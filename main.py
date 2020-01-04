@@ -98,6 +98,8 @@ class Layer (wx.Bitmap):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
         
 class LayerCommand(wx.Command):
@@ -130,6 +132,7 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         
         self.full_redraw = True
         
@@ -145,6 +148,7 @@ class Canvas(wx.Panel):
         
         self.current_tool = "Pen"
         self.mirrorx = False
+        self.gridVisible = True
         
         self.pixel_size = 10
         
@@ -157,6 +161,7 @@ class Canvas(wx.Panel):
         # UNDO / REDO
         self.history = wx.CommandProcessor(NUM_UNDOS)
         self.beforeLayer = None
+        self.noUndo = False
         
         self.SetCursor(wx.Cursor(TOOLS[self.current_tool]))
         
@@ -272,6 +277,23 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.PenColorChanged(color)
             
+    def ChangeEraserColor(self, color):
+        self.eraserColor = self.ColorIndex(color.GetAsString(wx.C2S_HTML_SYNTAX))
+        for l in self.listeners:
+            l.EraserColorChanged(color)
+            
+    def OnMouseWheel(self, e):
+        amt = e.GetWheelRotation()
+        if amt>0:
+            self.pixel_size += 1
+        else:
+            self.pixel_size -= 1
+            if self.pixel_size<1:
+                self.pixel_size = 1
+        
+        self.full_redraw = True
+        self.Refresh()
+        
     def OnMouseMove(self, e):
         x, y = e.GetPosition()
         gx, gy = self.PixelAtPosition(x, y)
@@ -279,9 +301,13 @@ class Canvas(wx.Panel):
         # draw with 1st color
         if self.mouseState == 1:
             if self.current_tool == "Pen":
-                self.DrawPixel("drawing", gx, gy, self.penColor)
-                if self.mirrorx:
-                    self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.penColor)
+                if e.AltDown():
+                    color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                    self.ChangePenColor(color)
+                else:
+                    self.DrawPixel("drawing", gx, gy, self.penColor)
+                    if self.mirrorx:
+                        self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.penColor)
             elif self.current_tool == "Line":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
@@ -302,15 +328,22 @@ class Canvas(wx.Panel):
         # draw with 2nd color
         elif self.mouseState == 2:
             if self.current_tool == "Pen":
-                self.DrawPixel("drawing", gx, gy, self.eraserColor)
-                if self.mirrorx:
-                    self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.eraserColor)
+                if e.AltDown():
+                    color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                    self.ChangeEraserColor(color)
+                else:
+                    self.DrawPixel("drawing", gx, gy, self.eraserColor)
+                    if self.mirrorx:
+                        self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.eraserColor)
             elif self.current_tool == "Line":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y), self.eraserColor)
             elif self.current_tool == "Ellipse":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawEllipse("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y), self.eraserColor)
+            elif self.current_tool == "Picker":
+                color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                self.ChangeEraserColor(color)
             
             self.Refresh()
             
@@ -338,19 +371,24 @@ class Canvas(wx.Panel):
         self.beforeLayer = Layer(self.layers["current"])
         
         if self.current_tool == "Pen":
-            self.DrawPixel("drawing", gx, gy, self.penColor)
-            if self.mirrorx:
-                self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.penColor)
+            if e.AltDown():
+                self.noUndo = True
+                color = self.layers["current"].GetPixel(gx, gy)
+                self.ChangePenColor(color)
+            else:
+                self.DrawPixel("drawing", gx, gy, self.penColor)
+                if self.mirrorx:
+                    self.DrawPixel("drawing", *self.GetMirror(gx, gy), self.penColor)
         elif self.current_tool == "Move":
             self.Blit("current", "drawing")
             self.layers["current"].Clear(self.palette[self.eraserColor])
         elif self.current_tool == "Bucket":
             self.Blit("current", "drawing")
-            self.layers["current"].Clear(self.palette[self.eraserColor])
-            self.FloodFill("drawing", x, y, self.penColor)
+            self.layers["current"].Clear(self.palette[0])
+            self.FloodFill("drawing", gx, gy, self.penColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
-            color = self.layers["current"].GetPixel(x, y)
+            color = self.layers["current"].GetPixel(gx, gy)
             self.ChangePenColor(color)
             
         if not self.HasCapture():
@@ -387,14 +425,28 @@ class Canvas(wx.Panel):
     def OnRightDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
         self.origx, self.origy = e.GetPosition()
+        gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
         self.mouseState = 2
         
         # store a copy of the before picture
         self.beforeLayer = Layer(self.layers["current"])
         
         # put a dot
-        if self.current_tool=="Eraser":
-            self.DrawPixel("drawing", *self.PixelAtPosition(self.prevx, self.prevy), self.eraserColor)
+        if self.current_tool=="Pen":
+            if e.AltDown():
+                self.noUndo = True
+                color = self.layers["current"].GetPixel(gx, gy)
+                self.ChangeEraserColor(color)
+            else:
+                self.DrawPixel("drawing", gx, gy, self.eraserColor)
+        elif self.current_tool == "Picker":
+            self.noUndo = True
+            color = self.layers["current"].GetPixel(gx, gy)
+            self.ChangeEraserColor(color)
+        elif self.current_tool == "Bucket":
+            self.Blit("current", "drawing")
+            self.layers["current"].Clear(self.palette[0])
+            self.FloodFill("drawing", gx, gy, self.eraserColor)
         
         if not self.HasCapture():
             self.CaptureMouse()
@@ -442,8 +494,9 @@ class Canvas(wx.Panel):
                        0,
                        self.layers["width"], self.layers["height"])
         
-        gc = wx.GraphicsContext.Create(dc)
-        self.DrawGrid(gc)
+        if self.gridVisible:
+            gc = wx.GraphicsContext.Create(dc)
+            self.DrawGrid(gc)
         
     def Undo(self):
         self.history.Undo()
@@ -456,10 +509,11 @@ class Canvas(wx.Panel):
     def IsDirty(self):
         return self.history.IsDirty()
         
-    def New(self, width, height):
+    def New(self, pixel, width, height):
         self.palette = ["#00000000", "#000000FF", "#FFFFFFFF"]
         self.penColor = 1 #
         self.eraserColor = 2 #
+        self.pixel_size = pixel
         
         # to ensure alpha
         current_layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
@@ -481,15 +535,18 @@ class Canvas(wx.Panel):
         else:
             return self.palette.index(color)
         
-    def Load(self, filename):
+    def Load(self, pixel, filename):
         image = wx.Image(filename)
-        width, height = int(image.GetWidth()/self.pixel_size), int(image.GetHeight()/self.pixel_size)
+        self.pixel_size = pixel
+        width, height = int(image.GetWidth()/pixel), int(image.GetHeight()/pixel)
         
-        self.New(width, height)
+        self.New(pixel, width, height)
         
         self.layers["current"].Load(filename)
         
         self.history.ClearCommands()
+        
+        print('Loaded:', filename)
         
     def Save(self, filename):
         self.layers["current"].Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
@@ -513,20 +570,28 @@ class Canvas(wx.Panel):
         self.current_tool = tool
         self.SetCursor(wx.Cursor(TOOLS[tool]))
         
+    def ScrollToMiddle(self, size):
+        self.panx = int(size[0]/2 - self.layers["width"]*self.pixel_size/2)
+        self.pany = int(size[1]/2 - self.layers["height"]*self.pixel_size/2)
+        
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title = 'Pixel Art', size=(440,500))
+        super().__init__(None, title = 'Pixel Art', size=(550,500))
+        
+        self.FirstTimeResize = True
         
         self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyDown)
         self.Bind(wx.EVT_SIZE, self.OnResize)
         
         self.canvas = Canvas(self)
-        self.canvas.New(*DEFAULT_DOC_SIZE)
+        self.canvas.New(10, *DEFAULT_DOC_SIZE)
         self.canvas.listeners.append(self)
         
         tb = self.CreateToolBar()
         self.AddToolButton(tb, 'Clear', self.OnClear)
         
+        self.txtPixel = wx.TextCtrl(tb, value=str(10))
+        self.AddToolControl(tb, self.txtPixel)
         self.txtWidth = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[0]))
         self.AddToolControl(tb, self.txtWidth)
         self.txtHeight = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[1]))
@@ -550,7 +615,9 @@ class Frame(wx.Frame):
         self.AddToolControl(tb, toolbtn)
         toolbtn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 60, wx.DefaultCoord)
         
+        self.AddToggleButton(tb, 'GRD', self.OnToggleGrid, True)
         self.AddToggleButton(tb, 'MX', self.OnMirrorX)
+        self.AddToolButton(tb, 'C', self.OnCenter)
         
         tb.Realize()
         
@@ -558,10 +625,11 @@ class Frame(wx.Frame):
         bs.Add(self.canvas, wx.ID_ANY, wx.EXPAND | wx.ALL, 2)
         self.SetSizer(bs)
         
-        self.FirstTimeResize = True
-        
     def PenColorChanged(self, color):
         self.colorbtn.SetColour(color)
+        
+    def EraserColorChanged(self, color):
+        self.eraserbtn.SetColour(color)
         
     def AddToolButton(self, tb, label, function):
         btn = wx.Button(tb, wx.ID_ANY, label=label)
@@ -569,8 +637,9 @@ class Frame(wx.Frame):
         btn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 40, wx.DefaultCoord)
         self.Bind(wx.EVT_BUTTON, function, id=btn.GetId())
         
-    def AddToggleButton(self, tb, label, function):
+    def AddToggleButton(self, tb, label, function, default=False):
         btn = wx.ToggleButton(tb, wx.ID_ANY, label=label)
+        btn.SetValue(default)
         self.AddToolControl(tb, btn)
         btn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 40, wx.DefaultCoord)
         self.Bind(wx.EVT_TOGGLEBUTTON, function, id=btn.GetId())
@@ -601,8 +670,13 @@ class Frame(wx.Frame):
             
         ret = wx.LoadFileSelector("Pixel Art", "png", parent=self)
         if ret:
-            self.canvas.Load(ret)
+            pixel = int(self.txtPixel.GetValue())
+            self.canvas.Load(pixel, ret)
             self.canvas.FullRedraw()
+        
+    def OnToggleGrid(self, e):
+        self.canvas.gridVisible = e.IsChecked()
+        self.canvas.Refresh()
         
     def OnMirrorX(self, e):
         self.canvas.mirrorx = e.IsChecked()
@@ -614,9 +688,10 @@ class Frame(wx.Frame):
         try:
             self.colorbtn.SetColour("#000000FF")
             self.eraserbtn.SetColour("#FFFFFFFF")
+            pixel = int(self.txtPixel.GetValue())
             width = int(self.txtWidth.GetValue())
             height = int(self.txtHeight.GetValue())
-            self.canvas.New(width, height)
+            self.canvas.New(pixel, width, height)
             self.canvas.FullRedraw()
         except:
             print('error')
@@ -640,25 +715,27 @@ class Frame(wx.Frame):
     def OnKeyDown(self, e):
         keycode = e.GetUnicodeKey()
         
-        passEvent = True
         if keycode == ord('Z'):
             if e.ControlDown():
-                passEvent = False
                 if e.ShiftDown():
                     self.canvas.Redo()
                 else:
                     self.canvas.Undo()
-        
-        if passEvent:
-            e.Skip()
+                return
+                
+        e.Skip()
         
     def OnTool(self, e):
         self.canvas.SetTool(e.GetString())
         
+    def OnCenter(self, e):
+        self.canvas.ScrollToMiddle(self.canvas.Size)
+        self.canvas.FullRedraw()
+        
     def OnResize(self, e):
         if self.FirstTimeResize:
-            pass
-        self.canvas.FullRedraw()
+            self.OnCenter(e)
+            self.FirstTimeResize = False
         e.Skip()
         
 def CreateWindows():
