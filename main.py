@@ -9,6 +9,7 @@ import wx
 
 from PIL import Image
 
+PROGRAM_NAME = "Pixel Portal"
 DEFAULT_DOC_SIZE = (32, 32)
 NUM_UNDOS = 100
 TOOLS = {"Pen":wx.CURSOR_PENCIL,    "Sel Rect": wx.CURSOR_CROSS,    "Line":wx.CURSOR_CROSS,
@@ -50,11 +51,12 @@ class Layer (wx.Bitmap):
         
         #gc.DrawRectangle(0, 0, *gc.GetSize())
         # weird bug ^^^ can't correctly draw a big rectangle in one go
-        if rect.IsEmpty():
-            rect = wx.Rect(0, 0, self.width, self.height)
-        for x in range(rect.x, rect.x+rect.width, 60):
-            for y in range(rect.y, rect.y+rect.height, 60):
-                gc.DrawRectangle(x, y, min(rect.width, 60), min(rect.height, 60))
+        x0, y0, w, h = rect
+        if w<=0 or h<=0:
+            w, h = self.width, self.height
+        for x in range(x0, x0+w, 60):
+            for y in range(y0, y0+h, 60):
+                gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
         
     def GetPixel(self, x, y):
         mdc = wx.MemoryDC(self)
@@ -78,10 +80,10 @@ class Layer (wx.Bitmap):
     def Line(self, x0, y0, x1, y1, color, clip=wx.Rect()):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
-        if clip.IsEmpty():
-            clip.width = self.width
-            clip.height = self.height
-        gc.Clip(*clip)
+        x, y, w, h = clip
+        if w<=0 or h<=0:
+            w, h = self.width, self.height
+        gc.Clip(x, y, w, h)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
@@ -90,10 +92,10 @@ class Layer (wx.Bitmap):
     def Ellipse(self, x, y, w, h, color, clip=wx.Rect()):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
-        if clip.IsEmpty():
-            clip.width = self.width
-            clip.height = self.height
-        gc.Clip(*clip)
+        x0, y0, cw, ch = clip
+        if cw<=0 or ch<=0:
+            cw, ch = self.width, self.height
+        gc.Clip(x0, y0, cw, ch)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
@@ -112,15 +114,15 @@ class Layer (wx.Bitmap):
         gc.DrawBitmap(layer, x, y, w, h)
         
     def Draw(self, layer, rect=wx.Rect()):
-        if rect.IsEmpty():
-            rect.width = layer.width
-            rect.height = layer.height
+        x0, y0, w, h = rect
+        if w<=0 or h<=0:
+            w, h = self.width, self.height
         
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(layer.GetSubBitmap(rect), *rect)
+        gc.DrawBitmap(layer.GetSubBitmap(wx.Rect(x0, y0, w, h)), x0, y0, w, h)
         
     def Load(self, name):
         bitmap = wx.Bitmap()
@@ -155,6 +157,7 @@ class UndoManager(wx.CommandProcessor):
         
     def Store(self, command):
         super().Store(command)
+        print('Undos:', len(self.Commands))
         
 class Canvas(wx.Panel):
     def __init__(self, parent):
@@ -281,22 +284,22 @@ class Canvas(wx.Panel):
         while queue:
             # replace current pixel
             x, y = queue.pop()
-            if not self.selection.IsEmpty() and self.selection.Contains(x, y):
+            if self.selection.IsEmpty() or self.selection.Contains(x, y):
                 l.SetPixel(x, y, color)
-            
-            #north
-            if y>0 and l.GetPixel(x, y-1)==replace and l.GetPixel(x, y-1)!=color:
-                queue.add((x, y-1))
-            #east
-            if x<self.layers["width"]-1 and l.GetPixel(x+1, y)==replace and l.GetPixel(x+1,y)!=color:
-                queue.add((x+1, y))
-            #south
-            if y<self.layers["height"]-1 and l.GetPixel(x, y+1)==replace and l.GetPixel(x, y+1)!=color:
-                queue.add((x, y+1))
-            #west
-            if x>0 and l.GetPixel(x-1, y)==replace and l.GetPixel(x-1, y)!=color:
-                queue.add((x-1, y))
-            
+                
+                #north
+                if y>0 and l.GetPixel(x, y-1)==replace and l.GetPixel(x, y-1)!=color:
+                    queue.add((x, y-1))
+                #east
+                if x<self.layers["width"]-1 and l.GetPixel(x+1, y)==replace and l.GetPixel(x+1,y)!=color:
+                    queue.add((x+1, y))
+                #south
+                if y<self.layers["height"]-1 and l.GetPixel(x, y+1)==replace and l.GetPixel(x, y+1)!=color:
+                    queue.add((x, y+1))
+                #west
+                if x>0 and l.GetPixel(x-1, y)==replace and l.GetPixel(x-1, y)!=color:
+                    queue.add((x-1, y))
+                
     def DrawLine(self, layer, x0, y0, x1, y1, color, canmirrorx = True, canmirrory = True):
         self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
         if canmirrorx and self.mirrorx:
@@ -716,7 +719,7 @@ class Canvas(wx.Panel):
         
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title = 'Pixel Art', size=(590,500))
+        super().__init__(None, title = PROGRAM_NAME, size=(590,500))
         
         self.FirstTimeResize = True
         
@@ -811,7 +814,7 @@ class Frame(wx.Frame):
         if not self.CheckDirty():
             return
             
-        ret = wx.LoadFileSelector("Pixel Art", "png", parent=self)
+        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
         if ret:
             pixel = int(self.txtPixel.GetValue())
             self.canvas.Load(pixel, ret)
@@ -843,12 +846,12 @@ class Frame(wx.Frame):
             print('OnNew error')
         
     def OnSave(self, e):
-        ret = wx.SaveFileSelector("Pixel Art", "png", parent=self)
+        ret = wx.SaveFileSelector(PROGRAM_NAME, "png", parent=self)
         if ret:
             self.canvas.Save(ret)
         
     def OnSaveGif(self, e):
-        ret = wx.SaveFileSelector("Pixel Art", "gif", parent=self)
+        ret = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
         if ret:
             self.canvas.SaveGif(ret)
         
