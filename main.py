@@ -2,8 +2,9 @@
 #### Pixel Art ####
 ## Bhupendra Aole #
 
+import colorsys
 import numpy as np
-from math import ceil, floor
+from math import atan2, ceil, floor, pi
 import random
 import wx
 
@@ -170,10 +171,10 @@ class Canvas(wx.Panel):
         
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
-        self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
+        self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
@@ -722,10 +723,123 @@ class Canvas(wx.Panel):
     def ScrollToMiddle(self, size):
         self.panx = int(size[0]/2 - self.layers["width"]*self.pixel_size/2)
         self.pany = int(size[1]/2 - self.layers["height"]*self.pixel_size/2)
+    
+class ColorPanel(wx.Panel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.Bind(wx.EVT_MOTION, self.OnMouseMove)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        
+        self.mouseState = 0
+        
+        self.lightness = 1.0
+        self.backgroundBrush = wx.TheBrushList.FindOrCreateBrush("#998877FF")
+        self.padding = 5
+        
+        self.image = self.Parent.colorImage.AdjustChannels(self.lightness, self.lightness, self.lightness)
+        self.bitmap = wx.Bitmap(self.image, 24)
+        self.blitw, self.blith = 0, 0
+        
+    def OnMouseMove(self, e):
+        if self.mouseState == 1:
+            x, y = e.GetPosition()
+            iw, ih = self.bitmap.GetSize()
+            sw, sh = self.blitw, self.blith
+            x, y = x-self.padding, y-self.padding
+            x = int(x*iw/sw)
+            y = int(y*ih/sh)
+            if x>=0 and x<iw and y>=0 and y<ih:
+                print(self.image.GetRed(x, y), self.image.GetGreen(x, y), self.image.GetBlue(x, y))
+            
+    def OnLeftDown(self, e):
+        self.mouseState = 1
+        
+    def OnLeftUp(self, e):
+        self.mouseState = 0
+        
+    def OnPaint(self, e):
+        if self.blitw<1 or self.blith<1:
+            return
+            
+        dc = wx.PaintDC(self)
+        dc.SetBackground(self.backgroundBrush)
+        dc.Clear()
+        
+        iw, ih = self.bitmap.GetSize()
+        
+        mdc = wx.MemoryDC(self.bitmap)
+        dc.StretchBlit(self.padding, self.padding,
+                       self.blitw, self.blith,
+                       mdc,
+                       0, 0,
+                       iw, ih)
+                       
+    def OnSize(self, e):
+        iw, ih = self.bitmap.GetSize()
+        ar = iw/ih
+        
+        w, h = e.GetSize()
+        m = min(w-self.padding*2, h*ar-self.padding*2)
+        
+        self.blitw, self.blith = m, m/ar
+        self.Refresh()
+    
+class ColorDialog(wx.Dialog):
+    def __init__(self, parent):
+        super().__init__(parent, size=(300, 300), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER) # | wx.STAY_ON_TOP)
+        
+        self.CreateColorWheel(0.5)
+        
+        cp = ColorPanel(self)
+        cp.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        cp.Bind(wx.EVT_PAINT, cp.OnPaint)
+        cp.Bind(wx.EVT_SIZE, cp.OnSize)
+        
+        bs = wx.BoxSizer(wx.HORIZONTAL)
+        bs.Add(cp, wx.ID_ANY, wx.EXPAND | wx.ALL, 2)
+        self.SetSizer(bs)
+        
+    def CreateColorWheel(self, lightness):
+        imgw, imgh = 1000, 1000
+        w, h = imgw+100, imgh
+        
+        c = imgw/2, imgh/2
+        r = min(imgw, imgh)/2
+        
+        data = []
+        alpha = []
+        for y in range(h):
+            for x in range(w):
+                rx = x - c[0]
+                ry = y - c[1]
+                s = ((x - c[0])**2.0 + (y - c[1])**2.0)**0.5
+                
+                if x<imgw and s <= r: #1.0:
+                    hue = ((atan2(ry, rx) / pi) + 1.0) / 2.0
+                    rgb = colorsys.hsv_to_rgb(hue, s / r, 1.0)
+                    data.extend((int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
+                    alpha.append(255)
+                else:
+                    if x>=imgw+20 and x<imgw+50:
+                        col = int(((h-1)-y)*255/(h-1))
+                        data.extend((col,col,col))
+                        alpha.append(255)
+                    elif x>=imgw+70 and x<imgw+100:
+                        col = int(((h-1)-y)*255/(h-1))
+                        data.extend((255,255,255))
+                        alpha.append(col)
+                    else:
+                        data.extend((0,0,0))
+                        alpha.append(0)
+                        
+        image = wx.Image(w, h, bytearray(data), bytearray(alpha))
+        self.colorImage = image
         
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title = PROGRAM_NAME, size=(590,500))
+        super().__init__(None, title = PROGRAM_NAME, size=(610,500))
         
         self.FirstTimeResize = True
         
@@ -735,6 +849,8 @@ class Frame(wx.Frame):
         self.canvas = Canvas(self)
         self.canvas.New(DEFAULT_PIXEL_SIZE, *DEFAULT_DOC_SIZE)
         self.canvas.listeners.append(self)
+        
+        self.testDialog = ColorDialog(self)
         
         tb = self.CreateToolBar()
         self.AddToolButton(tb, 'Clear', self.OnClear)
@@ -768,6 +884,7 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'MX', self.OnMirrorX)
         self.AddToggleButton(tb, 'MY', self.OnMirrorY)
         self.AddToolButton(tb, 'C', self.OnCenter)
+        self.AddToolButton(tb, 'T', self.OnTest)
         
         tb.Realize()
         
@@ -893,6 +1010,10 @@ class Frame(wx.Frame):
             self.FirstTimeResize = False
         self.canvas.FullRedraw()
         e.Skip()
+        
+    def OnTest(self, e):
+        self.testDialog.SetTitle('Color')
+        self.testDialog.Show()
         
 def CreateWindows():
     global app
