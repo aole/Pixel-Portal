@@ -10,8 +10,10 @@ import wx
 from PIL import Image
 
 PROGRAM_NAME = "Pixel Portal"
-DEFAULT_DOC_SIZE = (32, 32)
+DEFAULT_DOC_SIZE = (80, 80)
+DEFAULT_PIXEL_SIZE = 5
 NUM_UNDOS = 100
+
 TOOLS = {"Pen":wx.CURSOR_PENCIL,    "Sel Rect": wx.CURSOR_CROSS,    "Line":wx.CURSOR_CROSS,
          "Ellipse":wx.CURSOR_CROSS, "Move":wx.CURSOR_SIZING,        "Bucket":wx.CURSOR_PAINT_BRUSH,
          "Picker":wx.CURSOR_RIGHT_ARROW}
@@ -116,6 +118,7 @@ class Layer (wx.Bitmap):
     def Draw(self, layer, rect=wx.Rect()):
         x0, y0, w, h = rect
         if w<=0 or h<=0:
+            x0, y0 = 0, 0
             w, h = self.width, self.height
         
         mdc = wx.MemoryDC(self)
@@ -193,7 +196,7 @@ class Canvas(wx.Panel):
         self.mirrory = False
         self.gridVisible = True
         
-        self.pixel_size = 10
+        self.pixel_size = DEFAULT_PIXEL_SIZE
         
         self.penColor = 1 #
         self.eraserColor = 2 #
@@ -354,6 +357,10 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.EraserColorChanged(color)
             
+    def ResetSelection(self):
+        s = self.selection
+        s[0] = s[1] = s[2] = s[3] = 0
+        
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
         if amt>0:
@@ -540,8 +547,7 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
             if not self.selection.Contains(gx, gy):
-                self.selection[2] = 0
-                self.selection[3] = 0
+                self.ResetSelection()
                 
         if not self.HasCapture():
             self.CaptureMouse()
@@ -628,7 +634,7 @@ class Canvas(wx.Panel):
         
         gc = wx.GraphicsContext.Create(dc)
         
-        if self.gridVisible:
+        if self.gridVisible and self.pixel_size>2:
             self.DrawGrid(gc)
         
         # draw selection rectangle
@@ -727,7 +733,7 @@ class Frame(wx.Frame):
         self.Bind(wx.EVT_SIZE, self.OnResize)
         
         self.canvas = Canvas(self)
-        self.canvas.New(10, *DEFAULT_DOC_SIZE)
+        self.canvas.New(DEFAULT_PIXEL_SIZE, *DEFAULT_DOC_SIZE)
         self.canvas.listeners.append(self)
         
         tb = self.CreateToolBar()
@@ -885,6 +891,7 @@ class Frame(wx.Frame):
         if self.FirstTimeResize:
             self.OnCenter(e)
             self.FirstTimeResize = False
+        self.canvas.FullRedraw()
         e.Skip()
         
 def CreateWindows():
