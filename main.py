@@ -1,6 +1,6 @@
 
-#### Pixel Art ####
-## Bhupendra Aole #
+#### Pixel Portal ####
+### Bhupendra Aole ###
 
 import colorsys
 import numpy as np
@@ -140,19 +140,43 @@ class Layer (wx.Bitmap):
         gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
         
 class LayerCommand(wx.Command):
-    def __init__(self, layer, before, after):
+    def __init__(self, layers, before, after):
         super().__init__(True)
         
-        self.layer = layer
+        self.layers = layers
         self.before = before
         self.after = after
         
     def Do(self):
-        self.layer.Blit(self.after)
+        self.layers["current"].Blit(self.after)
         return True
         
     def Undo(self):
-        self.layer.Blit(self.before)
+        self.layers["current"].Blit(self.before)
+        return True
+        
+class ResizeCommand(wx.Command):
+    def __init__(self, layers, before, after):
+        super().__init__(True)
+        
+        self.layers = layers
+        self.before = before
+        self.after = after
+        
+    def Do(self):
+        self.layers["width"] = self.after.width
+        self.layers["height"] = self.after.height
+        self.layers["current"] = Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 255, 255, 255, 255))
+        self.layers["current"].Draw(self.after)
+        self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 0, 0, 0, 0))
+        return True
+        
+    def Undo(self):
+        self.layers["width"] = self.before.width
+        self.layers["height"] = self.before.height
+        self.layers["current"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 255, 255, 255, 255))
+        self.layers["current"].Draw(self.before)
+        self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0))
         return True
         
 class UndoManager(wx.CommandProcessor):
@@ -222,7 +246,7 @@ class Canvas(wx.Panel):
         
         self.layers["current"].Clear(self.palette[self.eraserColor])
         
-        self.history.Store(LayerCommand(self.layers["current"], self.beforeLayer, Layer(self.layers["current"])))
+        self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
         self.beforeLayer = None
         self.Refresh()
         
@@ -512,7 +536,7 @@ class Canvas(wx.Panel):
         
         # create an undo command
         if not self.noUndo:
-            self.history.Store(LayerCommand(self.layers["current"], self.beforeLayer, Layer(self.layers["current"])))
+            self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
         self.beforeLayer = None
         
         self.noUndo = False
@@ -576,7 +600,7 @@ class Canvas(wx.Panel):
         
         # create an undo command
         if not self.noUndo:
-            self.history.Store(LayerCommand(self.layers["current"], self.beforeLayer, Layer(self.layers["current"])))
+            self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
         self.beforeLayer = None
         
         self.noUndo = False
@@ -650,10 +674,12 @@ class Canvas(wx.Panel):
             
     def Undo(self):
         self.history.Undo()
+        self.full_redraw = True
         self.Refresh()
         
     def Redo(self):
         self.history.Redo()
+        self.full_redraw = True
         self.Refresh()
         
     def IsDirty(self):
@@ -684,6 +710,26 @@ class Canvas(wx.Panel):
             return len(self.palette)-1
         else:
             return self.palette.index(color)
+        
+    def Resize(self, width, height):
+        if width==self.layers["width"] and height==self.layers["height"]:
+            return
+            
+        current_layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
+        current_layer.Draw(self.layers["current"], wx.Rect(0, 0, self.layers["width"], self.layers["height"]))
+        
+        drawing_layer = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
+        
+        cmd = ResizeCommand(self.layers, Layer(self.layers["current"]), Layer(current_layer))
+        self.history.Store(cmd)
+        
+        self.layers["width"] = width
+        self.layers["height"] = height
+        self.layers["drawing"] = drawing_layer
+        self.layers["current"] = current_layer
+        
+        self.full_redraw = True
+        self.Refresh()
         
     def Load(self, pixel, filename):
         image = wx.Image(filename)
@@ -854,6 +900,7 @@ class Frame(wx.Frame):
         
         tb = self.CreateToolBar()
         self.AddToolButton(tb, 'Clear', self.OnClear)
+        self.AddToolButton(tb, 'Resize', self.OnDocResize)
         
         self.txtPixel = wx.TextCtrl(tb, value=str(10))
         self.AddToolControl(tb, self.txtPixel)
@@ -920,6 +967,11 @@ class Frame(wx.Frame):
         
     def OnClear(self, e):
         self.canvas.ClearCurrentLayer()
+        
+    def OnDocResize(self, e):
+        width = int(self.txtWidth.GetValue())
+        height = int(self.txtHeight.GetValue())
+        self.canvas.Resize(width, height)
         
     def CheckDirty(self):
         if self.canvas.IsDirty():
