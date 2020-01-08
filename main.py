@@ -15,8 +15,8 @@ DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 NUM_UNDOS = 100
 
-TOOLS = {"Pen":wx.CURSOR_PENCIL,    "Sel Rect": wx.CURSOR_CROSS,    "Line":wx.CURSOR_CROSS,
-         "Ellipse":wx.CURSOR_CROSS, "Move":wx.CURSOR_SIZING,        "Bucket":wx.CURSOR_PAINT_BRUSH,
+TOOLS = {"Pen":wx.CURSOR_PENCIL,        "Sel Rect": wx.CURSOR_CROSS,    "Line":wx.CURSOR_CROSS,
+         "Ellipse":wx.CURSOR_CROSS,     "Move":wx.CURSOR_SIZING,        "Bucket":wx.CURSOR_PAINT_BRUSH,
          "Picker":wx.CURSOR_RIGHT_ARROW}
 
 app = None
@@ -770,6 +770,28 @@ class Canvas(wx.Panel):
         self.panx = int(size[0]/2 - self.layers["width"]*self.pixel_size/2)
         self.pany = int(size[1]/2 - self.layers["height"]*self.pixel_size/2)
     
+    def GetMirror(self, bitmap, horizontally=True):
+        return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
+        
+    def OnMirrorTR(self, e):
+        before = Layer(self.layers["current"])
+        after = Layer(self.GetMirror(before))
+        after.Draw(before, wx.Rect(0, 0, int(before.width/2), before.height))
+        
+        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.layers["current"] = after
+        
+        self.Refresh()
+        
+    def OnFlipH(self, e):
+        before = self.layers["current"]
+        after = self.GetMirror(before)
+        
+        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.layers["current"] = Layer(after)
+        
+        self.Refresh()
+        
 class ColorPanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -885,7 +907,7 @@ class ColorDialog(wx.Dialog):
         
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title = PROGRAM_NAME, size=(610,500))
+        super().__init__(None, title = PROGRAM_NAME, size=(650,500))
         
         self.FirstTimeResize = True
         
@@ -898,6 +920,19 @@ class Frame(wx.Frame):
         
         self.testDialog = ColorDialog(self)
         
+        # MENU
+        self.menuid = 10001
+        
+        mbar = wx.MenuBar()
+        
+        medit = wx.Menu()
+        mbar.Append(medit, "Edit")
+        self.AddMenuItem(medit, "Flip Horizontal", self.canvas.OnFlipH)
+        self.AddMenuItem(medit, "Mirror to Right", self.canvas.OnMirrorTR)
+        
+        self.SetMenuBar(mbar)
+        
+        # TOOLBAR
         tb = self.CreateToolBar()
         self.AddToolButton(tb, 'Clear', self.OnClear)
         self.AddToolButton(tb, 'Resize', self.OnDocResize)
@@ -938,6 +973,11 @@ class Frame(wx.Frame):
         bs = wx.BoxSizer(wx.HORIZONTAL)
         bs.Add(self.canvas, wx.ID_ANY, wx.EXPAND | wx.ALL, 2)
         self.SetSizer(bs)
+        
+    def AddMenuItem(self, menu, name, func):
+        menu.Append(self.menuid, name)
+        menu.Bind(wx.EVT_MENU, func, id=self.menuid)
+        self.menuid += 1
         
     def PenColorChanged(self, color):
         self.colorbtn.SetColour(color)
