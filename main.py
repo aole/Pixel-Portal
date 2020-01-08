@@ -46,59 +46,59 @@ class Layer (wx.Bitmap):
         
         return bitmap
         
-    def Clear(self, color, rect = wx.Rect()):
+    def Clear(self, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         
         #gc.DrawRectangle(0, 0, *gc.GetSize())
         # weird bug ^^^ can't correctly draw a big rectangle in one go
-        x0, y0, w, h = rect
-        if w<=0 or h<=0:
-            w, h = self.width, self.height
-        for x in range(x0, x0+w, 60):
-            for y in range(y0, y0+h, 60):
+        w, h = self.width, self.height
+        for x in range(0, w, 60):
+            for y in range(0, h, 60):
                 gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
         
     def GetPixel(self, x, y):
         mdc = wx.MemoryDC(self)
         return mdc.GetPixel(x, y)
         
-    def SetPixel(self, x, y, color):
+    def SetPixel(self, x, y, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         gc.DrawRectangle(x, y, 1, 1)
         
-    def SetPixels(self, pixels, color):
+    def SetPixels(self, pixels, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         for x,y in pixels:
             gc.DrawRectangle(x, y, 1, 1)
         
-    def Line(self, x0, y0, x1, y1, color, clip=wx.Rect()):
+    def Line(self, x0, y0, x1, y1, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
-        x, y, w, h = clip
-        if w<=0 or h<=0:
-            w, h = self.width, self.height
-        gc.Clip(x, y, w, h)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
         gc.StrokeLine(x0,y0,x1,y1)
         
-    def Ellipse(self, x, y, w, h, color, clip=wx.Rect()):
+    def Ellipse(self, x, y, w, h, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
-        x0, y0, cw, ch = clip
-        if cw<=0 or ch<=0:
-            cw, ch = self.width, self.height
-        gc.Clip(x0, y0, cw, ch)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
@@ -116,17 +116,14 @@ class Layer (wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, x, y, w, h)
         
-    def Draw(self, layer, rect=wx.Rect()):
-        x0, y0, w, h = rect
-        if w<=0 or h<=0:
-            x0, y0 = 0, 0
-            w, h = self.width, self.height
-        
+    def Draw(self, layer, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(layer.GetSubBitmap(wx.Rect(x0, y0, w, h)), x0, y0, w, h)
+        gc.DrawBitmap(layer, 0, 0, self.width, self.height)
         
     def Load(self, name):
         bitmap = wx.Bitmap()
@@ -212,7 +209,7 @@ class Canvas(wx.Panel):
         self.origx, self.origy = 0, 0
         
         self.movex, self.movey = 0, 0
-        self.selection = wx.Rect()
+        self.selection = wx.Region()
         
         self.mouseState = 0
         
@@ -289,9 +286,7 @@ class Canvas(wx.Panel):
         return ((y+1-h)*-1)+h
         
     def DrawPixel(self, layer, x, y, color, canmirrorx = True, canmirrory = True):
-        if not self.selection.IsEmpty() and not self.selection.Contains(x, y):
-            return
-        self.layers[layer].SetPixel(x, y, self.palette[color])
+        self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawPixel(layer, self.GetXMirror(x), y, color, False, True)
         if canmirrory and self.mirrory:
@@ -312,7 +307,7 @@ class Canvas(wx.Panel):
         while queue:
             # replace current pixel
             x, y = queue.pop()
-            if self.selection.IsEmpty() or self.selection.Contains(x, y):
+            if not self.selection or self.selection.IsEmpty() or self.selection.Contains(x, y):
                 l.SetPixel(x, y, color)
                 
                 #north
@@ -383,8 +378,7 @@ class Canvas(wx.Panel):
             l.EraserColorChanged(color)
             
     def ResetSelection(self):
-        s = self.selection
-        s[0] = s[1] = s[2] = s[3] = 0
+        self.selection = wx.Region()
         
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
@@ -449,8 +443,8 @@ class Canvas(wx.Panel):
                 self.ChangeEraserColor(color)
             elif self.current_tool == "Sel Rect":
                 px, py = self.PixelAtPosition(self.prevx, self.prevy)
-                self.selection.x += gx - px
-                self.selection.y += gy - py
+                if not self.selection.IsEmpty():
+                    self.selection.Offset(gx - px, gy - py)
             
             self.Refresh()
             
@@ -503,8 +497,8 @@ class Canvas(wx.Panel):
         miny, maxy = minmax(y0, y1)
         minx, miny = self.PixelAtPosition(minx, miny)
         maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
-        self.selection = wx.Rect(minx, miny, maxx-minx, maxy-miny)
-        self.selection = self.selection.Intersect(wx.Rect(0, 0, self.layers["width"], self.layers["height"]))
+        self.selection = wx.Region(minx, miny, maxx-minx, maxy-miny)
+        self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
         
     def OnLeftUp(self, e):
         x, y = e.GetPosition()
@@ -524,8 +518,7 @@ class Canvas(wx.Panel):
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
                 gx, gy = self.PixelAtPosition(x, y)
-                self.selection.x += int(self.movex/self.pixel_size)
-                self.selection.y += int(self.movey/self.pixel_size)
+                self.selection.Offset(int(self.movex/self.pixel_size), int(self.movey/self.pixel_size))
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
             self.CreateSelectionRect(x, y, self.origx, self.origy)
@@ -651,11 +644,11 @@ class Canvas(wx.Panel):
         else:
             if self.mouseState == 1 and self.current_tool in ("Move"):
                 display_selection_rect = False
-            dc.StretchBlit(self.panx + self.movex + self.selection.x*self.pixel_size, self.pany + self.movey + self.selection.y*self.pixel_size,
-                           self.selection.width*self.pixel_size, self.selection.height*self.pixel_size,
+            dc.StretchBlit(self.panx + self.movex + self.selection.GetBox().x*self.pixel_size, self.pany + self.movey + self.selection.GetBox().y*self.pixel_size,
+                           self.selection.GetBox().width*self.pixel_size, self.selection.GetBox().height*self.pixel_size,
                            mdc,
-                           self.selection.x, self.selection.y,
-                           self.selection.width, self.selection.height)
+                           self.selection.GetBox().x, self.selection.GetBox().y,
+                           self.selection.GetBox().width, self.selection.GetBox().height)
         
         gc = wx.GraphicsContext.Create(dc)
         
@@ -669,8 +662,8 @@ class Canvas(wx.Panel):
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx- self.origx), abs(self.prevy- self.origy))
         elif not self.selection.IsEmpty() and display_selection_rect:
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
-            gc.DrawRectangle(self.selection.x*self.pixel_size+self.panx, self.selection.y*self.pixel_size+self.pany,
-                             self.selection.width*self.pixel_size, self.selection.height*self.pixel_size)
+            gc.DrawRectangle(self.selection.GetBox().x*self.pixel_size+self.panx, self.selection.GetBox().y*self.pixel_size+self.pany,
+                             self.selection.GetBox().width*self.pixel_size, self.selection.GetBox().height*self.pixel_size)
             
     def Undo(self):
         self.history.Undo()
