@@ -902,7 +902,7 @@ class Frame(wx.Frame):
         self.AddToolButton(tb, 'Clear', self.OnClear)
         self.AddToolButton(tb, 'Resize', self.OnDocResize)
         
-        self.txtPixel = wx.TextCtrl(tb, value=str(10))
+        self.txtPixel = wx.TextCtrl(tb, value=str(DEFAULT_PIXEL_SIZE))
         self.AddToolControl(tb, self.txtPixel)
         self.txtWidth = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[0]))
         self.AddToolControl(tb, self.txtWidth)
