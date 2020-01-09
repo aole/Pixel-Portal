@@ -494,7 +494,8 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Move":
             # self.Blit("current", "drawing")
             self.layers["drawing"].Draw(self.layers["current"], self.selection)
-            self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
+            if not e.ControlDown():
+                self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
         elif self.current_tool == "Bucket":
             self.Blit("current", "drawing")
             self.layers["current"].Clear(self.palette[0])
@@ -633,16 +634,18 @@ class Canvas(wx.Panel):
 
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
+        
+        # PAINT WHOLE CANVAS
         if self.full_redraw:
             dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
             dc.Clear()
             self.full_redraw = False
 
-        # clip only to the document
+        # CLIP TO DOCUMENT
         dc.SetClippingRegion(self.panx, self.pany, self.layers["width"] * self.pixel_size,
                              self.layers["height"] * self.pixel_size)
 
-        # draw layers
+        # LAYERS
         mdc = wx.MemoryDC(self.layers["current"])
         dc.StretchBlit(self.panx, self.pany,
                        self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
@@ -650,7 +653,7 @@ class Canvas(wx.Panel):
                        0, 0,
                        self.layers["width"], self.layers["height"])
 
-        # draw drawing layer
+        # DRAWING LAYER
         display_selection_rect = True
         mdc = wx.MemoryDC(self.layers["drawing"])
         if self.selection.IsEmpty():
@@ -672,24 +675,18 @@ class Canvas(wx.Panel):
 
         gc = wx.GraphicsContext.Create(dc)
 
-        # draw reference image
+        # REFERENCE
         if self.layers["reference"]:
             w, h = int(self.layers["reference"].width*self.refScale), int(self.layers["reference"].height*self.refScale)
             ar = w/h
             cw, ch = self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size
             gc.DrawBitmap(self.layers["reference"], self.panx, self.pany, min(cw, ch*ar), min(cw/ar,ch))
-            '''
-            mdc = wx.MemoryDC(self.layers["reference"])
-            dc.StretchBlit(self.panx, self.pany,
-                           min(cw, w), min(ch, h),
-                           mdc,
-                           0, 0,
-                           min(cw, w), min(ch, h))
-            '''
+            
+        # GRID
         if self.gridVisible and self.pixel_size > 2:
             self.DrawGrid(gc)
 
-        # draw selection rectangle
+        # SELECTION
         gc.SetCompositionMode(wx.COMPOSITION_XOR)
         if self.mouseState == 1 and self.current_tool == "Sel Rect":
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
