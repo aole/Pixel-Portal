@@ -9,7 +9,7 @@ from math import atan2, ceil, floor, pi
 import random
 import wx
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (650, 550)
@@ -21,6 +21,9 @@ DEFAULT_PIXEL_SIZE = 5
 TOOLS = {"Pen": wx.CURSOR_PENCIL, "Sel Rect": wx.CURSOR_CROSS, "Line": wx.CURSOR_CROSS,
          "Ellipse": wx.CURSOR_CROSS, "Move": wx.CURSOR_SIZING, "Bucket": wx.CURSOR_PAINT_BRUSH,
          "Picker": wx.CURSOR_RIGHT_ARROW, "Reference": wx.CURSOR_MAGNIFIER}
+#Debug
+RENDER_DRAWING_LAYER = True
+RENDER_CURRENT_LAYER = True
 
 app = None
 
@@ -130,7 +133,7 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, 0, 0, self.width, self.height)
 
-    def Load(self, name, pixelated=True):
+    def Load(self, name):
         bitmap = wx.Bitmap()
         bitmap.LoadFile(name)
 
@@ -240,6 +243,7 @@ class Canvas(wx.Panel):
                        "drawing": None,
                        "current": None,
                        "reference": None}
+        self.alphabg = wx.Bitmap("alphabg.png")
 
         # UNDO / REDO
         self.history = UndoManager()
@@ -313,11 +317,11 @@ class Canvas(wx.Panel):
         if not self.selection.IsEmpty() and not self.selection.Contains(x, y):
             return
 
-        color = wx.Colour(self.palette[color])
-
+        #self.layers[layer].FloodFill(x, y, self.palette[color], self.selection)
         l = self.layers[layer]
         replace = l.GetPixel(x, y)
 
+        color = self.palette[color]
         queue = {(x, y)}
         while queue:
             # replace current pixel
@@ -337,7 +341,7 @@ class Canvas(wx.Panel):
                 # west
                 if x > 0 and l.GetPixel(x - 1, y) == replace and l.GetPixel(x - 1, y) != color:
                     queue.add((x - 1, y))
-
+        
     def DrawLine(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
         self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
         if canmirrorx and self.mirrorx:
@@ -504,9 +508,14 @@ class Canvas(wx.Panel):
             if not e.ControlDown():
                 self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
         elif self.current_tool == "Bucket":
-            self.Blit("current", "drawing")
-            self.layers["current"].Clear(self.palette[0])
-            self.FloodFill("drawing", gx, gy, self.penColor)
+            if e.AltDown():
+                self.noUndo = True
+                color = self.layers["current"].GetPixel(gx, gy)
+                self.ChangePenColor(color)
+            else:
+                self.Blit("current", "drawing")
+                self.layers["current"].Clear(self.palette[0])
+                self.FloodFill("drawing", gx, gy, self.penColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
             color = self.layers["current"].GetPixel(gx, gy)
@@ -534,6 +543,7 @@ class Canvas(wx.Panel):
         
     def OnLeftUp(self, e):
         x, y = e.GetPosition()
+        gx, gy = self.PixelAtPosition(x, y)
         self.mouseState = 0
 
         self.noUndo = False
@@ -543,13 +553,14 @@ class Canvas(wx.Panel):
             self.ReleaseMouse()
 
         # transfer from drawing layer to current_layer
-        if self.current_tool in ("Pen", "Line", "Ellipse", "Bucket"):
+        if self.current_tool in ("Pen", "Line", "Ellipse"):
+            self.Blit("drawing", "current")
+        elif self.current_tool == "Bucket":
             self.Blit("drawing", "current")
         elif self.current_tool == "Move":
             self.Blit("drawing", "current", int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
-                gx, gy = self.PixelAtPosition(x, y)
                 self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
@@ -593,9 +604,14 @@ class Canvas(wx.Panel):
             color = self.layers["current"].GetPixel(gx, gy)
             self.ChangeEraserColor(color)
         elif self.current_tool == "Bucket":
-            self.Blit("current", "drawing")
-            self.layers["current"].Clear(self.palette[0])
-            self.FloodFill("drawing", gx, gy, self.eraserColor)
+            if e.AltDown():
+                self.noUndo = True
+                color = self.layers["current"].GetPixel(gx, gy)
+                self.ChangeEraserColor(color)
+            else:
+                self.Blit("current", "drawing")
+                self.layers["current"].Clear(self.palette[0])
+                self.FloodFill("drawing", gx, gy, self.eraserColor)
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
             if not self.selection.Contains(gx, gy):
@@ -661,23 +677,27 @@ class Canvas(wx.Panel):
         dc.SetClippingRegion(self.panx, self.pany, self.layers["width"] * self.pixel_size,
                              self.layers["height"] * self.pixel_size)
 
+        # RENDER ALPHA BACKGROUND
+        dc.DrawBitmap(self.alphabg, self.panx, self.pany)
         # LAYERS
-        mdc = wx.MemoryDC(self.layers["current"])
-        dc.StretchBlit(self.panx, self.pany,
-                       self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
-                       mdc,
-                       0, 0,
-                       self.layers["width"], self.layers["height"])
-
-        # DRAWING LAYER
-        display_selection_rect = True
-        mdc = wx.MemoryDC(self.layers["drawing"])
-        dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
+        if RENDER_CURRENT_LAYER:
+            mdc = wx.MemoryDC(self.layers["current"])
+            dc.StretchBlit(self.panx, self.pany,
                            self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
                            mdc,
                            0, 0,
                            self.layers["width"], self.layers["height"])
-                           
+
+        # DRAWING LAYER
+        if RENDER_DRAWING_LAYER:
+            mdc = wx.MemoryDC(self.layers["drawing"])
+            dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
+                               self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
+                               mdc,
+                               0, 0,
+                               self.layers["width"], self.layers["height"])
+
+        display_selection_rect = True
         if self.mouseState == 1 and self.current_tool in ("Move"):
             display_selection_rect = False
         
