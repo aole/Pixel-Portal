@@ -219,7 +219,7 @@ class Canvas(wx.Panel):
 
         self.movex, self.movey = 0, 0
         self.selection = wx.Region()
-
+        
         self.mouseState = 0
 
         self.current_tool = "Pen"
@@ -504,6 +504,9 @@ class Canvas(wx.Panel):
             self.noUndo = True
             color = self.layers["current"].GetPixel(gx, gy)
             self.ChangePenColor(color)
+        elif self.current_tool == "Sel Rect":
+            if not e.ControlDown():
+                self.selection = wx.Region(0,0,0,0)
 
         if not self.HasCapture():
             self.CaptureMouse()
@@ -515,9 +518,9 @@ class Canvas(wx.Panel):
         miny, maxy = minmax(y0, y1)
         minx, miny = self.PixelAtPosition(minx, miny)
         maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
-        self.selection = wx.Region(minx, miny, maxx - minx, maxy - miny)
+        self.selection.Union(minx, miny, maxx - minx, maxy - miny)
         self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
-
+        
     def OnLeftUp(self, e):
         x, y = e.GetPosition()
         self.mouseState = 0
@@ -541,6 +544,10 @@ class Canvas(wx.Panel):
             self.noUndo = True
             self.CreateSelectionRect(x, y, self.origx, self.origy)
 
+        print('self.selection:')
+        for r in self.selection:
+            print(r)
+            
         self.movex, self.movey = 0, 0
 
         self.layers["drawing"].Clear(self.palette[0])
@@ -656,23 +663,15 @@ class Canvas(wx.Panel):
         # DRAWING LAYER
         display_selection_rect = True
         mdc = wx.MemoryDC(self.layers["drawing"])
-        if self.selection.IsEmpty():
-            dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
+        dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
                            self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
                            mdc,
                            0, 0,
                            self.layers["width"], self.layers["height"])
-        else:
-            if self.mouseState == 1 and self.current_tool in ("Move"):
-                display_selection_rect = False
-            dc.StretchBlit(self.panx + self.movex + self.selection.GetBox().x * self.pixel_size,
-                           self.pany + self.movey + self.selection.GetBox().y * self.pixel_size,
-                           self.selection.GetBox().width * self.pixel_size,
-                           self.selection.GetBox().height * self.pixel_size,
-                           mdc,
-                           self.selection.GetBox().x, self.selection.GetBox().y,
-                           self.selection.GetBox().width, self.selection.GetBox().height)
-
+                           
+        if self.mouseState == 1 and self.current_tool in ("Move"):
+            display_selection_rect = False
+        
         gc = wx.GraphicsContext.Create(dc)
 
         # REFERENCE
@@ -692,12 +691,13 @@ class Canvas(wx.Panel):
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
                              abs(self.prevy - self.origy))
-        elif not self.selection.IsEmpty() and display_selection_rect:
+        if not self.selection.IsEmpty() and display_selection_rect:
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
-            gc.DrawRectangle(self.selection.GetBox().x * self.pixel_size + self.panx,
-                             self.selection.GetBox().y * self.pixel_size + self.pany,
-                             self.selection.GetBox().width * self.pixel_size,
-                             self.selection.GetBox().height * self.pixel_size)
+            for r in self.selection:
+                gc.DrawRectangle(r.x * self.pixel_size + self.panx,
+                                 r.y * self.pixel_size + self.pany,
+                                 r.width * self.pixel_size,
+                                 r.height * self.pixel_size)
 
     def Undo(self):
         self.history.Undo()
