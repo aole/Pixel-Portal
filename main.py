@@ -505,20 +505,24 @@ class Canvas(wx.Panel):
             color = self.layers["current"].GetPixel(gx, gy)
             self.ChangePenColor(color)
         elif self.current_tool == "Sel Rect":
-            if not e.ControlDown():
-                self.selection = wx.Region(0,0,0,0)
+            if not e.ControlDown() and not e.AltDown():
+                self.selection = wx.Region()
 
         if not self.HasCapture():
             self.CaptureMouse()
 
         self.Refresh()
 
-    def CreateSelectionRect(self, x0, y0, x1, y1):
+    def UpdateSelectionRect(self, x0, y0, x1, y1, subtract=False):
         minx, maxx = minmax(x0, x1)
         miny, maxy = minmax(y0, y1)
         minx, miny = self.PixelAtPosition(minx, miny)
         maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
-        self.selection.Union(minx, miny, maxx - minx, maxy - miny)
+        if subtract:
+            self.selection.Subtract(wx.Rect(minx, miny, maxx - minx, maxy - miny))
+        else:
+            self.selection.Union(minx, miny, maxx - minx, maxy - miny)
+            
         self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
         
     def OnLeftUp(self, e):
@@ -542,12 +546,8 @@ class Canvas(wx.Panel):
                 self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
-            self.CreateSelectionRect(x, y, self.origx, self.origy)
+            self.UpdateSelectionRect(x, y, self.origx, self.origy, e.AltDown())
 
-        print('self.selection:')
-        for r in self.selection:
-            print(r)
-            
         self.movex, self.movey = 0, 0
 
         self.layers["drawing"].Clear(self.palette[0])
