@@ -670,21 +670,22 @@ class Canvas(wx.Panel):
                            self.selection.GetBox().x, self.selection.GetBox().y,
                            self.selection.GetBox().width, self.selection.GetBox().height)
 
-        # draw reference if any
+        gc = wx.GraphicsContext.Create(dc)
+
+        # draw reference image
         if self.layers["reference"]:
             w, h = int(self.layers["reference"].width*self.refScale), int(self.layers["reference"].height*self.refScale)
             ar = w/h
             cw, ch = self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size
-            
+            gc.DrawBitmap(self.layers["reference"], self.panx, self.pany, min(cw, ch*ar), min(cw/ar,ch))
+            '''
             mdc = wx.MemoryDC(self.layers["reference"])
             dc.StretchBlit(self.panx, self.pany,
                            min(cw, w), min(ch, h),
                            mdc,
                            0, 0,
                            min(cw, w), min(ch, h))
-
-        gc = wx.GraphicsContext.Create(dc)
-
+            '''
         if self.gridVisible and self.pixel_size > 2:
             self.DrawGrid(gc)
 
@@ -745,7 +746,7 @@ class Canvas(wx.Panel):
             return
 
         current_layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
-        current_layer.Draw(self.layers["current"], wx.Rect(0, 0, self.layers["width"], self.layers["height"]))
+        current_layer.Blit(self.layers["current"])
 
         drawing_layer = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
 
@@ -768,6 +769,7 @@ class Canvas(wx.Panel):
 
     def RemoveRefImage(self, e):
         self.layers["reference"] = None
+        self.Refresh()
 
     def Load(self, pixel, filename):
         image = wx.Image(filename)
