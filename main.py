@@ -350,6 +350,12 @@ class Canvas(wx.Panel):
         y = min(y0, y1)
         w = abs(x1 - x0)
         h = abs(y1 - y0)
+        if w==0 or h==0:
+            if w==0 and h==0:
+                self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
+            else:
+                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
+                
         self.layers[layer].Ellipse(x, y, w, h, self.palette[color], self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawEllipse(layer, self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
@@ -421,7 +427,7 @@ class Canvas(wx.Panel):
                     color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangePenColor(color)
                 else:
-                    self.DrawPixel("drawing", gx, gy, self.penColor)
+                    self.DrawLine("drawing", *self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
             elif self.current_tool == "Line":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
@@ -446,7 +452,7 @@ class Canvas(wx.Panel):
                     color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangeEraserColor(color)
                 else:
-                    self.DrawPixel("drawing", gx, gy, self.eraserColor)
+                    self.DrawLine("drawing", *self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.eraserColor)
             elif self.current_tool == "Line":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
@@ -491,8 +497,9 @@ class Canvas(wx.Panel):
                 self.ChangePenColor(color)
             else:
                 self.DrawPixel("drawing", gx, gy, self.penColor)
+        elif self.current_tool in ["Line", "Ellipse"]:
+            self.DrawPixel("drawing", gx, gy, self.penColor)
         elif self.current_tool == "Move":
-            # self.Blit("current", "drawing")
             self.layers["drawing"].Draw(self.layers["current"], self.selection)
             if not e.ControlDown():
                 self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
@@ -579,6 +586,8 @@ class Canvas(wx.Panel):
                 self.ChangeEraserColor(color)
             else:
                 self.DrawPixel("drawing", gx, gy, self.eraserColor)
+        elif self.current_tool in ["Line", "Ellipse"]:
+            self.DrawPixel("drawing", gx, gy, self.eraserColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
             color = self.layers["current"].GetPixel(gx, gy)
