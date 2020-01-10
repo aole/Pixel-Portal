@@ -18,7 +18,7 @@ NUM_UNDOS = 100
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-TOOLS = {"Pen": wx.CURSOR_PENCIL, "Sel Rect": wx.CURSOR_CROSS, "Line": wx.CURSOR_CROSS,
+TOOLS = {"Pen": wx.CURSOR_PENCIL, "Sel Rect": wx.CURSOR_CROSS, "Line": wx.CURSOR_CROSS, "Rectangle": wx.CURSOR_CROSS,
          "Ellipse": wx.CURSOR_CROSS, "Move": wx.CURSOR_SIZING, "Bucket": wx.CURSOR_PAINT_BRUSH,
          "Picker": wx.CURSOR_RIGHT_ARROW, "Reference": wx.CURSOR_MAGNIFIER}
 #Debug
@@ -101,6 +101,16 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
         gc.StrokeLine(x0, y0, x1, y1)
+
+    def Rectangle(self, x, y, w, h, color, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
+        gc.DrawRectangle(x, y, w, h)
 
     def Ellipse(self, x, y, w, h, color, clip=None):
         mdc = wx.MemoryDC(self)
@@ -349,11 +359,36 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.DrawLine(layer, x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False)
 
-    def DrawEllipse(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
+    def DrawRectangle(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True, equal=False):
         x = min(x0, x1)
         y = min(y0, y1)
         w = abs(x1 - x0)
         h = abs(y1 - y0)
+        if equal and w!=h:
+            w = h = min(w,h)
+            x1 = x0+w
+            y1 = y0+h
+        if w==0 or h==0:
+            if w==0 and h==0:
+                self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
+            else:
+                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
+                
+        self.layers[layer].Rectangle(x, y, w, h, self.palette[color], self.selection)
+        if canmirrorx and self.mirrorx:
+            self.DrawRectangle(layer, self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
+        if canmirrory and self.mirrory:
+            self.DrawRectangle(layer, x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False)
+
+    def DrawEllipse(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True, equal=False):
+        x = min(x0, x1)
+        y = min(y0, y1)
+        w = abs(x1 - x0)
+        h = abs(y1 - y0)
+        if equal and w!=h:
+            w = h = min(w,h)
+            x1 = x0+w
+            y1 = y0+h
         if w==0 or h==0:
             if w==0 and h==0:
                 self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
@@ -435,9 +470,12 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Line":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
+            elif self.current_tool == "Rectangle":
+                self.layers["drawing"].Clear(self.palette[0])
+                self.DrawRectangle("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor, equal=e.ShiftDown())
             elif self.current_tool == "Ellipse":
                 self.layers["drawing"].Clear(self.palette[0])
-                self.DrawEllipse("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
+                self.DrawEllipse("drawing", *self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor, equal=e.ShiftDown())
             elif self.current_tool == "Move":
                 self.movex, self.movey = x - self.origx, y - self.origy
                 # move in grid spaces
@@ -461,10 +499,14 @@ class Canvas(wx.Panel):
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawLine("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
                               self.eraserColor)
+            elif self.current_tool == "Rectangle":
+                self.layers["drawing"].Clear(self.palette[0])
+                self.DrawRectangle("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
+                                 self.eraserColor, equal=e.ShiftDown())
             elif self.current_tool == "Ellipse":
                 self.layers["drawing"].Clear(self.palette[0])
                 self.DrawEllipse("drawing", *self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
-                                 self.eraserColor)
+                                 self.eraserColor, equal=e.ShiftDown())
             elif self.current_tool == "Picker":
                 color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangeEraserColor(color)
@@ -501,7 +543,7 @@ class Canvas(wx.Panel):
                 self.ChangePenColor(color)
             else:
                 self.DrawPixel("drawing", gx, gy, self.penColor)
-        elif self.current_tool in ["Line", "Ellipse"]:
+        elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             self.DrawPixel("drawing", gx, gy, self.penColor)
         elif self.current_tool == "Move":
             self.layers["drawing"].Draw(self.layers["current"], self.selection)
@@ -553,7 +595,7 @@ class Canvas(wx.Panel):
             self.ReleaseMouse()
 
         # transfer from drawing layer to current_layer
-        if self.current_tool in ("Pen", "Line", "Ellipse"):
+        if self.current_tool in ("Pen", "Line", "Ellipse", "Rectangle"):
             self.Blit("drawing", "current")
         elif self.current_tool == "Bucket":
             self.Blit("drawing", "current")
