@@ -203,7 +203,7 @@ class UndoManager(wx.CommandProcessor):
 
     def Store(self, command):
         super().Store(command)
-        print('Undos:', len(self.Commands))
+        #print('Undos:', len(self.Commands))
 
 
 class Canvas(wx.Panel):
@@ -270,7 +270,7 @@ class Canvas(wx.Panel):
     def ClearCurrentLayer(self):
         self.beforeLayer = Layer(self.layers["current"])
 
-        self.layers["current"].Clear(self.palette[self.eraserColor])
+        self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
 
         self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
         self.beforeLayer = None
