@@ -7,7 +7,7 @@ import colorsys
 import numpy as np
 from math import atan2, ceil, floor, pi
 import random
-import wx
+import wx, wx.adv
 
 from PIL import Image, ImageDraw
 
@@ -18,22 +18,19 @@ NUM_UNDOS = 100
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-TOOLS = {"Pen": wx.CURSOR_PENCIL, "Sel Rect": wx.CURSOR_CROSS, "Line": wx.CURSOR_CROSS, "Rectangle": wx.CURSOR_CROSS,
-         "Ellipse": wx.CURSOR_CROSS, "Move": wx.CURSOR_SIZING, "Bucket": wx.CURSOR_PAINT_BRUSH,
-         "Picker": wx.CURSOR_RIGHT_ARROW, "Reference": wx.CURSOR_MAGNIFIER}
+TOOLS = {"Pen": (wx.CURSOR_PENCIL, "toolpen.png"), "Sel Rect": (wx.CURSOR_CROSS, "toolselectrect.png"), "Line": (wx.CURSOR_CROSS, "toolline.png"), "Rectangle": (wx.CURSOR_CROSS, "toolrect.png"), "Ellipse": (wx.CURSOR_CROSS, "toolellipse.png"), "Move": (wx.CURSOR_SIZING, "toolmove.png"), "Bucket": (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"), "Picker": (wx.CURSOR_RIGHT_ARROW, "toolpicker.png")}
+
 #Debug
 RENDER_DRAWING_LAYER = True
 RENDER_CURRENT_LAYER = True
 
 app = None
 
-
 def minmax(a, b):
     if b < a:
         return b, a
     else:
         return a, b
-
 
 class Layer(wx.Bitmap):
     def __init__(self, *args, **kwargs):
@@ -154,7 +151,6 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
 
-
 class LayerCommand(wx.Command):
     def __init__(self, layers, before, after):
         super().__init__(True)
@@ -170,7 +166,6 @@ class LayerCommand(wx.Command):
     def Undo(self):
         self.layers["current"].Blit(self.before)
         return True
-
 
 class ResizeCommand(wx.Command):
     def __init__(self, layers, before, after):
@@ -196,15 +191,12 @@ class ResizeCommand(wx.Command):
         self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0))
         return True
 
-
 class UndoManager(wx.CommandProcessor):
     def __init__(self):
         super().__init__(NUM_UNDOS)
 
     def Store(self, command):
         super().Store(command)
-        #print('Undos:', len(self.Commands))
-
 
 class Canvas(wx.Panel):
     def __init__(self, parent):
@@ -221,6 +213,7 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
+        self.Bind(wx.EVT_ENTER_WINDOW, self.OnMouseEnter)
 
         self.full_redraw = True
 
@@ -260,7 +253,7 @@ class Canvas(wx.Panel):
         self.beforeLayer = None
         self.noUndo = False
 
-        self.SetCursor(wx.Cursor(TOOLS[self.current_tool]))
+        self.SetCursor(wx.Cursor(TOOLS[self.current_tool][0]))
 
         self.listeners = []
 
@@ -675,7 +668,7 @@ class Canvas(wx.Panel):
             self.ReleaseMouse()
 
         # transfer from drawing layer to current_layer
-        if self.current_tool in ("Pen", "Line", "Ellipse", "Bucket"):
+        if self.current_tool in ("Pen", "Line", "Rectangle", "Ellipse", "Bucket"):
             self.Blit("drawing", "current")
             self.noUndo = False
 
@@ -686,10 +679,9 @@ class Canvas(wx.Panel):
         # create an undo command
         if not self.noUndo:
             self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
+            self.noUndo = False
+            
         self.beforeLayer = None
-
-        self.noUndo = False
-
         self.Refresh()
 
     def OnMiddleDown(self, e):
@@ -702,6 +694,9 @@ class Canvas(wx.Panel):
         self.mouseState = 0
         self.noUndo = False
 
+    def OnMouseEnter(self, e):
+        self.SetFocus()
+        
     def FullRedraw(self):
         self.full_redraw = True
         self.Refresh()
@@ -872,7 +867,7 @@ class Canvas(wx.Panel):
 
     def SetTool(self, tool):
         self.current_tool = tool
-        self.SetCursor(wx.Cursor(TOOLS[tool]))
+        self.SetCursor(wx.Cursor(TOOLS[tool][0]))
 
     def ScrollToMiddle(self, size):
         self.panx = int(size[0] / 2 - self.layers["width"] * self.pixel_size / 2)
@@ -916,7 +911,6 @@ class Canvas(wx.Panel):
 
         self.Refresh()
         
-
 class ColorPanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -978,7 +972,6 @@ class ColorPanel(wx.Panel):
 
         self.blitw, self.blith = m, m / ar
         self.Refresh()
-
 
 class ColorDialog(wx.Dialog):
     def __init__(self, parent):
@@ -1084,11 +1077,13 @@ class Frame(wx.Frame):
         self.colorbtn = self.AddToolButton(tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
         self.eraserbtn = self.AddToolButton(tb, 'Background Color', self.OnEraser, icon=wx.Bitmap("icons/backcolor.png"))
         
-        toolbtn = wx.ComboBox(tb, value="Pen", choices=list(TOOLS.keys()), style=wx.CB_READONLY)
-        self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=toolbtn.GetId())
-        self.AddToolControl(tb, toolbtn)
-        toolbtn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 60, wx.DefaultCoord)
-
+        bcb = wx.adv.BitmapComboBox(tb, style=wx.CB_READONLY)
+        for k, v in TOOLS.items():
+            bcb.Append(k, wx.Bitmap("icons/"+v[1]))
+        self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=bcb.GetId())
+        bcb.SetSelection(0)
+        tb.AddControl(bcb)
+        
         self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, icon=wx.Bitmap("icons/grid.png"), default=True)
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
@@ -1119,7 +1114,6 @@ class Frame(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
             self.canvas.SetPenColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
-            mdc = wx.MemoryDC(bitmap)
             clip = wx.Region(0,0,32,32)
             clip.Subtract(wx.Rect(9, 9, 14, 14))
             mdc.SetDeviceClippingRegion(clip)
@@ -1141,7 +1135,6 @@ class Frame(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
             self.canvas.SetEraserColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
-            mdc = wx.MemoryDC(bitmap)
             clip = wx.Region(0,0,32,32)
             clip.Subtract(wx.Rect(9, 9, 14, 14))
             mdc.SetDeviceClippingRegion(clip)
@@ -1152,15 +1145,28 @@ class Frame(wx.Frame):
             self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
 
     def PenColorChanged(self, color):
-        print(color)
-        #self.colorbtn.SetColour(color)
-        mdc = wx.MemoryDC(self.colorbtn.GetBitmap())
+        bitmap = self.colorbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        clip = wx.Region(0,0,32,32)
+        clip.Subtract(wx.Rect(9, 9, 14, 14))
+        mdc.SetDeviceClippingRegion(clip)
         mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         mdc.SetPen(wx.NullPen)
         mdc.DrawRectangle(0,0,32,32)
+        mdc.SelectObject(wx.NullBitmap)
+        self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
 
     def EraserColorChanged(self, color):
-        self.eraserbtn.SetColour(color)
+        bitmap = self.eraserbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        clip = wx.Region(0,0,32,32)
+        clip.Subtract(wx.Rect(9, 9, 14, 14))
+        mdc.SetDeviceClippingRegion(clip)
+        mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        mdc.SetPen(wx.NullPen)
+        mdc.DrawRectangle(0,0,32,32)
+        mdc.SelectObject(wx.NullBitmap)
+        self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
 
     def PixelSizeChanged(self, value):
         self.txtPixel.SetValue(str(value))
@@ -1231,8 +1237,8 @@ class Frame(wx.Frame):
             return
 
         try:
-            self.colorbtn.SetColour("#000000FF")
-            self.eraserbtn.SetColour("#FFFFFFFF")
+            self.PenColorChanged("#000000FF")
+            self.EraserColorChanged("#FFFFFFFF")
             pixel = int(self.txtPixel.GetValue())
             width = int(self.txtWidth.GetValue())
             height = int(self.txtHeight.GetValue())
@@ -1282,7 +1288,6 @@ class Frame(wx.Frame):
         self.testDialog.SetTitle('Color')
         self.testDialog.Show()
 
-
 def CreateWindows():
     global app
 
@@ -1290,10 +1295,8 @@ def CreateWindows():
 
     Frame().Show()
 
-
 def RunProgram():
     app.MainLoop()
-
 
 CreateWindows()
 RunProgram()
