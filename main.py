@@ -897,14 +897,25 @@ class Canvas(wx.Panel):
         self.Refresh()
 
     def OnFlipH(self, e):
-        before = self.layers["current"]
+        before = Layer(self.layers["current"])
         after = self.GetMirror(before)
 
         self.history.Store(LayerCommand(self.layers, before, Layer(after)))
-        self.layers["current"].Draw(after) # = Layer(after)
+        self.layers["current"].Draw(after)
 
         self.Refresh()
 
+    def Rotate90(self, e, clockwise=True):
+        before = Layer(self.layers["current"])
+        image = before.ConvertToImage()
+        image = image.Rotate90(clockwise)
+        after = image.ConvertToBitmap()
+
+        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.layers["current"].Draw(after)
+
+        self.Refresh()
+        
 
 class ColorPanel(wx.Panel):
     def __init__(self, *args, **kwargs):
@@ -1020,7 +1031,6 @@ class ColorDialog(wx.Dialog):
         image = wx.Image(w, h, bytearray(data), bytearray(alpha))
         self.colorImage = image
 
-
 class Frame(wx.Frame):
     def __init__(self):
         super().__init__(None, title=PROGRAM_NAME, size=WINDOW_SIZE)
@@ -1037,7 +1047,7 @@ class Frame(wx.Frame):
         self.testDialog = ColorDialog(self)
 
         # MENU
-        self.menuid = 10001
+        self.menuid = 20001
 
         mbar = wx.MenuBar()
 
@@ -1047,13 +1057,16 @@ class Frame(wx.Frame):
         self.AddMenuItem(medit, "Mirror to Right", self.canvas.OnMirrorTR)
         self.AddMenuItem(medit, "Reference Image ...", self.OnRefImage)
         self.AddMenuItem(medit, "Remove Reference Image", self.canvas.RemoveRefImage)
+        self.AddMenuItem(medit, "Rotate 90 CW", self.canvas.Rotate90)
 
         self.SetMenuBar(mbar)
 
         # TOOLBAR
         tb = self.CreateToolBar()
-        self.AddToolButton(tb, 'Clear', self.OnClear)
-        self.AddToolButton(tb, 'Resize', self.OnDocResize)
+        tb.SetToolBitmapSize((32, 32))
+        
+        self.AddToolButton(tb, 'Clear', self.OnClear, icon=wx.Bitmap("icons/clear.png"))
+        self.AddToolButton(tb, 'Resize', self.OnDocResize, icon=wx.Bitmap("icons/resize.png"))
 
         self.txtPixel = wx.TextCtrl(tb, value=str(DEFAULT_PIXEL_SIZE))
         self.AddToolControl(tb, self.txtPixel)
@@ -1062,11 +1075,12 @@ class Frame(wx.Frame):
         self.txtHeight = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[1]))
         self.AddToolControl(tb, self.txtHeight)
 
-        self.AddToolButton(tb, 'New', self.OnNew)
-        self.AddToolButton(tb, 'Load', self.OnLoad)
-        self.AddToolButton(tb, 'Save', self.OnSave)
-        self.AddToolButton(tb, 'Gif', self.OnSaveGif)
-
+        self.AddToolButton(tb, 'New', self.OnNew, icon=wx.Bitmap("icons/new.png"))
+        self.AddToolButton(tb, 'Load', self.OnLoad, icon=wx.Bitmap("icons/load.png"))
+        self.AddToolButton(tb, 'Save', self.OnSave, icon=wx.Bitmap("icons/save.png"))
+        self.AddToolButton(tb, 'Gif', self.OnSaveGif, icon=wx.Bitmap("icons/gif.png"))
+        tb.AddSeparator()
+        
         self.colorbtn = wx.ColourPickerCtrl(tb, colour=self.canvas.GetPenColor())
         self.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnColor, id=self.colorbtn.GetId())
         self.AddToolControl(tb, self.colorbtn)
@@ -1080,11 +1094,11 @@ class Frame(wx.Frame):
         self.AddToolControl(tb, toolbtn)
         toolbtn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 60, wx.DefaultCoord)
 
-        self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, True)
-        self.AddToggleButton(tb, 'MX', self.OnMirrorX)
-        self.AddToggleButton(tb, 'MY', self.OnMirrorY)
-        self.AddToolButton(tb, 'C', self.OnCenter)
-        self.AddToolButton(tb, 'T', self.OnTest)
+        self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, icon=wx.Bitmap("icons/grid.png"), default=True)
+        self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
+        self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
+        self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/resize.png"))
+        self.AddToolButton(tb, 'T', self.OnTest, icon=wx.Bitmap("icons/NA.png"))
 
         tb.Realize()
 
@@ -1106,18 +1120,14 @@ class Frame(wx.Frame):
     def PixelSizeChanged(self, value):
         self.txtPixel.SetValue(str(value))
 
-    def AddToolButton(self, tb, label, function):
-        btn = wx.Button(tb, wx.ID_ANY, label=label)
-        self.AddToolControl(tb, btn)
-        btn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 40, wx.DefaultCoord)
-        self.Bind(wx.EVT_BUTTON, function, id=btn.GetId())
+    def AddToolButton(self, tb, label, function, icon):
+        btn = tb.AddTool(wx.ID_ANY, label, icon, shortHelp=label)
+        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
 
-    def AddToggleButton(self, tb, label, function, default=False):
-        btn = wx.ToggleButton(tb, wx.ID_ANY, label=label)
-        btn.SetValue(default)
-        self.AddToolControl(tb, btn)
-        btn.SetSize(wx.DefaultCoord, wx.DefaultCoord, 40, wx.DefaultCoord)
-        self.Bind(wx.EVT_TOGGLEBUTTON, function, id=btn.GetId())
+    def AddToggleButton(self, tb, label, function, icon, default=False):
+        btn = tb.AddCheckTool(wx.ID_ANY, label, icon, shortHelp=label)
+        tb.ToggleTool(btn.GetId(), default)
+        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
 
     def AddToolControl(self, tb, control):
         control.SetSize(wx.DefaultCoord, wx.DefaultCoord, 30, wx.DefaultCoord)
