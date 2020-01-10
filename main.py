@@ -1062,7 +1062,7 @@ class Frame(wx.Frame):
         self.SetMenuBar(mbar)
 
         # TOOLBAR
-        tb = self.CreateToolBar()
+        self.toolbar = tb = self.CreateToolBar()
         tb.SetToolBitmapSize((32, 32))
         
         self.AddToolButton(tb, 'Clear', self.OnClear, icon=wx.Bitmap("icons/clear.png"))
@@ -1081,14 +1081,9 @@ class Frame(wx.Frame):
         self.AddToolButton(tb, 'Gif', self.OnSaveGif, icon=wx.Bitmap("icons/gif.png"))
         tb.AddSeparator()
         
-        self.colorbtn = wx.ColourPickerCtrl(tb, colour=self.canvas.GetPenColor())
-        self.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnColor, id=self.colorbtn.GetId())
-        self.AddToolControl(tb, self.colorbtn)
-
-        self.eraserbtn = wx.ColourPickerCtrl(tb, colour=self.canvas.GetEraserColor())
-        self.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnEraser, id=self.eraserbtn.GetId())
-        self.AddToolControl(tb, self.eraserbtn)
-
+        self.colorbtn = self.AddToolButton(tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
+        self.eraserbtn = self.AddToolButton(tb, 'Background Color', self.OnEraser, icon=wx.Bitmap("icons/backcolor.png"))
+        
         toolbtn = wx.ComboBox(tb, value="Pen", choices=list(TOOLS.keys()), style=wx.CB_READONLY)
         self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=toolbtn.GetId())
         self.AddToolControl(tb, toolbtn)
@@ -1097,7 +1092,7 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, icon=wx.Bitmap("icons/grid.png"), default=True)
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
-        self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/resize.png"))
+        self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
         self.AddToolButton(tb, 'T', self.OnTest, icon=wx.Bitmap("icons/NA.png"))
 
         tb.Realize()
@@ -1111,8 +1106,58 @@ class Frame(wx.Frame):
         menu.Bind(wx.EVT_MENU, func, id=self.menuid)
         self.menuid += 1
 
+    def OnColor(self, e):
+        bitmap = self.colorbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        color = mdc.GetPixel(1, 1)
+        
+        data = wx.ColourData()
+        data.SetColour(color)
+        data.SetChooseFull(True)
+        #data.SetChooseAlpha(True)
+        dlg = wx.ColourDialog(self, data)
+        if dlg.ShowModal() == wx.ID_OK:
+            color = dlg.GetColourData().GetColour()
+            self.canvas.SetPenColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
+            mdc = wx.MemoryDC(bitmap)
+            clip = wx.Region(0,0,32,32)
+            clip.Subtract(wx.Rect(9, 9, 14, 14))
+            mdc.SetDeviceClippingRegion(clip)
+            mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+            mdc.SetPen(wx.NullPen)
+            mdc.DrawRectangle(0,0,32,32)
+            mdc.SelectObject(wx.NullBitmap)
+            self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
+            
+    def OnEraser(self, e):
+        bitmap = self.eraserbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        color = mdc.GetPixel(1, 1)
+        
+        data = wx.ColourData()
+        data.SetColour(color)
+        data.SetChooseFull(True)
+        dlg = wx.ColourDialog(self, data)
+        if dlg.ShowModal() == wx.ID_OK:
+            color = dlg.GetColourData().GetColour()
+            self.canvas.SetEraserColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
+            mdc = wx.MemoryDC(bitmap)
+            clip = wx.Region(0,0,32,32)
+            clip.Subtract(wx.Rect(9, 9, 14, 14))
+            mdc.SetDeviceClippingRegion(clip)
+            mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+            mdc.SetPen(wx.NullPen)
+            mdc.DrawRectangle(0,0,32,32)
+            mdc.SelectObject(wx.NullBitmap)
+            self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
+
     def PenColorChanged(self, color):
-        self.colorbtn.SetColour(color)
+        print(color)
+        #self.colorbtn.SetColour(color)
+        mdc = wx.MemoryDC(self.colorbtn.GetBitmap())
+        mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        mdc.SetPen(wx.NullPen)
+        mdc.DrawRectangle(0,0,32,32)
 
     def EraserColorChanged(self, color):
         self.eraserbtn.SetColour(color)
@@ -1123,12 +1168,14 @@ class Frame(wx.Frame):
     def AddToolButton(self, tb, label, function, icon):
         btn = tb.AddTool(wx.ID_ANY, label, icon, shortHelp=label)
         self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
-
+        return btn
+        
     def AddToggleButton(self, tb, label, function, icon, default=False):
         btn = tb.AddCheckTool(wx.ID_ANY, label, icon, shortHelp=label)
         tb.ToggleTool(btn.GetId(), default)
         self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
-
+        return btn
+        
     def AddToolControl(self, tb, control):
         control.SetSize(wx.DefaultCoord, wx.DefaultCoord, 30, wx.DefaultCoord)
         tb.AddControl(control)
@@ -1203,12 +1250,6 @@ class Frame(wx.Frame):
         ret = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
         if ret:
             self.canvas.SaveGif(ret)
-
-    def OnColor(self, e):
-        self.canvas.SetPenColor(e.Colour.GetAsString(wx.C2S_HTML_SYNTAX))
-
-    def OnEraser(self, e):
-        self.canvas.SetEraserColor(e.Colour.GetAsString(wx.C2S_HTML_SYNTAX))
 
     def OnKeyDown(self, e):
         keycode = e.GetUnicodeKey()
