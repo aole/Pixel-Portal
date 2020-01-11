@@ -12,7 +12,7 @@ import wx, wx.adv
 from PIL import Image, ImageDraw
 
 PROGRAM_NAME = "Pixel Portal"
-WINDOW_SIZE = (650, 550)
+WINDOW_SIZE = (700, 550)
 NUM_UNDOS = 100
 
 DEFAULT_DOC_SIZE = (80, 80)
@@ -23,6 +23,7 @@ TOOLS = {"Pen": (wx.CURSOR_PENCIL, "toolpen.png"), "Sel Rect": (wx.CURSOR_CROSS,
 #Debug
 RENDER_DRAWING_LAYER = True
 RENDER_CURRENT_LAYER = True
+RENDER_PREVIEW = True
 
 app = None
 
@@ -704,6 +705,7 @@ class Canvas(wx.Panel):
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
         
+        lw, lh = self.layers["width"], self.layers["height"]
         # PAINT WHOLE CANVAS
         if self.full_redraw:
             dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
@@ -723,7 +725,7 @@ class Canvas(wx.Panel):
                            self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
                            mdc,
                            0, 0,
-                           self.layers["width"], self.layers["height"])
+                           lw, lh)
 
         # DRAWING LAYER
         if RENDER_DRAWING_LAYER:
@@ -732,7 +734,7 @@ class Canvas(wx.Panel):
                                self.layers["width"] * self.pixel_size, self.layers["height"] * self.pixel_size,
                                mdc,
                                0, 0,
-                               self.layers["width"], self.layers["height"])
+                               lw, lh)
 
         display_selection_rect = True
         if self.mouseState == 1 and self.current_tool in ("Move"):
@@ -765,6 +767,19 @@ class Canvas(wx.Panel):
                                  r.width * self.pixel_size,
                                  r.height * self.pixel_size)
 
+        # PREVIEW
+        if RENDER_PREVIEW:
+            dc.DestroyClippingRegion()
+            w, h = e.GetEventObject().GetSize()
+            # BUG? dc.GetSize provide does not reduce in size if the window is expanded and them reduced.
+            
+            mdc = wx.MemoryDC(self.layers["current"])
+            dc.StretchBlit(w-lw, 0,
+                           lw, lh,
+                           mdc,
+                           0, 0,
+                           lw, lh)
+        
     def Undo(self):
         self.history.Undo()
         self.full_redraw = True
@@ -1054,6 +1069,13 @@ class Frame(wx.Frame):
 
         mbar = wx.MenuBar()
 
+        mfile = wx.Menu()
+        mbar.Append(mfile, "File")
+        
+        mnew = wx.Menu()
+        mfile.AppendSubMenu(mnew, "New")
+        self.AddMenuItem(mnew, "32 x 32", self.OnNew32x32)
+        
         medit = wx.Menu()
         mbar.Append(medit, "Edit")
         self.AddMenuItem(medit, "Flip Horizontal", self.canvas.OnFlipH)
@@ -1243,7 +1265,10 @@ class Frame(wx.Frame):
     def OnMirrorY(self, e):
         self.canvas.mirrory = e.IsChecked()
 
-    def OnNew(self, e):
+    def OnNew32x32(self, e):
+        self.OnNew(e, 32, 32)
+        
+    def OnNew(self, e, width=None, height=None):
         if not self.CheckDirty():
             return
 
@@ -1251,8 +1276,14 @@ class Frame(wx.Frame):
             self.PenColorChanged("#000000FF")
             self.EraserColorChanged("#FFFFFFFF")
             pixel = int(self.txtPixel.GetValue())
-            width = int(self.txtWidth.GetValue())
-            height = int(self.txtHeight.GetValue())
+            if width:
+                self.txtWidth.SetValue(str(width))
+            else:
+                width = int(self.txtWidth.GetValue())
+            if height:
+                self.txtHeight.SetValue(str(height))
+            else:
+                height = int(self.txtHeight.GetValue())
             self.canvas.New(pixel, width, height)
             self.canvas.FullRedraw()
         except:
