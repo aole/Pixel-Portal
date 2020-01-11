@@ -1,10 +1,10 @@
 # Pixel-Portal
 Pixel Art drawing program
 
+![Screenshot](screenshot5.jpg?raw=true)
 ![Screenshot](screenshot4.jpg?raw=true)
 ![Screenshot](screenshot3.jpg?raw=true)
 ![Screenshot](screenshot2.jpg?raw=true)
-![Screenshot](screenshot.jpg?raw=true)
 
 Features
 --------

@@ -891,6 +891,16 @@ class Canvas(wx.Panel):
 
         self.Refresh()
 
+    def OnMirrorTB(self, e):
+        before = Layer(self.layers["current"])
+        after = Layer(self.GetMirror(before, False))
+        after.Draw(before, wx.Region(0, 0, before.width, int(before.height / 2)))
+
+        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.layers["current"] = after
+
+        self.Refresh()
+
     def OnFlipH(self, e):
         before = Layer(self.layers["current"])
         after = self.GetMirror(before)
@@ -1048,6 +1058,7 @@ class Frame(wx.Frame):
         mbar.Append(medit, "Edit")
         self.AddMenuItem(medit, "Flip Horizontal", self.canvas.OnFlipH)
         self.AddMenuItem(medit, "Mirror to Right", self.canvas.OnMirrorTR)
+        self.AddMenuItem(medit, "Mirror Down", self.canvas.OnMirrorTB)
         self.AddMenuItem(medit, "Reference Image ...", self.OnRefImage)
         self.AddMenuItem(medit, "Remove Reference Image", self.canvas.RemoveRefImage)
         self.AddMenuItem(medit, "Rotate 90 CW", self.canvas.Rotate90)
