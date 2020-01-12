@@ -90,6 +90,32 @@ class Layer(wx.Bitmap):
         for x, y in pixels:
             gc.DrawRectangle(x, y, 1, 1)
 
+    # BUG?? FloodFill is painting with alpha=0
+    def FloodFill(self, x0, y0, color, clip=None):
+        pdc = wx.adv.PseudoDC()
+        mdc = wx.MemoryDC(self)
+        replace = mdc.GetPixel(x0, y0)
+        
+        mdc.SetBrush(wx.Brush(color))
+        mdc.FloodFill(x0, y0, replace)
+        return 
+        
+        gc = wx.GraphicsContext.Create(mdc)
+        region = wx.Region(self, replace)
+        w, h = self.width, self.height
+        if not region.IsEmpty():
+            region.Xor(0, 0, w, h)
+            if clip and not clip.IsEmpty():
+                region.Intersect(clip)
+            gc.Clip(region)
+            gc.SetBrush(wx.Brush(color))
+            gc.SetPen(wx.NullPen)
+            for x in range(0, w, 60):
+                for y in range(0, h, 60):
+                    gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
+            #gc.DrawRectangle(0, 0, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+        
     def Line(self, x0, y0, x1, y1, color, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -316,35 +342,42 @@ class Canvas(wx.Panel):
             self.DrawPixel(layer, x, self.GetYMirror(y), color, False, False)
 
     def FloodFill(self, layer, x, y, color):
-        if x < 0 or y < 0 or x > self.layers["width"] - 1 or y > self.layers["height"] - 1:
+        w, h = self.layers["width"], self.layers["height"]
+        
+        if x < 0 or y < 0 or x > w - 1 or y > h - 1:
             return
         if not self.selection.IsEmpty() and not self.selection.Contains(x, y):
             return
 
-        #self.layers[layer].FloodFill(x, y, self.palette[color], self.selection)
-        l = self.layers[layer]
-        replace = l.GetPixel(x, y)
-
-        color = self.palette[color]
+        buf = bytearray(w*h*4)
+        self.layers[layer].CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
+        buf = np.array(buf).reshape(h, w, 4)
+        
+        replace = np.array(buf[y][x])
+        
+        c = wx.Colour(self.palette[color])
+        color = np.array([c.red, c.green, c.blue, 255])
+        
         queue = {(x, y)}
         while queue:
             # replace current pixel
             x, y = queue.pop()
             if not self.selection or self.selection.IsEmpty() or self.selection.Contains(x, y):
-                l.SetPixel(x, y, color)
-
+                buf[y][x] = color
                 # north
-                if y > 0 and l.GetPixel(x, y - 1) == replace and l.GetPixel(x, y - 1) != color:
+                if y > 0 and np.array_equal(buf[y-1][x], replace) and not np.array_equal(buf[y-1][x], color):
                     queue.add((x, y - 1))
                 # east
-                if x < self.layers["width"] - 1 and l.GetPixel(x + 1, y) == replace and l.GetPixel(x + 1, y) != color:
+                if x < w - 1 and np.array_equal(buf[y][x + 1], replace) and not np.array_equal(buf[y][x + 1], color):
                     queue.add((x + 1, y))
                 # south
-                if y < self.layers["height"] - 1 and l.GetPixel(x, y + 1) == replace and l.GetPixel(x, y + 1) != color:
+                if y < h - 1 and np.array_equal(buf[y + 1][x], replace) and not np.array_equal(buf[y+1][x], color):
                     queue.add((x, y + 1))
                 # west
-                if x > 0 and l.GetPixel(x - 1, y) == replace and l.GetPixel(x - 1, y) != color:
+                if x > 0 and np.array_equal(buf[y][x - 1], replace) and not np.array_equal(buf[y][x - 1], color):
                     queue.add((x - 1, y))
+                    
+        self.layers[layer].CopyFromBuffer(bytes(buf), wx.BitmapBufferFormat_RGBA)
         
     def DrawLine(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
         self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
