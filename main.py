@@ -7,7 +7,9 @@ import colorsys
 import numpy as np
 from math import atan2, ceil, floor, pi
 import random
+
 import wx, wx.adv
+import wx.lib.agw.cubecolourdialog as CCD
 
 from PIL import Image, ImageDraw
 
@@ -968,119 +970,6 @@ class Canvas(wx.Panel):
         self.layers["current"].Draw(after)
 
         self.Refresh()
-        
-class ColorPanel(wx.Panel):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-
-        self.mouseState = 0
-
-        self.lightness = 1.0
-        self.backgroundBrush = wx.TheBrushList.FindOrCreateBrush("#998877FF")
-        self.padding = 5
-
-        self.image = self.Parent.colorImage.AdjustChannels(self.lightness, self.lightness, self.lightness)
-        self.bitmap = wx.Bitmap(self.image, 24)
-        self.blitw, self.blith = 0, 0
-
-    def OnMouseMove(self, e):
-        if self.mouseState == 1:
-            x, y = e.GetPosition()
-            iw, ih = self.bitmap.GetSize()
-            sw, sh = self.blitw, self.blith
-            x, y = x - self.padding, y - self.padding
-            x = int(x * iw / sw)
-            y = int(y * ih / sh)
-            if x >= 0 and x < iw and y >= 0 and y < ih:
-                print(self.image.GetRed(x, y), self.image.GetGreen(x, y), self.image.GetBlue(x, y))
-
-    def OnLeftDown(self, e):
-        self.mouseState = 1
-
-    def OnLeftUp(self, e):
-        self.mouseState = 0
-
-    def OnPaint(self, e):
-        if self.blitw < 1 or self.blith < 1:
-            return
-
-        dc = wx.PaintDC(self)
-        dc.SetBackground(self.backgroundBrush)
-        dc.Clear()
-
-        iw, ih = self.bitmap.GetSize()
-
-        mdc = wx.MemoryDC(self.bitmap)
-        dc.StretchBlit(self.padding, self.padding,
-                       self.blitw, self.blith,
-                       mdc,
-                       0, 0,
-                       iw, ih)
-
-    def OnSize(self, e):
-        iw, ih = self.bitmap.GetSize()
-        ar = iw / ih
-
-        w, h = e.GetSize()
-        m = min(w - self.padding * 2, h * ar - self.padding * 2)
-
-        self.blitw, self.blith = m, m / ar
-        self.Refresh()
-
-class ColorDialog(wx.Dialog):
-    def __init__(self, parent):
-        super().__init__(parent, size=(300, 300), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)  # | wx.STAY_ON_TOP)
-
-        self.CreateColorWheel(0.5)
-
-        cp = ColorPanel(self)
-        cp.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        cp.Bind(wx.EVT_PAINT, cp.OnPaint)
-        cp.Bind(wx.EVT_SIZE, cp.OnSize)
-
-        bs = wx.BoxSizer(wx.HORIZONTAL)
-        bs.Add(cp, wx.ID_ANY, wx.EXPAND | wx.ALL, 2)
-        self.SetSizer(bs)
-
-    def CreateColorWheel(self, lightness):
-        imgw, imgh = 1000, 1000
-        w, h = imgw + 100, imgh
-
-        c = imgw / 2, imgh / 2
-        r = min(imgw, imgh) / 2
-
-        data = []
-        alpha = []
-        for y in range(h):
-            for x in range(w):
-                rx = x - c[0]
-                ry = y - c[1]
-                s = ((x - c[0]) ** 2.0 + (y - c[1]) ** 2.0) ** 0.5
-
-                if x < imgw and s <= r:  # 1.0:
-                    hue = ((atan2(ry, rx) / pi) + 1.0) / 2.0
-                    rgb = colorsys.hsv_to_rgb(hue, s / r, 1.0)
-                    data.extend((int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)))
-                    alpha.append(255)
-                else:
-                    if x >= imgw + 20 and x < imgw + 50:
-                        col = int(((h - 1) - y) * 255 / (h - 1))
-                        data.extend((col, col, col))
-                        alpha.append(255)
-                    elif x >= imgw + 70 and x < imgw + 100:
-                        col = int(((h - 1) - y) * 255 / (h - 1))
-                        data.extend((255, 255, 255))
-                        alpha.append(col)
-                    else:
-                        data.extend((0, 0, 0))
-                        alpha.append(0)
-
-        image = wx.Image(w, h, bytearray(data), bytearray(alpha))
-        self.colorImage = image
 
 class Frame(wx.Frame):
     def __init__(self):
@@ -1094,8 +983,6 @@ class Frame(wx.Frame):
         self.canvas = Canvas(self)
         self.canvas.New(DEFAULT_PIXEL_SIZE, *DEFAULT_DOC_SIZE)
         self.canvas.listeners.append(self)
-
-        self.testDialog = ColorDialog(self)
 
         # MENU
         self.menuid = 20001
@@ -1154,7 +1041,6 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
-        self.AddToolButton(tb, 'T', self.OnTest, icon=wx.Bitmap("icons/NA.png"))
 
         tb.Realize()
 
@@ -1174,9 +1060,8 @@ class Frame(wx.Frame):
         
         data = wx.ColourData()
         data.SetColour(color)
-        data.SetChooseFull(True)
-        #data.SetChooseAlpha(True)
-        dlg = wx.ColourDialog(self, data)
+        #data.SetChooseFull(True)
+        dlg = CCD.CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
             self.canvas.SetPenColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
@@ -1197,7 +1082,7 @@ class Frame(wx.Frame):
         data = wx.ColourData()
         data.SetColour(color)
         data.SetChooseFull(True)
-        dlg = wx.ColourDialog(self, data)
+        dlg = CCD.CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
             self.canvas.SetEraserColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
