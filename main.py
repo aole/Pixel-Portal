@@ -251,7 +251,8 @@ class Canvas(wx.Panel):
 
         self.prevx, self.prevy = 0, 0
         self.origx, self.origy = 0, 0
-
+        self.prevgx, self.prevgy = -1, -1
+        
         self.movex, self.movey = 0, 0
         self.selection = wx.Region()
         
@@ -487,6 +488,7 @@ class Canvas(wx.Panel):
     def OnMouseMove(self, e):
         x, y = e.GetPosition()
         gx, gy = self.PixelAtPosition(x, y)
+        self.prevgx, self.prevgy = gx, gy
 
         # draw with 1st color
         if self.mouseState == 1:
@@ -513,8 +515,6 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Picker":
                 color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangePenColor(color)
-
-            self.Refresh()
 
         # draw with 2nd color
         elif self.mouseState == 2:
@@ -544,16 +544,15 @@ class Canvas(wx.Panel):
                 if not self.selection.IsEmpty():
                     self.selection.Offset(gx - px, gy - py)
 
-            self.Refresh()
-
         elif self.mouseState == 3:
             self.panx += x - self.prevx
             self.pany += y - self.prevy
 
             self.full_redraw = True
-            self.Refresh()
 
         self.prevx, self.prevy = x, y
+
+        self.Refresh()
 
     def OnLeftDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
@@ -747,6 +746,41 @@ class Canvas(wx.Panel):
             dc.Clear()
             self.full_redraw = False
 
+        # PAINT RULERS
+        dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
+        dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+        dc.DrawRectangle(self.panx-10, 0, lw*self.pixel_size+20, 25)
+        dc.DrawRectangle(0, self.pany-10, 25, lh*self.pixel_size+20)
+        
+        dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.BLACK))
+        for rx in range(0, lw+1):
+            if self.prevgx==rx and rx<lw:
+                dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#CCCCCC"))
+                dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+                dc.DrawRectangle(self.panx + rx * self.pixel_size, 0, 5, 5)
+                dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.BLACK))
+                dc.SetBrush(wx.NullBrush)
+                
+            rh = 10 if rx%5==0 else 5
+            dc.DrawLine(self.panx + rx * self.pixel_size, 0, self.panx + rx * self.pixel_size, rh)
+            if rx%5==0:
+                rsz = int(dc.GetTextExtent(str(rx)).width/2)
+                dc.DrawText(str(rx), self.panx + rx * self.pixel_size - rsz, rh)
+                
+        for ry in range(0, lh+1):
+            if self.prevgy==ry and ry<lh:
+                dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#CCCCCC"))
+                dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+                dc.DrawRectangle(0, self.pany + ry * self.pixel_size, 5, 5)
+                dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.BLACK))
+                dc.SetBrush(wx.NullBrush)
+                
+            rw = 10 if ry%5==0 else 5
+            dc.DrawLine(0, self.pany + ry * self.pixel_size, rw, self.pany + ry * self.pixel_size)
+            if ry%5==0:
+                rsz = int(dc.GetTextExtent(str(ry)).height/2)
+                dc.DrawText(str(ry), rw, self.pany + ry * self.pixel_size - rsz)
+            
         # CLIP TO DOCUMENT
         dc.SetClippingRegion(self.panx, self.pany, self.layers["width"] * self.pixel_size,
                              self.layers["height"] * self.pixel_size)
@@ -923,10 +957,10 @@ class Canvas(wx.Panel):
         self.panx = int(size[0] / 2 - self.layers["width"] * self.pixel_size / 2)
         self.pany = int(size[1] / 2 - self.layers["height"] * self.pixel_size / 2)
 
-        if self.panx < 10:
-            self.panx = 10
-        if self.pany < 10:
-            self.pany = 10
+        if self.panx < 0:
+            self.panx = 30
+        if self.pany < 0:
+            self.pany = 30
 
     def GetMirror(self, bitmap, horizontally=True):
         return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
