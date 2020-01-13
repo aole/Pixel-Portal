@@ -736,6 +736,11 @@ class Canvas(wx.Panel):
         self.full_redraw = True
         self.Refresh()
 
+    def DrawBrushOnCanvas(self, gc, px, py):
+        gc.SetPen(wx.NullPen)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.palette[self.penColor]))
+        gc.DrawRectangle(self.panx+px*self.pixel_size, self.pany+py*self.pixel_size, self.pixel_size, self.pixel_size)
+        
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
         
@@ -811,6 +816,10 @@ class Canvas(wx.Panel):
         
         gc = wx.GraphicsContext.Create(dc)
 
+        # DRAW BRUSH PREVIEW
+        if self.mouseState == 0:
+            self.DrawBrushOnCanvas(gc, self.prevgx, self.prevgy)
+            
         # REFERENCE
         if self.layers["reference"]:
             w, h = int(self.layers["reference"].width*self.refScale), int(self.layers["reference"].height*self.refScale)
