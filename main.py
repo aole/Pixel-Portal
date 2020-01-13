@@ -73,16 +73,16 @@ class Layer(wx.Bitmap):
         mdc = wx.MemoryDC(self)
         return mdc.GetPixel(x, y)
 
-    def SetPixel(self, x, y, color, clip=None):
+    def SetPixel(self, x, y, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-        gc.DrawRectangle(x, y, 1, 1)
+        gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
 
-    def SetPixels(self, pixels, color, clip=None):
+    def SetPixels(self, pixels, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
@@ -118,34 +118,34 @@ class Layer(wx.Bitmap):
             #gc.DrawRectangle(0, 0, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
         
-    def Line(self, x0, y0, x1, y1, color, clip=None):
+    def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.StrokeLine(x0, y0, x1, y1)
 
-    def Rectangle(self, x, y, w, h, color, clip=None):
+    def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.DrawRectangle(x, y, w, h)
 
-    def Ellipse(self, x, y, w, h, color, clip=None):
+    def Ellipse(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(color))
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.DrawEllipse(x, y, w, h)
 
     def Blit(self, layer, x=0, y=0, w=0, h=0):
@@ -265,6 +265,7 @@ class Canvas(wx.Panel):
 
         self.pixel_size = DEFAULT_PIXEL_SIZE
 
+        self.penSize = 3
         self.penColor = 1  #
         self.eraserColor = 2  #
         self.palette = None
@@ -293,7 +294,7 @@ class Canvas(wx.Panel):
     def ClearCurrentLayer(self):
         self.beforeLayer = Layer(self.layers["current"])
 
-        self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
+        self.layers["current"].Clear(self.palette[self.eraserColor], clip=self.selection)
 
         self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers["current"])))
         self.beforeLayer = None
@@ -338,7 +339,7 @@ class Canvas(wx.Panel):
         return ((y + 1 - h) * -1) + h
 
     def DrawPixel(self, layer, x, y, color, canmirrorx=True, canmirrory=True):
-        self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
+        self.layers[layer].SetPixel(x, y, self.palette[color], size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawPixel(layer, self.GetXMirror(x), y, color, False, True)
         if canmirrory and self.mirrory:
@@ -383,7 +384,7 @@ class Canvas(wx.Panel):
         self.layers[layer].CopyFromBuffer(bytes(buf), wx.BitmapBufferFormat_RGBA)
         
     def DrawLine(self, layer, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
-        self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
+        self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawLine(layer, self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
         if canmirrory and self.mirrory:
@@ -400,11 +401,11 @@ class Canvas(wx.Panel):
             y1 = y0+h
         if w==0 or h==0:
             if w==0 and h==0:
-                self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
+                self.layers[layer].SetPixel(x, y, self.palette[color], size=self.penSize, clip=self.selection)
             else:
-                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
+                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], size=self.penSize, clip=self.selection)
                 
-        self.layers[layer].Rectangle(x, y, w, h, self.palette[color], self.selection)
+        self.layers[layer].Rectangle(x, y, w, h, self.palette[color], clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawRectangle(layer, self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
         if canmirrory and self.mirrory:
@@ -421,11 +422,11 @@ class Canvas(wx.Panel):
             y1 = y0+h
         if w==0 or h==0:
             if w==0 and h==0:
-                self.layers[layer].SetPixel(x, y, self.palette[color], self.selection)
+                self.layers[layer].SetPixel(x, y, self.palette[color], size=self.penSize, clip=self.selection)
             else:
-                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], self.selection)
+                self.layers[layer].Line(x0, y0, x1, y1, self.palette[color], size=self.penSize, clip=self.selection)
                 
-        self.layers[layer].Ellipse(x, y, w, h, self.palette[color], self.selection)
+        self.layers[layer].Ellipse(x, y, w, h, self.palette[color], clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawEllipse(layer, self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
         if canmirrory and self.mirrory:
@@ -574,9 +575,9 @@ class Canvas(wx.Panel):
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             self.DrawPixel("drawing", gx, gy, self.penColor)
         elif self.current_tool == "Move":
-            self.layers["drawing"].Draw(self.layers["current"], self.selection)
+            self.layers["drawing"].Draw(self.layers["current"], clip=self.selection)
             if not e.ControlDown():
-                self.layers["current"].Clear(self.palette[self.eraserColor], self.selection)
+                self.layers["current"].Clear(self.palette[self.eraserColor], clip=self.selection)
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
@@ -739,7 +740,9 @@ class Canvas(wx.Panel):
     def DrawBrushOnCanvas(self, gc, px, py):
         gc.SetPen(wx.NullPen)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.palette[self.penColor]))
-        gc.DrawRectangle(self.panx+px*self.pixel_size, self.pany+py*self.pixel_size, self.pixel_size, self.pixel_size)
+        x, y = int(px-self.penSize/2+.5), int(py-self.penSize/2+.5)
+        sz = self.penSize*self.pixel_size
+        gc.DrawRectangle(self.panx+x*self.pixel_size, self.pany+y*self.pixel_size, sz, sz)
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
