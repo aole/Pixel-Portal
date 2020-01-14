@@ -321,22 +321,26 @@ class Canvas(wx.Panel):
         gc.SetPen(wx.ThePenList.FindOrCreatePen('#22222255'))
         path = gc.CreatePath()
         if midpx:
-            for x in range(self.panx, min(self.panx + self.layers["width"] * self.pixel_size + 1, w), midpx):
-                path.MoveToPoint(x, self.pany)
-                path.AddLineToPoint(x, min(self.pany + self.layers["height"] * self.pixel_size, h))
+            path.MoveToPoint(midpx+self.panx, self.pany)
+            path.AddLineToPoint(midpx+self.panx, min(self.pany + self.layers["height"] * self.pixel_size, h))
+            if self.mirrorx:
+                path.MoveToPoint(midpx+self.panx-self.pixel_size, self.pany)
+                path.AddLineToPoint(midpx+self.panx-self.pixel_size, min(self.pany + self.layers["height"] * self.pixel_size, h))
         if midpy:
-            for y in range(self.pany, min(self.pany + self.layers["height"] * self.pixel_size + 1, h), midpy):
-                path.MoveToPoint(self.panx, y)
-                path.AddLineToPoint(min(self.panx + self.layers["width"] * self.pixel_size, w), y)
+            path.MoveToPoint(self.panx, midpy+self.pany)
+            path.AddLineToPoint(min(self.panx + self.layers["width"] * self.pixel_size, w), midpy+self.pany)
+            if self.mirrory:
+                path.MoveToPoint(self.panx, midpy+self.pany-self.pixel_size)
+                path.AddLineToPoint(min(self.panx + self.layers["width"] * self.pixel_size, w), midpy+self.pany-self.pixel_size)
         gc.StrokePath(path)
 
     def GetXMirror(self, x):
         w = int(self.layers["width"] / 2)
-        return ((x + 1 - w) * -1) + w
+        return ((x + 1 - w) * -1) + w - 1
 
     def GetYMirror(self, y):
         h = int(self.layers["height"] / 2)
-        return ((y + 1 - h) * -1) + h
+        return ((y + 1 - h) * -1) + h - 1
 
     def DrawPixel(self, layer, x, y, color, canmirrorx=True, canmirrory=True):
         self.layers[layer].SetPixel(x, y, self.palette[color], size=self.penSize, clip=self.selection)
@@ -1261,9 +1265,11 @@ class Frame(wx.Frame):
 
     def OnMirrorX(self, e):
         self.canvas.mirrorx = e.IsChecked()
+        self.canvas.Refresh()
 
     def OnMirrorY(self, e):
         self.canvas.mirrory = e.IsChecked()
+        self.canvas.Refresh()
 
     def OnNew32x32(self, e):
         self.OnNew(e, 32, 32)
