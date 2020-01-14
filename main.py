@@ -8,6 +8,8 @@ import numpy as np
 from math import atan2, ceil, floor, pi
 import random
 
+from shapely.geometry import Polygon, MultiPolygon
+
 import wx, wx.adv
 import wx.lib.agw.cubecolourdialog as CCD
 
@@ -541,7 +543,7 @@ class Canvas(wx.Panel):
             
         self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
         
-    def SelectBoundry(self, x, y, add=False, sub=False):
+    def SelectBoundary(self, x, y, add=False, sub=False):
         layer = self.layers["current"]
         w, h = layer.width, layer.height
         
@@ -839,7 +841,7 @@ class Canvas(wx.Panel):
         gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
         
         if self.current_tool == "Sel Rect":
-            self.SelectBoundry(gx, gy, e.ControlDown(), e.AltDown())
+            self.SelectBoundary(gx, gy, e.ControlDown(), e.AltDown())
             
         self.doubleClick = True
         self.Refresh()
@@ -857,6 +859,9 @@ class Canvas(wx.Panel):
         x, y = int(px-self.penSize/2+.5), int(py-self.penSize/2+.5)
         sz = self.penSize*self.pixel_size
         gc.DrawRectangle(self.panx+x*self.pixel_size, self.pany+y*self.pixel_size, sz, sz)
+        
+    def GetPolyCoords(self, x, y, w, h):
+        return (x,y), (x,y+h), (x+w, y+h), (x+w,y)
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
@@ -927,10 +932,6 @@ class Canvas(wx.Panel):
                                0, 0,
                                lw, lh)
 
-        display_selection_rect = True
-        if self.mouseState == 1 and self.current_tool in ("Move"):
-            display_selection_rect = False
-        
         gc = wx.GraphicsContext.Create(dc)
 
         # DRAW BRUSH PREVIEW
@@ -949,20 +950,52 @@ class Canvas(wx.Panel):
             self.DrawGrid(gc)
 
         # SELECTION
+        display_selection_rect = True
+        if self.mouseState == 1 and self.current_tool in ("Move"):
+            display_selection_rect = False
+        
         gc.SetCompositionMode(wx.COMPOSITION_XOR)
         gc.SetBrush(wx.NullBrush)
         if self.mouseState == 1 and self.current_tool == "Sel Rect":
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
                              abs(self.prevy - self.origy))
+                             
+        # TODO: Performance, precalculate shapely MultiPolygon
         if self.selection and not self.selection.IsEmpty() and display_selection_rect:
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
+            spoly = Polygon()
             for r in self.selection:
-                gc.DrawRectangle(r.x * self.pixel_size + self.panx,
+                poly = Polygon([*self.GetPolyCoords(r.x * self.pixel_size + self.panx,
                                  r.y * self.pixel_size + self.pany,
                                  r.width * self.pixel_size,
-                                 r.height * self.pixel_size)
-
+                                 r.height * self.pixel_size)])
+                spoly = spoly.union(poly)
+            path = gc.CreatePath()
+            # can have multiple disjoint polygons boundaries
+            for poly in MultiPolygon([spoly]):
+                moveto = True
+                for x,y in poly.exterior.coords:
+                    if moveto:
+                        path.MoveToPoint(x,y)
+                        moveto = False
+                    else:
+                        path.AddLineToPoint(x,y)
+                path.CloseSubpath()
+                
+                # each exterior boundary can have multiple interior holes
+                for interior in poly.interiors:
+                    moveto = True
+                    for x,y in interior.coords:
+                        if moveto:
+                            path.MoveToPoint(x,y)
+                            moveto = False
+                        else:
+                            path.AddLineToPoint(x,y)
+                    path.CloseSubpath()
+                    
+            gc.DrawPath(path)
+            
         # PREVIEW
         if RENDER_PREVIEW:
             dc.DestroyClippingRegion()
