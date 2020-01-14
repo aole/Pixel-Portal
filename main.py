@@ -22,7 +22,14 @@ NUM_UNDOS = 100
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-TOOLS = {"Pen": (wx.CURSOR_PENCIL, "toolpen.png"), "Sel Rect": (wx.CURSOR_CROSS, "toolselectrect.png"), "Line": (wx.CURSOR_CROSS, "toolline.png"), "Rectangle": (wx.CURSOR_CROSS, "toolrect.png"), "Ellipse": (wx.CURSOR_CROSS, "toolellipse.png"), "Move": (wx.CURSOR_SIZING, "toolmove.png"), "Bucket": (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"), "Picker": (wx.CURSOR_RIGHT_ARROW, "toolpicker.png")}
+TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
+         "Sel Rect":    (wx.CURSOR_CROSS, "toolselectrect.png"),
+         "Line":        (wx.CURSOR_CROSS, "toolline.png"),
+         "Rectangle":   (wx.CURSOR_CROSS, "toolrect.png"),
+         "Ellipse":     (wx.CURSOR_CROSS, "toolellipse.png"),
+         "Move":        (wx.CURSOR_SIZING, "toolmove.png"),
+         "Bucket":      (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
+         "Picker":      (wx.CURSOR_RIGHT_ARROW, "toolpicker.png")}
 
 #Debug
 RENDER_DRAWING_LAYER = True
@@ -222,6 +229,22 @@ class ResizeCommand(wx.Command):
         self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0))
         return True
 
+class SelectionCommand(wx.Command):
+    def __init__(self, canvas, before, after):
+        super().__init__(True)
+        
+        self.canvas = canvas
+        self.before = before
+        self.after = after
+
+    def Do(self):
+        self.canvas.selection = wx.Region(self.after)
+        return True
+
+    def Undo(self):
+        self.canvas.selection = wx.Region(self.before)
+        return True
+
 class UndoManager(wx.CommandProcessor):
     def __init__(self):
         super().__init__(NUM_UNDOS)
@@ -239,6 +262,7 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
@@ -260,6 +284,8 @@ class Canvas(wx.Panel):
         self.lastSelection = None
         
         self.mouseState = 0
+        self.doubleClick = False
+        
         self.current_tool = "Pen"
         self.mirrorx = False
         self.mirrory = False
@@ -515,6 +541,44 @@ class Canvas(wx.Panel):
             
         self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
         
+    def SelectBoundry(self, x, y, add=False, sub=False):
+        layer = self.layers["current"]
+        w, h = layer.width, layer.height
+        
+        buf = bytearray(w*h*4)
+        layer.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
+        buf = np.array(buf).reshape(h, w, 4)
+        
+        color = np.array(buf[y][x])
+        
+        queue = {(x, y)}
+        col = set()
+        selection = wx.Region()
+        
+        while queue:
+            x, y = queue.pop()
+            col.add((x,y))
+            selection.Union(x,y, 1,1)
+            # north
+            if y > 0 and np.array_equal(np.array(buf[y-1][x]), color) and (x,y-1) not in col:
+                queue.add((x, y - 1))
+            # east
+            if x < w - 1 and np.array_equal(np.array(buf[y][x + 1]), color) and (x+1,y) not in col:
+                queue.add((x + 1, y))
+            # south
+            if y < h - 1 and np.array_equal(np.array(buf[y + 1][x]), color) and (x,y+1) not in col:
+                queue.add((x, y + 1))
+            # west
+            if x > 0 and np.array_equal(np.array(buf[y][x - 1]), color) and (x-1,y) not in col:
+                queue.add((x - 1, y))
+                    
+        if add:
+            self.selection.Union(selection)
+        elif sub:
+            self.selection.Subtract(selection)
+        else:
+            self.selection = selection
+        
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
         if amt > 0:
@@ -670,7 +734,7 @@ class Canvas(wx.Panel):
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
                 self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
-        elif self.current_tool == "Sel Rect":
+        elif self.current_tool == "Sel Rect" and not self.doubleClick:
             self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
 
         self.movex, self.movey = 0, 0
@@ -684,6 +748,7 @@ class Canvas(wx.Panel):
 
         self.noUndo = False
 
+        self.doubleClick = False
         self.Refresh()
 
     def OnRightDown(self, e):
@@ -769,6 +834,16 @@ class Canvas(wx.Panel):
         self.mouseState = 0
         self.noUndo = False
 
+    def OnLeftDClick(self, e):
+        self.prevx, self.prevy = e.GetPosition()
+        gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
+        
+        if self.current_tool == "Sel Rect":
+            self.SelectBoundry(gx, gy, e.ControlDown(), e.AltDown())
+            
+        self.doubleClick = True
+        self.Refresh()
+        
     def OnMouseEnter(self, e):
         self.SetFocus()
         
