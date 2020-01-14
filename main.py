@@ -8,7 +8,8 @@ import numpy as np
 from math import atan2, ceil, floor, pi
 import random
 
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry   import Polygon, MultiPolygon
+from shapely.ops        import unary_union
 
 import wx, wx.adv
 import wx.lib.agw.cubecolourdialog as CCD
@@ -269,6 +270,7 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        self.Bind(wx.EVT_RIGHT_DCLICK, self.OnRightDClick)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnMouseEnter)
 
@@ -681,8 +683,8 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers["current"].GetPixel(gx, gy)
                 self.ChangePenColor(color)
-            else:
-                self.DrawPixel("drawing", gx, gy, self.penColor)
+            #else:
+                #self.DrawPixel("drawing", gx, gy, self.penColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
@@ -769,8 +771,8 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers["current"].GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
-            else:
-                self.DrawPixel("drawing", gx, gy, self.eraserColor)
+            #else:
+            #    self.DrawPixel("drawing", gx, gy, self.eraserColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
@@ -840,8 +842,24 @@ class Canvas(wx.Panel):
         self.prevx, self.prevy = e.GetPosition()
         gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
         
-        if self.current_tool == "Sel Rect":
+        if self.current_tool == "Pen":
+            self.Blit("current", "drawing")
+            self.layers["current"].Clear(COLOR_BLANK)
+            self.FloodFill("drawing", gx, gy, self.penColor)
+        elif self.current_tool == "Sel Rect":
             self.SelectBoundary(gx, gy, e.ControlDown(), e.AltDown())
+            
+        self.doubleClick = True
+        self.Refresh()
+        
+    def OnRightDClick(self, e):
+        self.prevx, self.prevy = e.GetPosition()
+        gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
+        
+        if self.current_tool == "Pen":
+            self.Blit("current", "drawing")
+            self.layers["current"].Clear(COLOR_BLANK)
+            self.FloodFill("drawing", gx, gy, self.eraserColor)
             
         self.doubleClick = True
         self.Refresh()
@@ -954,47 +972,54 @@ class Canvas(wx.Panel):
         if self.mouseState == 1 and self.current_tool in ("Move"):
             display_selection_rect = False
         
-        gc.SetCompositionMode(wx.COMPOSITION_XOR)
+        # XOR ADD CLEAR not supported on windows
+        # print(gc.SetCompositionMode(wx.COMPOSITION_CLEAR))
         gc.SetBrush(wx.NullBrush)
         if self.mouseState == 1 and self.current_tool == "Sel Rect":
-            gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
+            gc.SetPen(wx.ThePenList.FindOrCreatePen("#22443388", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
                              abs(self.prevy - self.origy))
                              
-        # TODO: Performance, precalculate shapely MultiPolygon
+        # TODO: Performance, precalculate shapely MultiPolygon union
         if self.selection and not self.selection.IsEmpty() and display_selection_rect:
-            gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
-            spoly = Polygon()
+            spoly = []
             for r in self.selection:
                 poly = Polygon([*self.GetPolyCoords(r.x * self.pixel_size + self.panx,
                                  r.y * self.pixel_size + self.pany,
                                  r.width * self.pixel_size,
                                  r.height * self.pixel_size)])
-                spoly = spoly.union(poly)
-            path = gc.CreatePath()
+                spoly.append(poly)
+            spoly = unary_union(spoly)
+            if not isinstance(spoly, MultiPolygon):
+                spoly = MultiPolygon([spoly])
             # can have multiple disjoint polygons boundaries
-            for poly in MultiPolygon([spoly]):
+            expath = gc.CreatePath()
+            inpath = gc.CreatePath()
+            for poly in spoly:
                 moveto = True
                 for x,y in poly.exterior.coords:
                     if moveto:
-                        path.MoveToPoint(x,y)
+                        expath.MoveToPoint(x,y)
                         moveto = False
                     else:
-                        path.AddLineToPoint(x,y)
-                path.CloseSubpath()
+                        expath.AddLineToPoint(x,y)
+                expath.CloseSubpath()
                 
                 # each exterior boundary can have multiple interior holes
                 for interior in poly.interiors:
                     moveto = True
                     for x,y in interior.coords:
                         if moveto:
-                            path.MoveToPoint(x,y)
+                            inpath.MoveToPoint(x,y)
                             moveto = False
                         else:
-                            path.AddLineToPoint(x,y)
-                    path.CloseSubpath()
+                            inpath.AddLineToPoint(x,y)
+                    inpath.CloseSubpath()
                     
-            gc.DrawPath(path)
+            gc.SetPen(wx.ThePenList.FindOrCreatePen("#66887788", 2, wx.PENSTYLE_LONG_DASH))
+            gc.DrawPath(inpath)
+            gc.SetPen(wx.ThePenList.FindOrCreatePen("#22443388", 2, wx.PENSTYLE_LONG_DASH))
+            gc.DrawPath(expath)
             
         # PREVIEW
         if RENDER_PREVIEW:
