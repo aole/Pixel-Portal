@@ -255,9 +255,9 @@ class Canvas(wx.Panel):
         
         self.movex, self.movey = 0, 0
         self.selection = wx.Region()
+        self.lastSelection = None
         
         self.mouseState = 0
-
         self.current_tool = "Pen"
         self.mirrorx = False
         self.mirrory = False
@@ -499,9 +499,37 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.EraserColorChanged(color)
 
-    def ResetSelection(self):
-        self.selection = wx.Region()
-
+    def Select(self, region=None):
+        self.lastSelection = None
+        if not region: # Select All
+            self.selection = wx.Region(0,0,self.layers["width"], self.layers["height"])
+        else:
+            if self.selection and not self.selection.IsEmpty(): # Deselection
+                self.lastSelection = self.selection
+            self.selection = region
+            
+    def Reselect(self):
+        if not self.selection or self.selection.IsEmpty():
+            self.selection = self.lastSelection
+            self.lastSelection = None
+            
+    def SelectInvert(self):
+        s = wx.Region(0, 0, self.layers["width"], self.layers["height"])
+        s.Subtract(self.selection)
+        self.selection = s
+        
+    def UpdateSelection(self, x0, y0, x1, y1, subtract=False):
+        minx, maxx = minmax(x0, x1)
+        miny, maxy = minmax(y0, y1)
+        minx, miny = self.PixelAtPosition(minx, miny)
+        maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
+        if subtract:
+            self.selection.Subtract(wx.Rect(minx, miny, maxx - minx, maxy - miny))
+        else:
+            self.selection.Union(minx, miny, maxx - minx, maxy - miny)
+            
+        self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
+        
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
         if amt > 0:
@@ -630,25 +658,13 @@ class Canvas(wx.Panel):
             self.ChangePenColor(color)
         elif self.current_tool == "Sel Rect":
             if not e.ControlDown() and not e.AltDown():
-                self.selection = wx.Region()
+                self.Select(wx.Region())
 
         if not self.HasCapture():
             self.CaptureMouse()
 
         self.Refresh()
 
-    def UpdateSelectionRect(self, x0, y0, x1, y1, subtract=False):
-        minx, maxx = minmax(x0, x1)
-        miny, maxy = minmax(y0, y1)
-        minx, miny = self.PixelAtPosition(minx, miny)
-        maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
-        if subtract:
-            self.selection.Subtract(wx.Rect(minx, miny, maxx - minx, maxy - miny))
-        else:
-            self.selection.Union(minx, miny, maxx - minx, maxy - miny)
-            
-        self.selection.Intersect(0, 0, self.layers["width"], self.layers["height"])
-        
     def OnLeftUp(self, e):
         x, y = e.GetPosition()
         gx, gy = self.PixelAtPosition(x, y)
@@ -670,7 +686,7 @@ class Canvas(wx.Panel):
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
                 self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
         elif self.current_tool == "Sel Rect":
-            self.UpdateSelectionRect(x, y, self.origx, self.origy, e.AltDown())
+            self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
 
         self.movex, self.movey = 0, 0
 
@@ -726,7 +742,7 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Sel Rect":
             self.noUndo = True
             if not self.selection.Contains(gx, gy):
-                self.ResetSelection()
+                self.Select(wx.Region())
 
         if not self.HasCapture():
             self.CaptureMouse()
@@ -879,7 +895,7 @@ class Canvas(wx.Panel):
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
                              abs(self.prevy - self.origy))
-        if not self.selection.IsEmpty() and display_selection_rect:
+        if self.selection and not self.selection.IsEmpty() and display_selection_rect:
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22222288", 2, wx.PENSTYLE_LONG_DASH))
             for r in self.selection:
                 gc.DrawRectangle(r.x * self.pixel_size + self.panx,
@@ -1076,20 +1092,27 @@ class Frame(wx.Frame):
         mbar = wx.MenuBar()
 
         mfile = wx.Menu()
-        mbar.Append(mfile, "File")
+        mbar.Append(mfile, "&File")
         
         mnew = wx.Menu()
         mfile.AppendSubMenu(mnew, "New")
         self.AddMenuItem(mnew, "32 x 32", self.OnNew32x32)
         
         medit = wx.Menu()
-        mbar.Append(medit, "Edit")
+        mbar.Append(medit, "&Edit")
         self.AddMenuItem(medit, "Flip Horizontal", self.canvas.OnFlipH)
         self.AddMenuItem(medit, "Mirror to Right", self.canvas.OnMirrorTR)
         self.AddMenuItem(medit, "Mirror Down", self.canvas.OnMirrorTB)
         self.AddMenuItem(medit, "Reference Image ...", self.OnRefImage)
         self.AddMenuItem(medit, "Remove Reference Image", self.canvas.RemoveRefImage)
         self.AddMenuItem(medit, "Rotate 90 CW", self.canvas.Rotate90)
+        
+        mselect = wx.Menu()
+        mbar.Append(mselect, "&Selection")
+        self.AddMenuItem(mselect, "Select &All\tCTRL+A", self.OnSelectAll)
+        self.AddMenuItem(mselect, "&Deselect\tCTRL+SHIFT+A", self.OnDeselect)
+        self.AddMenuItem(mselect, "&Reselect\tCTRL+SHIFT+D", self.OnReselect)
+        self.AddMenuItem(mselect, "&Invert Selection\tCTRL+SHIFT+I", self.OnSelectInvert)
 
         self.SetMenuBar(mbar)
 
@@ -1335,10 +1358,22 @@ class Frame(wx.Frame):
         self.canvas.FullRedraw()
         e.Skip()
 
-    def OnTest(self, e):
-        self.testDialog.SetTitle('Color')
-        self.testDialog.Show()
-
+    def OnSelectAll(self, e):
+        self.canvas.Select()
+        self.Refresh()
+        
+    def OnDeselect(self, e):
+        self.canvas.Select(wx.Region())
+        self.Refresh()
+        
+    def OnReselect(self, e):
+        self.canvas.Reselect()
+        self.Refresh()
+        
+    def OnSelectInvert(self, e):
+        self.canvas.SelectInvert()
+        self.Refresh()
+        
 def CreateWindows():
     global app
 
