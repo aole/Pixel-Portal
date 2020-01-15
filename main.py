@@ -63,6 +63,8 @@ class Layer(wx.Bitmap):
                          0,
                          0,
                          self.width, self.height)
+        mdcd.SelectObject(wx.NullBitmap)
+        mdcs.SelectObject(wx.NullBitmap)
 
         return bitmap
 
@@ -80,6 +82,7 @@ class Layer(wx.Bitmap):
         for x in range(0, w, 60):
             for y in range(0, h, 60):
                 gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
+        mdc.SelectObject(wx.NullBitmap)
 
     def GetPixel(self, x, y):
         mdc = wx.MemoryDC(self)
@@ -93,7 +96,8 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
-
+        mdc.SelectObject(wx.NullBitmap)
+        
     def SetPixels(self, pixels, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -103,6 +107,7 @@ class Layer(wx.Bitmap):
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         for x, y in pixels:
             gc.DrawRectangle(x, y, 1, 1)
+        mdc.SelectObject(wx.NullBitmap)
 
     # BUG?? FloodFill is painting with alpha=0
     def FloodFill(self, x0, y0, color, clip=None):
@@ -139,6 +144,7 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.StrokeLine(x0, y0, x1, y1)
+        mdc.SelectObject(wx.NullBitmap)
 
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
@@ -149,6 +155,7 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.DrawRectangle(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
 
     def Ellipse(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
@@ -159,6 +166,7 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.DrawEllipse(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
 
     def Blit(self, layer, x=0, y=0, w=0, h=0):
         if w == 0:
@@ -171,6 +179,7 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
 
     def Draw(self, layer, clip=None):
         mdc = wx.MemoryDC(self)
@@ -180,6 +189,7 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, 0, 0, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
 
     def Load(self, name):
         bitmap = wx.Bitmap()
@@ -191,6 +201,7 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
 
 class LayerCommand(wx.Command):
     def __init__(self, layers, before, after):
@@ -265,12 +276,10 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
-        self.Bind(wx.EVT_RIGHT_DCLICK, self.OnRightDClick)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnMouseEnter)
 
@@ -381,6 +390,21 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.DrawPixel(layer, x, self.GetYMirror(y), color, False, False)
 
+    def OnFloodFill(self):
+        x,y = wx.GetMousePosition()
+        x,y = self.ScreenToClient(x,y)
+        x,y = self.PixelAtPosition(x,y)
+        
+        beforeLayer = Layer(self.layers["current"])
+        self.Blit("current", "drawing")
+        self.layers["current"].Clear(COLOR_BLANK)
+        self.FloodFill("drawing", x, y, self.penColor)
+        self.Blit("drawing", "current")
+        self.layers["drawing"].Clear(COLOR_BLANK)
+            
+        self.history.Store(LayerCommand(self.layers, beforeLayer, Layer(self.layers["current"])))
+        self.Refresh()
+        
     def FloodFill(self, layer, x, y, color):
         w, h = self.layers["width"], self.layers["height"]
         
@@ -683,8 +707,8 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers["current"].GetPixel(gx, gy)
                 self.ChangePenColor(color)
-            #else:
-                #self.DrawPixel("drawing", gx, gy, self.penColor)
+            else:
+                self.DrawPixel("drawing", gx, gy, self.penColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
@@ -771,8 +795,8 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers["current"].GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
-            #else:
-            #    self.DrawPixel("drawing", gx, gy, self.eraserColor)
+            else:
+                self.DrawPixel("drawing", gx, gy, self.eraserColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
@@ -805,6 +829,7 @@ class Canvas(wx.Panel):
 
     def OnRightUp(self, e):
         x, y = e.GetPosition()
+        gx, gy = self.PixelAtPosition(x, y)
         self.mouseState = 0
 
         if self.HasCapture():
@@ -838,32 +863,6 @@ class Canvas(wx.Panel):
         self.mouseState = 0
         self.noUndo = False
 
-    def OnLeftDClick(self, e):
-        self.prevx, self.prevy = e.GetPosition()
-        gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
-        
-        if self.current_tool == "Pen":
-            self.Blit("current", "drawing")
-            self.layers["current"].Clear(COLOR_BLANK)
-            self.FloodFill("drawing", gx, gy, self.penColor)
-        elif self.current_tool == "Sel Rect":
-            self.SelectBoundary(gx, gy, e.ControlDown(), e.AltDown())
-            
-        self.doubleClick = True
-        self.Refresh()
-        
-    def OnRightDClick(self, e):
-        self.prevx, self.prevy = e.GetPosition()
-        gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
-        
-        if self.current_tool == "Pen":
-            self.Blit("current", "drawing")
-            self.layers["current"].Clear(COLOR_BLANK)
-            self.FloodFill("drawing", gx, gy, self.eraserColor)
-            
-        self.doubleClick = True
-        self.Refresh()
-        
     def OnMouseEnter(self, e):
         self.SetFocus()
         
@@ -1283,11 +1282,9 @@ class Frame(wx.Frame):
         
         data = wx.ColourData()
         data.SetColour(color)
-        #data.SetChooseFull(True)
         dlg = CCD.CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
-            #self.canvas.SetPenColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
             self.canvas.SetPenColor(color)
             clip = wx.Region(0,0,32,32)
             clip.Subtract(wx.Rect(9, 9, 14, 14))
@@ -1309,7 +1306,6 @@ class Frame(wx.Frame):
         dlg = CCD.CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
-            #self.canvas.SetEraserColor(color.GetAsString(wx.C2S_HTML_SYNTAX))
             self.canvas.SetEraserColor(color)
             clip = wx.Region(0,0,32,32)
             clip.Subtract(wx.Rect(9, 9, 14, 14))
@@ -1457,6 +1453,8 @@ class Frame(wx.Frame):
             self.canvas.AdjustBrushSize(-1)
         elif keycode == ord(']'):
             self.canvas.AdjustBrushSize(1)
+        elif keycode == ord('F'):
+            self.canvas.OnFloodFill()
         else:
             e.Skip()
 
