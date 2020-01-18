@@ -26,7 +26,7 @@ DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
 TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
-         "Sel Rect":    (wx.CURSOR_CROSS, "toolselectrect.png"),
+         "Select":    (wx.CURSOR_CROSS, "toolselectrect.png"),
          "Line":        (wx.CURSOR_CROSS, "toolline.png"),
          "Rectangle":   (wx.CURSOR_CROSS, "toolrect.png"),
          "Ellipse":     (wx.CURSOR_CROSS, "toolellipse.png"),
@@ -276,6 +276,7 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
@@ -547,6 +548,11 @@ class Canvas(wx.Panel):
                 self.lastSelection = self.selection
             self.selection = region
             
+    def Deselect(self):
+        if self.selection and not self.selection.IsEmpty(): # Deselection
+            self.lastSelection = self.selection
+        self.selection = wx.Region()
+        
     def Reselect(self):
         if not self.selection or self.selection.IsEmpty():
             self.selection = self.lastSelection
@@ -557,12 +563,12 @@ class Canvas(wx.Panel):
         s.Subtract(self.selection)
         self.selection = s
         
-    def UpdateSelection(self, x0, y0, x1, y1, subtract=False):
+    def UpdateSelection(self, x0, y0, x1, y1, sub=False):
         minx, maxx = minmax(x0, x1)
         miny, maxy = minmax(y0, y1)
         minx, miny = self.PixelAtPosition(minx, miny)
         maxx, maxy = self.PixelAtPosition(maxx, maxy, ceil)
-        if subtract:
+        if sub:
             self.selection.Subtract(wx.Rect(minx, miny, maxx - minx, maxy - miny))
         else:
             self.selection.Union(minx, miny, maxx - minx, maxy - miny)
@@ -677,7 +683,7 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Picker":
                 color = self.layers["current"].GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangeEraserColor(color)
-            elif self.current_tool == "Sel Rect":
+            elif self.current_tool == "Select":
                 px, py = self.PixelAtPosition(self.prevx, self.prevy)
                 if not self.selection.IsEmpty():
                     self.selection.Offset(gx - px, gy - py)
@@ -733,7 +739,7 @@ class Canvas(wx.Panel):
             self.noUndo = True
             color = self.layers["current"].GetPixel(gx, gy)
             self.ChangePenColor(color)
-        elif self.current_tool == "Sel Rect":
+        elif self.current_tool == "Select":
             if not e.ControlDown() and not e.AltDown():
                 self.Select(wx.Region())
 
@@ -762,9 +768,10 @@ class Canvas(wx.Panel):
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
                 self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
-        elif self.current_tool == "Sel Rect" and not self.doubleClick:
+        elif self.current_tool == "Select" and not self.doubleClick:
             self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
-
+            self.doubleClick = False
+            
         self.movex, self.movey = 0, 0
 
         self.layers["drawing"].Clear(COLOR_BLANK)
@@ -817,7 +824,7 @@ class Canvas(wx.Panel):
                 self.Blit("current", "drawing")
                 self.layers["current"].Clear(COLOR_BLANK)
                 self.FloodFill("drawing", gx, gy, self.eraserColor)
-        elif self.current_tool == "Sel Rect":
+        elif self.current_tool == "Select":
             self.noUndo = True
             if not self.selection.Contains(gx, gy):
                 self.Select(wx.Region())
@@ -863,6 +870,14 @@ class Canvas(wx.Panel):
         self.mouseState = 0
         self.noUndo = False
 
+    def OnLeftDClick(self, e):
+        x, y = e.GetPosition()
+        gx, gy = self.PixelAtPosition(x, y)
+        if self.current_tool=="Select":
+            self.SelectBoundary(gx, gy, e.ControlDown(), e.AltDown())
+        
+        self.doubleClick = True
+        
     def OnMouseEnter(self, e):
         self.SetFocus()
         
@@ -974,7 +989,7 @@ class Canvas(wx.Panel):
         # XOR ADD CLEAR not supported on windows
         # print(gc.SetCompositionMode(wx.COMPOSITION_CLEAR))
         gc.SetBrush(wx.NullBrush)
-        if self.mouseState == 1 and self.current_tool == "Sel Rect":
+        if self.mouseState == 1 and self.current_tool == "Select":
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22443388", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
                              abs(self.prevy - self.origy))
@@ -1062,7 +1077,8 @@ class Canvas(wx.Panel):
         self.layers["current"] = current_layer
 
         self.history.ClearCommands()
-
+        self.Deselect()
+        
     def StoreColor(self, color):
         if color not in self.palette:
             self.palette.append(color)
@@ -1109,8 +1125,7 @@ class Canvas(wx.Panel):
         self.layers["current"].Load(filename)
 
         self.history.ClearCommands()
-
-        print('Loaded:', filename)
+        self.Deselect()
 
     def Save(self, filename):
         self.layers["current"].Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
