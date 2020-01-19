@@ -17,11 +17,11 @@ class LayerCommand(wx.Command):
         self.after = after
 
     def Do(self):
-        self.layers["current"].Blit(self.after)
+        self.layers.current().Blit(self.after)
         return True
 
     def Undo(self):
-        self.layers["current"].Blit(self.before)
+        self.layers.current().Blit(self.before)
         return True
 
 class ResizeCommand(wx.Command):
@@ -33,19 +33,19 @@ class ResizeCommand(wx.Command):
         self.after = after
 
     def Do(self):
-        self.layers["width"] = self.after.width
-        self.layers["height"] = self.after.height
-        self.layers["current"] = Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 255, 255, 255, 255))
-        self.layers["current"].Draw(self.after)
-        self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 0, 0, 0, 0))
+        self.layers.width = self.after.width
+        self.layers.height = self.after.height
+        self.layers.surface = Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 255, 255, 255, 255))
+        self.layers.current().Draw(self.after)
+        self.layers.set(Layer(wx.Bitmap.FromRGBA(self.after.width, self.after.height, 0, 0, 0, 0)))
         return True
 
     def Undo(self):
-        self.layers["width"] = self.before.width
-        self.layers["height"] = self.before.height
-        self.layers["current"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 255, 255, 255, 255))
-        self.layers["current"].Draw(self.before)
-        self.layers["drawing"] = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0))
+        self.layers.width = self.before.width
+        self.layers.height = self.before.height
+        self.layers.surface = Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 255, 255, 255, 255))
+        self.layers.current().Draw(self.before)
+        self.layers.set(Layer(wx.Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0)))
         return True
 
 class SelectionCommand(wx.Command):
