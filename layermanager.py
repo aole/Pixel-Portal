@@ -190,6 +190,8 @@ class LayerManager:
             
         self.layers.insert(self.currentLayer, layer)
     
+        return layer
+        
     def select(self, layer):
         self.currentLayer = self.layers.index(layer)
     
@@ -250,6 +252,30 @@ class LayerManager:
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         self.surface.Line(x0, y0, x1, y1, color, size, clip)
         
+    def BlitToSurface(self):
+        self.surface.Blit(self.layers[self.currentLayer])
+        
     def BlitFromSurface(self, x=0, y=0):
         self.layers[self.currentLayer].Blit(self.surface, x, y)
+        
+    def Crop(self, lm, rect):
+        self.width  = rect.width
+        self.height = rect.height
+        for layer in reversed(lm.layers):
+            l = self.appendSelect()
+            l.Draw(layer.GetSubBitmap(rect))
+        self.currentLayer = lm.currentLayer
+        self.surface = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+        self.compositeLayer = None
+        
+    def Resize(self, lm, width, height):
+        self.width  = width
+        self.height = height
+        for layer in reversed(lm.layers):
+            l = self.appendSelect()
+            l.Blit(layer)
+            
+        self.currentLayer = lm.currentLayer
+        self.surface = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+        self.compositeLayer = None
         

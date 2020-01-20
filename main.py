@@ -112,9 +112,6 @@ class Canvas(wx.Panel):
 
         self.listeners = []
 
-    def BlitToSurface(self):
-        self.layers.surface.Blit(self.layers.current())
-        
     def ClearCurrentLayer(self):
         self.beforeLayer = Layer(self.layers.current())
 
@@ -179,7 +176,7 @@ class Canvas(wx.Panel):
         x,y = self.PixelAtPosition(x,y)
         
         beforeLayer = Layer(self.layers.current())
-        self.BlitToSurface()
+        self.layers.BlitToSurface()
         self.layers.current().Clear(COLOR_BLANK)
         self.FloodFill(x, y, self.penColor)
         self.layers.BlitFromSurface()
@@ -511,7 +508,7 @@ class Canvas(wx.Panel):
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
-                self.BlitToSurface()
+                self.layers.BlitToSurface()
                 self.layers.current().Clear(COLOR_BLANK)
                 self.FloodFill(gx, gy, self.penColor)
         elif self.current_tool == "Picker":
@@ -600,7 +597,7 @@ class Canvas(wx.Panel):
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
-                self.BlitToSurface()
+                self.layers.BlitToSurface()
                 self.layers.current().Clear(COLOR_BLANK)
                 self.FloodFill(gx, gy, self.eraserColor)
         elif self.current_tool == "Select":
@@ -857,23 +854,29 @@ class Canvas(wx.Panel):
         if width == self.layers.width and height == self.layers.height:
             return
 
-        bgcolor = self.eraserColor
-        current_layer = Layer(wx.Bitmap.FromRGBA(width, height, bgcolor.red, bgcolor.green, bgcolor.blue, bgcolor.alpha))
-        current_layer.Blit(self.layers.current())
+        old = self.layers
+        self.layers = LayerManager()
+        self.layers.Resize(old, width, height)
+        
+        self.FullRedraw()
 
-        drawing_layer = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
+    def OnCropToSelection(self, e):
+        if not self.selection or self.selection.IsEmpty():
+            return
+        
+        rect = self.selection.GetBox()
+        old = self.layers
+        self.layers = LayerManager()
+        self.layers.Crop(old, rect)
+        
+        self.history.ClearCommands()
+        self.Deselect()
 
-        cmd = ResizeCommand(self.layers, Layer(self.layers.current()), Layer(current_layer))
-        self.history.Store(cmd)
-
-        self.layers.width = width
-        self.layers.height = height
-        self.layers.surface = drawing_layer
-        self.layers.set(current_layer)
-
-        self.full_redraw = True
-        self.Refresh()
-
+        for l in self.listeners:
+            l.ImageSizeChanged(rect.width, rect.height)
+            
+        self.FullRedraw()
+        
     def LoadRefImage(self, filename):
         image = Image.open(filename)
         image.putalpha(int(self.refAlpha*255))
@@ -896,6 +899,9 @@ class Canvas(wx.Panel):
         self.history.ClearCommands()
         self.Deselect()
 
+        for l in self.listeners:
+            l.ImageSizeChanged(width, height)
+            
     def Save(self, filename):
         self.layers.composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
         self.history.MarkAsSaved()
@@ -922,10 +928,10 @@ class Canvas(wx.Panel):
         self.panx = int(size[0] / 2 - self.layers.width * self.pixel_size / 2)
         self.pany = int(size[1] / 2 - self.layers.height * self.pixel_size / 2)
 
-        if self.panx < 0:
-            self.panx = 50
-        if self.pany < 0:
-            self.pany = 50
+        if self.panx < 30:
+            self.panx = 30
+        if self.pany < 30:
+            self.pany = 30
 
     def GetMirror(self, bitmap, horizontally=True):
         return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
@@ -1005,6 +1011,7 @@ class Frame(wx.Frame):
         self.AddMenuItem(medit, "Reference Image ...", self.OnRefImage)
         self.AddMenuItem(medit, "Remove Reference Image", self.canvas.RemoveRefImage)
         self.AddMenuItem(medit, "Rotate 90 CW", self.canvas.Rotate90)
+        self.AddMenuItem(medit, "Crop to Selection", self.canvas.OnCropToSelection)
         
         mselect = wx.Menu()
         mbar.Append(mselect, "&Selection")
@@ -1147,6 +1154,10 @@ class Frame(wx.Frame):
         mdc.SelectObject(wx.NullBitmap)
         self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
 
+    def ImageSizeChanged(self, w, h):
+        self.txtWidth.SetValue(str(w))
+        self.txtHeight.SetValue(str(h))
+        
     def PixelSizeChanged(self, value):
         self.txtPixel.SetValue(str(value))
 
