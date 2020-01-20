@@ -22,7 +22,7 @@ from layermanager import *
 COLOR_BLANK = wx.Colour(0,0,0,0)
 
 PROGRAM_NAME = "Pixel Portal"
-WINDOW_SIZE = (700, 550)
+WINDOW_SIZE = (750, 550)
 
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
@@ -733,7 +733,7 @@ class Canvas(wx.Panel):
         dc.DrawBitmap(self.alphabg, self.panx, self.pany)
         # LAYERS
         if RENDER_CURRENT_LAYER:
-            mdc = wx.MemoryDC(self.layers.current())
+            mdc = wx.MemoryDC(self.layers.composite())
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
                            mdc,
@@ -826,7 +826,7 @@ class Canvas(wx.Panel):
             w, h = e.GetEventObject().GetSize()
             # BUG? dc.GetSize provide does not reduce in size if the window is expanded and them reduced.
             
-            mdc = wx.MemoryDC(self.layers.current())
+            mdc = wx.MemoryDC(self.layers.composite())
             dc.StretchBlit(w-lw, 0,
                            lw, lh,
                            mdc,
@@ -986,6 +986,9 @@ class Canvas(wx.Panel):
 
         self.Refresh()
 
+    def AddLayer(self):
+        self.layers.appendSelect()
+        
 class Frame(wx.Frame):
     def __init__(self):
         super().__init__(None, title=PROGRAM_NAME, size=WINDOW_SIZE)
@@ -996,7 +999,6 @@ class Frame(wx.Frame):
         self.Bind(wx.EVT_SIZE, self.OnResize)
 
         self.canvas = Canvas(self)
-        self.canvas.New(DEFAULT_PIXEL_SIZE, *DEFAULT_DOC_SIZE)
         self.canvas.listeners.append(self)
 
         # MENU
@@ -1027,6 +1029,11 @@ class Frame(wx.Frame):
         self.AddMenuItem(mselect, "&Reselect\tCTRL+SHIFT+D", self.OnReselect)
         self.AddMenuItem(mselect, "&Invert Selection\tCTRL+SHIFT+I", self.OnSelectInvert)
 
+        menu = wx.Menu()
+        mbar.Append(menu, "&Layer")
+        self.AddMenuItem(menu, "&Add Layer", self.OnAddLayer)
+        self.AddMenuItem(menu, "&Remove Layer", self.OnRemoveLayer)
+        
         self.SetMenuBar(mbar)
 
         # TOOLBAR
@@ -1066,8 +1073,24 @@ class Frame(wx.Frame):
 
         tb.Realize()
 
+        # add CANVAS
         bs = wx.BoxSizer(wx.HORIZONTAL)
-        bs.Add(self.canvas, wx.ID_ANY, wx.EXPAND | wx.ALL, 2)
+        bs.Add(self.canvas, 2, wx.EXPAND | wx.ALL, 2)
+        
+        # RIGHT PANEL
+        layerPanel = wx.Panel(self, size=(200,-1))
+        bs.Add(layerPanel, 0, wx.RIGHT, 2)
+        bsp = wx.BoxSizer(wx.VERTICAL)
+        
+        # LAYERS LIST
+        self.layerList = wx.ListCtrl(layerPanel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL|wx.LC_HRULES)
+        self.layerList.InsertColumn(0, "Layers:", width=196)
+        self.layerList.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnLayerSelect)
+        bsp.Add(self.layerList, 1, wx.EXPAND | wx.ALL, 2)
+        
+        self.OnNew(None, *DEFAULT_DOC_SIZE)
+        
+        layerPanel.SetSizer(bsp)
         self.SetSizer(bs)
 
     def AddMenuItem(self, menu, name, func):
@@ -1213,23 +1236,19 @@ class Frame(wx.Frame):
         if not self.CheckDirty():
             return
 
-        try:
-            self.PenColorChanged("#000000FF")
-            self.EraserColorChanged("#FFFFFFFF")
-            pixel = int(self.txtPixel.GetValue())
-            if width:
-                self.txtWidth.SetValue(str(width))
-            else:
-                width = int(self.txtWidth.GetValue())
-            if height:
-                self.txtHeight.SetValue(str(height))
-            else:
-                height = int(self.txtHeight.GetValue())
-            self.canvas.New(pixel, width, height)
-            self.canvas.FullRedraw()
-        except:
-            print('OnNew error')
-
+        pixel = int(self.txtPixel.GetValue())
+        if width:
+            self.txtWidth.SetValue(str(width))
+        else:
+            width = int(self.txtWidth.GetValue())
+        if height:
+            self.txtHeight.SetValue(str(height))
+        else:
+            height = int(self.txtHeight.GetValue())
+        self.canvas.New(pixel, width, height)
+        self.canvas.FullRedraw()
+        self.RepopulateList()
+        
     def OnSave(self, e):
         ret = wx.SaveFileSelector(PROGRAM_NAME, "png", parent=self)
         if ret:
@@ -1287,6 +1306,27 @@ class Frame(wx.Frame):
     def OnSelectInvert(self, e):
         self.canvas.SelectInvert()
         self.Refresh()
+    
+    def OnLayerSelect(self, e):
+        idx = e.GetIndex()
+        self.canvas.layers.selectIndex(idx)
+        
+    def OnAddLayer(self, e):
+        self.canvas.layers.appendSelect()
+        self.canvas.FullRedraw()
+        self.RepopulateList()
+        
+    def OnRemoveLayer(self, e):
+        self.canvas.layers.remove()
+        self.canvas.FullRedraw()
+        self.RepopulateList()
+        
+    def RepopulateList(self):
+        self.layerList.DeleteAllItems()
+        for layer in self.canvas.layers.layers:
+            self.layerList.Append([layer.name])
+            
+        self.layerList.Select(self.canvas.layers.selectedIndex())
         
 def CreateWindows():
     global app

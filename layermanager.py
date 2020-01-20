@@ -6,12 +6,17 @@ Bhupendra Aole
 
 import wx
 
+
 class Layer(wx.Bitmap):
+    layerCount = 1
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.width = self.GetWidth()
         self.height = self.GetHeight()
-
+        self.name = "Layer "+str(Layer.layerCount)
+        Layer.layerCount += 1
+        
     def Scaled(self, factor):
         bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
         mdcd = wx.MemoryDC(bitmap)
@@ -27,11 +32,13 @@ class Layer(wx.Bitmap):
 
         return bitmap
 
-    def Clear(self, color, clip=None):
+    def Clear(self, color=wx.Colour(0,0,0,0), clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
 
@@ -53,6 +60,7 @@ class Layer(wx.Bitmap):
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
         mdc.SelectObject(wx.NullBitmap)
@@ -63,6 +71,7 @@ class Layer(wx.Bitmap):
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
         for x, y in pixels:
             gc.DrawRectangle(x, y, 1, 1)
@@ -169,10 +178,16 @@ class LayerManager:
         self.width = 0
         self.height = 0
         self.surface = None
+        self.compositeLayer = None
         
-    def appendSelect(self, layer):
-        self.currentLayer = len(self.layers)
-        self.layers.append(layer)
+    def appendSelect(self, layer=None):
+        if not layer:
+            layer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+            
+        if self.currentLayer<0:
+            self.currentLayer = 0
+            
+        self.layers.insert(self.currentLayer, layer)
     
     def select(self, layer):
         self.currentLayer = self.layers.index(layer)
@@ -180,17 +195,40 @@ class LayerManager:
     def selectIndex(self, index):
         self.currentLayer = index
     
+    def selectedIndex(self):
+        return self.currentLayer
+        
+    def reverseIndex(self):
+        return (len(self.layers)-1)-self.currentLayer
+        
     def current(self):
         return self.layers[self.currentLayer]
     
+    def composite(self):
+        if not self.compositeLayer:
+            self.compositeLayer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+        else:
+            self.compositeLayer.Clear()
+            
+        for layer in reversed(self.layers):
+            self.compositeLayer.Draw(layer)
+        
+        return self.compositeLayer
+        
     def set(self, layer):
         if self.currentLayer>=0:
             self.layers[self.currentLayer] = layer
         else:
             self.appendSelect(layer)
         
-    def remove(self, layer):
+    def remove(self, layer=None):
         if len(self.layers)>1:
-            del self.layers[self.layers.index(layer)]
+            if layer:
+                del self.layers[self.layers.index(layer)]
+            else:
+                del self.layers[self.currentLayer]
+                
+            if self.currentLayer>=len(self.layers):
+                self.currentLayer = len(self.layers)-1
     
     
