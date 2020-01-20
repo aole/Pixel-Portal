@@ -28,7 +28,7 @@ DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
 TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
-         "Select":    (wx.CURSOR_CROSS, "toolselectrect.png"),
+         "Select":      (wx.CURSOR_CROSS, "toolselectrect.png"),
          "Line":        (wx.CURSOR_CROSS, "toolline.png"),
          "Rectangle":   (wx.CURSOR_CROSS, "toolrect.png"),
          "Ellipse":     (wx.CURSOR_CROSS, "toolellipse.png"),
@@ -40,6 +40,7 @@ TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
 RENDER_DRAWING_LAYER = True
 RENDER_CURRENT_LAYER = True
 RENDER_PREVIEW = True
+RENDER_PIXEL_UNDER_MOUSE = False
 
 app = None
 
@@ -170,7 +171,7 @@ class Canvas(wx.Panel):
         return ((y + 1 - h) * -1) + h - 1
 
     def DrawPixel(self, x, y, color, canmirrorx=True, canmirrory=True):
-        self.layers.surface.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
+        self.layers.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawPixel(self.GetXMirror(x), y, color, False, True)
         if canmirrory and self.mirrory:
@@ -229,7 +230,7 @@ class Canvas(wx.Panel):
         self.layers.surface.CopyFromBuffer(bytes(buf), wx.BitmapBufferFormat_RGBA)
         
     def DrawLine(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
-        self.layers.surface.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
+        self.layers.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
             self.DrawLine(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True)
         if canmirrory and self.mirrory:
@@ -741,6 +742,7 @@ class Canvas(wx.Panel):
                            lw, lh)
 
         # DRAWING LAYER
+        
         if RENDER_DRAWING_LAYER:
             mdc = wx.MemoryDC(self.layers.surface)
             dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
@@ -748,11 +750,11 @@ class Canvas(wx.Panel):
                                mdc,
                                0, 0,
                                lw, lh)
-
+        
         gc = wx.GraphicsContext.Create(dc)
 
         # DRAW BRUSH PREVIEW
-        if self.mouseState == 0 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
+        if RENDER_PIXEL_UNDER_MOUSE and self.mouseState == 0 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
             self.DrawBrushOnCanvas(gc, self.prevgx, self.prevgy)
             
         # REFERENCE
@@ -847,9 +849,6 @@ class Canvas(wx.Panel):
         return self.history.IsDirty()
 
     def New(self, pixel, width, height):
-        self.palette = [COLOR_BLANK, wx.BLACK, wx.WHITE]
-        self.penColor = wx.BLACK  #
-        self.eraserColor = wx.WHITE  #
         self.pixel_size = pixel
 
         # to ensure alpha
@@ -858,8 +857,10 @@ class Canvas(wx.Panel):
 
         self.layers.width = width
         self.layers.height = height
+        self.layers.removeAll()
         self.layers.surface = drawing_layer
-        self.layers.set(current_layer)
+        self.layers.surface.name = 'Surface'
+        self.layers.appendSelect(current_layer)
 
         self.history.ClearCommands()
         self.Deselect()
@@ -913,7 +914,7 @@ class Canvas(wx.Panel):
         self.Deselect()
 
     def Save(self, filename):
-        self.layers.current().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
+        self.layers.composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
         self.history.MarkAsSaved()
 
     def SaveGif(self, filename):
@@ -934,14 +935,14 @@ class Canvas(wx.Panel):
         self.current_tool = tool
         self.SetCursor(wx.Cursor(TOOLS[tool][0]))
 
-    def ScrollToMiddle(self, size):
+    def CenterCanvasInPanel(self, size):
         self.panx = int(size[0] / 2 - self.layers.width * self.pixel_size / 2)
         self.pany = int(size[1] / 2 - self.layers.height * self.pixel_size / 2)
 
         if self.panx < 0:
-            self.panx = 30
+            self.panx = 50
         if self.pany < 0:
-            self.pany = 30
+            self.pany = 50
 
     def GetMirror(self, bitmap, horizontally=True):
         return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
@@ -1216,6 +1217,7 @@ class Frame(wx.Frame):
             pixel = int(self.txtPixel.GetValue())
             self.canvas.Load(pixel, ret)
             self.canvas.FullRedraw()
+            self.RepopulateList()
 
     def OnToggleGrid(self, e):
         self.canvas.gridVisible = e.IsChecked()
@@ -1245,6 +1247,7 @@ class Frame(wx.Frame):
             self.txtHeight.SetValue(str(height))
         else:
             height = int(self.txtHeight.GetValue())
+            
         self.canvas.New(pixel, width, height)
         self.canvas.FullRedraw()
         self.RepopulateList()
@@ -1281,7 +1284,7 @@ class Frame(wx.Frame):
         self.canvas.SetTool(e.GetString())
 
     def OnCenter(self, e):
-        self.canvas.ScrollToMiddle(self.canvas.Size)
+        self.canvas.CenterCanvasInPanel(self.canvas.Size)
         self.canvas.FullRedraw()
 
     def OnResize(self, e):

@@ -142,6 +142,7 @@ class Layer(wx.Bitmap):
         if h == 0:
             h = layer.height
 
+        #print('blit:',self.name,x,y,self.width, self.height,'from',layer.name, w, h)
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
@@ -204,14 +205,17 @@ class LayerManager:
     def current(self):
         return self.layers[self.currentLayer]
     
-    def composite(self):
+    def composite(self, includeCurrent=True):
         if not self.compositeLayer:
             self.compositeLayer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
         else:
             self.compositeLayer.Clear()
-            
+        
         for layer in reversed(self.layers):
-            self.compositeLayer.Draw(layer)
+            if layer == self.layers[self.currentLayer]:
+                self.compositeLayer.Draw(self.surface)
+            if includeCurrent:
+                self.compositeLayer.Draw(layer)
         
         return self.compositeLayer
         
@@ -231,4 +235,17 @@ class LayerManager:
             if self.currentLayer>=len(self.layers):
                 self.currentLayer = len(self.layers)-1
     
-    
+    def removeAll(self):
+        self.surface = None
+        self.compositeLayer = None
+        
+        while self.layers:
+            del self.layers[0]
+        self.currentLayer = -1
+        
+    def SetPixel(self, x, y, color, size=1, clip=None):
+        self.surface.SetPixel(x, y, color, size, clip)
+        
+    def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
+        self.surface.Line(x0, y0, x1, y1, color, size, clip)
+        
