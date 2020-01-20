@@ -150,14 +150,14 @@ class Layer(wx.Bitmap):
         gc.DrawBitmap(layer, x, y, w, h)
         mdc.SelectObject(wx.NullBitmap)
 
-    def Draw(self, layer, clip=None):
+    def Draw(self, layer, clip=None, x=0, y=0):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(layer, 0, 0, self.width, self.height)
+        gc.DrawBitmap(layer, x, y, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
 
     def Load(self, name):
@@ -205,7 +205,7 @@ class LayerManager:
     def current(self):
         return self.layers[self.currentLayer]
     
-    def composite(self, includeCurrent=True):
+    def composite(self, mx=0, my=0):
         if not self.compositeLayer:
             self.compositeLayer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
         else:
@@ -213,10 +213,11 @@ class LayerManager:
         
         for layer in reversed(self.layers):
             if layer == self.layers[self.currentLayer]:
-                self.compositeLayer.Draw(self.surface)
-            if includeCurrent:
                 self.compositeLayer.Draw(layer)
-        
+                self.compositeLayer.Draw(self.surface, x=mx, y=my)
+            else:
+                self.compositeLayer.Draw(layer)
+                
         return self.compositeLayer
         
     def set(self, layer):
@@ -248,4 +249,7 @@ class LayerManager:
         
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         self.surface.Line(x0, y0, x1, y1, color, size, clip)
+        
+    def BlitFromSurface(self, x=0, y=0):
+        self.layers[self.currentLayer].Blit(self.surface, x, y)
         

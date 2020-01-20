@@ -37,7 +37,6 @@ TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
          "Picker":      (wx.CURSOR_RIGHT_ARROW, "toolpicker.png")}
 
 #Debug
-RENDER_DRAWING_LAYER = True
 RENDER_CURRENT_LAYER = True
 RENDER_PREVIEW = True
 RENDER_PIXEL_UNDER_MOUSE = False
@@ -116,9 +115,6 @@ class Canvas(wx.Panel):
     def BlitToSurface(self):
         self.layers.surface.Blit(self.layers.current())
         
-    def BlitFromSurface(self, x=0, y=0):
-        self.layers.current().Blit(self.layers.surface, x, y)
-        
     def ClearCurrentLayer(self):
         self.beforeLayer = Layer(self.layers.current())
 
@@ -186,7 +182,7 @@ class Canvas(wx.Panel):
         self.BlitToSurface()
         self.layers.current().Clear(COLOR_BLANK)
         self.FloodFill(x, y, self.penColor)
-        self.BlitFromSurface()
+        self.layers.BlitFromSurface()
         self.layers.surface.Clear(COLOR_BLANK)
             
         self.history.Store(LayerCommand(self.layers, beforeLayer, Layer(self.layers.current())))
@@ -438,10 +434,7 @@ class Canvas(wx.Panel):
                 self.DrawEllipse(*self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor,
                                  equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Move":
-                self.movex, self.movey = x - self.origx, y - self.origy
-                # move in grid spaces
-                self.movex -= self.movex % self.pixel_size
-                self.movey -= self.movey % self.pixel_size
+                self.movex, self.movey = int((x - self.origx)/ self.pixel_size), int((y - self.origy)/ self.pixel_size)
             elif self.current_tool == "Picker":
                 color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangePenColor(color)
@@ -546,14 +539,14 @@ class Canvas(wx.Panel):
 
         # transfer from drawing layer to current_layer
         if self.current_tool in ("Pen", "Line", "Ellipse", "Rectangle"):
-            self.BlitFromSurface()
+            self.layers.BlitFromSurface()
         elif self.current_tool == "Bucket":
-            self.BlitFromSurface()
+            self.layers.BlitFromSurface()
         elif self.current_tool == "Move":
-            self.BlitFromSurface(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
+            self.layers.BlitFromSurface(self.movex, self.movey)
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
-                self.selection.Offset(int(self.movex / self.pixel_size), int(self.movey / self.pixel_size))
+                self.selection.Offset(self.movex, self.movey)
         elif self.current_tool == "Select" and not self.doubleClick:
             self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
             self.doubleClick = False
@@ -632,7 +625,7 @@ class Canvas(wx.Panel):
 
         # transfer from drawing layer to current_layer
         if self.current_tool in ("Pen", "Line", "Rectangle", "Ellipse", "Bucket"):
-            self.BlitFromSurface()
+            self.layers.BlitFromSurface()
 
         self.movex, self.movey = 0, 0
 
@@ -734,23 +727,13 @@ class Canvas(wx.Panel):
         dc.DrawBitmap(self.alphabg, self.panx, self.pany)
         # LAYERS
         if RENDER_CURRENT_LAYER:
-            mdc = wx.MemoryDC(self.layers.composite())
+            mdc = wx.MemoryDC(self.layers.composite(self.movex, self.movey))
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
                            mdc,
                            0, 0,
                            lw, lh)
 
-        # DRAWING LAYER
-        
-        if RENDER_DRAWING_LAYER:
-            mdc = wx.MemoryDC(self.layers.surface)
-            dc.StretchBlit(self.panx + self.movex, self.pany + self.movey,
-                               self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
-                               mdc,
-                               0, 0,
-                               lw, lh)
-        
         gc = wx.GraphicsContext.Create(dc)
 
         # DRAW BRUSH PREVIEW
