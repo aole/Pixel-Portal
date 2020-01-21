@@ -292,10 +292,10 @@ class Canvas(wx.Panel):
             self.DrawEllipse(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False, equal, center)
 
     def SetPenColor(self, color):
-        self.penColor = self.StoreColor(color)
+        self.penColor = color
 
     def SetEraserColor(self, color):
-        self.eraserColor = self.StoreColor(color)
+        self.eraserColor = color
 
     def PixelAtPosition(self, x, y, func=int):
         return (func((x - self.panx) / self.pixel_size),
@@ -309,12 +309,12 @@ class Canvas(wx.Panel):
         self.Refresh()
         
     def ChangePenColor(self, color):
-        self.penColor = self.StoreColor(color)
+        self.penColor = color
         for l in self.listeners:
             l.PenColorChanged(color)
 
     def ChangeEraserColor(self, color):
-        self.eraserColor = self.StoreColor(color)
+        self.eraserColor = color
         for l in self.listeners:
             l.EraserColorChanged(color)
 
@@ -845,11 +845,6 @@ class Canvas(wx.Panel):
         self.history.ClearCommands()
         self.Deselect()
         
-    def StoreColor(self, color):
-        if color not in self.palette:
-            self.palette.append(color)
-        return color
-
     def Resize(self, width, height):
         if width == self.layers.width and height == self.layers.height:
             return
