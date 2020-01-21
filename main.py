@@ -19,8 +19,6 @@ from PIL import Image, ImageDraw
 from undomanager import *
 from layermanager import *
 
-COLOR_BLANK = wx.Colour(0,0,0,0)
-
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (750, 550)
 
@@ -170,6 +168,13 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.DrawPixel(x, self.GetYMirror(y), color, False, False)
 
+    def ErasePixel(self, x, y, canmirrorx=True, canmirrory=True):
+        self.layers.ErasePixel(x, y, size=self.penSize, clip=self.selection)
+        if canmirrorx and self.mirrorx:
+            self.ErasePixel(self.GetXMirror(x), y, False, True)
+        if canmirrory and self.mirrory:
+            self.ErasePixel(x, self.GetYMirror(y), False, False)
+
     def OnFloodFill(self):
         x,y = wx.GetMousePosition()
         x,y = self.ScreenToClient(x,y)
@@ -229,6 +234,13 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.DrawLine(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False)
 
+    def EraseLine(self, x0, y0, x1, y1, canmirrorx=True, canmirrory=True):
+        self.layers.EraseLine(x0, y0, x1, y1, size=self.penSize, clip=self.selection)
+        if canmirrorx and self.mirrorx:
+            self.EraseLine(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, False, True)
+        if canmirrory and self.mirrory:
+            self.EraseLine(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False)
+
     def DrawRectangle(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True, equal=False, center=False):
         x = min(x0, x1)
         y = min(y0, y1)
@@ -247,18 +259,49 @@ class Canvas(wx.Panel):
                 
         if w==0 or h==0:
             if w==0 and h==0:
-                self.layers.surface.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
+                self.layers.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
             else:
-                self.layers.surface.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
+                self.layers.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
         elif center:
-            self.layers.surface.Rectangle(xc-w, yc-h, w*2, h*2, color, size=self.penSize, clip=self.selection)
+            self.layers.Rectangle(xc-w, yc-h, w*2, h*2, color, size=self.penSize, clip=self.selection)
         else:
-            self.layers.surface.Rectangle(x, y, w, h, color, size=self.penSize, clip=self.selection)
+            self.layers.Rectangle(x, y, w, h, color, size=self.penSize, clip=self.selection)
         
         if canmirrorx and self.mirrorx:
             self.DrawRectangle(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True, equal, center)
         if canmirrory and self.mirrory:
             self.DrawRectangle(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False, equal, center)
+
+    def EraseRectangle(self, x0, y0, x1, y1, canmirrorx=True, canmirrory=True, equal=False, center=False):
+        x = min(x0, x1)
+        y = min(y0, y1)
+        w = abs(x1 - x0)
+        h = abs(y1 - y0)
+        
+        if center:
+            xc = x0
+            yc = y0
+        if equal and w!=h:
+            w = h = min(w,h)
+            if x0>x1:
+                x = x0-w
+            if y0>y1:
+                y = y0-w
+                
+        if w==0 or h==0:
+            if w==0 and h==0:
+                self.layers.ErasePixel(x, y, size=self.penSize, clip=self.selection)
+            else:
+                self.layers.EraseLine(x0, y0, x1, y1, size=self.penSize, clip=self.selection)
+        elif center:
+            self.layers.EraseRectangle(xc-w, yc-h, w*2, h*2, size=self.penSize, clip=self.selection)
+        else:
+            self.layers.EraseRectangle(x, y, w, h, size=self.penSize, clip=self.selection)
+        
+        if canmirrorx and self.mirrorx:
+            self.EraseRectangle(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, False, True, equal, center)
+        if canmirrory and self.mirrory:
+            self.EraseRectangle(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False, equal, center)
 
     def DrawEllipse(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True, equal=False, center=False):
         x = min(x0, x1)
@@ -278,18 +321,49 @@ class Canvas(wx.Panel):
                 
         if w==0 or h==0:
             if w==0 and h==0:
-                self.layers.surface.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
+                self.layers.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
             else:
-                self.layers.surface.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
+                self.layers.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
         elif center:
-            self.layers.surface.Ellipse(xc-w, yc-h, w*2, h*2, color, size=self.penSize, clip=self.selection)
+            self.layers.Ellipse(xc-w, yc-h, w*2, h*2, color, size=self.penSize, clip=self.selection)
         else:
-            self.layers.surface.Ellipse(x, y, w, h, color, size=self.penSize, clip=self.selection)
+            self.layers.Ellipse(x, y, w, h, color, size=self.penSize, clip=self.selection)
         
         if canmirrorx and self.mirrorx:
             self.DrawEllipse(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, color, False, True, equal, center)
         if canmirrory and self.mirrory:
             self.DrawEllipse(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), color, False, False, equal, center)
+
+    def EraseEllipse(self, x0, y0, x1, y1, canmirrorx=True, canmirrory=True, equal=False, center=False):
+        x = min(x0, x1)
+        y = min(y0, y1)
+        w = abs(x1 - x0)
+        h = abs(y1 - y0)
+        
+        if center:
+            xc = x0
+            yc = y0
+        if equal and w!=h:
+            w = h = min(w,h)
+            if x0>x1:
+                x = x0-w
+            if y0>y1:
+                y = y0-w
+                
+        if w==0 or h==0:
+            if w==0 and h==0:
+                self.layers.ErasePixel(x, y, size=self.penSize, clip=self.selection)
+            else:
+                self.layers.EraseLine(x0, y0, x1, y1, size=self.penSize, clip=self.selection)
+        elif center:
+            self.layers.EraseEllipse(xc-w, yc-h, w*2, h*2, size=self.penSize, clip=self.selection)
+        else:
+            self.layers.EraseEllipse(x, y, w, h, size=self.penSize, clip=self.selection)
+        
+        if canmirrorx and self.mirrorx:
+            self.EraseEllipse(self.GetXMirror(x0), y0, self.GetXMirror(x1), y1, False, True, equal, center)
+        if canmirrory and self.mirrory:
+            self.EraseEllipse(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False, equal, center)
 
     def SetPenColor(self, color):
         self.penColor = color
@@ -443,19 +517,18 @@ class Canvas(wx.Panel):
                     color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangeEraserColor(color)
                 else:
-                    self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.eraserColor)
+                    self.EraseLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy)
             elif self.current_tool == "Line":
-                self.layers.surface.Clear(COLOR_BLANK)
-                self.DrawLine(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
-                              self.eraserColor)
+                self.layers.BlitToSurface()
+                self.EraseLine(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y))
             elif self.current_tool == "Rectangle":
-                self.layers.surface.Clear(COLOR_BLANK)
-                self.DrawRectangle(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
-                                 self.eraserColor, equal=e.ShiftDown(), center=e.ControlDown())
+                self.layers.BlitToSurface()
+                self.EraseRectangle(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
+                                 equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Ellipse":
-                self.layers.surface.Clear(COLOR_BLANK)
-                self.DrawEllipse(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
-                                 self.eraserColor, equal=e.ShiftDown(), center=e.ControlDown())
+                self.layers.BlitToSurface()
+                self.EraseEllipse(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
+                                 equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Picker":
                 color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangeEraserColor(color)
@@ -579,14 +652,16 @@ class Canvas(wx.Panel):
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
-                self.DrawPixel(gx, gy, self.eraserColor)
+                self.layers.BlitToSurface()
+                self.ErasePixel(gx, gy)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
-                self.DrawPixel(gx, gy, self.eraserColor)
+                self.layers.BlitToSurface()
+                self.ErasePixel(gx, gy)
         elif self.current_tool == "Picker":
             self.noUndo = True
             color = self.layers.current().GetPixel(gx, gy)
@@ -622,7 +697,7 @@ class Canvas(wx.Panel):
 
         # transfer from drawing layer to current_layer
         if self.current_tool in ("Pen", "Line", "Rectangle", "Ellipse", "Bucket"):
-            self.layers.BlitFromSurface()
+            self.layers.SourceFromSurface()
 
         self.movex, self.movey = 0, 0
 
@@ -675,13 +750,13 @@ class Canvas(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         
         lw, lh = self.layers.width, self.layers.height
-        # PAINT WHOLE CANVAS
+        # PAINT WHOLE CANVAS BACKGROUND
         if self.full_redraw:
             dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
             dc.Clear()
             self.full_redraw = False
 
-        # PAINT RULERS
+        # PAINT RULERS --------------
         dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
         dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
         dc.DrawRectangle(self.panx-10, 0, lw*self.pixel_size+20, 25)
@@ -722,9 +797,10 @@ class Canvas(wx.Panel):
 
         # RENDER ALPHA BACKGROUND
         dc.DrawBitmap(self.alphabg, self.panx, self.pany)
-        # LAYERS
+        
+        # RENDER PAINT LAYERS
         if RENDER_CURRENT_LAYER:
-            mdc = wx.MemoryDC(self.layers.composite(self.movex, self.movey))
+            mdc = wx.MemoryDC(self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2))
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
                            mdc,
@@ -841,6 +917,7 @@ class Canvas(wx.Panel):
         self.layers.surface = drawing_layer
         self.layers.surface.name = 'Surface'
         self.layers.appendSelect(current_layer)
+        self.layers.appendSelect()
 
         self.history.ClearCommands()
         self.Deselect()
@@ -890,7 +967,8 @@ class Canvas(wx.Panel):
         self.New(pixel, width, height)
 
         self.layers.current().Load(filename)
-
+        self.layers.appendSelect()
+        
         self.history.ClearCommands()
         self.Deselect()
 

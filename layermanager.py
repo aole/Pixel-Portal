@@ -6,6 +6,7 @@ Bhupendra Aole
 
 import wx
 
+COLOR_BLANK = wx.Colour(0,0,0,0)
 
 class Layer(wx.Bitmap):
     layerCount = 1
@@ -65,6 +66,18 @@ class Layer(wx.Bitmap):
         gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
         mdc.SelectObject(wx.NullBitmap)
         
+    def ErasePixel(self, x, y, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(COLOR_BLANK))
+        gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
+        mdc.SelectObject(wx.NullBitmap)
+        
     def SetPixels(self, pixels, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -114,6 +127,18 @@ class Layer(wx.Bitmap):
         gc.StrokeLine(x0, y0, x1, y1)
         mdc.SelectObject(wx.NullBitmap)
 
+    def EraseLine(self, x0, y0, x1, y1, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
+        gc.StrokeLine(x0, y0, x1, y1)
+        mdc.SelectObject(wx.NullBitmap)
+
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -125,6 +150,18 @@ class Layer(wx.Bitmap):
         gc.DrawRectangle(x, y, w, h)
         mdc.SelectObject(wx.NullBitmap)
 
+    def EraseRectangle(self, x, y, w, h, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
+        gc.DrawRectangle(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
+
     def Ellipse(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -133,6 +170,18 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
+        gc.DrawEllipse(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
+
+    def EraseEllipse(self, x, y, w, h, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
         gc.DrawEllipse(x, y, w, h)
         mdc.SelectObject(wx.NullBitmap)
 
@@ -158,6 +207,17 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, x, y, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+
+    def PasteSource(self, layer, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.DrawBitmap(layer, 0, 0, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
 
     def Load(self, name):
@@ -207,7 +267,7 @@ class LayerManager:
     def current(self):
         return self.layers[self.currentLayer]
     
-    def composite(self, mx=0, my=0):
+    def composite(self, mx=0, my=0, drawCurrent=True):
         if not self.compositeLayer:
             self.compositeLayer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
         else:
@@ -215,7 +275,8 @@ class LayerManager:
         
         for layer in reversed(self.layers):
             if layer == self.layers[self.currentLayer]:
-                self.compositeLayer.Draw(layer)
+                if drawCurrent:
+                    self.compositeLayer.Draw(layer)
                 self.compositeLayer.Draw(self.surface, x=mx, y=my)
             else:
                 self.compositeLayer.Draw(layer)
@@ -249,14 +310,38 @@ class LayerManager:
     def SetPixel(self, x, y, color, size=1, clip=None):
         self.surface.SetPixel(x, y, color, size, clip)
         
+    def ErasePixel(self, x, y, size=1, clip=None):
+        self.surface.ErasePixel(x, y, size, clip)
+        
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         self.surface.Line(x0, y0, x1, y1, color, size, clip)
+        
+    def EraseLine(self, x0, y0, x1, y1, size=1, clip=None):
+        self.surface.EraseLine(x0, y0, x1, y1, size, clip)
+        
+    def Rectangle(self, x, y, w, h, color, size=1, clip=None):
+        self.surface.Rectangle(x, y, w, h, color, size, clip)
+        
+    def EraseRectangle(self, x, y, w, h, size=1, clip=None):
+        self.surface.EraseRectangle(x, y, w, h, size, clip)
+        
+    def Ellipse(self, x, y, w, h, color, size=1, clip=None):
+        self.surface.Ellipse(x, y, w, h, color, size, clip)
+        
+    def EraseEllipse(self, x, y, w, h, size=1, clip=None):
+        self.surface.EraseEllipse(x, y, w, h, size, clip)
         
     def BlitToSurface(self):
         self.surface.Blit(self.layers[self.currentLayer])
         
     def BlitFromSurface(self, x=0, y=0):
         self.layers[self.currentLayer].Blit(self.surface, x, y)
+        
+    def SourceToSurface(self):
+        self.surface.PasteSource(self.layers[self.currentLayer])
+        
+    def SourceFromSurface(self):
+        self.layers[self.currentLayer].PasteSource(self.surface)
         
     def Crop(self, lm, rect):
         self.width  = rect.width
