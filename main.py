@@ -8,11 +8,12 @@ import numpy as np
 from math import atan2, ceil, floor, pi
 import random
 
-from shapely.geometry   import Polygon, MultiPolygon
+from shapely.geometry   import Polygon, MultiPolygon, LineString
 from shapely.ops        import unary_union
 
 import wx, wx.adv
 import wx.lib.agw.cubecolourdialog as CCD
+from wx.lib.plot.polyobjects import PolySpline
 
 from PIL import Image, ImageDraw
 
@@ -73,6 +74,7 @@ class Canvas(wx.Panel):
         self.prevx, self.prevy = 0, 0
         self.origx, self.origy = 0, 0
         self.prevgx, self.prevgy = -1, -1
+        self.linePoints = []
         
         self.movex, self.movey = 0, 0
         self.selection = wx.Region()
@@ -112,7 +114,7 @@ class Canvas(wx.Panel):
     def ClearCurrentLayer(self):
         self.beforeLayer = Layer(self.layers.current())
 
-        self.layers.current().Clear(self.eraserColor, clip=self.selection)
+        self.layers.current().Clear(clip=self.selection)
 
         self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers.current())))
         self.beforeLayer = None
@@ -484,6 +486,7 @@ class Canvas(wx.Panel):
                     color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangePenColor(color)
                 else:
+                    self.linePoints.append((gx, gy)) # for smoothing later
                     self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
             elif self.current_tool == "Line":
                 self.layers.surface.Clear()
@@ -554,6 +557,7 @@ class Canvas(wx.Panel):
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
+                self.linePoints.append((gx, gy))
                 self.DrawPixel(gx, gy, self.penColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
@@ -599,7 +603,23 @@ class Canvas(wx.Panel):
             self.ReleaseMouse()
 
         # transfer from drawing layer to current_layer
-        if self.current_tool in ("Pen", "Line", "Ellipse", "Rectangle"):
+        if self.current_tool == "Pen":
+            # smooth line
+            '''
+            line = LineString(self.linePoints)
+            smoothline = line.simplify(5, False)
+            print(smoothline)
+            x0, y0 = smoothline.coords[0]
+            for x, y in smoothline.coords[1:]:
+                self.DrawLine(x0, y0, x, y, wx.Colour(111,22,33))
+                x0, y0 = x, y
+            self.linePoints = []
+            spline = PolySpline(smoothline.coords, colour=wx.Colour(111,22,33))
+            mdc = wx.MemoryDC(self.layers.surface)
+            spline.draw(mdc, 0)
+            '''
+            self.layers.BlitFromSurface()
+        elif self.current_tool in ("Line", "Ellipse", "Rectangle"):
             self.layers.BlitFromSurface()
         elif self.current_tool == "Bucket":
             self.layers.BlitFromSurface()
@@ -975,7 +995,6 @@ class Canvas(wx.Panel):
         self.New(pixel, width, height)
 
         self.layers.current().Load(filename)
-        self.layers.appendSelect()
         
         self.history.ClearCommands()
         self.Deselect()
