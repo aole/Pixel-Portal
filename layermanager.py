@@ -33,7 +33,7 @@ class Layer(wx.Bitmap):
 
         return bitmap
 
-    def Clear(self, color=wx.Colour(0,0,0,0), clip=None):
+    def Clear(self, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
@@ -41,7 +41,7 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(COLOR_BLANK))
 
         # gc.DrawRectangle(0, 0, *gc.GetSize())
         # weird bug ^^^ can't correctly draw a big rectangle in one go

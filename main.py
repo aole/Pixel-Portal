@@ -90,7 +90,6 @@ class Canvas(wx.Panel):
 
         self.penSize = 1
         self.penColor = wx.BLACK
-        self.eraserColor = wx.WHITE
         self.palette = None
 
         self.refAlpha = 0.3
@@ -182,10 +181,10 @@ class Canvas(wx.Panel):
         
         beforeLayer = Layer(self.layers.current())
         self.layers.BlitToSurface()
-        self.layers.current().Clear(COLOR_BLANK)
+        self.layers.current().Clear()
         self.FloodFill(x, y, self.penColor)
         self.layers.BlitFromSurface()
-        self.layers.surface.Clear(COLOR_BLANK)
+        self.layers.surface.Clear()
             
         self.history.Store(LayerCommand(self.layers, beforeLayer, Layer(self.layers.current())))
         self.Refresh()
@@ -368,9 +367,6 @@ class Canvas(wx.Panel):
     def SetPenColor(self, color):
         self.penColor = color
 
-    def SetEraserColor(self, color):
-        self.eraserColor = color
-
     def PixelAtPosition(self, x, y, func=int):
         return (func((x - self.panx) / self.pixel_size),
                 func((y - self.pany) / self.pixel_size))
@@ -386,11 +382,6 @@ class Canvas(wx.Panel):
         self.penColor = color
         for l in self.listeners:
             l.PenColorChanged(color)
-
-    def ChangeEraserColor(self, color):
-        self.eraserColor = color
-        for l in self.listeners:
-            l.EraserColorChanged(color)
 
     def Select(self, region=None):
         self.lastSelection = None
@@ -495,13 +486,13 @@ class Canvas(wx.Panel):
                 else:
                     self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
             elif self.current_tool == "Line":
-                self.layers.surface.Clear(COLOR_BLANK)
+                self.layers.surface.Clear()
                 self.DrawLine(*self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
             elif self.current_tool == "Rectangle":
-                self.layers.surface.Clear(COLOR_BLANK)
+                self.layers.surface.Clear()
                 self.DrawRectangle(*self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor, equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Ellipse":
-                self.layers.surface.Clear(COLOR_BLANK)
+                self.layers.surface.Clear()
                 self.DrawEllipse(*self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor,
                                  equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Move":
@@ -574,7 +565,7 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Move":
             self.layers.surface.Draw(self.layers.current(), clip=self.selection)
             if not e.ControlDown():
-                self.layers.current().Clear(self.eraserColor, clip=self.selection)
+                self.layers.current().Clear(clip=self.selection)
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
@@ -582,7 +573,7 @@ class Canvas(wx.Panel):
                 self.ChangePenColor(color)
             else:
                 self.layers.BlitToSurface()
-                self.layers.current().Clear(COLOR_BLANK)
+                self.layers.current().Clear()
                 self.FloodFill(gx, gy, self.penColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
@@ -623,7 +614,7 @@ class Canvas(wx.Panel):
             
         self.movex, self.movey = 0, 0
 
-        self.layers.surface.Clear(COLOR_BLANK)
+        self.layers.surface.Clear()
 
         # create an undo command
         if not self.noUndo:
@@ -673,7 +664,7 @@ class Canvas(wx.Panel):
                 self.ChangeEraserColor(color)
             else:
                 self.layers.BlitToSurface()
-                self.layers.current().Clear(COLOR_BLANK)
+                self.layers.current().Clear()
                 self.FloodFill(gx, gy, self.eraserColor)
         elif self.current_tool == "Select":
             self.noUndo = True
@@ -701,7 +692,7 @@ class Canvas(wx.Panel):
 
         self.movex, self.movey = 0, 0
 
-        self.layers.surface.Clear(COLOR_BLANK)
+        self.layers.surface.Clear()
 
         # create an undo command
         if not self.noUndo:
@@ -750,6 +741,8 @@ class Canvas(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         
         lw, lh = self.layers.width, self.layers.height
+        plw, plh = self.layers.width*self.pixel_size, self.layers.height*self.pixel_size
+        
         # PAINT WHOLE CANVAS BACKGROUND
         if self.full_redraw:
             dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
@@ -796,11 +789,19 @@ class Canvas(wx.Panel):
                              self.layers.height * self.pixel_size)
 
         # RENDER ALPHA BACKGROUND
-        dc.DrawBitmap(self.alphabg, self.panx, self.pany)
+        abgw, abgh = self.alphabg.GetWidth(), self.alphabg.GetHeight()
+        #dc.DrawBitmap(self.alphabg, self.panx, self.pany)
+        mdc = wx.MemoryDC(self.alphabg)
+        dc.StretchBlit(self.panx, self.pany,
+                       plw, plh,
+                       mdc,
+                       0, 0,
+                       abgw, abgh)
         
         # RENDER PAINT LAYERS
+        composite = self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2)
         if RENDER_CURRENT_LAYER:
-            mdc = wx.MemoryDC(self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2))
+            mdc = wx.MemoryDC(composite)
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
                            mdc,
@@ -883,14 +884,21 @@ class Canvas(wx.Panel):
             dc.DestroyClippingRegion()
             w, h = e.GetEventObject().GetSize()
             # BUG? dc.GetSize provide does not reduce in size if the window is expanded and them reduced.
-            
-            mdc = wx.MemoryDC(self.layers.composite())
+            mdc = wx.MemoryDC(self.alphabg)
+            dc.StretchBlit(w-lw, 0,
+                           lw, lh,
+                           mdc,
+                           0, 0,
+                           abgw, abgh)
+            mdc = wx.MemoryDC(composite)
             dc.StretchBlit(w-lw, 0,
                            lw, lh,
                            mdc,
                            0, 0,
                            lw, lh)
         
+        mdc.SelectObject(wx.NullBitmap)
+            
     def Undo(self):
         self.history.Undo()
         self.full_redraw = True
@@ -1121,7 +1129,6 @@ class Frame(wx.Frame):
         tb.AddSeparator()
         
         self.colorbtn = self.AddToolButton(tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
-        self.eraserbtn = self.AddToolButton(tb, 'Background Color', self.OnEraser, icon=wx.Bitmap("icons/backcolor.png"))
         
         bcb = wx.adv.BitmapComboBox(tb, style=wx.CB_READONLY)
         for k, v in TOOLS.items():
@@ -1182,27 +1189,6 @@ class Frame(wx.Frame):
             mdc.SelectObject(wx.NullBitmap)
             self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
             
-    def OnEraser(self, e):
-        bitmap = self.eraserbtn.GetBitmap()
-        mdc = wx.MemoryDC(bitmap)
-        color = mdc.GetPixel(1, 1)
-        
-        data = wx.ColourData()
-        data.SetColour(color)
-        data.SetChooseFull(True)
-        dlg = CCD.CubeColourDialog(self, data)
-        if dlg.ShowModal() == wx.ID_OK:
-            color = dlg.GetColourData().GetColour()
-            self.canvas.SetEraserColor(color)
-            clip = wx.Region(0,0,32,32)
-            clip.Subtract(wx.Rect(9, 9, 14, 14))
-            mdc.SetDeviceClippingRegion(clip)
-            mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-            mdc.SetPen(wx.NullPen)
-            mdc.DrawRectangle(0,0,32,32)
-            mdc.SelectObject(wx.NullBitmap)
-            self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
-
     def PenColorChanged(self, color):
         bitmap = self.colorbtn.GetBitmap()
         mdc = wx.MemoryDC(bitmap)
@@ -1214,18 +1200,6 @@ class Frame(wx.Frame):
         mdc.DrawRectangle(0,0,32,32)
         mdc.SelectObject(wx.NullBitmap)
         self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
-
-    def EraserColorChanged(self, color):
-        bitmap = self.eraserbtn.GetBitmap()
-        mdc = wx.MemoryDC(bitmap)
-        clip = wx.Region(0,0,32,32)
-        clip.Subtract(wx.Rect(9, 9, 14, 14))
-        mdc.SetDeviceClippingRegion(clip)
-        mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-        mdc.SetPen(wx.NullPen)
-        mdc.DrawRectangle(0,0,32,32)
-        mdc.SelectObject(wx.NullBitmap)
-        self.toolbar.SetToolNormalBitmap(self.eraserbtn.GetId(), bitmap)
 
     def ImageSizeChanged(self, w, h):
         self.txtWidth.SetValue(str(w))
