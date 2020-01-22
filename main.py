@@ -75,6 +75,7 @@ class Canvas(wx.Panel):
         self.origx, self.origy = 0, 0
         self.prevgx, self.prevgy = -1, -1
         self.linePoints = []
+        self.smoothLine = False
         
         self.movex, self.movey = 0, 0
         self.selection = wx.Region()
@@ -486,7 +487,8 @@ class Canvas(wx.Panel):
                     color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangePenColor(color)
                 else:
-                    self.linePoints.append((gx, gy)) # for smoothing later
+                    if self.smoothLine:
+                        self.linePoints.append((gx, gy)) # for smoothing later
                     self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
             elif self.current_tool == "Line":
                 self.layers.surface.Clear()
@@ -557,7 +559,8 @@ class Canvas(wx.Panel):
                 color = self.layers.current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
-                self.linePoints.append((gx, gy))
+                if self.smoothLine:
+                    self.linePoints.append((gx, gy))
                 self.DrawPixel(gx, gy, self.penColor)
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
@@ -605,20 +608,13 @@ class Canvas(wx.Panel):
         # transfer from drawing layer to current_layer
         if self.current_tool == "Pen":
             # smooth line
-            '''
-            line = LineString(self.linePoints)
-            smoothline = line.simplify(5, False)
-            print(smoothline)
-            x0, y0 = smoothline.coords[0]
-            for x, y in smoothline.coords[1:]:
-                self.DrawLine(x0, y0, x, y, wx.Colour(111,22,33))
-                x0, y0 = x, y
-            self.linePoints = []
-            spline = PolySpline(smoothline.coords, colour=wx.Colour(111,22,33))
-            mdc = wx.MemoryDC(self.layers.surface)
-            spline.draw(mdc, 0)
-            '''
+            if self.smoothLine:
+                line = LineString(self.linePoints)
+                self.linePoints.clear()
+                smoothline = line.simplify(1, True)
+                self.layers.Spline(smoothline.coords, self.penColor)
             self.layers.BlitFromSurface()
+            
         elif self.current_tool in ("Line", "Ellipse", "Rectangle"):
             self.layers.BlitFromSurface()
         elif self.current_tool == "Bucket":
@@ -759,6 +755,9 @@ class Canvas(wx.Panel):
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
+        alphadc = wx.MemoryDC(self.alphabg)
+        composite = self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2)
+        compositedc = wx.MemoryDC(composite)
         
         lw, lh = self.layers.width, self.layers.height
         plw, plh = self.layers.width*self.pixel_size, self.layers.height*self.pixel_size
@@ -810,21 +809,17 @@ class Canvas(wx.Panel):
 
         # RENDER ALPHA BACKGROUND
         abgw, abgh = self.alphabg.GetWidth(), self.alphabg.GetHeight()
-        #dc.DrawBitmap(self.alphabg, self.panx, self.pany)
-        mdc = wx.MemoryDC(self.alphabg)
         dc.StretchBlit(self.panx, self.pany,
                        plw, plh,
-                       mdc,
+                       alphadc,
                        0, 0,
                        abgw, abgh)
         
         # RENDER PAINT LAYERS
-        composite = self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2)
         if RENDER_CURRENT_LAYER:
-            mdc = wx.MemoryDC(composite)
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
-                           mdc,
+                           compositedc,
                            0, 0,
                            lw, lh)
 
@@ -904,21 +899,20 @@ class Canvas(wx.Panel):
             dc.DestroyClippingRegion()
             w, h = e.GetEventObject().GetSize()
             # BUG? dc.GetSize provide does not reduce in size if the window is expanded and them reduced.
-            mdc = wx.MemoryDC(self.alphabg)
             dc.StretchBlit(w-lw, 0,
                            lw, lh,
-                           mdc,
+                           alphadc,
                            0, 0,
                            abgw, abgh)
-            mdc = wx.MemoryDC(composite)
             dc.StretchBlit(w-lw, 0,
                            lw, lh,
-                           mdc,
+                           compositedc,
                            0, 0,
                            lw, lh)
         
-        mdc.SelectObject(wx.NullBitmap)
-            
+        alphadc.SelectObject(wx.NullBitmap)
+        del alphadc
+        
     def Undo(self):
         self.history.Undo()
         self.full_redraw = True
@@ -1159,6 +1153,7 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, icon=wx.Bitmap("icons/grid.png"), default=True)
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
+        self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
         self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
 
         tb.Realize()
@@ -1205,9 +1200,11 @@ class Frame(wx.Frame):
             mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
             mdc.SetPen(wx.NullPen)
             mdc.DrawRectangle(0,0,32,32)
-            mdc.SelectObject(wx.NullBitmap)
             self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
-            
+        
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+        
     def PenColorChanged(self, color):
         bitmap = self.colorbtn.GetBitmap()
         mdc = wx.MemoryDC(bitmap)
@@ -1218,6 +1215,7 @@ class Frame(wx.Frame):
         mdc.SetPen(wx.NullPen)
         mdc.DrawRectangle(0,0,32,32)
         mdc.SelectObject(wx.NullBitmap)
+        del mdc
         self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
 
     def ImageSizeChanged(self, w, h):
@@ -1289,6 +1287,10 @@ class Frame(wx.Frame):
 
     def OnMirrorY(self, e):
         self.canvas.mirrory = e.IsChecked()
+        self.canvas.Refresh()
+
+    def OnSmoothLine(self, e):
+        self.canvas.smoothLine = e.IsChecked()
         self.canvas.Refresh()
 
     def OnNew32x32(self, e):
