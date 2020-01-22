@@ -3,17 +3,14 @@
 ### Bhupendra Aole ###
 """
 
-import colorsys
-import numpy as np
-from math import atan2, ceil, floor, pi
-import random
+from math import ceil
 
 from shapely.geometry   import Polygon, MultiPolygon, LineString
 from shapely.ops        import unary_union
 
-import wx, wx.adv
-import wx.lib.agw.cubecolourdialog as CCD
-from wx.lib.plot.polyobjects import PolySpline
+import wx
+from wx.adv import BitmapComboBox
+from wx.lib.agw.cubecolourdialog import CubeColourDialog
 
 from PIL import Image, ImageDraw
 
@@ -196,8 +193,15 @@ class Canvas(wx.Panel):
         #self.layers.surface.FloodFill(x, y, color, self.selection)
         #return
         
+        
         w, h = self.layers.width, self.layers.height
         
+        def bpos(xp, yp):
+            return yp*w*4+xp*4
+            
+        def car(a, b):
+            return a[0]==b[0] and a[1]==b[1] and a[2]==b[2] and a[3]==b[3]
+            
         if x < 0 or y < 0 or x > w - 1 or y > h - 1:
             return
         if not self.selection.IsEmpty() and not self.selection.Contains(x, y):
@@ -205,32 +209,41 @@ class Canvas(wx.Panel):
 
         buf = bytearray(w*h*4)
         self.layers.surface.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
-        buf = np.array(buf).reshape(h, w, 4)
         
-        replace = np.array(buf[y][x])
+        i = bpos(x,y)
+        replace = buf[i:i+4]
         
-        rgba = np.array(color.Get())
+        rgba = color.Get()
         
         queue = {(x, y)}
         while queue:
             # replace current pixel
             x, y = queue.pop()
+            i = bpos(x,y)
+            
             if not self.selection or self.selection.IsEmpty() or self.selection.Contains(x, y):
-                buf[y][x] = rgba
+                buf[i] = rgba[0]
+                buf[i+1] = rgba[1]
+                buf[i+2] = rgba[2]
+                buf[i+3] = rgba[3]
                 # north
-                if y > 0 and np.array_equal(buf[y-1][x], replace) and not np.array_equal(buf[y-1][x], rgba):
+                d = bpos(x,y-1)
+                if y > 0 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
                     queue.add((x, y - 1))
                 # east
-                if x < w - 1 and np.array_equal(buf[y][x + 1], replace) and not np.array_equal(buf[y][x + 1], rgba):
+                d = bpos(x+1,y)
+                if x < w - 1 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
                     queue.add((x + 1, y))
                 # south
-                if y < h - 1 and np.array_equal(buf[y + 1][x], replace) and not np.array_equal(buf[y+1][x], rgba):
+                d = bpos(x,y+1)
+                if y < h - 1 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
                     queue.add((x, y + 1))
                 # west
-                if x > 0 and np.array_equal(buf[y][x - 1], replace) and not np.array_equal(buf[y][x - 1], rgba):
+                d = bpos(x-1, y)
+                if x > 0 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
                     queue.add((x - 1, y))
                     
-        self.layers.surface.CopyFromBuffer(bytes(buf), wx.BitmapBufferFormat_RGBA)
+        self.layers.surface.CopyFromBuffer(buf, wx.BitmapBufferFormat_RGBA)
         
     def DrawLine(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
         self.layers.Line(x0, y0, x1, y1, color, size=self.penSize, clip=self.selection)
@@ -373,6 +386,9 @@ class Canvas(wx.Panel):
     def SetPenColor(self, color):
         self.penColor = color
 
+    def GetPenColor(self):
+        return self.penColor
+
     def PixelAtPosition(self, x, y, func=int):
         return (func((x - self.panx) / self.pixel_size),
                 func((y - self.pany) / self.pixel_size))
@@ -429,11 +445,17 @@ class Canvas(wx.Panel):
         layer = self.layers.current()
         w, h = layer.width, layer.height
         
+        def bpos(xp, yp):
+            return yp*w*4+xp*4
+            
+        def car(a, b):
+            return a[0]==b[0] and a[1]==b[1] and a[2]==b[2] and a[3]==b[3]
+            
         buf = bytearray(w*h*4)
         layer.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
-        buf = np.array(buf).reshape(h, w, 4)
         
-        color = np.array(buf[y][x])
+        i = bpos(x,y)
+        color = buf[i:i+4]
         
         queue = {(x, y)}
         col = set()
@@ -444,16 +466,20 @@ class Canvas(wx.Panel):
             col.add((x,y))
             selection.Union(x,y, 1,1)
             # north
-            if y > 0 and np.array_equal(np.array(buf[y-1][x]), color) and (x,y-1) not in col:
+            d = bpos(x,y-1)
+            if y > 0 and car(buf[d:d+4], color) and (x,y-1) not in col:
                 queue.add((x, y - 1))
             # east
-            if x < w - 1 and np.array_equal(np.array(buf[y][x + 1]), color) and (x+1,y) not in col:
+            d = bpos(x+1,y)
+            if x < w - 1 and car(buf[d:d+4], color) and (x+1,y) not in col:
                 queue.add((x + 1, y))
             # south
-            if y < h - 1 and np.array_equal(np.array(buf[y + 1][x]), color) and (x,y+1) not in col:
+            d = bpos(x,y+1)
+            if y < h - 1 and car(buf[d:d+4], color) and (x,y+1) not in col:
                 queue.add((x, y + 1))
             # west
-            if x > 0 and np.array_equal(np.array(buf[y][x - 1]), color) and (x-1,y) not in col:
+            d = bpos(x-1,y)
+            if x > 0 and car(buf[d:d+4], color) and (x-1,y) not in col:
                 queue.add((x - 1, y))
                     
         if add:
@@ -1007,13 +1033,13 @@ class Canvas(wx.Panel):
         images = []
         wxImage = self.history.GetCommands()[0].before.Scaled(self.pixel_size).ConvertToImage()
         pilImage = Image.new('RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
-        pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
+        pilImage.frombytes(array(wxImage.GetDataBuffer()))
         images.append(pilImage)
 
         for cmd in self.history.GetCommands():
             wxImage = cmd.after.Scaled(self.pixel_size).ConvertToImage()
             pilImage = Image.new('RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
-            pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
+            pilImage.frombytes(array(wxImage.GetDataBuffer()))
             images.append(pilImage)
         images[0].save(filename, save_all=True, append_images=images[1:], optimize=False, duration=100, loop=0)
 
@@ -1146,7 +1172,7 @@ class Frame(wx.Frame):
         
         self.colorbtn = self.AddToolButton(tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
         
-        bcb = wx.adv.BitmapComboBox(tb, style=wx.CB_READONLY)
+        bcb = BitmapComboBox(tb, style=wx.CB_READONLY)
         for k, v in TOOLS.items():
             bcb.Append(k, wx.Bitmap("icons/"+v[1]))
         self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=bcb.GetId())
@@ -1187,26 +1213,29 @@ class Frame(wx.Frame):
         self.menuid += 1
 
     def OnColor(self, e):
-        bitmap = self.colorbtn.GetBitmap()
-        mdc = wx.MemoryDC(bitmap)
-        color = mdc.GetPixel(1, 1)
         
         data = wx.ColourData()
-        data.SetColour(color)
-        dlg = CCD.CubeColourDialog(self, data)
+        data.SetColour(self.canvas.GetPenColor())
+        dlg = CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
             self.canvas.SetPenColor(color)
+            
+            bitmap = self.colorbtn.GetBitmap()
+            mdc = wx.MemoryDC(bitmap)
+            
             clip = wx.Region(0,0,32,32)
             clip.Subtract(wx.Rect(9, 9, 14, 14))
             mdc.SetDeviceClippingRegion(clip)
+            
             mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
             mdc.SetPen(wx.NullPen)
             mdc.DrawRectangle(0,0,32,32)
+            
+            mdc.SelectObject(wx.NullBitmap)
+            del mdc
+            
             self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
-        
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
         
     def PenColorChanged(self, color):
         bitmap = self.colorbtn.GetBitmap()
