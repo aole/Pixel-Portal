@@ -100,15 +100,16 @@ class Layer(wx.Bitmap):
         del mdc
 
     # BUG?? FloodFill is painting with alpha=0
-    def FloodFill(self, x0, y0, color, clip=None):
-        pdc = wx.adv.PseudoDC()
+    def FloodFill(self, x, y, color, clip=None):
         mdc = wx.MemoryDC(self)
-        replace = mdc.GetPixel(x0, y0)
+        gcdc = wx.GCDC(mdc)
         
-        mdc.SetBrush(wx.Brush(color))
-        mdc.FloodFill(x0, y0, replace)
-        return 
+        replace = mdc.GetPixel(x, y)
+        #print(replace)
+        gcdc.SetBrush(wx.Brush(color))
+        gcdc.FloodFill(x, y, replace)
         
+        '''
         gc = wx.GraphicsContext.Create(mdc)
         region = wx.Region(self, replace)
         w, h = self.width, self.height
@@ -123,7 +124,10 @@ class Layer(wx.Bitmap):
                 for y in range(0, h, 60):
                     gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
             #gc.DrawRectangle(0, 0, self.width, self.height)
-        mdc.SelectObject(wx.NullBitmap)
+        '''
+        #mdc.SelectObject(wx.NullBitmap)
+        #del gcdc
+        #del mdc
         
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)

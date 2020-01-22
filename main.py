@@ -180,19 +180,22 @@ class Canvas(wx.Panel):
     def OnFloodFill(self):
         x,y = wx.GetMousePosition()
         x,y = self.ScreenToClient(x,y)
-        x,y = self.PixelAtPosition(x,y)
+        gx, gy = self.PixelAtPosition(x,y)
         
         beforeLayer = Layer(self.layers.current())
         self.layers.BlitToSurface()
         self.layers.current().Clear()
-        self.FloodFill(x, y, self.penColor)
+        self.FloodFill(gx, gy, self.penColor)
         self.layers.BlitFromSurface()
         self.layers.surface.Clear()
-            
+        
         self.history.Store(LayerCommand(self.layers, beforeLayer, Layer(self.layers.current())))
         self.Refresh()
         
     def FloodFill(self, x, y, color):
+        #self.layers.surface.FloodFill(x, y, color, self.selection)
+        #return
+        
         w, h = self.layers.width, self.layers.height
         
         if x < 0 or y < 0 or x > w - 1 or y > h - 1:
@@ -206,7 +209,7 @@ class Canvas(wx.Panel):
         
         replace = np.array(buf[y][x])
         
-        rgba = np.array([color.red, color.green, color.blue, color.alpha])
+        rgba = np.array(color.Get())
         
         queue = {(x, y)}
         while queue:
