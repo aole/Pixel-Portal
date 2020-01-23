@@ -43,6 +43,24 @@ class AddLayerCommand(Command):
         self.layermgr.remove()
         return True
 
+class RemoveLayerCommand(Command):
+    def __init__(self, layermgr, index, layer):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.index = index
+        self.layer = layer
+        
+    def Do(self):
+        self.layermgr.currentLayer = self.index
+        self.layermgr.remove()
+        return True
+
+    def Undo(self):
+        self.layermgr.currentLayer = self.index
+        self.layermgr.appendSelect(self.layer)
+        return True
+
 class ResizeCommand(Command):
     def __init__(self, layers, before, after):
         super().__init__(True)

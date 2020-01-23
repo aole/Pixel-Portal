@@ -958,14 +958,12 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.Undid()
             
-
     def Redo(self):
         self.history.Redo()
         self.FullRedraw()
         for l in self.listeners:
             l.Redid()
             
-
     def IsDirty(self):
         return self.history.IsDirty()
 
@@ -1117,6 +1115,11 @@ class Canvas(wx.Panel):
         index = self.layers.currentLayer
         layer = Layer(self.layers.appendSelect())
         self.history.Store(AddLayerCommand(self.layers, index, layer))
+        
+    def RemoveLayer(self):
+        index = self.layers.currentLayer
+        layer = Layer(self.layers.remove())
+        self.history.Store(RemoveLayerCommand(self.layers, index, layer))
         
 class Frame(wx.Frame):
     def __init__(self):
@@ -1437,7 +1440,7 @@ class Frame(wx.Frame):
         self.RepopulateList()
         
     def OnRemoveLayer(self, e):
-        self.canvas.layers.remove()
+        self.canvas.RemoveLayer()
         self.canvas.FullRedraw()
         self.RepopulateList()
         

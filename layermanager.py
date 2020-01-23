@@ -21,6 +21,10 @@ class Layer(wx.Bitmap):
         
         self.visible = True
         
+    def Copy(self, name=None):
+        layer = Layer(self.GetSubBitmap(wx.Rect(0, 0, self.width, self.height)))
+        layer.name = name if name else self.name
+        
     def Scaled(self, factor):
         bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
         mdcd = wx.MemoryDC(bitmap)
@@ -320,14 +324,15 @@ class LayerManager:
         
     def remove(self, layer=None):
         if len(self.layers)>1:
-            if layer:
-                del self.layers[self.layers.index(layer)]
-            else:
-                del self.layers[self.currentLayer]
+            if not layer:
+                layer = self.layers[self.currentLayer]
+            del self.layers[self.layers.index(layer)]
                 
             if self.currentLayer>=len(self.layers):
                 self.currentLayer = len(self.layers)-1
-    
+        
+        return layer
+        
     def removeAll(self):
         self.surface = None
         self.compositeLayer = None
