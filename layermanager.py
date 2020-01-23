@@ -394,7 +394,6 @@ class LayerManager:
         self.compositeLayer = None
         
     def Spline(self, pts, color):
-        self.surface.Clear()
         mdc = wx.MemoryDC(self.surface)
         gcdc = wx.GCDC(mdc)
         gc = gcdc.GraphicsContext

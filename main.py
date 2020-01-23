@@ -259,6 +259,15 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.EraseLine(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False)
 
+    def Spline(self, pts, color, canmirrorx=True, canmirrory=True):
+        self.layers.Spline(pts, color)
+        if canmirrorx and self.mirrorx:
+            mpts = [(self.GetXMirror(x), y) for x,y in pts]
+            self.Spline(mpts, color, False, True)
+        if canmirrory and self.mirrory:
+            mpts = [(x, self.GetYMirror(y)) for x,y in pts]
+            self.Spline(mpts, color, False, False)
+
     def DrawRectangle(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True, equal=False, center=False):
         x = min(x0, x1)
         y = min(y0, y1)
@@ -638,10 +647,11 @@ class Canvas(wx.Panel):
         if self.current_tool == "Pen":
             # smooth line
             if self.smoothLine:
+                self.layers.surface.Clear()
                 line = LineString(self.linePoints)
                 self.linePoints.clear()
                 smoothline = line.simplify(1, True)
-                self.layers.Spline(smoothline.coords, self.penColor)
+                self.Spline(smoothline.coords, self.penColor)
             self.layers.BlitFromSurface()
             
         elif self.current_tool in ("Line", "Ellipse", "Rectangle"):
