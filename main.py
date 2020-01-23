@@ -114,7 +114,7 @@ class Canvas(wx.Panel):
 
         self.layers.current().Clear(clip=self.selection)
 
-        self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers.current())))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
         self.beforeLayer = None
         self.Refresh()
 
@@ -186,7 +186,7 @@ class Canvas(wx.Panel):
         self.layers.BlitFromSurface()
         self.layers.surface.Clear()
         
-        self.history.Store(LayerCommand(self.layers, beforeLayer, Layer(self.layers.current())))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, Layer(self.layers.current())))
         self.Refresh()
         
     def FloodFill(self, x, y, color):
@@ -673,7 +673,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers.current())))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
         self.beforeLayer = None
 
         self.noUndo = False
@@ -751,7 +751,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(LayerCommand(self.layers, self.beforeLayer, Layer(self.layers.current())))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
             self.noUndo = True
             
         self.beforeLayer = None
@@ -954,13 +954,17 @@ class Canvas(wx.Panel):
         
     def Undo(self):
         self.history.Undo()
-        self.full_redraw = True
-        self.Refresh()
+        self.FullRedraw()
+        for l in self.listeners:
+            l.Undid()
+            
 
     def Redo(self):
         self.history.Redo()
-        self.full_redraw = True
-        self.Refresh()
+        self.FullRedraw()
+        for l in self.listeners:
+            l.Redid()
+            
 
     def IsDirty(self):
         return self.history.IsDirty()
@@ -1074,7 +1078,7 @@ class Canvas(wx.Panel):
         after = Layer(self.GetMirror(before))
         after.Draw(before, wx.Region(0, 0, int(before.width / 2), before.height))
 
-        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
         self.layers.set(after)
 
         self.Refresh()
@@ -1084,7 +1088,7 @@ class Canvas(wx.Panel):
         after = Layer(self.GetMirror(before, False))
         after.Draw(before, wx.Region(0, 0, before.width, int(before.height / 2)))
 
-        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
         self.layers.set(after)
 
         self.Refresh()
@@ -1093,7 +1097,7 @@ class Canvas(wx.Panel):
         before = Layer(self.layers.current())
         after = self.GetMirror(before)
 
-        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
         self.layers.current().Draw(after)
 
         self.Refresh()
@@ -1104,13 +1108,15 @@ class Canvas(wx.Panel):
         image = image.Rotate90(clockwise)
         after = image.ConvertToBitmap()
 
-        self.history.Store(LayerCommand(self.layers, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
         self.layers.current().Draw(after)
 
         self.Refresh()
 
     def AddLayer(self):
-        self.layers.appendSelect()
+        index = self.layers.currentLayer
+        layer = Layer(self.layers.appendSelect())
+        self.history.Store(AddLayerCommand(self.layers, index, layer))
         
 class Frame(wx.Frame):
     def __init__(self):
@@ -1269,6 +1275,12 @@ class Frame(wx.Frame):
     def PixelSizeChanged(self, value):
         self.txtPixel.SetValue(str(value))
 
+    def Undid(self):
+        self.RepopulateList()
+        
+    def Redid(self):
+        self.Undid()
+        
     def AddToolButton(self, tb, label, function, icon):
         btn = tb.AddTool(wx.ID_ANY, label, icon, shortHelp=label)
         self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
@@ -1420,7 +1432,7 @@ class Frame(wx.Frame):
         self.canvas.layers.selectIndex(e.Index)
         
     def OnAddLayer(self, e):
-        self.canvas.layers.appendSelect()
+        self.canvas.AddLayer()
         self.canvas.FullRedraw()
         self.RepopulateList()
         

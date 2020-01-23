@@ -8,20 +8,39 @@ from wx import Command, Bitmap, CommandProcessor, Region
 
 NUM_UNDOS = 100
 
-class LayerCommand(Command):
-    def __init__(self, layers, before, after):
+class PaintCommand(Command):
+    def __init__(self, layermgr, index, before, after):
         super().__init__(True)
 
-        self.layers = layers
+        self.layermgr = layermgr
+        self.index = index
         self.before = before
         self.after = after
 
     def Do(self):
-        self.layers.current().Blit(self.after)
+        self.layermgr.layers[self.index].PasteSource(self.after)
         return True
 
     def Undo(self):
-        self.layers.current().Blit(self.before)
+        self.layermgr.layers[self.index].PasteSource(self.before)
+        return True
+
+class AddLayerCommand(Command):
+    def __init__(self, layermgr, index, layer):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.index = index
+        self.layer = layer
+        
+    def Do(self):
+        self.layermgr.currentLayer = self.index
+        self.layermgr.appendSelect(self.layer)
+        return True
+
+    def Undo(self):
+        self.layermgr.currentLayer = self.index
+        self.layermgr.remove()
         return True
 
 class ResizeCommand(Command):
