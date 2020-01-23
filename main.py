@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 
 from undomanager import *
 from layermanager import *
+from gradienteditor import *
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (750, 550)
@@ -23,16 +24,16 @@ WINDOW_SIZE = (750, 550)
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-TOOLS = {"Pen":             (wx.CURSOR_PENCIL, "toolpen.png"),
-         "Select":          (wx.CURSOR_CROSS, "toolselectrect.png"),
-         "Line":            (wx.CURSOR_CROSS, "toolline.png"),
-         "Rectangle":       (wx.CURSOR_CROSS, "toolrect.png"),
-         "Ellipse":         (wx.CURSOR_CROSS, "toolellipse.png"),
-         "Move":            (wx.CURSOR_SIZING, "toolmove.png"),
+TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
+         "Select":          (wx.CURSOR_CROSS,       "toolselectrect.png"),
+         "Line":            (wx.CURSOR_CROSS,       "toolline.png"),
+         "Rectangle":       (wx.CURSOR_CROSS,       "toolrect.png"),
+         "Ellipse":         (wx.CURSOR_CROSS,       "toolellipse.png"),
+         "Move":            (wx.CURSOR_SIZING,      "toolmove.png"),
          "Bucket":          (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
          "Picker":          (wx.CURSOR_RIGHT_ARROW, "toolpicker.png"),
-         "Gradient":        (wx.CURSOR_CROSS, "toolgradient.png"),
-         "Radial Gradient": (wx.CURSOR_CROSS, "toolrgradient.png")}
+         "Gradient":        (wx.CURSOR_CROSS,       "toolgradient.png"),
+         "Radial Gradient": (wx.CURSOR_CROSS,       "toolrgradient.png")}
 
 #Debug
 RENDER_CURRENT_LAYER = True
@@ -94,7 +95,8 @@ class Canvas(wx.Panel):
         self.penSize = 1
         self.penColor = wx.BLACK
         self.palette = None
-
+        self.gradientStops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
+        
         self.refAlpha = 0.3
         self.refScale = 1
         self.reference = None
@@ -396,10 +398,10 @@ class Canvas(wx.Panel):
             self.EraseEllipse(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False, equal, center)
 
     def FillGradient(self, x0, y0, x1, y1):
-        self.layers.FillGradient(x0, y0, x1, y1, wx.RED, wx.BLUE, clip=self.selection)
+        self.layers.FillGradient(x0, y0, x1, y1, self.gradientStops, clip=self.selection)
         
     def FillRGradient(self, x0, y0, x1, y1):
-        self.layers.FillRGradient(x0, y0, x1, y1, wx.BLACK, wx.Colour(0,0,0,0), clip=self.selection)
+        self.layers.FillRGradient(x0, y0, x1, y1, self.gradientStops, clip=self.selection)
         
     def SetPenColor(self, color):
         self.penColor = color
@@ -407,6 +409,12 @@ class Canvas(wx.Panel):
     def GetPenColor(self):
         return self.penColor
 
+    def SetGradientStops(self, stops):
+        self.gradientStops = stops
+        
+    def GetGradientStops(self):
+        return self.gradientStops
+        
     def PixelAtPosition(self, x, y, func=int):
         return (func((x - self.panx) / self.pixel_size),
                 func((y - self.pany) / self.pixel_size))
@@ -1204,6 +1212,7 @@ class Frame(wx.Frame):
         
         self.colorbtn = self.AddToolButton(tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
         
+        # Tool combo box
         bcb = BitmapComboBox(tb, style=wx.CB_READONLY)
         for k, v in TOOLS.items():
             bcb.Append(k, wx.Bitmap("icons/"+v[1]))
@@ -1211,12 +1220,16 @@ class Frame(wx.Frame):
         bcb.SetSelection(0)
         tb.AddControl(bcb)
         
+        # Gradient editor
+        gbtn = wx.BitmapButton(tb, bitmap=wx.Bitmap("icons/gradient.png"))
+        self.Bind(wx.EVT_BUTTON, self.OnGradient, id=gbtn.GetId())
+        tb.AddControl(gbtn)
+        
         self.AddToggleButton(tb, 'Grid', self.OnToggleGrid, icon=wx.Bitmap("icons/grid.png"), default=True)
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
         self.AddToolButton(tb, 'Toggle Layer Visibility', self.OnToggleLayerVisibility, icon=wx.Bitmap("icons/visible.png"))
-        self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
 
         tb.Realize()
 
@@ -1247,7 +1260,6 @@ class Frame(wx.Frame):
         self.menuid += 1
 
     def OnColor(self, e):
-        
         data = wx.ColourData()
         data.SetColour(self.canvas.GetPenColor())
         dlg = CubeColourDialog(self, data)
@@ -1417,6 +1429,30 @@ class Frame(wx.Frame):
     def OnTool(self, e):
         self.canvas.SetTool(e.GetString())
 
+    def OnGradient(self, e):
+        dlg = GradientEditor(self, self.canvas.GetGradientStops())
+        if dlg.ShowModal() == wx.ID_OK:
+            stops = dlg.GetStops()
+            self.canvas.SetGradientStops(stops)
+            
+            bitmap = e.GetEventObject().GetBitmap()
+            mdc = wx.MemoryDC(bitmap)
+            gc = wx.GraphicsContext.Create(mdc)
+            
+            clip = wx.Region(2,2,60,28)
+            mdc.SetDeviceClippingRegion(clip)
+            
+            brush = gc.CreateLinearGradientBrush(0, 0, 64, 0, stops)
+            gc.SetBrush(brush)
+            gc.SetPen(wx.NullPen)
+            gc.DrawRectangle(0,0,64,32)
+            
+            mdc.SelectObject(wx.NullBitmap)
+            del mdc
+            
+            e.GetEventObject().SetBitmap(bitmap)
+        dlg.Destroy()
+        
     def OnCenter(self, e):
         self.canvas.CenterCanvasInPanel(self.canvas.Size)
         self.canvas.FullRedraw()
