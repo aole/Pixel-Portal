@@ -5,6 +5,7 @@ Bhupendra Aole
 """
 
 import wx
+from math import sqrt
 
 COLOR_BLANK = wx.Colour(0,0,0,0)
 
@@ -212,6 +213,29 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
+    def FillGradient(self, x0, y0, x1, y1, c0, c1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        brush = gc.CreateLinearGradientBrush(x0, y0, x1, y1, c0, c1)
+        gc.SetBrush(brush)
+        gc.DrawRectangle(0, 0, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+        
+    def FillRGradient(self, x0, y0, x1, y1, c0, c1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        r = sqrt((x1-x0)**2 + (y1-y0)**2)
+        brush = gc.CreateRadialGradientBrush(x0, y0, x0, y0, r, c0, c1)
+        gc.SetBrush(brush)
+        gc.DrawRectangle(0, 0, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+        
     def Blit(self, layer, x=0, y=0, w=0, h=0):
         if w == 0:
             w = layer.width
@@ -374,6 +398,12 @@ class LayerManager:
         
     def EraseEllipse(self, x, y, w, h, size=1, clip=None):
         self.surface.EraseEllipse(x, y, w, h, size, clip)
+        
+    def FillGradient(self, x0, y0, x1, y1, c0, c1, clip=None):
+        self.surface.FillGradient(x0, y0, x1, y1, c0, c1, clip)
+        
+    def FillRGradient(self, x0, y0, x1, y1, c0, c1, clip=None):
+        self.surface.FillRGradient(x0, y0, x1, y1, c0, c1, clip)
         
     def BlitToSurface(self):
         self.surface.Blit(self.layers[self.currentLayer])

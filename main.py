@@ -23,14 +23,16 @@ WINDOW_SIZE = (750, 550)
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-TOOLS = {"Pen":         (wx.CURSOR_PENCIL, "toolpen.png"),
-         "Select":      (wx.CURSOR_CROSS, "toolselectrect.png"),
-         "Line":        (wx.CURSOR_CROSS, "toolline.png"),
-         "Rectangle":   (wx.CURSOR_CROSS, "toolrect.png"),
-         "Ellipse":     (wx.CURSOR_CROSS, "toolellipse.png"),
-         "Move":        (wx.CURSOR_SIZING, "toolmove.png"),
-         "Bucket":      (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
-         "Picker":      (wx.CURSOR_RIGHT_ARROW, "toolpicker.png")}
+TOOLS = {"Pen":             (wx.CURSOR_PENCIL, "toolpen.png"),
+         "Select":          (wx.CURSOR_CROSS, "toolselectrect.png"),
+         "Line":            (wx.CURSOR_CROSS, "toolline.png"),
+         "Rectangle":       (wx.CURSOR_CROSS, "toolrect.png"),
+         "Ellipse":         (wx.CURSOR_CROSS, "toolellipse.png"),
+         "Move":            (wx.CURSOR_SIZING, "toolmove.png"),
+         "Bucket":          (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
+         "Picker":          (wx.CURSOR_RIGHT_ARROW, "toolpicker.png"),
+         "Gradient":        (wx.CURSOR_CROSS, "toolgradient.png"),
+         "Radial Gradient": (wx.CURSOR_CROSS, "toolrgradient.png")}
 
 #Debug
 RENDER_CURRENT_LAYER = True
@@ -392,6 +394,12 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.EraseEllipse(x0, self.GetYMirror(y0), x1, self.GetYMirror(y1), False, False, equal, center)
 
+    def FillGradient(self, x0, y0, x1, y1):
+        self.layers.FillGradient(x0, y0, x1, y1, wx.RED, wx.BLUE, clip=self.selection)
+        
+    def FillRGradient(self, x0, y0, x1, y1):
+        self.layers.FillRGradient(x0, y0, x1, y1, wx.BLACK, wx.Colour(0,0,0,0), clip=self.selection)
+        
     def SetPenColor(self, color):
         self.penColor = color
 
@@ -543,6 +551,12 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Picker":
                 color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangePenColor(color)
+            elif self.current_tool == "Gradient":
+                self.layers.surface.Clear()
+                self.FillGradient(*self.PixelAtPosition(self.origx, self.origy), gx, gy)
+            elif self.current_tool == "Radial Gradient":
+                self.layers.surface.Clear()
+                self.FillRGradient(*self.PixelAtPosition(self.origx, self.origy), gx, gy)
 
         # draw with 2nd color
         elif self.mouseState == 2:
@@ -654,7 +668,7 @@ class Canvas(wx.Panel):
                 self.Spline(smoothline.coords, self.penColor)
             self.layers.BlitFromSurface()
             
-        elif self.current_tool in ("Line", "Ellipse", "Rectangle"):
+        elif self.current_tool in ("Line", "Ellipse", "Rectangle", "Gradient", "Radial Gradient"):
             self.layers.BlitFromSurface()
         elif self.current_tool == "Bucket":
             self.layers.BlitFromSurface()
