@@ -1183,6 +1183,7 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
+        self.AddToolButton(tb, 'Toggle Layer Visibility', self.OnToggleLayerVisibility, icon=wx.Bitmap("icons/visible.png"))
         self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
 
         tb.Realize()
@@ -1198,7 +1199,8 @@ class Frame(wx.Frame):
         
         # LAYERS LIST
         self.layerList = wx.ListCtrl(layerPanel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL|wx.LC_HRULES)
-        self.layerList.InsertColumn(0, "Layers:", width=196)
+        self.layerList.InsertColumn(0, "Layers:", width=176)
+        self.layerList.InsertColumn(1, "V:", width=20)
         self.layerList.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnLayerSelect)
         bsp.Add(self.layerList, 1, wx.EXPAND | wx.ALL, 2)
         
@@ -1405,8 +1407,7 @@ class Frame(wx.Frame):
         self.Refresh()
     
     def OnLayerSelect(self, e):
-        idx = e.GetIndex()
-        self.canvas.layers.selectIndex(idx)
+        self.canvas.layers.selectIndex(e.Index)
         
     def OnAddLayer(self, e):
         self.canvas.layers.appendSelect()
@@ -1418,10 +1419,16 @@ class Frame(wx.Frame):
         self.canvas.FullRedraw()
         self.RepopulateList()
         
+    def OnToggleLayerVisibility(self, e):
+        self.canvas.layers.ToggleVisible()
+        self.canvas.Refresh()
+        self.RepopulateList()
+        
     def RepopulateList(self):
         self.layerList.DeleteAllItems()
         for layer in self.canvas.layers.layers:
-            self.layerList.Append([layer.name])
+            v = 'V' if layer.visible else ''
+            self.layerList.Append([layer.name, v])
             
         self.layerList.Select(self.canvas.layers.selectedIndex())
         

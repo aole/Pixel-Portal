@@ -15,8 +15,11 @@ class Layer(wx.Bitmap):
         super().__init__(*args, **kwargs)
         self.width = self.GetWidth()
         self.height = self.GetHeight()
+        
         self.name = "Layer "+str(Layer.layerCount)
         Layer.layerCount += 1
+        
+        self.visible = True
         
     def Scaled(self, factor):
         bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
@@ -297,6 +300,9 @@ class LayerManager:
             self.compositeLayer.Clear()
         
         for layer in reversed(self.layers):
+            if not layer.visible:
+                continue
+                
             if layer == self.layers[self.currentLayer]:
                 if drawCurrent:
                     self.compositeLayer.Draw(layer)
@@ -399,4 +405,13 @@ class LayerManager:
         del gcdc
         mdc.SelectObject(wx.NullBitmap)
         del mdc
+        
+    def SetVisible(self, v=True):
+        self.layers[self.currentLayer].visible = v
+        
+    def ToggleVisible(self):
+        self.layers[self.currentLayer].visible = not self.layers[self.currentLayer].visible
+        
+    def GetVisible(self):
+        return self.layers[self.currentLayer].visible
         
