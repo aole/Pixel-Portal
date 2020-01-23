@@ -62,27 +62,19 @@ class RemoveLayerCommand(Command):
         return True
 
 class ResizeCommand(Command):
-    def __init__(self, layers, before, after):
+    def __init__(self, layermgr, blayermgr, alayermgr):
         super().__init__(True)
 
-        self.layers = layers
-        self.before = before
-        self.after = after
+        self.layermgr = layermgr
+        self.blayermgr = blayermgr
+        self.alayermgr = alayermgr
 
     def Do(self):
-        self.layers.width = self.after.width
-        self.layers.height = self.after.height
-        self.layers.surface = Layer(Bitmap.FromRGBA(self.after.width, self.after.height, 255, 255, 255, 255))
-        self.layers.current().Draw(self.after)
-        self.layers.set(Layer(Bitmap.FromRGBA(self.after.width, self.after.height, 0, 0, 0, 0)))
+        self.layermgr.Resize(self.alayermgr)
         return True
 
     def Undo(self):
-        self.layers.width = self.before.width
-        self.layers.height = self.before.height
-        self.layers.surface = Layer(Bitmap.FromRGBA(self.before.width, self.before.height, 255, 255, 255, 255))
-        self.layers.current().Draw(self.before)
-        self.layers.set(Layer(Bitmap.FromRGBA(self.before.width, self.before.height, 0, 0, 0, 0)))
+        self.layermgr.Resize(self.blayermgr)
         return True
 
 class SelectionCommand(Command):

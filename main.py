@@ -110,11 +110,11 @@ class Canvas(wx.Panel):
         self.listeners = []
 
     def ClearCurrentLayer(self):
-        self.beforeLayer = self.layers.current().Copy()
+        self.beforeLayer = self.layers.Current().Copy()
 
-        self.layers.current().Clear(clip=self.selection)
+        self.layers.Current().Clear(clip=self.selection)
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.Current().Copy()))
         self.beforeLayer = None
         self.Refresh()
 
@@ -179,14 +179,14 @@ class Canvas(wx.Panel):
         x,y = self.ScreenToClient(x,y)
         gx, gy = self.PixelAtPosition(x,y)
         
-        beforeLayer = self.layers.current().Copy()
+        beforeLayer = self.layers.Current().Copy()
         self.layers.BlitToSurface()
-        self.layers.current().Clear()
+        self.layers.Current().Clear()
         self.FloodFill(gx, gy, self.penColor)
         self.layers.BlitFromSurface()
         self.layers.surface.Clear()
         
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, self.layers.current().Copy()))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, self.layers.Current().Copy()))
         self.Refresh()
         
     def FloodFill(self, x, y, color):
@@ -451,7 +451,7 @@ class Canvas(wx.Panel):
         self.selection.Intersect(0, 0, self.layers.width, self.layers.height)
         
     def SelectBoundary(self, x, y, add=False, sub=False):
-        layer = self.layers.current()
+        layer = self.layers.Current()
         w, h = layer.width, layer.height
         
         def bpos(xp, yp):
@@ -522,7 +522,7 @@ class Canvas(wx.Panel):
         if self.mouseState == 1:
             if self.current_tool == "Pen":
                 if e.AltDown():
-                    color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                    color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangePenColor(color)
                 else:
                     if self.smoothLine:
@@ -541,14 +541,14 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Move":
                 self.movex, self.movey = int((x - self.origx)/ self.pixel_size), int((y - self.origy)/ self.pixel_size)
             elif self.current_tool == "Picker":
-                color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangePenColor(color)
 
         # draw with 2nd color
         elif self.mouseState == 2:
             if self.current_tool == "Pen":
                 if e.AltDown():
-                    color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                    color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                     self.ChangeEraserColor(color)
                 else:
                     self.EraseLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy)
@@ -564,7 +564,7 @@ class Canvas(wx.Panel):
                 self.EraseEllipse(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
                                  equal=e.ShiftDown(), center=e.ControlDown())
             elif self.current_tool == "Picker":
-                color = self.layers.current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
                 self.ChangeEraserColor(color)
             elif self.current_tool == "Select":
                 px, py = self.PixelAtPosition(self.prevx, self.prevy)
@@ -589,12 +589,12 @@ class Canvas(wx.Panel):
 
         self.noUndo = False
         # store a copy of the before picture
-        self.beforeLayer = self.layers.current().Copy()
+        self.beforeLayer = self.layers.Current().Copy()
 
         if self.current_tool == "Pen":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
                 if self.smoothLine:
@@ -603,26 +603,26 @@ class Canvas(wx.Panel):
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
                 self.DrawPixel(gx, gy, self.penColor)
         elif self.current_tool == "Move":
-            self.layers.surface.Draw(self.layers.current(), clip=self.selection)
+            self.layers.surface.Draw(self.layers.Current(), clip=self.selection)
             if not e.ControlDown():
-                self.layers.current().Clear(clip=self.selection)
+                self.layers.Current().Clear(clip=self.selection)
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             else:
                 self.layers.BlitToSurface()
-                self.layers.current().Clear()
+                self.layers.Current().Clear()
                 self.FloodFill(gx, gy, self.penColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
-            color = self.layers.current().GetPixel(gx, gy)
+            color = self.layers.Current().GetPixel(gx, gy)
             self.ChangePenColor(color)
         elif self.current_tool == "Select":
             if not e.ControlDown() and not e.AltDown():
@@ -673,7 +673,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.Current().Copy()))
         self.beforeLayer = None
 
         self.noUndo = False
@@ -689,13 +689,13 @@ class Canvas(wx.Panel):
 
         self.noUndo = False
         # store a copy of the before picture
-        self.beforeLayer = self.layers.current().Copy()
+        self.beforeLayer = self.layers.Current().Copy()
 
         # put a dot
         if self.current_tool == "Pen":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
                 self.layers.BlitToSurface()
@@ -703,23 +703,23 @@ class Canvas(wx.Panel):
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
                 self.layers.BlitToSurface()
                 self.ErasePixel(gx, gy)
         elif self.current_tool == "Picker":
             self.noUndo = True
-            color = self.layers.current().GetPixel(gx, gy)
+            color = self.layers.Current().GetPixel(gx, gy)
             self.ChangeEraserColor(color)
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.current().GetPixel(gx, gy)
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangeEraserColor(color)
             else:
                 self.layers.BlitToSurface()
-                self.layers.current().Clear()
+                self.layers.Current().Clear()
                 self.FloodFill(gx, gy, self.eraserColor)
         elif self.current_tool == "Select":
             self.noUndo = True
@@ -751,7 +751,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.Current().Copy()))
             self.noUndo = True
             
         self.beforeLayer = None
@@ -795,7 +795,7 @@ class Canvas(wx.Panel):
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
         alphadc = wx.MemoryDC(self.alphabg)
-        composite = self.layers.composite(self.movex, self.movey, drawCurrent=self.mouseState != 2)
+        composite = self.layers.Composite(self.movex, self.movey, drawCurrent=self.mouseState != 2)
         compositedc = wx.MemoryDC(composite)
         
         lw, lh = self.layers.width, self.layers.height
@@ -976,11 +976,11 @@ class Canvas(wx.Panel):
 
         self.layers.width = width
         self.layers.height = height
-        self.layers.removeAll()
+        self.layers.RemoveAll()
         self.layers.surface = drawing_layer
         self.layers.surface.name = 'Surface'
-        self.layers.appendSelect(current_layer)
-        self.layers.appendSelect()
+        self.layers.AppendSelect(current_layer)
+        self.layers.AppendSelect()
 
         self.history.ClearCommands()
         self.Deselect()
@@ -988,10 +988,10 @@ class Canvas(wx.Panel):
     def Resize(self, width, height):
         if width == self.layers.width and height == self.layers.height:
             return
-
-        old = self.layers
-        self.layers = LayerManager()
+        old = self.layers.Copy()
+        #self.layers = LayerManager()
         self.layers.Resize(old, width, height)
+        self.history.Store(ResizeCommand(self.layers, old, self.layers.Copy()))
         
         self.FullRedraw()
 
@@ -1029,7 +1029,7 @@ class Canvas(wx.Panel):
 
         self.New(pixel, width, height)
 
-        self.layers.current().Load(filename)
+        self.layers.Current().Load(filename)
         
         self.history.ClearCommands()
         self.Deselect()
@@ -1038,7 +1038,7 @@ class Canvas(wx.Panel):
             l.ImageSizeChanged(width, height)
             
     def Save(self, filename):
-        self.layers.composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
+        self.layers.Composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
         self.history.MarkAsSaved()
 
     def SaveGif(self, filename):
@@ -1072,56 +1072,56 @@ class Canvas(wx.Panel):
         return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
 
     def OnMirrorTR(self, e):
-        before = self.layers.current().Copy()
+        before = self.layers.Current().Copy()
         after = Layer(self.GetMirror(before))
         after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, int(before.width / 2), before.height))
 
         self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
-        self.layers.set(after)
+        self.layers.Set(after)
 
         self.Refresh()
 
     def OnMirrorTB(self, e):
-        before = self.layers.current().Copy()
+        before = self.layers.Current().Copy()
         after = Layer(self.GetMirror(before, False))
         after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, before.width, int(before.height / 2)))
 
         self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
-        self.layers.set(after)
+        self.layers.Set(after)
 
         self.Refresh()
 
     def OnFlipH(self, e):
-        before = self.layers.current().Copy()
+        before = self.layers.Current().Copy()
         after = self.GetMirror(before)
         after.name = before.name+' mirror'
 
         self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
-        self.layers.current().Draw(after)
+        self.layers.Current().Draw(after)
 
         self.Refresh()
 
     def Rotate90(self, e, clockwise=True):
-        before = self.layers.current().Copy()
+        before = self.layers.Current().Copy()
         image = before.ConvertToImage()
         image = image.Rotate90(clockwise)
         after = image.ConvertToBitmap()
 
         self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
-        self.layers.current().Draw(after)
+        self.layers.Current().Draw(after)
 
         self.Refresh()
 
     def AddLayer(self):
         index = self.layers.currentLayer
-        layer = self.layers.appendSelect().Copy()
+        layer = self.layers.AppendSelect().Copy()
         self.history.Store(AddLayerCommand(self.layers, index, layer))
         
     def RemoveLayer(self):
         index = self.layers.currentLayer
-        layer = self.layers.remove().Copy()
+        layer = self.layers.Remove().Copy()
         self.history.Store(RemoveLayerCommand(self.layers, index, layer))
         
 class Frame(wx.Frame):
@@ -1435,7 +1435,7 @@ class Frame(wx.Frame):
         self.Refresh()
     
     def OnLayerSelect(self, e):
-        self.canvas.layers.selectIndex(e.Index)
+        self.canvas.layers.SelectIndex(e.Index)
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
@@ -1458,7 +1458,7 @@ class Frame(wx.Frame):
             v = 'V' if layer.visible else ''
             self.layerList.Append([layer.name, v])
             
-        self.layerList.Select(self.canvas.layers.selectedIndex())
+        self.layerList.Select(self.canvas.layers.SelectedIndex())
         
 def CreateWindows():
     global app
