@@ -24,6 +24,7 @@ class Layer(wx.Bitmap):
     def Copy(self, name=None):
         layer = Layer(self.GetSubBitmap(wx.Rect(0, 0, self.width, self.height)))
         layer.name = name if name else self.name
+        return layer
         
     def Scaled(self, factor):
         bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)

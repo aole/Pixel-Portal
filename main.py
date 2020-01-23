@@ -110,11 +110,11 @@ class Canvas(wx.Panel):
         self.listeners = []
 
     def ClearCurrentLayer(self):
-        self.beforeLayer = Layer(self.layers.current())
+        self.beforeLayer = self.layers.current().Copy()
 
         self.layers.current().Clear(clip=self.selection)
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
         self.beforeLayer = None
         self.Refresh()
 
@@ -179,14 +179,14 @@ class Canvas(wx.Panel):
         x,y = self.ScreenToClient(x,y)
         gx, gy = self.PixelAtPosition(x,y)
         
-        beforeLayer = Layer(self.layers.current())
+        beforeLayer = self.layers.current().Copy()
         self.layers.BlitToSurface()
         self.layers.current().Clear()
         self.FloodFill(gx, gy, self.penColor)
         self.layers.BlitFromSurface()
         self.layers.surface.Clear()
         
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, Layer(self.layers.current())))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, self.layers.current().Copy()))
         self.Refresh()
         
     def FloodFill(self, x, y, color):
@@ -589,7 +589,7 @@ class Canvas(wx.Panel):
 
         self.noUndo = False
         # store a copy of the before picture
-        self.beforeLayer = Layer(self.layers.current())
+        self.beforeLayer = self.layers.current().Copy()
 
         if self.current_tool == "Pen":
             if e.AltDown():
@@ -673,7 +673,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
         self.beforeLayer = None
 
         self.noUndo = False
@@ -689,7 +689,7 @@ class Canvas(wx.Panel):
 
         self.noUndo = False
         # store a copy of the before picture
-        self.beforeLayer = Layer(self.layers.current())
+        self.beforeLayer = self.layers.current().Copy()
 
         # put a dot
         if self.current_tool == "Pen":
@@ -751,7 +751,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, Layer(self.layers.current())))
+            self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.current().Copy()))
             self.noUndo = True
             
         self.beforeLayer = None
@@ -1072,53 +1072,56 @@ class Canvas(wx.Panel):
         return bitmap.ConvertToImage().Mirror(horizontally).ConvertToBitmap()
 
     def OnMirrorTR(self, e):
-        before = Layer(self.layers.current())
+        before = self.layers.current().Copy()
         after = Layer(self.GetMirror(before))
+        after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, int(before.width / 2), before.height))
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
         self.layers.set(after)
 
         self.Refresh()
 
     def OnMirrorTB(self, e):
-        before = Layer(self.layers.current())
+        before = self.layers.current().Copy()
         after = Layer(self.GetMirror(before, False))
+        after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, before.width, int(before.height / 2)))
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
         self.layers.set(after)
 
         self.Refresh()
 
     def OnFlipH(self, e):
-        before = Layer(self.layers.current())
+        before = self.layers.current().Copy()
         after = self.GetMirror(before)
+        after.name = before.name+' mirror'
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
         self.layers.current().Draw(after)
 
         self.Refresh()
 
     def Rotate90(self, e, clockwise=True):
-        before = Layer(self.layers.current())
+        before = self.layers.current().Copy()
         image = before.ConvertToImage()
         image = image.Rotate90(clockwise)
         after = image.ConvertToBitmap()
 
-        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, Layer(after)))
+        self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, before, after.Copy()))
         self.layers.current().Draw(after)
 
         self.Refresh()
 
     def AddLayer(self):
         index = self.layers.currentLayer
-        layer = Layer(self.layers.appendSelect())
+        layer = self.layers.appendSelect().Copy()
         self.history.Store(AddLayerCommand(self.layers, index, layer))
         
     def RemoveLayer(self):
         index = self.layers.currentLayer
-        layer = Layer(self.layers.remove())
+        layer = self.layers.remove().Copy()
         self.history.Store(RemoveLayerCommand(self.layers, index, layer))
         
 class Frame(wx.Frame):
