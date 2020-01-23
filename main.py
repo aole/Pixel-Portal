@@ -84,6 +84,7 @@ class Canvas(wx.Panel):
         self.doubleClick = False
         
         self.current_tool = "Pen"
+        self.original_tool = self.current_tool
         self.mirrorx = False
         self.mirrory = False
         self.gridVisible = True
@@ -529,13 +530,9 @@ class Canvas(wx.Panel):
         # draw with 1st color
         if self.mouseState == 1:
             if self.current_tool == "Pen":
-                if e.AltDown():
-                    color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
-                    self.ChangePenColor(color)
-                else:
-                    if self.smoothLine:
-                        self.linePoints.append((gx, gy)) # for smoothing later
-                    self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
+                if self.smoothLine:
+                    self.linePoints.append((gx, gy)) # for smoothing later
+                self.DrawLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy, self.penColor)
             elif self.current_tool == "Line":
                 self.layers.surface.Clear()
                 self.DrawLine(*self.PixelAtPosition(self.origx, self.origy), gx, gy, self.penColor)
@@ -549,7 +546,7 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Move":
                 self.movex, self.movey = int((x - self.origx)/ self.pixel_size), int((y - self.origy)/ self.pixel_size)
             elif self.current_tool == "Picker":
-                color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
+                color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
             elif self.current_tool == "Gradient":
                 self.layers.surface.Clear()
@@ -561,11 +558,7 @@ class Canvas(wx.Panel):
         # draw with 2nd color
         elif self.mouseState == 2:
             if self.current_tool == "Pen":
-                if e.AltDown():
-                    color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
-                    self.ChangeEraserColor(color)
-                else:
-                    self.EraseLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy)
+                self.EraseLine(*self.PixelAtPosition(self.prevx, self.prevy), gx, gy)
             elif self.current_tool == "Line":
                 self.layers.BlitToSurface()
                 self.EraseLine(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y))
@@ -577,9 +570,6 @@ class Canvas(wx.Panel):
                 self.layers.BlitToSurface()
                 self.EraseEllipse(*self.PixelAtPosition(self.origx, self.origy), *self.PixelAtPosition(x, y),
                                  equal=e.ShiftDown(), center=e.ControlDown())
-            elif self.current_tool == "Picker":
-                color = self.layers.Current().GetPixel(*self.PixelAtPosition(self.prevx, self.prevy))
-                self.ChangeEraserColor(color)
             elif self.current_tool == "Select":
                 px, py = self.PixelAtPosition(self.prevx, self.prevy)
                 if not self.selection.IsEmpty():
@@ -610,6 +600,7 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 if self.smoothLine:
                     self.linePoints.append((gx, gy))
@@ -619,6 +610,7 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 self.DrawPixel(gx, gy, self.penColor)
         elif self.current_tool == "Move":
@@ -630,6 +622,7 @@ class Canvas(wx.Panel):
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 self.layers.BlitToSurface()
                 self.layers.Current().Clear()
@@ -691,6 +684,7 @@ class Canvas(wx.Panel):
         self.beforeLayer = None
 
         self.noUndo = False
+        self.current_tool = self.original_tool
 
         self.doubleClick = False
         self.Refresh()
@@ -768,6 +762,7 @@ class Canvas(wx.Panel):
             self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, self.beforeLayer, self.layers.Current().Copy()))
             self.noUndo = True
             
+        self.current_tool = self.original_tool
         self.beforeLayer = None
         self.Refresh()
 
@@ -1071,6 +1066,7 @@ class Canvas(wx.Panel):
 
     def SetTool(self, tool):
         self.current_tool = tool
+        self.original_tool = tool
         self.SetCursor(wx.Cursor(TOOLS[tool][0]))
 
     def CenterCanvasInPanel(self, size):
