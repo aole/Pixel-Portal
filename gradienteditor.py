@@ -34,12 +34,10 @@ class GradientControl(wx.Window):
             stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
             stops.Add(wx.GraphicsGradientStop(wx.BLACK, 0))
             stops.Add(wx.GraphicsGradientStop(wx.WHITE, 1))
-        print(stops.Count)
         self.stops = stops
         
         self.markers = [wx.GraphicsGradientStop(stops.StartColour, 0), wx.GraphicsGradientStop(stops.EndColour, 1)]
         for stop in range(1, stops.Count-1):
-            print(stop, stops[stop].Colour)
             self.markers.append(stops[stop])
             
     def UpdateStops(self):
@@ -48,14 +46,14 @@ class GradientControl(wx.Window):
             self.stops.Add(marker)
             
     def MarkerUnderLocation(self, mx, my):
-        for marker in self.markers[2:]:
+        for idx, marker in enumerate(self.markers[2:]):
             x = (self.width-GradientControl.PADDING2) * marker.Position + GradientControl.PADDING
             y = 75
             r = wx.Rect(x-3, y+8, 6, 8)
             if r.Contains(mx, my):
-                return marker
+                return marker, idx
                 
-        return None
+        return None, -1
         
     def SetMarkerLocation(self, marker, x, y):
         px = max(GradientControl.PADDING, min(x, self.width-GradientControl.PADDING)) - GradientControl.PADDING
@@ -107,7 +105,7 @@ class GradientControl(wx.Window):
         x, y = e.GetPosition()
         self.prevx, self.prevy = x, y
         
-        self.dragging = self.MarkerUnderLocation(x, y)
+        self.dragging, idx = self.MarkerUnderLocation(x, y)
         self.left_down = True
         
         if not self.HasCapture():
@@ -129,14 +127,16 @@ class GradientControl(wx.Window):
     def OnLeftDClick(self, e):
         x, y = e.GetPosition()
         if self.prevx==x and self.prevy==y:
-            marker = self.MarkerUnderLocation(x, y)
-            data = wx.ColourData()
-            data.SetColour(marker.Colour)
-            dlg = CubeColourDialog(self, data)
-            if dlg.ShowModal() == wx.ID_OK:
-                color = dlg.GetColourData().GetColour()
-                marker.SetColour(color)
-        
+            marker, idx = self.MarkerUnderLocation(x, y)
+            if marker:
+                data = wx.ColourData()
+                data.SetColour(marker.Colour)
+                dlg = CubeColourDialog(self, data)
+                if dlg.ShowModal() == wx.ID_OK:
+                    color = dlg.GetColourData().GetColour()
+                    marker.SetColour(color)
+                    self.markers[idx].SetColour(color)
+                        
         self.UpdateStops()
         self.Refresh()
         
