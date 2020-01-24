@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw
 from undomanager import *
 from layermanager import *
 from gradienteditor import *
+from layercontrol import *
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (800, 550)
@@ -700,6 +701,9 @@ class Canvas(wx.Panel):
 
         self.doubleClick = False
         self.Refresh()
+        
+        for l in self.listeners:
+            l.RefreshLayers()
 
     def OnRightDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
@@ -780,6 +784,9 @@ class Canvas(wx.Panel):
         self.current_tool = self.original_tool
         self.beforeLayer = None
         self.Refresh()
+        
+        for l in self.listeners:
+            l.RefreshLayers()
 
     def OnMiddleDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
@@ -1254,11 +1261,16 @@ class Frame(wx.Frame):
         bsp = wx.BoxSizer(wx.VERTICAL)
         
         # LAYERS LIST
+        self.lyrctrl = LayerControl(layerPanel)
+        self.lyrctrl.layers = self.canvas.layers
+        bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 2)
+        '''
         self.layerList = wx.ListCtrl(layerPanel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL|wx.LC_HRULES)
         self.layerList.InsertColumn(0, "Layers:", width=176)
         self.layerList.InsertColumn(1, "V:", width=20)
         self.layerList.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnLayerSelect)
         bsp.Add(self.layerList, 1, wx.EXPAND | wx.ALL, 2)
+        '''
         
         self.OnNew(None, *DEFAULT_DOC_SIZE)
         
@@ -1510,12 +1522,18 @@ class Frame(wx.Frame):
         self.RepopulateList()
         
     def RepopulateList(self):
+        self.RefreshLayers()
+        return
         self.layerList.DeleteAllItems()
         for layer in self.canvas.layers.layers:
             v = 'V' if layer.visible else ''
             self.layerList.Append([layer.name, v])
             
         self.layerList.Select(self.canvas.layers.SelectedIndex())
+        
+    def RefreshLayers(self):
+        self.lyrctrl.layers = self.canvas.layers
+        self.lyrctrl.UpdateLayers()
         
 def CreateWindows():
     global app
