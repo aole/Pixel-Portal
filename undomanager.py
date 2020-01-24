@@ -25,6 +25,9 @@ class PaintCommand(Command):
         self.layermgr.layers[self.index].PasteSource(self.before)
         return True
 
+    def __str__(self):
+        return self.before.name+" -> paint -> "+ self.after.name
+        
 class AddLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -35,14 +38,17 @@ class AddLayerCommand(Command):
         
     def Do(self):
         self.layermgr.currentLayer = self.index
-        self.layermgr.appendSelect(self.layer)
+        self.layermgr.AppendSelect(self.layer)
         return True
 
     def Undo(self):
         self.layermgr.currentLayer = self.index
-        self.layermgr.remove()
+        self.layermgr.Remove()
         return True
 
+    def __str__(self):
+        return "Add "+self.layer.name
+        
 class RemoveLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -53,14 +59,17 @@ class RemoveLayerCommand(Command):
         
     def Do(self):
         self.layermgr.currentLayer = self.index
-        self.layermgr.remove()
+        self.layermgr.Remove()
         return True
 
     def Undo(self):
         self.layermgr.currentLayer = self.index
-        self.layermgr.appendSelect(self.layer)
+        self.layermgr.AppendSelect(self.layer)
         return True
 
+    def __str__(self):
+        return "Remove "+self.layer.name
+        
 class ResizeCommand(Command):
     def __init__(self, layermgr, blayermgr, alayermgr):
         super().__init__(True)
@@ -77,6 +86,9 @@ class ResizeCommand(Command):
         self.layermgr.Resize(self.blayermgr)
         return True
 
+    def __str__(self):
+        return str(self.blayermgr.width)+", "+str(self.blayermgr.height)+" -> Resize -> "+str(self.alayermgr.width)+", "+str(self.alayermgr.height)
+        
 class SelectionCommand(Command):
     def __init__(self, canvas, before, after):
         super().__init__(True)

@@ -30,11 +30,25 @@ class GradientControl(wx.Window):
         self.left_down = False
         self.dragging = None
         
-        self.stops = stops if stops else wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
-        self.markers = [wx.GraphicsGradientStop(wx.BLACK, 0), wx.GraphicsGradientStop(wx.WHITE, 1)]
+        if not stops:
+            stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
+            stops.Add(wx.GraphicsGradientStop(wx.BLACK, 0))
+            stops.Add(wx.GraphicsGradientStop(wx.WHITE, 1))
+        print(stops.Count)
+        self.stops = stops
         
+        self.markers = [wx.GraphicsGradientStop(stops.StartColour, 0), wx.GraphicsGradientStop(stops.EndColour, 1)]
+        for stop in range(1, stops.Count-1):
+            print(stop, stops[stop].Colour)
+            self.markers.append(stops[stop])
+            
+    def UpdateStops(self):
+        self.stops = wx.GraphicsGradientStops(self.markers[0].Colour, self.markers[1].Colour)
+        for marker in self.markers[2:]:
+            self.stops.Add(marker)
+            
     def MarkerUnderLocation(self, mx, my):
-        for marker in self.markers:
+        for marker in self.markers[2:]:
             x = (self.width-GradientControl.PADDING2) * marker.Position + GradientControl.PADDING
             y = 75
             r = wx.Rect(x-3, y+8, 6, 8)
@@ -69,28 +83,23 @@ class GradientControl(wx.Window):
         gc.SetPen(wx.Pen(wx.BLACK, 5))
         gc.StrokeLine(GradientControl.PADDING, 75, self.width-GradientControl.PADDING, 75)
         
-        stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
-        for marker in self.markers:
-            stops.Add(marker)
+        for marker in self.markers[2:]:
             x = (self.width-GradientControl.PADDING2)*marker.Position + GradientControl.PADDING
             self.DrawMarker(gc, marker.Colour, x, 75, marker==self.dragging)
         
-        brush = gc.CreateLinearGradientBrush(GradientControl.PADDING, 0, self.width-GradientControl.PADDING, 0, stops)
+        brush = gc.CreateLinearGradientBrush(GradientControl.PADDING, 0, self.width-GradientControl.PADDING, 0, self.stops)
         gc.SetBrush(brush)
         gc.SetPen(wx.NullPen)
         gc.DrawRoundedRectangle(GradientControl.PADDING, GradientControl.PADDING, self.width-GradientControl.PADDING2, 45, 5)
         
     def GetStops(self):
-        stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
-        for marker in self.markers:
-            stops.Add(marker)
-        
-        return stops
+        return self.stops
         
     def OnMouseMove(self, e):
         x, y = e.GetPosition()
         if self.left_down and self.dragging:
             self.SetMarkerLocation(self.dragging, x, y)
+            self.UpdateStops()
             self.Refresh()
         self.prevx, self.prevy = x, y
         
@@ -105,7 +114,7 @@ class GradientControl(wx.Window):
             self.CaptureMouse()
             
         self.Refresh()
-
+        
     def OnLeftUp(self, e):
         self.dragging = None
         self.left_down = False
@@ -116,7 +125,7 @@ class GradientControl(wx.Window):
             self.ReleaseMouse()
             
         self.Refresh()
-
+        
     def OnLeftDClick(self, e):
         x, y = e.GetPosition()
         if self.prevx==x and self.prevy==y:
@@ -128,6 +137,7 @@ class GradientControl(wx.Window):
                 color = dlg.GetColourData().GetColour()
                 marker.SetColour(color)
         
+        self.UpdateStops()
         self.Refresh()
         
 class GradientEditor(wx.Dialog):

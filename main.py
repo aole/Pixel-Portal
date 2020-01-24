@@ -19,7 +19,7 @@ from layermanager import *
 from gradienteditor import *
 
 PROGRAM_NAME = "Pixel Portal"
-WINDOW_SIZE = (750, 550)
+WINDOW_SIZE = (800, 550)
 
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
@@ -39,6 +39,7 @@ TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
 RENDER_CURRENT_LAYER = True
 RENDER_PREVIEW = True
 RENDER_PIXEL_UNDER_MOUSE = False
+PRINT_UNDO_REDO = True
 
 app = None
 
@@ -95,7 +96,10 @@ class Canvas(wx.Panel):
         self.penSize = 1
         self.penColor = wx.BLACK
         self.palette = None
+        
         self.gradientStops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
+        self.gradientStops.Add(wx.GraphicsGradientStop(wx.BLACK, 0))
+        self.gradientStops.Add(wx.GraphicsGradientStop(wx.WHITE, 1))
         
         self.refAlpha = 0.3
         self.refScale = 1
@@ -606,7 +610,7 @@ class Canvas(wx.Panel):
         if self.current_tool == "Pen":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.Current().GetPixel(gx, gy)
+                color = self.layers.Composite().GetPixel(gx, gy)
                 self.ChangePenColor(color)
                 self.current_tool = "Picker"
             else:
@@ -616,7 +620,7 @@ class Canvas(wx.Panel):
         elif self.current_tool in ["Line", "Ellipse", "Rectangle"]:
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.Current().GetPixel(gx, gy)
+                color = self.layers.Composite().GetPixel(gx, gy)
                 self.ChangePenColor(color)
                 self.current_tool = "Picker"
             else:
@@ -628,7 +632,7 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
-                color = self.layers.Current().GetPixel(gx, gy)
+                color = self.layers.Composite().GetPixel(gx, gy)
                 self.ChangePenColor(color)
                 self.current_tool = "Picker"
             else:
@@ -637,7 +641,7 @@ class Canvas(wx.Panel):
                 self.FloodFill(gx, gy, self.penColor)
         elif self.current_tool == "Picker":
             self.noUndo = True
-            color = self.layers.Current().GetPixel(gx, gy)
+            color = self.layers.Composite().GetPixel(gx, gy)
             self.ChangePenColor(color)
         elif self.current_tool == "Select":
             if not e.ControlDown() and not e.AltDown():
@@ -712,7 +716,8 @@ class Canvas(wx.Panel):
             if e.AltDown():
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
-                self.ChangeEraserColor(color)
+                self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 self.layers.BlitToSurface()
                 self.ErasePixel(gx, gy)
@@ -720,23 +725,25 @@ class Canvas(wx.Panel):
             if e.AltDown():
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
-                self.ChangeEraserColor(color)
+                self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 self.layers.BlitToSurface()
                 self.ErasePixel(gx, gy)
         elif self.current_tool == "Picker":
             self.noUndo = True
             color = self.layers.Current().GetPixel(gx, gy)
-            self.ChangeEraserColor(color)
+            self.ChangePenColor(color)
         elif self.current_tool == "Bucket":
             if e.AltDown():
                 self.noUndo = True
                 color = self.layers.Current().GetPixel(gx, gy)
-                self.ChangeEraserColor(color)
+                self.ChangePenColor(color)
+                self.current_tool = "Picker"
             else:
                 self.layers.BlitToSurface()
                 self.layers.Current().Clear()
-                self.FloodFill(gx, gy, self.eraserColor)
+                self.FloodFill(gx, gy, wx.Colour(0,0,0,0))
         elif self.current_tool == "Select":
             self.noUndo = True
             if not self.selection.Contains(gx, gy):
@@ -970,13 +977,16 @@ class Canvas(wx.Panel):
         del alphadc
         
     def Undo(self):
+        if PRINT_UNDO_REDO:
+            print('UNDO:', str(self.history.GetCurrentCommand()))
         self.history.Undo()
         self.FullRedraw()
         for l in self.listeners:
             l.Undid()
             
     def Redo(self):
-        self.history.Redo()
+        if PRINT_UNDO_REDO and self.history.Redo():
+            print('REDO:', str(self.history.GetCurrentCommand()))
         self.FullRedraw()
         for l in self.listeners:
             l.Redid()
@@ -1230,7 +1240,8 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
         self.AddToolButton(tb, 'Toggle Layer Visibility', self.OnToggleLayerVisibility, icon=wx.Bitmap("icons/visible.png"))
-
+        self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
+        
         tb.Realize()
 
         # add CANVAS
