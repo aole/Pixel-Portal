@@ -12,7 +12,7 @@ import wx
 from wx.adv import BitmapComboBox
 from wx.lib.agw.cubecolourdialog import CubeColourDialog
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageSequence
 
 import numpy as np
 
@@ -1061,14 +1061,23 @@ class Canvas(wx.Panel):
         self.Refresh()
 
     def Load(self, pixel, filename):
-        image = wx.Image(filename)
-        self.pixel_size = pixel
-        width, height = int(image.GetWidth() / pixel), int(image.GetHeight() / pixel)
+        if filename[-3:]=="png":
+            image = wx.Image(filename)
+            self.pixel_size = pixel
+            width, height = int(image.GetWidth() / pixel), int(image.GetHeight() / pixel)
 
-        self.New(pixel, width, height)
+            self.New(pixel, width, height)
 
-        self.layers.Current().Load(filename)
-        
+            self.layers.Current().Load(filename)
+        elif filename[-3:]=="tif":
+            im = Image.open(filename)
+            width, height = int(im.width/pixel), int(im.height/pixel)
+            self.layers.Init(width, height)
+            for frame in ImageSequence.Iterator(im):
+                bitmap = wx.Bitmap.FromBufferRGBA(im.width, im.height, frame.convert("RGBA").tobytes("raw"))
+                self.layers.InsertBottom(Layer(Layer(bitmap).Scaled(1/pixel)))
+            self.layers.currentLayer = 0
+            
         self.history.ClearCommands()
         self.Deselect()
 
@@ -1391,10 +1400,14 @@ class Frame(wx.Frame):
         if not self.CheckDirty():
             return
 
-        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
-        if ret:
+        with wx.FileDialog(self, "Open Image file",
+                           wildcard="supported|*.tif;*.png|tif files (*.tif)|*.tif|png files (*.png)|*.png",
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_PREVIEW) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+                
             pixel = int(self.txtPixel.GetValue())
-            self.canvas.Load(pixel, ret)
+            self.canvas.Load(pixel, fd.GetPath())
             self.canvas.Refresh()
             self.RefreshLayers()
 

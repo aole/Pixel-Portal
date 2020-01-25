@@ -444,6 +444,20 @@ class LayerManager:
     def GetVisible(self):
         return self.layers[self.currentLayer].visible
         
+    def Init(self, width, height):
+        self.RemoveAll()
+        self.width  = width
+        self.height = height
+        
+        self.currentLayer = -1
+        self.surface = Layer.Create(width, height)
+        self.compositeLayer = None
+        
+    def InsertBottom(self, layer):
+        self.layers.append(layer)
+    
+        return layer
+        
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         self.surface.Line(x0, y0, x1, y1, color, size, clip)
         
