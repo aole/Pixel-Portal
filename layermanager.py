@@ -306,9 +306,15 @@ class LayerManager:
         self.compositeLayer = None
         
     def __iter__(self):
-        for layer in reversed(self.layers):
+        for layer in self.layers:
             yield layer
             
+    def __len__(self):
+        return len(self.layers)
+        
+    def __getitem__(self, index):
+        return self.layers[index]
+        
     def AppendSelect(self, layer=None):
         if not layer:
             layer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
