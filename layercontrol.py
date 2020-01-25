@@ -87,14 +87,15 @@ class LayerPanel(wx.Panel):
         y -= index*50
         return x>w-25 and y<25
         
-    def SetTextBox(self, idx, layer):
+    def SetTextBox(self, idx=-1, layer=None, x=0, y=0):
         if not layer:
             self.textctrl.Hide()
             if self.txtBoxLayer:
                 self.txtBoxLayer.name = self.textctrl.GetValue()
                 
         self.txtBoxLayer = layer
-        if layer:
+        w, h = self.GetClientSize()
+        if layer and x>60 and x<w-25:
             self.textctrl.SetValue(layer.name)
             self.textctrl.SelectAll()
             self.textctrl.SetPosition(wx.Point(60, idx*50+15))
@@ -135,7 +136,7 @@ class LayerControl(wx.ScrolledWindow):
         
     def OnLeftDown(self, e):
         x, y = e.Position
-        self.panel.SetTextBox(0, None)
+        self.panel.SetTextBox()
         idx, layer = self.panel.GetLayerAtPosition(x, y)
         if layer:
             if self.panel.IsVisibleIcon(idx, x, y):
@@ -148,7 +149,7 @@ class LayerControl(wx.ScrolledWindow):
     def OnLeftDClick(self, e):
         x, y = e.Position
         idx, layer = self.panel.GetLayerAtPosition(x, y)
-        self.panel.SetTextBox(idx, layer)
+        self.panel.SetTextBox(idx, layer, x, y)
         
     def OnSlider(self, e):
         evt = LayerAlphaEvent(alpha = self.slider.Value/255.0)

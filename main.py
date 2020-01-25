@@ -14,6 +14,8 @@ from wx.lib.agw.cubecolourdialog import CubeColourDialog
 
 from PIL import Image, ImageDraw
 
+import numpy as np
+
 from undomanager import *
 from layermanager import *
 from gradienteditor import *
@@ -67,8 +69,6 @@ class Canvas(wx.Panel):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnMouseEnter)
-
-        self.full_redraw = True
 
         self.panx = 20
         self.pany = 20
@@ -541,7 +541,6 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.PixelSizeChanged(self.pixel_size)
 
-        self.full_redraw = True
         self.Refresh()
 
     def OnMouseMove(self, e):
@@ -600,8 +599,6 @@ class Canvas(wx.Panel):
         elif self.mouseState == 3:
             self.panx += x - self.prevx
             self.pany += y - self.prevy
-
-            self.full_redraw = True
 
         self.prevx, self.prevy = x, y
 
@@ -818,10 +815,6 @@ class Canvas(wx.Panel):
     def OnMouseEnter(self, e):
         self.SetFocus()
         
-    def FullRedraw(self):
-        self.full_redraw = True
-        self.Refresh()
-
     def DrawBrushOnCanvas(self, gc, px, py):
         gc.SetPen(wx.NullPen)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.penColor))
@@ -846,10 +839,8 @@ class Canvas(wx.Panel):
         plw, plh = self.layers.width*self.pixel_size, self.layers.height*self.pixel_size
         
         # PAINT WHOLE CANVAS BACKGROUND
-        if self.full_redraw:
-            dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
-            dc.Clear()
-            self.full_redraw = False
+        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
+        dc.Clear()
 
         # PAINT RULERS --------------
         dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
@@ -1000,14 +991,14 @@ class Canvas(wx.Panel):
         if PRINT_UNDO_REDO:
             print('UNDO:', str(self.history.GetCurrentCommand()))
         self.history.Undo()
-        self.FullRedraw()
+        self.Refresh()
         for l in self.listeners:
             l.Undid()
             
     def Redo(self):
         if PRINT_UNDO_REDO and self.history.Redo():
             print('REDO:', str(self.history.GetCurrentCommand()))
-        self.FullRedraw()
+        self.Refresh()
         for l in self.listeners:
             l.Redid()
             
@@ -1040,7 +1031,7 @@ class Canvas(wx.Panel):
         self.layers.Resize(old, width, height)
         self.history.Store(ResizeCommand(self.layers, old, self.layers.Copy()))
         
-        self.FullRedraw()
+        self.Refresh()
 
     def OnCropToSelection(self, e):
         if not self.selection or self.selection.IsEmpty():
@@ -1057,7 +1048,7 @@ class Canvas(wx.Panel):
         for l in self.listeners:
             l.ImageSizeChanged(rect.width, rect.height)
             
-        self.FullRedraw()
+        self.Refresh()
         
     def LoadRefImage(self, filename):
         image = Image.open(filename)
@@ -1085,7 +1076,20 @@ class Canvas(wx.Panel):
             l.ImageSizeChanged(width, height)
             
     def Save(self, filename):
-        self.layers.Composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
+        if filename[-3:]=="png":
+            self.layers.Composite().Scaled(self.pixel_size).SaveFile(filename, wx.BITMAP_TYPE_PNG)
+        elif filename[-3:]=="tif":
+            tifimgs = []
+            w,h = self.layers.width*self.pixel_size, self.layers.height*self.pixel_size
+            for layer in self.layers:
+                buf = np.zeros(w*h*4)
+                layer.Scaled(self.pixel_size).CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
+                tifimg = Image.new('RGBA', (w,h))
+                tifimg.frombytes(buf)
+                tifimgs.append(tifimg)
+            tifimgs[0].save(filename, compression="tiff_deflate", save_all=True,
+               append_images=tifimgs[1:])
+                
         self.history.MarkAsSaved()
 
     def SaveGif(self, filename):
@@ -1381,7 +1385,7 @@ class Frame(wx.Frame):
         ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
         if ret:
             self.canvas.LoadRefImage(ret)
-            self.canvas.FullRedraw()
+            self.canvas.Refresh()
 
     def OnLoad(self, e):
         if not self.CheckDirty():
@@ -1391,7 +1395,7 @@ class Frame(wx.Frame):
         if ret:
             pixel = int(self.txtPixel.GetValue())
             self.canvas.Load(pixel, ret)
-            self.canvas.FullRedraw()
+            self.canvas.Refresh()
             self.RefreshLayers()
 
     def OnToggleGrid(self, e):
@@ -1428,13 +1432,16 @@ class Frame(wx.Frame):
             height = int(self.txtHeight.GetValue())
             
         self.canvas.New(pixel, width, height)
-        self.canvas.FullRedraw()
+        self.canvas.Refresh()
         self.RefreshLayers()
         
     def OnSave(self, e):
-        ret = wx.SaveFileSelector(PROGRAM_NAME, "png", parent=self)
-        if ret:
-            self.canvas.Save(ret)
+        with wx.FileDialog(self, "Save Image file", wildcard="tif files (*.tif)|*.tif|png files (*.png)|*.png",
+                       style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+                
+            self.canvas.Save(fd.GetPath())
 
     def OnSaveGif(self, e):
         ret = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
@@ -1488,13 +1495,13 @@ class Frame(wx.Frame):
         
     def OnCenter(self, e):
         self.canvas.CenterCanvasInPanel(self.canvas.Size)
-        self.canvas.FullRedraw()
+        self.canvas.Refresh()
 
     def OnResize(self, e):
         if self.FirstTimeResize:
             self.OnCenter(e)
             self.FirstTimeResize = False
-        self.canvas.FullRedraw()
+        self.canvas.Refresh()
         e.Skip()
 
     def OnSelectAll(self, e):
@@ -1529,12 +1536,12 @@ class Frame(wx.Frame):
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
-        self.canvas.FullRedraw()
+        self.canvas.Refresh()
         self.RefreshLayers()
         
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()
-        self.canvas.FullRedraw()
+        self.canvas.Refresh()
         self.RefreshLayers()
         
     def RefreshLayers(self):
