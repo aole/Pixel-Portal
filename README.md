@@ -1,6 +1,7 @@
 # Pixel-Portal
 Pixel Art drawing program
 
+![Screenshot](screenshot7.jpg?raw=true)
 ![Screenshot](screenshot6.jpg?raw=true)
 ![Screenshot](screenshot5.jpg?raw=true)
 ![Screenshot](screenshot4.jpg?raw=true)
@@ -25,4 +26,8 @@ Features
     Hold CTRL to add to selection, ALT to remove from selection
 - Paint bucket (Press F to fill under mouse)
 - Single pixel preview window
-- Layers (basic support)
+- Layers
+	Thumbnails
+	Visibility
+	Alpha
+	Naming

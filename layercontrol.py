@@ -11,6 +11,7 @@ from layermanager import *
 
 LayerClickedEvent, EVT_LAYER_CLICKED_EVENT = wx.lib.newevent.NewEvent()
 LayerVisibilityEvent, EVT_LAYER_VISIBILITY_EVENT = wx.lib.newevent.NewEvent()
+LayerAlphaEvent, EVT_LAYER_ALPHA_EVENT = wx.lib.newevent.NewEvent()
 
 class LayerPanel(wx.Panel):
     def __init__(self, parent=None):
@@ -114,7 +115,11 @@ class LayerControl(wx.ScrolledWindow):
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.panel.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         
+        self.slider = wx.Slider(self, value=255, maxValue=255)
+        self.slider.Bind(wx.EVT_SLIDER, self.OnSlider)
+        
         sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.slider, 0, wx.EXPAND | wx.ALL, 3)
         sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 3)
         self.SetSizer(sizer)
         
@@ -124,6 +129,8 @@ class LayerControl(wx.ScrolledWindow):
     def UpdateLayers(self, layers=None):
         if layers:
             self.panel.UpdateLayers(layers)
+            self.slider.SetValue(layers.Current().alpha*255)
+            
         self.Refresh()
         
     def OnLeftDown(self, e):
@@ -142,6 +149,10 @@ class LayerControl(wx.ScrolledWindow):
         x, y = e.Position
         idx, layer = self.panel.GetLayerAtPosition(x, y)
         self.panel.SetTextBox(idx, layer)
+        
+    def OnSlider(self, e):
+        evt = LayerAlphaEvent(alpha = self.slider.Value/255.0)
+        wx.PostEvent(self, evt)
         
 if __name__ == '__main__':
     app = wx.App()

@@ -9,6 +9,7 @@ from math import sqrt
 from random import randrange
 
 COLOR_BLANK = wx.Colour(0,0,0,0)
+COLOR_BLANK1 = wx.Colour(0,0,0,1)
 
 class Layer(wx.Bitmap):
     layerCount = 1
@@ -22,12 +23,53 @@ class Layer(wx.Bitmap):
         Layer.layerCount += 1
         
         self.visible = True
+        self.alpha = 1.0
+        
+    def Clear(self, clip=None, color=COLOR_BLANK):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+
+        # gc.DrawRectangle(0, 0, *gc.GetSize())
+        # weird bug ^^^ can't correctly draw a big rectangle in one go
+        w, h = self.width, self.height
+        for x in range(0, w, 60):
+            for y in range(0, h, 60):
+                gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
+                
+        # Hack for the following bug
+        # when the bitmap is fully transparent (ie alpha=0) and an
+        #   alpha multiplier is applied (using Image.AdjustChannels).
+        #   The image is no longer transparent
+        if color==COLOR_BLANK:
+            gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(COLOR_BLANK1))
+            gc.DrawRectangle(0,0,1,1)
+        
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
         
     def Copy(self, name=None):
         layer = Layer(self.GetSubBitmap(wx.Rect(0, 0, self.width, self.height)))
         layer.name = name if name else self.name
         return layer
         
+    def Create(width, height, color=COLOR_BLANK):
+        layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
+        layer.Clear(color=color)
+        return layer
+        
+    def GetPixel(self, x, y):
+        mdc = wx.MemoryDC(self)
+        col = mdc.GetPixel(x, y)
+        del mdc
+        
+        return col
+
     def Scaled(self, factor):
         bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
         mdcd = wx.MemoryDC(bitmap)
@@ -44,32 +86,6 @@ class Layer(wx.Bitmap):
         del mdcd
         
         return bitmap
-
-    def Clear(self, clip=None):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(COLOR_BLANK))
-
-        # gc.DrawRectangle(0, 0, *gc.GetSize())
-        # weird bug ^^^ can't correctly draw a big rectangle in one go
-        w, h = self.width, self.height
-        for x in range(0, w, 60):
-            for y in range(0, h, 60):
-                gc.DrawRectangle(x, y, min(w, 60), min(h, 60))
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-        
-    def GetPixel(self, x, y):
-        mdc = wx.MemoryDC(self)
-        col = mdc.GetPixel(x, y)
-        del mdc
-        
-        return col
 
     def SetPixel(self, x, y, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
@@ -301,7 +317,7 @@ class LayerManager:
         
         self.surface = None
         if width>0 and height>0:
-            self.surface = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+            self.surface = Layer.Create(width, height)
             
         self.compositeLayer = None
         
@@ -317,7 +333,7 @@ class LayerManager:
         
     def AppendSelect(self, layer=None):
         if not layer:
-            layer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+            layer = Layer.Create(self.width, self.height)
             
         if self.currentLayer<0:
             self.currentLayer = 0
@@ -335,22 +351,33 @@ class LayerManager:
     def Clear(self):
         self.surface.Clear()
         
-    def Composite(self, mx=0, my=0, drawCurrent=True):
+    def Composite(self, mx=0, my=0, drawCurrent=True, drawSurface=True):
         if not self.compositeLayer:
-            self.compositeLayer = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+            self.compositeLayer = Layer.Create(self.width, self.height)
         else:
             self.compositeLayer.Clear()
         
         for layer in reversed(self.layers):
-            if not layer.visible:
+            if not layer.visible or layer.alpha==0:
                 continue
+            
+            if layer.alpha<1:
+                alphalayer = layer.ConvertToImage().AdjustChannels(1,1,1,layer.alpha).ConvertToBitmap()
+            else:
+                alphalayer = layer
                 
             if layer == self.layers[self.currentLayer]:
                 if drawCurrent:
-                    self.compositeLayer.Draw(layer)
-                self.compositeLayer.Draw(self.surface, x=mx, y=my)
+                    self.compositeLayer.Draw(alphalayer)
+                
+                if drawSurface:
+                    if layer.alpha<1:
+                        alphasurface = self.surface.ConvertToImage().AdjustChannels(1,1,1,layer.alpha).ConvertToBitmap()
+                    else:
+                        alphasurface = self.surface
+                    self.compositeLayer.Draw(alphasurface, x=mx, y=my)
             else:
-                self.compositeLayer.Draw(layer)
+                self.compositeLayer.Draw(alphalayer)
                 
         return self.compositeLayer
         
@@ -366,7 +393,7 @@ class LayerManager:
         lm = LayerManager(width, height)
         for i in range(numlayers):
             if not i:
-                lm.AppendSelect(Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255)))
+                lm.AppendSelect(Layer.Create(width, height, wx.WHITE))
             else:
                 lm.AppendSelect()
                 lm.Clear()
@@ -383,7 +410,7 @@ class LayerManager:
             l = self.appendSelect()
             l.Draw(layer.GetSubBitmap(rect))
         self.currentLayer = lm.currentLayer
-        self.surface = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+        self.surface = Layer.Create(self.width, self.height)
         self.compositeLayer = None
         
     def Current(self):
@@ -452,7 +479,7 @@ class LayerManager:
             l.name = layer.name
             
         self.currentLayer = lm.currentLayer
-        self.surface = Layer(wx.Bitmap.FromRGBA(self.width, self.height, 0, 0, 0, 0))
+        self.surface = Layer.Create(self.width, self.height)
         self.compositeLayer = None
         
     def ReverseIndex(self):
@@ -472,6 +499,9 @@ class LayerManager:
             self.layers[self.currentLayer] = layer
         else:
             self.appendSelect(layer)
+    
+    def SetAlpha(self, alpha):
+        self.layers[self.currentLayer].alpha = alpha
         
     def SetPixel(self, x, y, color, size=1, clip=None):
         self.surface.SetPixel(x, y, color, size, clip)
