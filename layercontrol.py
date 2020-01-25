@@ -7,13 +7,11 @@ Bhupendra Aole
 import wx
 from layermanager import *
 
-class LayerControl(wx.ScrolledCanvas):
+class LayerPanel(wx.Panel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetVirtualSize (150, 150)
-        
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
         self.layers = None
@@ -29,10 +27,10 @@ class LayerControl(wx.ScrolledCanvas):
         gc = wx.GraphicsContext.Create(dc)
         w, h = self.GetClientSize()
         
-        #gc.DrawBitmap(self.alphabg, GradientControl.PADDING, GradientControl.PADDING, self.width-GradientControl.PADDING2, 45)
         if self.layers:
             y = 0
             for layer in self.layers:
+                gc.DrawBitmap(self.alphabg, 0, y, 50, 50)
                 gc.DrawBitmap(layer, 0, y, 50, 50)
                 gc.SetPen(wx.Pen(wx.BLACK))
                 gc.DrawRectangle(0, y, w, 50)
@@ -41,16 +39,35 @@ class LayerControl(wx.ScrolledCanvas):
                 gc.DrawRectangle(0, y, 50, 50)
                 y += 50
 
-    def UpdateLayers(self):
-        self.SetVirtualSize(150, self.layers.Count()*50)
-        self.SetScrollRate(1, 1)
+    def UpdateLayers(self, layers):
+        print('minsize:', layers.Count())
+        self.SetMinSize(wx.Size(150, layers.Count()*50))
+        self.layers = layers
+        self.Refresh()
+        
+class LayerControl(wx.ScrolledWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.panel = LayerPanel(self)
+        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 3)
+        
+        self.SetSizer(sizer)
+        
+        self.FitInside()
+        self.SetScrollRate(5,5)
+        
+    def UpdateLayers(self, layers=None):
+        if layers:
+            self.panel.UpdateLayers(layers)
         self.Refresh()
         
 if __name__ == '__main__':
     app = wx.App()
-    f = wx.Frame(None, title="Layer Conrol")
+    f = wx.Frame(None, title="Layer Control")
     l = LayerControl(f)
-    l.layers = LayerManager.CreateDummy(50, 50, 3)
+    l.UpdateLayers(LayerManager.CreateDummy(50, 50, 3))
     f.Show()
     app.MainLoop()
     

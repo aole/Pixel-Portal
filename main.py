@@ -1257,13 +1257,13 @@ class Frame(wx.Frame):
         
         # RIGHT PANEL
         layerPanel = wx.Panel(self, size=(200,-1))
-        bs.Add(layerPanel, 0, wx.RIGHT, 2)
+        bs.Add(layerPanel, 0, wx.EXPAND|wx.ALL, 2)
         bsp = wx.BoxSizer(wx.VERTICAL)
         
         # LAYERS LIST
         self.lyrctrl = LayerControl(layerPanel)
-        self.lyrctrl.layers = self.canvas.layers
-        bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 2)
+        self.lyrctrl.UpdateLayers(self.canvas.layers)
+        bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
         '''
         self.layerList = wx.ListCtrl(layerPanel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL|wx.LC_HRULES)
         self.layerList.InsertColumn(0, "Layers:", width=176)
@@ -1275,6 +1275,7 @@ class Frame(wx.Frame):
         self.OnNew(None, *DEFAULT_DOC_SIZE)
         
         layerPanel.SetSizer(bsp)
+        layerPanel.FitInside()
         self.SetSizer(bs)
 
     def AddMenuItem(self, menu, name, func):
@@ -1532,8 +1533,8 @@ class Frame(wx.Frame):
         self.layerList.Select(self.canvas.layers.SelectedIndex())
         
     def RefreshLayers(self):
-        self.lyrctrl.layers = self.canvas.layers
-        self.lyrctrl.UpdateLayers()
+        self.lyrctrl.UpdateLayers(self.canvas.layers)
+        self.lyrctrl.FitInside()
         
 def CreateWindows():
     global app
