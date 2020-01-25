@@ -41,7 +41,7 @@ TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
 #Debug
 RENDER_CURRENT_LAYER = True
 RENDER_PREVIEW = True
-RENDER_PIXEL_UNDER_MOUSE = False
+RENDER_BRUSH_OUTLINE = True
 PRINT_UNDO_REDO = True
 
 app = None
@@ -184,7 +184,7 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.ErasePixel(x, self.GetYMirror(y), False, False)
 
-    def OnFloodFill(self):
+    def OnFloodFill(self, e):
         x,y = wx.GetMousePosition()
         x,y = self.ScreenToClient(x,y)
         gx, gy = self.PixelAtPosition(x,y)
@@ -192,18 +192,14 @@ class Canvas(wx.Panel):
         beforeLayer = self.layers.Current().Copy()
         self.layers.BlitToSurface()
         self.layers.Current().Clear()
-        self.FloodFill(gx, gy, self.penColor)
+        self.FloodFill(gx, gy, self.penColor, boundaryonly=e.AltDown())
         self.layers.BlitFromSurface()
         self.layers.surface.Clear()
         
         self.history.Store(PaintCommand(self.layers, self.layers.currentLayer, beforeLayer, self.layers.Current().Copy()))
         self.Refresh()
         
-    def FloodFill(self, x, y, color):
-        #self.layers.surface.FloodFill(x, y, color, self.selection)
-        #return
-        
-        
+    def FloodFill(self, x, y, color, boundaryonly=False):
         w, h = self.layers.width, self.layers.height
         
         def bpos(xp, yp):
@@ -214,9 +210,14 @@ class Canvas(wx.Panel):
             
         if x < 0 or y < 0 or x > w - 1 or y > h - 1:
             return
-        if not self.selection.IsEmpty() and not self.selection.Contains(x, y):
+            
+        selection = wx.Region(self.selection)
+        if not selection.IsEmpty() and not selection.Contains(x, y):
             return
 
+        if not selection or selection.IsEmpty():
+            selection = wx.Region(0,0,w,h)
+            
         buf = bytearray(w*h*4)
         self.layers.surface.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
         
@@ -225,34 +226,64 @@ class Canvas(wx.Panel):
         
         rgba = color.Get()
         
+        visited = set()
+        boundary = set()
         queue = {(x, y)}
         while queue:
             # replace current pixel
-            x, y = queue.pop()
+            xy = queue.pop()
+            x,y = xy
             i = bpos(x,y)
             
-            if not self.selection or self.selection.IsEmpty() or self.selection.Contains(x, y):
+            # north
+            isboundary = False
+            d = bpos(x,y-1)
+            if y > 0 and car(buf[d:d+4], replace) and selection.Contains(x, y-1):
+                if (x,y-1) not in visited:
+                    queue.add((x, y - 1))
+            else:
+                isboundary = True
+            # east
+            d = bpos(x+1,y)
+            if x < w - 1 and car(buf[d:d+4], replace) and selection.Contains(x+1, y):
+                if (x+1,y) not in visited:
+                    queue.add((x + 1, y))
+            else:
+                isboundary = True
+            # south
+            d = bpos(x,y+1)
+            if y < h - 1 and car(buf[d:d+4], replace) and selection.Contains(x, y+1):
+                if (x,y+1) not in visited:
+                    queue.add((x, y + 1))
+            else:
+                isboundary = True
+            # west
+            d = bpos(x-1, y)
+            if x > 0 and car(buf[d:d+4], replace) and selection.Contains(x-1, y):
+                if (x-1,y) not in visited:
+                    queue.add((x - 1, y))
+            else:
+                isboundary = True
+                
+            # set this pixel
+            visited.add(xy)
+            if boundaryonly:
+                if isboundary:
+                    boundary.add((x,y))
+            else:
                 buf[i] = rgba[0]
                 buf[i+1] = rgba[1]
                 buf[i+2] = rgba[2]
                 buf[i+3] = rgba[3]
-                # north
-                d = bpos(x,y-1)
-                if y > 0 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
-                    queue.add((x, y - 1))
-                # east
-                d = bpos(x+1,y)
-                if x < w - 1 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
-                    queue.add((x + 1, y))
-                # south
-                d = bpos(x,y+1)
-                if y < h - 1 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
-                    queue.add((x, y + 1))
-                # west
-                d = bpos(x-1, y)
-                if x > 0 and car(buf[d:d+4], replace) and not car(buf[d:d+4], rgba):
-                    queue.add((x - 1, y))
                     
+        if boundaryonly:
+            for x,y in boundary:
+                i = bpos(x,y)
+                buf[i] = rgba[0]
+                buf[i+1] = rgba[1]
+                buf[i+2] = rgba[2]
+                buf[i+3] = rgba[3]
+                
         self.layers.surface.CopyFromBuffer(buf, wx.BitmapBufferFormat_RGBA)
         
     def DrawLine(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
@@ -645,7 +676,7 @@ class Canvas(wx.Panel):
             else:
                 self.layers.BlitToSurface()
                 self.layers.Current().Clear()
-                self.FloodFill(gx, gy, self.penColor)
+                self.FloodFill(gx, gy, self.penColor, boundaryonly=e.AltDown())
         elif self.current_tool == "Picker":
             self.noUndo = True
             color = self.layers.Composite().GetPixel(gx, gy)
@@ -816,8 +847,10 @@ class Canvas(wx.Panel):
         self.SetFocus()
         
     def DrawBrushOnCanvas(self, gc, px, py):
-        gc.SetPen(wx.NullPen)
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.penColor))
+        #gc.SetPen(wx.NullPen)
+        #gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.penColor))
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(self.penColor))
+        gc.SetBrush(wx.NullBrush)
         x, y = int(px-self.penSize/2+.5), int(py-self.penSize/2+.5)
         sz = self.penSize*self.pixel_size
         gc.DrawRectangle(self.panx+x*self.pixel_size, self.pany+y*self.pixel_size, sz, sz)
@@ -900,7 +933,7 @@ class Canvas(wx.Panel):
         gc = wx.GraphicsContext.Create(dc)
 
         # DRAW BRUSH PREVIEW
-        if RENDER_PIXEL_UNDER_MOUSE and self.mouseState == 0 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
+        if RENDER_BRUSH_OUTLINE and self.mouseState != 1 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
             self.DrawBrushOnCanvas(gc, self.prevgx, self.prevgy)
             
         # REFERENCE
@@ -1069,7 +1102,7 @@ class Canvas(wx.Panel):
             self.New(pixel, width, height)
 
             self.layers.Current().Load(filename)
-        elif filename[-3:]=="tif":
+        elif filename[-3:]=="tif" or filename[-4:]=="tiff":
             im = Image.open(filename)
             width, height = int(im.width/pixel), int(im.height/pixel)
             self.layers.Init(width, height)
@@ -1475,7 +1508,7 @@ class Frame(wx.Frame):
         elif keycode == ord(']'):
             self.canvas.AdjustBrushSize(1)
         elif keycode == ord('F'):
-            self.canvas.OnFloodFill()
+            self.canvas.OnFloodFill(e)
         else:
             e.Skip()
 
