@@ -1005,15 +1005,15 @@ class Canvas(wx.Panel):
         self.pixel_size = pixel
 
         # to ensure alpha
-        current_layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
-        drawing_layer = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
-
+        bglayer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
+        bglayer.name = "background"
+        
         self.layers.width = width
         self.layers.height = height
         self.layers.RemoveAll()
-        self.layers.surface = drawing_layer
+        self.layers.surface = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
         self.layers.surface.name = 'Surface'
-        self.layers.AppendSelect(current_layer)
+        self.layers.AppendSelect(bglayer)
         self.layers.AppendSelect()
 
         self.history.ClearCommands()
