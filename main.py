@@ -1246,7 +1246,6 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
-        self.AddToolButton(tb, 'Toggle Layer Visibility', self.OnToggleLayerVisibility, icon=wx.Bitmap("icons/visible.png"))
         self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
         
         tb.Realize()
@@ -1264,6 +1263,7 @@ class Frame(wx.Frame):
         self.lyrctrl = LayerControl(layerPanel)
         self.lyrctrl.UpdateLayers(self.canvas.layers)
         self.lyrctrl.Bind(EVT_LAYER_CLICKED_EVENT, self.OnLayerClicked)
+        self.lyrctrl.Bind(EVT_LAYER_VISIBILITY_EVENT, self.OnLayerVisibility)
         bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
         
         self.OnNew(None, *DEFAULT_DOC_SIZE)
@@ -1502,6 +1502,11 @@ class Frame(wx.Frame):
         self.canvas.layers.SelectIndex(e.index)
         self.RefreshLayers()
         
+    def OnLayerVisibility(self, e):
+        self.canvas.layers.ToggleVisible(e.index)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
         self.canvas.FullRedraw()
@@ -1510,11 +1515,6 @@ class Frame(wx.Frame):
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()
         self.canvas.FullRedraw()
-        self.RefreshLayers()
-        
-    def OnToggleLayerVisibility(self, e):
-        self.canvas.layers.ToggleVisible()
-        self.canvas.Refresh()
         self.RefreshLayers()
         
     def RefreshLayers(self):

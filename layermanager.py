@@ -497,6 +497,8 @@ class LayerManager:
         mdc.SelectObject(wx.NullBitmap)
         del mdc
         
-    def ToggleVisible(self):
-        self.layers[self.currentLayer].visible = not self.layers[self.currentLayer].visible
+    def ToggleVisible(self, idx=-1):
+        if idx<0:
+            idx = self.currentLayer
+        self.layers[idx].visible = not self.layers[idx].visible
         

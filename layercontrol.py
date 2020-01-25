@@ -10,6 +10,7 @@ import wx.lib.newevent
 from layermanager import *
 
 LayerClickedEvent, EVT_LAYER_CLICKED_EVENT = wx.lib.newevent.NewEvent()
+LayerVisibilityEvent, EVT_LAYER_VISIBILITY_EVENT = wx.lib.newevent.NewEvent()
 
 class LayerPanel(wx.Panel):
     def __init__(self, parent=None):
@@ -21,6 +22,7 @@ class LayerPanel(wx.Panel):
         self.layers = None
         
         self.alphabg = wx.Bitmap("alphabg.png").GetSubBitmap(wx.Rect(0,0,300,300))
+        self.bmVisible = wx.Bitmap("icons/visible.png")
 
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
@@ -36,14 +38,23 @@ class LayerPanel(wx.Panel):
         if self.layers:
             y = 0
             for layer in self.layers:
+                # draw checkered background
                 gc.DrawBitmap(self.alphabg, 0, y, 50, 50)
+                # draw the layer
                 gc.DrawBitmap(layer, 0, y, 50, 50)
+                # draw visibility icon
+                if layer.visible:
+                    gc.DrawBitmap(self.bmVisible, w-25, y, 25, 25)
                 
+                # if the layer is selected use thick pen
                 gc.SetPen(wx.Pen(wx.BLACK, 1))
                 if layer==self.layers.Current():
                     gc.SetPen(wx.Pen(wx.BLACK, 3))
+                # draw outline around layer
                 gc.DrawRectangle(0, y, w, 50)
+                gc.SetPen(wx.Pen(wx.BLACK, 1))
                 gc.DrawRectangle(0, y, 50, 50)
+                gc.DrawRectangle(w-25, y, 25, 25)
                 
                 y += 50
 
@@ -57,6 +68,11 @@ class LayerPanel(wx.Panel):
         if idx<self.layers.Count():
             return idx, self.layers[idx]
         return -1, None
+        
+    def IsVisibleIcon(self, index, x, y):
+        w, h = self.GetClientSize()
+        y -= index*50
+        return x>w-25 and y<25
         
 class LayerControl(wx.ScrolledWindow):
     def __init__(self, parent=None):
@@ -82,8 +98,12 @@ class LayerControl(wx.ScrolledWindow):
         x, y = e.Position
         idx, layer = self.panel.GetLayerAtPosition(x, y)
         if layer:
-            evt = LayerClickedEvent(layer = layer, index = idx, position = e.Position)
-            wx.PostEvent(self, evt)
+            if self.panel.IsVisibleIcon(idx, x, y):
+                evt = LayerVisibilityEvent(layer = layer, index = idx, position = e.Position)
+                wx.PostEvent(self, evt)
+            else:
+                evt = LayerClickedEvent(layer = layer, index = idx, position = e.Position)
+                wx.PostEvent(self, evt)
         
 if __name__ == '__main__':
     app = wx.App()
