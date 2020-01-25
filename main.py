@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw
 from undomanager import *
 from layermanager import *
 from gradienteditor import *
+from layercontrol import *
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (800, 550)
@@ -700,6 +701,9 @@ class Canvas(wx.Panel):
 
         self.doubleClick = False
         self.Refresh()
+        
+        for l in self.listeners:
+            l.RefreshLayers()
 
     def OnRightDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
@@ -780,6 +784,9 @@ class Canvas(wx.Panel):
         self.current_tool = self.original_tool
         self.beforeLayer = None
         self.Refresh()
+        
+        for l in self.listeners:
+            l.RefreshLayers()
 
     def OnMiddleDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
@@ -998,15 +1005,15 @@ class Canvas(wx.Panel):
         self.pixel_size = pixel
 
         # to ensure alpha
-        current_layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
-        drawing_layer = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
-
+        bglayer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
+        bglayer.name = "background"
+        
         self.layers.width = width
         self.layers.height = height
         self.layers.RemoveAll()
-        self.layers.surface = drawing_layer
+        self.layers.surface = Layer(wx.Bitmap.FromRGBA(width, height, 0, 0, 0, 0))
         self.layers.surface.name = 'Surface'
-        self.layers.AppendSelect(current_layer)
+        self.layers.AppendSelect(bglayer)
         self.layers.AppendSelect()
 
         self.history.ClearCommands()
@@ -1239,7 +1246,6 @@ class Frame(wx.Frame):
         self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX, icon=wx.Bitmap("icons/mirrorx.png"))
         self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY, icon=wx.Bitmap("icons/mirrory.png"))
         self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine, icon=wx.Bitmap("icons/smooth.png"))
-        self.AddToolButton(tb, 'Toggle Layer Visibility', self.OnToggleLayerVisibility, icon=wx.Bitmap("icons/visible.png"))
         self.AddToolButton(tb, 'Center', self.OnCenter, icon=wx.Bitmap("icons/center.png"))
         
         tb.Realize()
@@ -1250,19 +1256,20 @@ class Frame(wx.Frame):
         
         # RIGHT PANEL
         layerPanel = wx.Panel(self, size=(200,-1))
-        bs.Add(layerPanel, 0, wx.RIGHT, 2)
+        bs.Add(layerPanel, 0, wx.EXPAND|wx.ALL, 2)
         bsp = wx.BoxSizer(wx.VERTICAL)
         
         # LAYERS LIST
-        self.layerList = wx.ListCtrl(layerPanel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL|wx.LC_HRULES)
-        self.layerList.InsertColumn(0, "Layers:", width=176)
-        self.layerList.InsertColumn(1, "V:", width=20)
-        self.layerList.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnLayerSelect)
-        bsp.Add(self.layerList, 1, wx.EXPAND | wx.ALL, 2)
+        self.lyrctrl = LayerControl(layerPanel)
+        self.lyrctrl.UpdateLayers(self.canvas.layers)
+        self.lyrctrl.Bind(EVT_LAYER_CLICKED_EVENT, self.OnLayerClicked)
+        self.lyrctrl.Bind(EVT_LAYER_VISIBILITY_EVENT, self.OnLayerVisibility)
+        bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
         
         self.OnNew(None, *DEFAULT_DOC_SIZE)
         
         layerPanel.SetSizer(bsp)
+        layerPanel.FitInside()
         self.SetSizer(bs)
 
     def AddMenuItem(self, menu, name, func):
@@ -1315,7 +1322,7 @@ class Frame(wx.Frame):
         self.txtPixel.SetValue(str(value))
 
     def Undid(self):
-        self.RepopulateList()
+        self.RefreshLayers()
         
     def Redid(self):
         self.Undid()
@@ -1370,7 +1377,7 @@ class Frame(wx.Frame):
             pixel = int(self.txtPixel.GetValue())
             self.canvas.Load(pixel, ret)
             self.canvas.FullRedraw()
-            self.RepopulateList()
+            self.RefreshLayers()
 
     def OnToggleGrid(self, e):
         self.canvas.gridVisible = e.IsChecked()
@@ -1407,7 +1414,7 @@ class Frame(wx.Frame):
             
         self.canvas.New(pixel, width, height)
         self.canvas.FullRedraw()
-        self.RepopulateList()
+        self.RefreshLayers()
         
     def OnSave(self, e):
         ret = wx.SaveFileSelector(PROGRAM_NAME, "png", parent=self)
@@ -1491,31 +1498,28 @@ class Frame(wx.Frame):
         self.canvas.SelectInvert()
         self.Refresh()
     
-    def OnLayerSelect(self, e):
-        self.canvas.layers.SelectIndex(e.Index)
+    def OnLayerClicked(self, e):
+        self.canvas.layers.SelectIndex(e.index)
+        self.RefreshLayers()
+        
+    def OnLayerVisibility(self, e):
+        self.canvas.layers.ToggleVisible(e.index)
+        self.canvas.Refresh()
+        self.RefreshLayers()
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
         self.canvas.FullRedraw()
-        self.RepopulateList()
+        self.RefreshLayers()
         
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()
         self.canvas.FullRedraw()
-        self.RepopulateList()
+        self.RefreshLayers()
         
-    def OnToggleLayerVisibility(self, e):
-        self.canvas.layers.ToggleVisible()
-        self.canvas.Refresh()
-        self.RepopulateList()
-        
-    def RepopulateList(self):
-        self.layerList.DeleteAllItems()
-        for layer in self.canvas.layers.layers:
-            v = 'V' if layer.visible else ''
-            self.layerList.Append([layer.name, v])
-            
-        self.layerList.Select(self.canvas.layers.SelectedIndex())
+    def RefreshLayers(self):
+        self.lyrctrl.UpdateLayers(self.canvas.layers)
+        self.lyrctrl.FitInside()
         
 def CreateWindows():
     global app
