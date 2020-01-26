@@ -45,6 +45,11 @@ class LayerPanel(wx.Panel):
         if self.layers:
             y = 0
             for layer in self.layers:
+                if layer==self.layers.Current():
+                    gc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#666666FF"))
+                    gc.SetPen(wx.NullPen)
+                    gc.DrawRectangle(0, y, w, 50)
+                    gc.SetBrush(wx.NullBrush)
                 gc.SetPen(wx.Pen(wx.BLACK, 1))
                 # draw checkered background
                 gc.DrawBitmap(self.alphabg, 0, y, 50, 50)
@@ -52,17 +57,14 @@ class LayerPanel(wx.Panel):
                 gc.DrawBitmap(layer, 0, y, 50, 50)
                 # print layer name
                 if layer==self.layers.Current():
-                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.BLACK)
+                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE)
                 else:
                     gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_LIGHT), wx.BLACK)
                 gc.DrawText(layer.name, 60, y+18)
                 # draw visibility icon
                 if layer.visible:
-                    gc.DrawBitmap(self.bmVisible, w-25, y, 25, 25)
+                    gc.DrawBitmap(self.bmVisible, w-24, y+2, 23, 23)
                 
-                # if the layer is selected use thick pen
-                if layer==self.layers.Current():
-                    gc.SetPen(wx.Pen(wx.BLACK, 3))
                 # draw outline around layer
                 gc.DrawRectangle(0, y, w, 50)
                 gc.SetPen(wx.Pen(wx.BLACK, 1))

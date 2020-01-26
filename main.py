@@ -36,7 +36,8 @@ TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
          "Bucket":          (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
          "Picker":          (wx.CURSOR_RIGHT_ARROW, "toolpicker.png"),
          "Gradient":        (wx.CURSOR_CROSS,       "toolgradient.png"),
-         "Radial Gradient": (wx.CURSOR_CROSS,       "toolrgradient.png")}
+         "Radial Gradient": (wx.CURSOR_CROSS,       "toolrgradient.png"),
+         "Helper":          (wx.CURSOR_CROSS,       "toolhelper.png")}
 
 #Debug
 RENDER_CURRENT_LAYER = True
@@ -105,6 +106,9 @@ class Canvas(wx.Panel):
         self.refAlpha = 0.3
         self.refScale = 1
         self.reference = None
+        
+        self.helper = None
+        self.helperSegments = 1
         
         self.layers = LayerManager()
         
@@ -562,15 +566,23 @@ class Canvas(wx.Panel):
         
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
-        if amt > 0:
-            self.pixel_size += 1
+        if self.current_tool == "Helper":
+            if amt > 0:
+                self.helperSegments += 1
+            else:
+                self.helperSegments -= 1
+                if self.helperSegments < 2:
+                    self.helperSegments = 2
         else:
-            self.pixel_size -= 1
-            if self.pixel_size < 1:
-                self.pixel_size = 1
+            if amt > 0:
+                self.pixel_size += 1
+            else:
+                self.pixel_size -= 1
+                if self.pixel_size < 1:
+                    self.pixel_size = 1
 
-        for l in self.listeners:
-            l.PixelSizeChanged(self.pixel_size)
+            for l in self.listeners:
+                l.PixelSizeChanged(self.pixel_size)
 
         self.Refresh()
 
@@ -606,7 +618,9 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Radial Gradient":
                 self.layers.surface.Clear()
                 self.FillRGradient(*self.PixelAtPosition(self.origx, self.origy), gx, gy)
-
+            elif self.current_tool == "Helper":
+                self.helper[2] = (x - self.panx)/self.pixel_size
+                self.helper[3] = (y - self.pany)/self.pixel_size
         # draw with 2nd color
         elif self.mouseState == 2:
             if self.current_tool == "Pen":
@@ -626,6 +640,11 @@ class Canvas(wx.Panel):
                 px, py = self.PixelAtPosition(self.prevx, self.prevy)
                 if not self.selection.IsEmpty():
                     self.selection.Offset(gx - px, gy - py)
+            elif self.current_tool == "Helper":
+                self.helper[0] += (x - self.prevx)/self.pixel_size
+                self.helper[1] += (y - self.prevy)/self.pixel_size
+                self.helper[2] += (x - self.prevx)/self.pixel_size
+                self.helper[3] += (y - self.prevy)/self.pixel_size
 
         elif self.mouseState == 3:
             self.panx += x - self.prevx
@@ -684,7 +703,12 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Select":
             if not e.ControlDown() and not e.AltDown():
                 self.Select(wx.Region())
-
+        elif self.current_tool == "Helper":
+            self.helper = [(self.origx-self.panx)/self.pixel_size,
+                           (self.origy- self.pany)/self.pixel_size, 
+                           (self.origx- self.panx)/self.pixel_size, 
+                           (self.origy- self.pany)/self.pixel_size]
+            
         if not self.HasCapture():
             self.CaptureMouse()
 
@@ -723,6 +747,10 @@ class Canvas(wx.Panel):
         elif self.current_tool == "Select" and not self.doubleClick:
             self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
             self.doubleClick = False
+        elif self.current_tool == "Helper":
+            if self.helper[0]==self.helper[2] and self.helper[1]==self.helper[3]:
+                self.helper = None
+            self.noUndo = True
             
         self.movex, self.movey = 0, 0
 
@@ -911,8 +939,8 @@ class Canvas(wx.Panel):
                 dc.DrawText(str(ry), rw, self.pany + ry * self.pixel_size - rsz)
             
         # CLIP TO DOCUMENT
-        dc.SetClippingRegion(self.panx, self.pany, self.layers.width * self.pixel_size,
-                             self.layers.height * self.pixel_size)
+        #dc.SetClippingRegion(self.panx, self.pany, self.layers.width * self.pixel_size,
+        #                     self.layers.height * self.pixel_size)
 
         # RENDER ALPHA BACKGROUND
         abgw, abgh = self.alphabg.GetWidth(), self.alphabg.GetHeight()
@@ -1000,7 +1028,26 @@ class Canvas(wx.Panel):
             gc.DrawPath(inpath)
             gc.SetPen(wx.ThePenList.FindOrCreatePen("#22443388", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawPath(expath)
-            
+        
+        # HELPER
+        if self.helper:
+            gc.SetBrush(wx.NullBrush)
+            gc.SetPen(wx.ThePenList.FindOrCreatePen("#111111AA", 1))
+            x0, y0, x1, y1 = self.helper
+            dx = (x1-x0)/self.helperSegments
+            dy = (y1-y0)/self.helperSegments
+            #d = numpy.linalg.norm((dx, dy))/self.helperSegments
+            sx = x0
+            sy = y0
+            for i in range(self.helperSegments+1):
+                gc.DrawEllipse((sx-1)*self.pixel_size+self.panx, (sy-1)*self.pixel_size+self.pany, 2*self.pixel_size, 2*self.pixel_size)
+                sx += dx
+                sy += dy
+            gc.SetPen(wx.ThePenList.FindOrCreatePen("#111111AA", 3, wx.PENSTYLE_SHORT_DASH))
+            gc.StrokeLine(x0*self.pixel_size+self.panx,
+                          y0*self.pixel_size+self.pany,
+                          x1*self.pixel_size+self.panx,
+                          y1*self.pixel_size+self.pany)
         # PREVIEW
         if RENDER_PREVIEW:
             dc.DestroyClippingRegion()
