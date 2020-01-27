@@ -25,6 +25,7 @@ class LayerPanel(wx.Panel):
         
         self.alphabg = wx.Bitmap("alphabg.png").GetSubBitmap(wx.Rect(0,0,300,300))
         self.bmVisible = wx.Bitmap("icons/visible.png")
+        self.bmNotVisible = wx.Bitmap("icons/NA.png")
 
         self.textctrl = wx.TextCtrl(self, value="layer", pos=(60, 15), size=(100, wx.DefaultCoord), style=wx.TE_PROCESS_ENTER)
         self.textctrl.Bind(wx.EVT_TEXT_ENTER, self.OnTextEnter)
@@ -42,6 +43,7 @@ class LayerPanel(wx.Panel):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         w, h = self.GetClientSize()
         
+        border = 2
         if self.layers:
             y = 0
             for layer in self.layers:
@@ -52,9 +54,9 @@ class LayerPanel(wx.Panel):
                     gc.SetBrush(wx.NullBrush)
                 gc.SetPen(wx.Pen(wx.BLACK, 1))
                 # draw checkered background
-                gc.DrawBitmap(self.alphabg, 0, y, 50, 50)
+                gc.DrawBitmap(self.alphabg, border, y+border, 50-border*2, 50-border*2)
                 # draw the layer
-                gc.DrawBitmap(layer, 0, y, 50, 50)
+                gc.DrawBitmap(layer, border, y+border, 50-border*2, 50-border*2)
                 # print layer name
                 if layer==self.layers.Current():
                     gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE)
@@ -64,12 +66,21 @@ class LayerPanel(wx.Panel):
                 # draw visibility icon
                 if layer.visible:
                     gc.DrawBitmap(self.bmVisible, w-24, y+2, 23, 23)
+                else:
+                    gc.DrawBitmap(self.bmNotVisible, w-24, y+2, 23, 23)
                 
+                # draw outline around row
+                #gc.DrawRectangle(0, y, w, 50)
+                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.Colour(0,0,0,128), border))
+                gc.StrokeLine(border/2, y+border/2, w-border/2, y+border/2)
+                gc.StrokeLine(border/2, y+border/2, border/2, y+50-border/2)
+                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.Colour(255,255,255,128), border))
+                gc.StrokeLine(border/2, y+50-border/2, w-border/2, y+50-border/2)
+                gc.StrokeLine(w-border/2, y+border/2, w-border/2, y+50-border/2)
                 # draw outline around layer
-                gc.DrawRectangle(0, y, w, 50)
-                gc.SetPen(wx.Pen(wx.BLACK, 1))
-                gc.DrawRectangle(0, y, 50, 50)
-                gc.DrawRectangle(w-25, y, 25, 25)
+                #gc.DrawRectangle(0, y, 50, 50)
+                # draw outline around visibility icon
+                #gc.DrawRectangle(w-25, y, 25, 25)
                 
                 y += 50
 
@@ -91,9 +102,9 @@ class LayerPanel(wx.Panel):
         
     def SetTextBox(self, idx=-1, layer=None, x=0, y=0):
         if not layer:
-            self.textctrl.Hide()
-            if self.txtBoxLayer:
+            if self.textctrl and self.textctrl.Shown:
                 self.txtBoxLayer.name = self.textctrl.GetValue()
+            self.textctrl.Hide()
                 
         self.txtBoxLayer = layer
         w, h = self.GetClientSize()
