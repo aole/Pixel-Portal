@@ -132,6 +132,17 @@ class Canvas(wx.Panel):
         self.beforeLayer = None
         self.Refresh()
 
+    def DrawBrushOnCanvas(self, gc, px, py):
+        gc.Clip(self.panx, self.pany, self.layers.width*self.pixel_size, self.layers.height*self.pixel_size)
+        
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(self.penColor))
+        gc.SetBrush(wx.NullBrush)
+        x, y = int(px-self.penSize/2+.5), int(py-self.penSize/2+.5)
+        sz = self.penSize*self.pixel_size
+        gc.DrawRectangle(self.panx+x*self.pixel_size, self.pany+y*self.pixel_size, sz, sz)
+        
+        gc.ResetClip()
+        
     def DrawGrid(self, gc):
         w, h = self.GetClientSize()
 
@@ -166,14 +177,6 @@ class Canvas(wx.Panel):
                 path.AddLineToPoint(min(self.panx + self.layers.width * self.pixel_size, w), midpy+self.pany-self.pixel_size)
         gc.StrokePath(path)
 
-    def GetXMirror(self, x):
-        w = int(self.layers.width / 2)
-        return ((x + 1 - w) * -1) + w - 1
-
-    def GetYMirror(self, y):
-        h = int(self.layers.height / 2)
-        return ((y + 1 - h) * -1) + h - 1
-
     def DrawPixel(self, x, y, color, canmirrorx=True, canmirrory=True):
         self.layers.SetPixel(x, y, color, size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
@@ -187,6 +190,14 @@ class Canvas(wx.Panel):
             self.ErasePixel(self.GetXMirror(x), y, False, True)
         if canmirrory and self.mirrory:
             self.ErasePixel(x, self.GetYMirror(y), False, False)
+
+    def GetXMirror(self, x):
+        w = int(self.layers.width / 2)
+        return ((x + 1 - w) * -1) + w - 1
+
+    def GetYMirror(self, y):
+        h = int(self.layers.height / 2)
+        return ((y + 1 - h) * -1) + h - 1
 
     def OnFloodFill(self, e):
         x,y = wx.GetMousePosition()
@@ -874,15 +885,6 @@ class Canvas(wx.Panel):
     def OnMouseEnter(self, e):
         self.SetFocus()
         
-    def DrawBrushOnCanvas(self, gc, px, py):
-        #gc.SetPen(wx.NullPen)
-        #gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.penColor))
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(self.penColor))
-        gc.SetBrush(wx.NullBrush)
-        x, y = int(px-self.penSize/2+.5), int(py-self.penSize/2+.5)
-        sz = self.penSize*self.pixel_size
-        gc.DrawRectangle(self.panx+x*self.pixel_size, self.pany+y*self.pixel_size, sz, sz)
-        
     def GetPolyCoords(self, x, y, w, h):
         return (x,y), (x,y+h), (x+w, y+h), (x+w,y)
         
@@ -900,12 +902,12 @@ class Canvas(wx.Panel):
         plw, plh = self.layers.width*self.pixel_size, self.layers.height*self.pixel_size
         
         # PAINT WHOLE CANVAS BACKGROUND
-        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
+        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
         dc.Clear()
 
         # PAINT RULERS --------------
-        dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
-        dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+        dc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
+        dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
         dc.DrawRectangle(self.panx-10, 0, lw*self.pixel_size+20, 25)
         dc.DrawRectangle(0, self.pany-10, 25, lh*self.pixel_size+20)
         
@@ -913,7 +915,7 @@ class Canvas(wx.Panel):
         for rx in range(0, lw+1):
             if self.prevgx==rx and rx<lw:
                 dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#CCCCCC"))
-                dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+                dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
                 dc.DrawRectangle(self.panx + rx * self.pixel_size, 0, 5, 5)
                 dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.BLACK))
                 dc.SetBrush(wx.NullBrush)
@@ -927,7 +929,7 @@ class Canvas(wx.Panel):
         for ry in range(0, lh+1):
             if self.prevgy==ry and ry<lh:
                 dc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#CCCCCC"))
-                dc.SetPen(wx.ThePenList.FindOrCreatePen("#999999FF"))
+                dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
                 dc.DrawRectangle(0, self.pany + ry * self.pixel_size, 5, 5)
                 dc.SetPen(wx.ThePenList.FindOrCreatePen(wx.BLACK))
                 dc.SetBrush(wx.NullBrush)
@@ -942,7 +944,7 @@ class Canvas(wx.Panel):
         #dc.SetClippingRegion(self.panx, self.pany, self.layers.width * self.pixel_size,
         #                     self.layers.height * self.pixel_size)
 
-        # RENDER ALPHA BACKGROUND
+        # ALPHA BACKGROUND
         abgw, abgh = self.alphabg.GetWidth(), self.alphabg.GetHeight()
         dc.StretchBlit(self.panx, self.pany,
                        plw, plh,
@@ -950,7 +952,7 @@ class Canvas(wx.Panel):
                        0, 0,
                        abgw, abgh)
         
-        # RENDER PAINT LAYERS
+        # RENDER LAYERS
         if RENDER_CURRENT_LAYER:
             dc.StretchBlit(self.panx, self.pany,
                            self.layers.width * self.pixel_size, self.layers.height * self.pixel_size,
@@ -960,7 +962,7 @@ class Canvas(wx.Panel):
 
         gc = wx.GraphicsContext.Create(dc)
 
-        # DRAW BRUSH PREVIEW
+        # BRUSH PREVIEW
         if RENDER_BRUSH_OUTLINE and self.mouseState != 1 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
             self.DrawBrushOnCanvas(gc, self.prevgx, self.prevgy)
             
@@ -975,6 +977,15 @@ class Canvas(wx.Panel):
         if self.gridVisible and self.pixel_size > 2:
             self.DrawGrid(gc)
 
+        # DOCUMENT BORDER
+        gc.SetBrush(wx.NullBrush)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW), 2))
+        gc.StrokeLine(self.panx, self.pany, self.panx + plw, self.pany)
+        gc.StrokeLine(self.panx, self.pany, self.panx, self.pany + plh)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 2))
+        gc.StrokeLine(self.panx, self.pany + plh, self.panx + plw, self.pany + plh)
+        gc.StrokeLine(self.panx + plw, self.pany, self.panx + plw, self.pany + plh)
+        
         # SELECTION
         display_selection_rect = True
         if self.mouseState == 1 and self.current_tool in ("Move"):
@@ -1063,6 +1074,14 @@ class Canvas(wx.Panel):
                            compositedc,
                            0, 0,
                            lw, lh)
+        # PREVIEW BORDER
+        gc.SetBrush(wx.NullBrush)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 2))
+        gc.StrokeLine(w-lw, lh, w-lw + lw, lh)
+        gc.StrokeLine(w-lw + lw, 0, w-lw + lw, lh)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW), 2))
+        gc.StrokeLine(w-lw, 0, w-lw + lw, 0)
+        gc.StrokeLine(w-lw, 0, w-lw, lh)
         
         alphadc.SelectObject(wx.NullBitmap)
         del alphadc

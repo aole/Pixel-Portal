@@ -37,7 +37,7 @@ class LayerPanel(wx.Panel):
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
         
-        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush("#999999FF"))
+        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
         dc.Clear()
         
         gc = wx.GraphicsContext.Create(dc)
@@ -50,7 +50,7 @@ class LayerPanel(wx.Panel):
             y = 0
             for layer in self.layers:
                 if layer==self.layers.Current():
-                    gc.SetBrush(wx.TheBrushList.FindOrCreateBrush("#666666FF"))
+                    gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)))
                     gc.SetPen(wx.NullPen)
                     gc.DrawRectangle(0, y, w, 50)
                     gc.SetBrush(wx.NullBrush)
@@ -61,9 +61,9 @@ class LayerPanel(wx.Panel):
                 gc.DrawBitmap(layer, border, y+border, 50-border*2, 50-border*2)
                 # print layer name
                 if layer==self.layers.Current():
-                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.WHITE)
+                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), wx.SystemSettings.GetColour(wx.SYS_COLOUR_LISTBOXHIGHLIGHTTEXT))
                 else:
-                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_LIGHT), wx.BLACK)
+                    gc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_LIGHT), wx.SystemSettings.GetColour(wx.SYS_COLOUR_LISTBOXTEXT))
                 gc.DrawText(layer.name, 60, y+18)
                 # draw visibility icon
                 if layer.visible:
@@ -73,10 +73,10 @@ class LayerPanel(wx.Panel):
                 
                 # draw outline around row
                 #gc.DrawRectangle(0, y, w, 50)
-                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.Colour(0,0,0,128), border))
+                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW), border))
                 gc.StrokeLine(border/2, y+border/2, w-border/2, y+border/2)
                 gc.StrokeLine(border/2, y+border/2, border/2, y+50-border/2)
-                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.Colour(255,255,255,128), border))
+                gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), border))
                 gc.StrokeLine(border/2, y+50-border/2, w-border/2, y+50-border/2)
                 gc.StrokeLine(w-border/2, y+border/2, w-border/2, y+50-border/2)
                 # draw outline around layer
@@ -94,7 +94,7 @@ class LayerPanel(wx.Panel):
                     y=0
                     sh /= 2
                 gc.SetPen(wx.NullPen)
-                gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.Colour(0,0,0,128)))
+                gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)))
                 gc.DrawRectangle(0, y-5, w, sh)
                 
     def UpdateLayers(self, layers):
