@@ -471,6 +471,17 @@ class LayerManager:
         self.layers.insert(position, layer)
         self.currentLayer = min(position, len(self.layers)-1)
         
+    def MergeDown(self):
+        cl = self.layers[self.currentLayer]
+        
+        if cl.alpha<1:
+            alphalayer = cl.ConvertToImage().AdjustChannels(1,1,1, cl.alpha).ConvertToBitmap()
+        else:
+            alphalayer = cl
+        
+        self.layers[self.currentLayer+1].Draw(alphalayer)
+        del self.layers[self.currentLayer]
+        
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         self.surface.Rectangle(x, y, w, h, color, size, clip)
         

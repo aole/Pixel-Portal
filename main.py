@@ -1265,6 +1265,11 @@ class Canvas(wx.Panel):
         layer = self.layers.Remove().Copy()
         self.history.Store(RemoveLayerCommand(self.layers, index, layer))
         
+    def MergeDown(self):
+        if self.layers.currentLayer<self.layers.Count()-1 and self.layers.Current().visible:
+            self.layers.MergeDown()
+            # TODO: set undo/redo
+        
 class Frame(wx.Frame):
     def __init__(self):
         super().__init__(None, title=PROGRAM_NAME, size=WINDOW_SIZE)
@@ -1301,15 +1306,16 @@ class Frame(wx.Frame):
         
         mselect = wx.Menu()
         mbar.Append(mselect, "&Selection")
-        self.AddMenuItem(mselect, "Select &All\tCTRL+A", self.OnSelectAll)
-        self.AddMenuItem(mselect, "&Deselect\tCTRL+SHIFT+A", self.OnDeselect)
-        self.AddMenuItem(mselect, "&Reselect\tCTRL+SHIFT+D", self.OnReselect)
-        self.AddMenuItem(mselect, "&Invert Selection\tCTRL+SHIFT+I", self.OnSelectInvert)
+        self.AddMenuItem(mselect, "Select &All\tCtrl+A", self.OnSelectAll)
+        self.AddMenuItem(mselect, "&Deselect\tCtrl+D", self.OnDeselect)
+        self.AddMenuItem(mselect, "&Reselect\tCtrl+Shift+D", self.OnReselect)
+        self.AddMenuItem(mselect, "&Invert Selection\tCtrl+Shift+I", self.OnSelectInvert)
 
         menu = wx.Menu()
         mbar.Append(menu, "&Layer")
-        self.AddMenuItem(menu, "&Add Layer", self.OnAddLayer)
+        self.AddMenuItem(menu, "&Add Layer\tCtrl+Shift+N", self.OnAddLayer)
         self.AddMenuItem(menu, "&Remove Layer", self.OnRemoveLayer)
+        self.AddMenuItem(menu, "&Merge Down\tCtrl+E", self.OnMergeDown)
         
         self.SetMenuBar(mbar)
 
@@ -1640,6 +1646,11 @@ class Frame(wx.Frame):
         
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnMergeDown(self, e):
+        self.canvas.MergeDown()
         self.canvas.Refresh()
         self.RefreshLayers()
         
