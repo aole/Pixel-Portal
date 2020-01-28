@@ -1371,6 +1371,7 @@ class Frame(wx.Frame):
         self.lyrctrl.Bind(EVT_LAYER_CLICKED_EVENT, self.OnLayerClicked)
         self.lyrctrl.Bind(EVT_LAYER_VISIBILITY_EVENT, self.OnLayerVisibility)
         self.lyrctrl.Bind(EVT_LAYER_ALPHA_EVENT, self.OnLayerAlphaChange)
+        self.lyrctrl.Bind(EVT_LAYER_DROP_EVENT, self.OnLayerDrop)
         bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
         
         self.OnNew(None, *DEFAULT_DOC_SIZE)
@@ -1624,6 +1625,11 @@ class Frame(wx.Frame):
         
     def OnLayerAlphaChange(self, e):
         self.canvas.layers.SetAlpha(e.alpha)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnLayerDrop(self, e):
+        self.canvas.layers.RearrangeLayer(e.layer, e.position)
         self.canvas.Refresh()
         self.RefreshLayers()
         

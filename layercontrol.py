@@ -9,9 +9,10 @@ import wx.lib.newevent
 
 from layermanager import *
 
-LayerClickedEvent, EVT_LAYER_CLICKED_EVENT = wx.lib.newevent.NewEvent()
-LayerVisibilityEvent, EVT_LAYER_VISIBILITY_EVENT = wx.lib.newevent.NewEvent()
-LayerAlphaEvent, EVT_LAYER_ALPHA_EVENT = wx.lib.newevent.NewEvent()
+LayerClickedEvent,      EVT_LAYER_CLICKED_EVENT     = wx.lib.newevent.NewEvent()
+LayerVisibilityEvent,   EVT_LAYER_VISIBILITY_EVENT  = wx.lib.newevent.NewEvent()
+LayerAlphaEvent,        EVT_LAYER_ALPHA_EVENT       = wx.lib.newevent.NewEvent()
+LayerDropEvent,         EVT_LAYER_DROP_EVENT        = wx.lib.newevent.NewEvent()
 
 class LayerPanel(wx.Panel):
     def __init__(self, parent=None):
@@ -22,6 +23,7 @@ class LayerPanel(wx.Panel):
 
         self.layers = None
         self.txtBoxLayer = None
+        self.highlightSection = -1
         
         self.alphabg = wx.Bitmap("alphabg.png").GetSubBitmap(wx.Rect(0,0,300,300))
         self.bmVisible = wx.Bitmap("icons/visible.png")
@@ -83,7 +85,18 @@ class LayerPanel(wx.Panel):
                 #gc.DrawRectangle(w-25, y, 25, 25)
                 
                 y += 50
-
+            
+            # draw section between layers when draging
+            if self.highlightSection>=0:
+                y = self.highlightSection*50
+                sh = 12
+                if y<0:
+                    y=0
+                    sh /= 2
+                gc.SetPen(wx.NullPen)
+                gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.Colour(0,0,0,128)))
+                gc.DrawRectangle(0, y-5, w, sh)
+                
     def UpdateLayers(self, layers):
         self.SetMinSize(wx.Size(150, layers.Count()*50))
         self.layers = layers
@@ -127,6 +140,8 @@ class LayerControl(wx.ScrolledWindow):
         
         self.panel = LayerPanel(self)
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.panel.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         
         self.slider = wx.Slider(self, value=255, maxValue=255)
@@ -140,6 +155,8 @@ class LayerControl(wx.ScrolledWindow):
         self.FitInside()
         self.SetScrollRate(5,5)
         
+        self.grabbedLayer = None
+        
     def UpdateLayers(self, layers=None):
         if layers:
             self.panel.UpdateLayers(layers)
@@ -147,10 +164,25 @@ class LayerControl(wx.ScrolledWindow):
             
         self.Refresh()
         
+    def OnMouseMove(self, e):
+        self.panel.highlightSection = -1
+        if e.Dragging() and self.grabbedLayer:
+            wx.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+            x, y = e.Position
+            ry = y/50
+            dry = round(y/50)
+            if abs(ry-dry)<.15:
+                self.panel.highlightSection = dry
+            
+            self.panel.Refresh()
+        else:
+            wx.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
+            
     def OnLeftDown(self, e):
         x, y = e.Position
         self.panel.SetTextBox()
         idx, layer = self.panel.GetLayerAtPosition(x, y)
+        self.grabbedLayer = layer
         if layer:
             if self.panel.IsVisibleIcon(idx, x, y):
                 evt = LayerVisibilityEvent(layer = layer, index = idx, position = e.Position)
@@ -158,6 +190,22 @@ class LayerControl(wx.ScrolledWindow):
             else:
                 evt = LayerClickedEvent(layer = layer, index = idx, position = e.Position)
                 wx.PostEvent(self, evt)
+                
+        if not self.panel.HasCapture():
+            self.panel.CaptureMouse()
+
+    def OnLeftUp(self, e):
+        if self.panel.HasCapture():
+            # to avoid
+            # wx._core.wxAssertionError: C++ assertion "!wxMouseCapture::stack.empty()"
+            self.panel.ReleaseMouse()
+
+        if self.grabbedLayer and self.panel.highlightSection >=0:
+            evt = LayerDropEvent(layer = self.grabbedLayer, position = self.panel.highlightSection)
+            wx.PostEvent(self, evt)
+        self.grabbedLayer = None
+        self.panel.highlightSection = -1
+        self.panel.Refresh()
         
     def OnLeftDClick(self, e):
         x, y = e.Position
