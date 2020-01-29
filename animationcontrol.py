@@ -13,7 +13,19 @@ END_FRAME_HANDLE = 0
 INFO_BAR_HEIGHT = 20
 NUN_LABEL_WIDTH = 30
 LABEL_FONT_SIZE = 8
+MIN_MARKER_SIZE = 20
 
+FrameChangedEvent,      EVT_FRAME_CHANGED_EVENT     = wx.lib.newevent.NewEvent()
+
+class PlayTimer(wx.Timer):
+    def __init__(self, parent=None):
+        super().__init__()
+        
+        self.parent = parent
+
+    def Notify(self):
+        self.parent.NextFrame()
+        
 class AnimationPanel(wx.Panel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,12 +36,31 @@ class AnimationPanel(wx.Panel):
         self.startAnimationBlock = 25
         self.horizontalScale = 12
         self.currentFrame = 10
-        
+        self.fps = 8
         self.SetTotalFrames(24)
+        self.images = {}
         
+        self.playTimer = PlayTimer(self)
+        
+    def GetCurrentImage(self):
+        cf = self.currentFrame
+        while cf <=self.totalFrames and not cf in self.images:
+            cf += 1
+        
+        if cf in self.images:
+            return self.images[cf]
+        return None
+        
+    def InsertImage(self, frame, image):
+        self.images[frame] = image
+            
     def IsEndFrameHandle(self, x, y, margin=10):
         pos = self.startAnimationBlock + self.totalFrames * self.horizontalScale
         return x>=pos and x<pos+margin
+        
+    def NextFrame(self):
+        nf = 1 if self.currentFrame>=self.totalFrames else self.currentFrame+1
+        self.SetCurrentFrame(nf)
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
@@ -49,12 +80,20 @@ class AnimationPanel(wx.Panel):
         gc.SetPen(wx.NullPen)
         gc.DrawRectangle(sab, 0, tf*hs, h)
         
+        # image markers
+        gc.SetPen(wx.NullPen)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
+        mh = max(min(MIN_MARKER_SIZE,h-40), h-INFO_BAR_HEIGHT*2 -40)
+        msx = INFO_BAR_HEIGHT+min(20, (h-INFO_BAR_HEIGHT)-(MIN_MARKER_SIZE+40))
+        for key, value in self.images.items():
+            gc.DrawRoundedRectangle(sab+key*hs+2, msx, hs-3, mh, 5)
+            
         # vertical lines for each frame
         gc.SetBrush(wx.NullBrush)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 1))
         for x in range(sab % hs, w, hs):
             gc.StrokeLine(x, 0, x, h)
-        
+            
         # top info text
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE)))
         gc.DrawRectangle(0, 0, w, INFO_BAR_HEIGHT)
@@ -111,13 +150,24 @@ class AnimationPanel(wx.Panel):
         if self.startAnimationBlock > w-10:
             self.startAnimationBlock = w-10
     
-    def SetCurrentFrameAtPosition(self, x, y):
+    def Play(self):
+        self.playTimer.Start(milliseconds=1000.0/self.fps)
+        
+    def SetCurrentFrame(self, frame):
+        if self.currentFrame != frame:
+            image = self.GetCurrentImage()
+            evt = FrameChangedEvent(image = image, frame = frame, lastFrame = self.currentFrame)
+            wx.PostEvent(self, evt)
+            
+            self.currentFrame = frame
+            self.Refresh()
+            
+    def SetCurrentFrameFromPosition(self, x, y):
         w, h = self.GetClientSize()
         if y>20 and y<h-20:
             return
-        self.currentFrame = max(1, int((x - self.startAnimationBlock)/self.horizontalScale))
-        
-        self.Refresh()
+        x += 3*self.horizontalScale/4
+        self.SetCurrentFrame(max(1, int((x - self.startAnimationBlock)/self.horizontalScale)))
         
     def SetEndFrameToPosition(self, x, y):
         newf = int((x - self.startAnimationBlock)/self.horizontalScale)
@@ -128,6 +178,9 @@ class AnimationPanel(wx.Panel):
     def SetTotalFrames(self, frames):
         self.totalFrames = frames
         self.Refresh()
+        
+    def Stop(self):
+        self.playTimer.Stop()
         
     def ZoomOnPosition(self, x, y, amt):
         ps = self.horizontalScale*self.totalFrames
@@ -142,6 +195,7 @@ class AnimationControl(wx.Window):
     def __init__(self, parent=None):
         super().__init__(parent)
         
+        # ANIMATION PANEL
         self.panel = AnimationPanel(self)
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.panel.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
@@ -149,10 +203,30 @@ class AnimationControl(wx.Window):
         self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         
+        self.panel.InsertImage(3, self)
+        self.panel.InsertImage(4, self)
+        self.panel.InsertImage(14, self)
+        
         self.Bind(wx.EVT_SIZE, self.OnResize)
         
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 3)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 1)
+        
+        # ANIMATION CONTROLS
+        conpanel = wx.Panel(self)
+        consizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        btn = wx.Button(conpanel, label="Play")
+        self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
+        consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
+        
+        btn = wx.Button(conpanel, label="Stop")
+        self.Bind(wx.EVT_BUTTON, self.OnStop, id=btn.GetId())
+        consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
+        
+        conpanel.SetSizer(consizer)
+        sizer.Add(conpanel, 0, wx.ALIGN_CENTER, 1)
+        
         self.SetSizer(sizer)
         
         self.prevx, self.prevy = 0, 0
@@ -167,7 +241,7 @@ class AnimationControl(wx.Window):
             if self.grab == END_FRAME_HANDLE:
                 self.panel.SetEndFrameToPosition(x, y)
             else:
-                self.panel.SetCurrentFrameAtPosition(self.prevx, self.prevy)
+                self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
         elif e.rightIsDown:
             pass
         else:
@@ -184,7 +258,7 @@ class AnimationControl(wx.Window):
         if self.panel.IsEndFrameHandle(self.prevx, self.prevy):
             self.grab = END_FRAME_HANDLE
         else:
-            self.panel.SetCurrentFrameAtPosition(self.prevx, self.prevy)
+            self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
 
     def OnLeftUp(self, e):
         self.grab = None
@@ -197,9 +271,15 @@ class AnimationControl(wx.Window):
         self.panel.ZoomOnPosition(*e.Position, amt)
         self.panel.Refresh()
         
+    def OnPlay(self, e):
+        self.panel.Play()
+        
     def OnResize(self, e):
         self.panel.Refresh()
         e.Skip()
+        
+    def OnStop(self, e):
+        self.panel.Stop()
         
 if __name__ == '__main__':
     app = wx.App()
