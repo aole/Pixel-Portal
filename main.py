@@ -1335,6 +1335,8 @@ class Frame(wx.Frame):
         self.AddMenuItem(menu, "&Add Layer\tCtrl+Shift+N", self.OnAddLayer)
         self.AddMenuItem(menu, "&Remove Layer", self.OnRemoveLayer)
         self.AddMenuItem(menu, "&Merge Down\tCtrl+E", self.OnMergeDown)
+        menu.AppendSeparator()
+        self.AddMenuItem(menu, "&Clear\tDelete", self.OnClear)
         
         self.SetMenuBar(mbar)
 

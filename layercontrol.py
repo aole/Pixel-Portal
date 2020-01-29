@@ -41,8 +41,8 @@ class LayerPanel(wx.Panel):
         dc.Clear()
         
         gc = wx.GraphicsContext.Create(dc)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        #gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        #gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         w, h = self.GetClientSize()
         
         border = 2
