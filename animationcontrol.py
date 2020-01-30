@@ -35,9 +35,11 @@ class AnimationPanel(wx.Panel):
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
+        self.SINGLE_KEY_PER_FRAME = True
+        
         self.startAnimationBlock = 25
         self.horizontalScale = 12
-        self.currentFrame = 10
+        self.currentFrame = 1
         self.fps = 8
         self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
         self.selectedSlot = [1, 0, 1]
@@ -45,6 +47,14 @@ class AnimationPanel(wx.Panel):
         self.keys = {}
         self.SetTotalFrames(24)
         self.playTimer = PlayTimer(self)
+        
+        self.SetMinSize(wx.Size(100, 100))
+        
+    def DeleteSelectedKey(self):
+        if self.selectedSlot[0] in self.keys:
+            del self.keys[self.selectedSlot[0]]
+        
+        self.Refresh()
         
     def GetFrameFromPosition(self, x, y):
         return int((x - self.startAnimationBlock)/self.horizontalScale) + 1
@@ -54,7 +64,11 @@ class AnimationPanel(wx.Panel):
         while not f in self.keys and f>0:
             f -= 1
         if f in self.keys:
-            return self.keys[f]
+            key = self.keys[f]
+            if self.SINGLE_KEY_PER_FRAME:
+                key = key[0]
+            return key
+            
         return None
         
     def HighlightSlotFromPosition(self, x, y):
@@ -64,11 +78,11 @@ class AnimationPanel(wx.Panel):
         if y < INFO_BAR_HEIGHT or y > h-INFO_BAR_HEIGHT:
             return
         f = self.GetFrameFromPosition(x, y)
-        if f<=0 or f>=self.totalFrames:
+        if f<=0 or f>self.totalFrames:
             return
             
         self.highlightedSlot[0] = f
-        if not f in self.keys:
+        if not f in self.keys or self.SINGLE_KEY_PER_FRAME:
             self.highlightedSlot[2] = 1
         else:
             h -= INFO_BAR_HEIGHT*2
@@ -79,11 +93,12 @@ class AnimationPanel(wx.Panel):
             
     def InsertKey(self, key):
         if self.selectedSlot[2]:
-            if self.selectedSlot[2]<2:
+            if self.selectedSlot[2]<2 or self.SINGLE_KEY_PER_FRAME:
                 self.keys[self.selectedSlot[0]] = [key]
+                self.selectedSlot[2] = 1
             else:
                 self.keys[self.selectedSlot[0]].insert(self.selectedSlot[1], key)
-            self.selectedSlot[2] += 1
+                self.selectedSlot[2] += 1
             
             self.Refresh()
         else:
@@ -136,7 +151,9 @@ class AnimationPanel(wx.Panel):
             gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.selectedSlot[1] + 2, hs - 4, sh - 4, 5)
             
         # highlighted slot
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
+        c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        c.Set(c.red, c.green, c.blue, 128)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(c))
         gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 2, wx.PENSTYLE_LONG_DASH))
         if self.highlightedSlot[2]>0:
             x = sab + (self.highlightedSlot[0]-1) * hs
@@ -295,8 +312,12 @@ class AnimationControl(wx.Window):
         self.Bind(wx.EVT_BUTTON, self.OnStop, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
-        btn = wx.Button(conpanel, label="Key In")
+        btn = wx.Button(conpanel, label="Insert")
         self.Bind(wx.EVT_BUTTON, self.OnInsertKey, id=btn.GetId())
+        consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
+        
+        btn = wx.Button(conpanel, label="Delete")
+        self.Bind(wx.EVT_BUTTON, self.OnDeleteKey, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
         conpanel.SetSizer(consizer)
@@ -306,6 +327,9 @@ class AnimationControl(wx.Window):
         
         self.prevx, self.prevy = 0, 0
         self.grab = None
+        
+    def OnDeleteKey(self, e):
+        self.panel.DeleteSelectedKey()
         
     def OnInsertKey(self, e):
         key = (randrange(12), randrange(12))

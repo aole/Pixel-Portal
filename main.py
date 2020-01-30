@@ -20,9 +20,10 @@ from undomanager import *
 from layermanager import *
 from gradienteditor import *
 from layercontrol import *
+from animationcontrol import *
 
 PROGRAM_NAME = "Pixel Portal"
-WINDOW_SIZE = (800, 550)
+WINDOW_SIZE = (800, 700)
 
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
@@ -1383,6 +1384,7 @@ class Frame(wx.Frame):
         
         tb.Realize()
 
+        bstop = wx.BoxSizer(wx.VERTICAL)
         # add CANVAS
         bs = wx.BoxSizer(wx.HORIZONTAL)
         bs.Add(self.canvas, 2, wx.EXPAND | wx.ALL, 2)
@@ -1390,9 +1392,14 @@ class Frame(wx.Frame):
         # RIGHT PANEL
         layerPanel = wx.Panel(self, size=(200,-1))
         bs.Add(layerPanel, 0, wx.EXPAND|wx.ALL, 2)
-        bsp = wx.BoxSizer(wx.VERTICAL)
+        bstop.Add(bs, 1, wx.EXPAND|wx.ALL, 2)
+        
+        # ANIMATION CONTROL
+        animControl = AnimationControl(self)
+        bstop.Add(animControl, 0, wx.EXPAND|wx.ALL, 2)
         
         # LAYERS LIST
+        bsp = wx.BoxSizer(wx.VERTICAL)
         self.lyrctrl = LayerControl(layerPanel)
         self.lyrctrl.UpdateLayers(self.canvas.layers)
         self.lyrctrl.Bind(EVT_LAYER_CLICKED_EVENT, self.OnLayerClicked)
@@ -1405,7 +1412,7 @@ class Frame(wx.Frame):
         
         layerPanel.SetSizer(bsp)
         layerPanel.FitInside()
-        self.SetSizer(bs)
+        self.SetSizer(bstop)
 
     def AddMenuItem(self, menu, name, func):
         menu.Append(self.menuid, name)
