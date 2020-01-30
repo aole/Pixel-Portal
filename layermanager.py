@@ -63,6 +63,29 @@ class Layer(wx.Bitmap):
         layer.Clear(color=color)
         return layer
         
+    def Draw(self, layer, clip=None, x=0, y=0):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.DrawBitmap(layer, x, y, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
+    def DrawAll(self, layers, clip=None, x=0, y=0):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        for layer in layers:
+            gc.DrawBitmap(layer, x, y, self.width, self.height)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
     def GetPixel(self, x, y):
         mdc = wx.MemoryDC(self)
         col = mdc.GetPixel(x, y)
@@ -265,17 +288,6 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.DrawBitmap(layer, x, y, w, h)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-
-    def Draw(self, layer, clip=None, x=0, y=0):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(layer, x, y, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 

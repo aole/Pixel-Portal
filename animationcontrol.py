@@ -39,16 +39,20 @@ class AnimationPanel(wx.Panel):
         
         self.startAnimationBlock = 25
         self.horizontalScale = 12
-        self.currentFrame = 1
+        self.currentFrame = 0
         self.fps = 8
         self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
         self.selectedSlot = [1, 0, 1]
         
         self.keys = {}
         self.SetTotalFrames(24)
+        self.SetCurrentFrame(1)
         self.playTimer = PlayTimer(self)
         
         self.SetMinSize(wx.Size(100, 100))
+        
+    def CurrentFrameToSelected(self):
+        self.SetCurrentFrame(self.selectedSlot[0])
         
     def DeleteSelectedKey(self):
         if self.selectedSlot[0] in self.keys:
@@ -78,7 +82,7 @@ class AnimationPanel(wx.Panel):
         if y < INFO_BAR_HEIGHT or y > h-INFO_BAR_HEIGHT:
             return
         f = self.GetFrameFromPosition(x, y)
-        if f<=0 or f>self.totalFrames:
+        if f<=0: # or f>self.totalFrames:
             return
             
         self.highlightedSlot[0] = f
@@ -112,6 +116,9 @@ class AnimationPanel(wx.Panel):
         nf = 1 if self.currentFrame>=self.totalFrames else self.currentFrame+1
         self.SetCurrentFrame(nf)
         
+    def NextFrameSelected(self):
+        self.selectedSlot[0] = 1 if self.selectedSlot[0]>=self.totalFrames else self.selectedSlot[0]+1
+        
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
         
@@ -131,7 +138,9 @@ class AnimationPanel(wx.Panel):
         gc.DrawRectangle(sab, 0, tf*hs, h)
         
         # keys
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
+        c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)
+        c.Set(c.red, c.green+20, c.blue)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(c))
         gc.SetPen(wx.NullPen)
         for f, key in self.keys.items():
             fi = f - 1
@@ -225,6 +234,9 @@ class AnimationPanel(wx.Panel):
     def Play(self):
         self.playTimer.Start(milliseconds=1000.0/self.fps)
         
+    def SelectCurrentFrame(self):
+        self.selectedSlot[0] = self.currentFrame
+        
     def SelectHighlighted(self, x, y):
         if self.highlightedSlot[2]:
             self.selectedSlot[0] = self.highlightedSlot[0]
@@ -279,9 +291,58 @@ class AnimationPanel(wx.Panel):
             
         self.startAnimationBlock -= int((self.horizontalScale*self.totalFrames-ps)*((x - self.startAnimationBlock)/(ps)))
         
-class AnimationControl(wx.Window):
+class AnimationView(wx.Panel):
     def __init__(self, parent=None):
         super().__init__(parent)
+    
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+
+        self.SetMinSize(wx.Size(100, 100))
+        
+        self.bitmap = None
+        
+    def Display(self, key):
+        if key:
+            w, h = self.GetClientSize()
+            ar = w/h
+            
+            kw, kh = key[0].width, key[1].height
+            kar = kw/kh
+            
+            if kar>ar:
+                sr = w/kw
+            else:
+                sr = h/kh
+            
+            w = kw*sr
+            h = kh*sr
+            
+            self.bitmap = Layer(w, h)
+            self.bitmap.DrawAll(key)
+        else:
+            self.bitmap = None
+            
+    def OnFrameChanged(self, e):
+        self.Display(e.key)
+        self.Refresh()
+        
+    def OnPaint(self, e):
+        dc = wx.AutoBufferedPaintDC(self)
+        
+        dc.SetBackground(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
+        dc.Clear()
+        gc = wx.GraphicsContext.Create(dc)
+        
+        w, h = self.GetClientSize()
+        if self.bitmap:
+            gc.DrawBitmap(self.bitmap, max(0, (w-self.bitmap.width)/2), max(0, (h-self.bitmap.height)/2), self.bitmap.width, self.bitmap.height)
+            
+class AnimationControl(wx.Window):
+    def __init__(self, parent=None, layermgr=None):
+        super().__init__(parent)
+        
+        self.layermgr = layermgr
         
         # ANIMATION PANEL
         self.panel = AnimationPanel(self)
@@ -291,14 +352,18 @@ class AnimationControl(wx.Window):
         self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         
-        #self.panel.InsertImage(3, self)
-        #self.panel.InsertImage(4, self)
-        #self.panel.InsertImage(14, self)
-        
         self.Bind(wx.EVT_SIZE, self.OnResize)
         
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 1)
+        # VIEW PANEL
+        self.view = AnimationView(self)
+        self.panel.Bind(EVT_FRAME_CHANGED_EVENT, self.view.OnFrameChanged)
+        
+        panelsizer = wx.BoxSizer(wx.VERTICAL)
+        animsizer = wx.BoxSizer(wx.HORIZONTAL)
+        animsizer.Add(self.panel, 3, wx.EXPAND | wx.ALL, 1)
+        animsizer.Add(self.view, 1, wx.EXPAND | wx.ALL, 1)
+        
+        panelsizer.Add(animsizer, 1, wx.EXPAND | wx.ALL, 1)
         
         # ANIMATION CONTROLS
         conpanel = wx.Panel(self)
@@ -312,6 +377,8 @@ class AnimationControl(wx.Window):
         self.Bind(wx.EVT_BUTTON, self.OnStop, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
+        consizer.AddSpacer(50)
+        
         btn = wx.Button(conpanel, label="Insert")
         self.Bind(wx.EVT_BUTTON, self.OnInsertKey, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
@@ -321,9 +388,9 @@ class AnimationControl(wx.Window):
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
         conpanel.SetSizer(consizer)
-        sizer.Add(conpanel, 0, wx.ALIGN_CENTER, 1)
+        panelsizer.Add(conpanel, 0, wx.ALIGN_CENTER, 1)
         
-        self.SetSizer(sizer)
+        self.SetSizer(panelsizer)
         
         self.prevx, self.prevy = 0, 0
         self.grab = None
@@ -332,9 +399,15 @@ class AnimationControl(wx.Window):
         self.panel.DeleteSelectedKey()
         
     def OnInsertKey(self, e):
-        key = (randrange(12), randrange(12))
-        self.panel.InsertKey(key)
-        
+        if self.layermgr:
+            key = []
+            for layer in self.layermgr:
+                if layer.visible:
+                    key.insert(0, layer)
+            self.panel.InsertKey(key)
+            self.panel.NextFrameSelected()
+            self.panel.CurrentFrameToSelected()
+            
     def OnLeftDown(self, e):
         self.prevx, self.prevy = e.Position
         self.grab = None
@@ -392,7 +465,7 @@ class AnimationControl(wx.Window):
 if __name__ == '__main__':
     app = wx.App()
     f = wx.Frame(None, title="Animation Control")
-    l = AnimationControl(f)
+    l = AnimationControl(f, LayerManager.CreateDummy(50, 50, 3))
     f.Show()
     app.MainLoop()
     

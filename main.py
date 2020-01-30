@@ -1395,7 +1395,7 @@ class Frame(wx.Frame):
         bstop.Add(bs, 1, wx.EXPAND|wx.ALL, 2)
         
         # ANIMATION CONTROL
-        animControl = AnimationControl(self)
+        animControl = AnimationControl(self, self.canvas.layers)
         bstop.Add(animControl, 0, wx.EXPAND|wx.ALL, 2)
         
         # LAYERS LIST
