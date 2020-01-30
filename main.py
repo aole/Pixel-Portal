@@ -112,7 +112,7 @@ class Canvas(wx.Panel):
         
         self.layers = LayerManager()
         
-        self.alphabg = wx.Bitmap("alphabg.png")
+        self.alphabg = wx.Bitmap("alphabg.png").ConvertToImage().AdjustChannels(1,1,1, .3).ConvertToBitmap()
 
         # UNDO / REDO
         self.history = UndoManager()

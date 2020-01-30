@@ -37,9 +37,11 @@ class AnimationPanel(wx.Panel):
         self.horizontalScale = 12
         self.currentFrame = 10
         self.fps = 8
-        self.SetTotalFrames(24)
-        self.images = {}
+        self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
+        self.selectedSlot = [0, 0, 0]
         
+        self.images = {}
+        self.SetTotalFrames(24)
         self.playTimer = PlayTimer(self)
         
     def GetCurrentImage(self):
@@ -50,6 +52,23 @@ class AnimationPanel(wx.Panel):
         if cf in self.images:
             return self.images[cf]
         return None
+        
+    def GetFrameFromPosition(self, x, y):
+        return int((x - self.startAnimationBlock)/self.horizontalScale)
+        
+    def HighlightSlotFromPosition(self, x, y):
+        w, h = self.GetClientSize()
+        self.highlightedSlot[0] = 0
+        self.highlightedSlot[1] = 0
+        self.highlightedSlot[2] = 0
+        if y<20 and y>h-20:
+            return
+        f = self.GetFrameFromPosition(x, y)
+        if f<0 or f>=self.totalFrames:
+            return
+        self.highlightedSlot[0] = f
+        if not f in self.images:
+            self.highlightedSlot[2] = 1
         
     def InsertImage(self, frame, image):
         self.images[frame] = image
@@ -81,12 +100,20 @@ class AnimationPanel(wx.Panel):
         gc.DrawRectangle(sab, 0, tf*hs, h)
         
         # image markers
+        '''
         gc.SetPen(wx.NullPen)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
-        mh = max(min(MIN_MARKER_SIZE,h-40), h-INFO_BAR_HEIGHT*2 -40)
-        msx = INFO_BAR_HEIGHT+min(20, (h-INFO_BAR_HEIGHT)-(MIN_MARKER_SIZE+40))
+        mh = max((h-INFO_BAR_HEIGHT*2)-40, (h-INFO_BAR_HEIGHT*2)*.5)
+        msx = INFO_BAR_HEIGHT+min((h-INFO_BAR_HEIGHT*2)/4, 20)
         for key, value in self.images.items():
             gc.DrawRoundedRectangle(sab+key*hs+2, msx, hs-3, mh, 5)
+        '''
+        gc.SetBrush(wx.NullBrush)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 1))
+        if self.highlightedSlot[2]:
+            x = sab + self.highlightedSlot[0] * hs
+            sh = (h - INFO_BAR_HEIGHT*2) / self.highlightedSlot[2]
+            gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.highlightedSlot[1] + 2, hs - 4, sh - 4, 5)
             
         # vertical lines for each frame
         gc.SetBrush(wx.NullBrush)
@@ -167,7 +194,7 @@ class AnimationPanel(wx.Panel):
         if y>20 and y<h-20:
             return
         x += 3*self.horizontalScale/4
-        self.SetCurrentFrame(max(1, int((x - self.startAnimationBlock)/self.horizontalScale)))
+        self.SetCurrentFrame(max(1, self.GetFrameFromPosition(x, y)))
         
     def SetEndFrameToPosition(self, x, y):
         newf = int((x - self.startAnimationBlock)/self.horizontalScale)
@@ -203,9 +230,9 @@ class AnimationControl(wx.Window):
         self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         
-        self.panel.InsertImage(3, self)
-        self.panel.InsertImage(4, self)
-        self.panel.InsertImage(14, self)
+        #self.panel.InsertImage(3, self)
+        #self.panel.InsertImage(4, self)
+        #self.panel.InsertImage(14, self)
         
         self.Bind(wx.EVT_SIZE, self.OnResize)
         
@@ -249,6 +276,8 @@ class AnimationControl(wx.Window):
                 self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
             else:
                 self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
+                self.panel.HighlightSlotFromPosition(x, y)
+            self.panel.Refresh()
             
         self.prevx, self.prevy = x, y
         

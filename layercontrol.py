@@ -25,7 +25,7 @@ class LayerPanel(wx.Panel):
         self.txtBoxLayer = None
         self.highlightSection = -1
         
-        self.alphabg = wx.Bitmap("alphabg.png").GetSubBitmap(wx.Rect(0,0,300,300))
+        self.alphabg = wx.Bitmap("alphabg.png").GetSubBitmap(wx.Rect(0,0,300,300)).ConvertToImage().AdjustChannels(1,1,1, .3).ConvertToBitmap()
         self.bmVisible = wx.Bitmap("icons/visible.png")
         self.bmNotVisible = wx.Bitmap("icons/NA.png")
 
