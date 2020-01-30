@@ -4,6 +4,8 @@ Bhupendra Aole
 1/23/2020
 """
 
+from random import randrange
+
 import wx
 import wx.lib.newevent
 
@@ -38,40 +40,54 @@ class AnimationPanel(wx.Panel):
         self.currentFrame = 10
         self.fps = 8
         self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
-        self.selectedSlot = [0, 0, 0]
+        self.selectedSlot = [1, 0, 1]
         
-        self.images = {}
+        self.keys = {}
         self.SetTotalFrames(24)
         self.playTimer = PlayTimer(self)
         
-    def GetCurrentImage(self):
-        cf = self.currentFrame
-        while cf <=self.totalFrames and not cf in self.images:
-            cf += 1
-        
-        if cf in self.images:
-            return self.images[cf]
-        return None
-        
     def GetFrameFromPosition(self, x, y):
-        return int((x - self.startAnimationBlock)/self.horizontalScale)
+        return int((x - self.startAnimationBlock)/self.horizontalScale) + 1
+        
+    def GetKey(self, frame):
+        f = frame
+        while not f in self.keys and f>0:
+            f -= 1
+        if f in self.keys:
+            return self.keys[f]
+        return None
         
     def HighlightSlotFromPosition(self, x, y):
         w, h = self.GetClientSize()
-        self.highlightedSlot[0] = 0
-        self.highlightedSlot[1] = 0
-        self.highlightedSlot[2] = 0
-        if y<20 and y>h-20:
+        self.UnSetHighlightedSlot()
+        
+        if y < INFO_BAR_HEIGHT or y > h-INFO_BAR_HEIGHT:
             return
         f = self.GetFrameFromPosition(x, y)
-        if f<0 or f>=self.totalFrames:
+        if f<=0 or f>=self.totalFrames:
             return
+            
         self.highlightedSlot[0] = f
-        if not f in self.images:
+        if not f in self.keys:
             self.highlightedSlot[2] = 1
-        
-    def InsertImage(self, frame, image):
-        self.images[frame] = image
+        else:
+            h -= INFO_BAR_HEIGHT*2
+            y -= INFO_BAR_HEIGHT
+            key = self.keys[f]
+            self.highlightedSlot[2] = len(key)+1
+            self.highlightedSlot[1] = int(y/(h/self.highlightedSlot[2]))
+            
+    def InsertKey(self, key):
+        if self.selectedSlot[2]:
+            if self.selectedSlot[2]<2:
+                self.keys[self.selectedSlot[0]] = [key]
+            else:
+                self.keys[self.selectedSlot[0]].insert(self.selectedSlot[1], key)
+            self.selectedSlot[2] += 1
+            
+            self.Refresh()
+        else:
+            print('Error: No selected slot!')
             
     def IsEndFrameHandle(self, x, y, margin=10):
         pos = self.startAnimationBlock + self.totalFrames * self.horizontalScale
@@ -99,19 +115,31 @@ class AnimationPanel(wx.Panel):
         gc.SetPen(wx.NullPen)
         gc.DrawRectangle(sab, 0, tf*hs, h)
         
-        # image markers
-        '''
-        gc.SetPen(wx.NullPen)
+        # keys
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_APPWORKSPACE)))
-        mh = max((h-INFO_BAR_HEIGHT*2)-40, (h-INFO_BAR_HEIGHT*2)*.5)
-        msx = INFO_BAR_HEIGHT+min((h-INFO_BAR_HEIGHT*2)/4, 20)
-        for key, value in self.images.items():
-            gc.DrawRoundedRectangle(sab+key*hs+2, msx, hs-3, mh, 5)
-        '''
+        gc.SetPen(wx.NullPen)
+        for f, key in self.keys.items():
+            fi = f - 1
+            numslots = len(key)
+            sh = (h-INFO_BAR_HEIGHT*2)/numslots
+            y = INFO_BAR_HEIGHT
+            for i in range(numslots):
+                gc.DrawRoundedRectangle(sab+fi*hs+2, y, hs-4, sh, 5)
+                y += sh
+            
+        # selected slot
         gc.SetBrush(wx.NullBrush)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 1))
-        if self.highlightedSlot[2]:
-            x = sab + self.highlightedSlot[0] * hs
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 1))
+        if self.selectedSlot[2]>0:
+            x = sab + (self.selectedSlot[0]-1) * hs
+            sh = (h - INFO_BAR_HEIGHT*2) / self.selectedSlot[2]
+            gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.selectedSlot[1] + 2, hs - 4, sh - 4, 5)
+            
+        # highlighted slot
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_ACTIVEBORDER), 2, wx.PENSTYLE_LONG_DASH))
+        if self.highlightedSlot[2]>0:
+            x = sab + (self.highlightedSlot[0]-1) * hs
             sh = (h - INFO_BAR_HEIGHT*2) / self.highlightedSlot[2]
             gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.highlightedSlot[1] + 2, hs - 4, sh - 4, 5)
             
@@ -180,10 +208,17 @@ class AnimationPanel(wx.Panel):
     def Play(self):
         self.playTimer.Start(milliseconds=1000.0/self.fps)
         
+    def SelectHighlighted(self, x, y):
+        if self.highlightedSlot[2]:
+            self.selectedSlot[0] = self.highlightedSlot[0]
+            self.selectedSlot[1] = self.highlightedSlot[1]
+            self.selectedSlot[2] = self.highlightedSlot[2]
+            self.Refresh()
+        
     def SetCurrentFrame(self, frame):
         if self.currentFrame != frame:
-            image = self.GetCurrentImage()
-            evt = FrameChangedEvent(image = image, frame = frame, lastFrame = self.currentFrame)
+            key = self.GetKey(frame)
+            evt = FrameChangedEvent(key = key, frame = frame, lastFrame = self.currentFrame)
             wx.PostEvent(self, evt)
             
             self.currentFrame = frame
@@ -193,7 +228,6 @@ class AnimationPanel(wx.Panel):
         w, h = self.GetClientSize()
         if y>20 and y<h-20:
             return
-        x += 3*self.horizontalScale/4
         self.SetCurrentFrame(max(1, self.GetFrameFromPosition(x, y)))
         
     def SetEndFrameToPosition(self, x, y):
@@ -208,6 +242,16 @@ class AnimationPanel(wx.Panel):
         
     def Stop(self):
         self.playTimer.Stop()
+        
+    def UnSetHighlightedSlot(self):
+        self.highlightedSlot[0] = 0
+        self.highlightedSlot[1] = 0
+        self.highlightedSlot[2] = 0
+        
+    def UnSetSelectedSlot(self):
+        self.selectedSlot[0] = 0
+        self.selectedSlot[1] = 0
+        self.selectedSlot[2] = 0
         
     def ZoomOnPosition(self, x, y, amt):
         ps = self.horizontalScale*self.totalFrames
@@ -251,6 +295,10 @@ class AnimationControl(wx.Window):
         self.Bind(wx.EVT_BUTTON, self.OnStop, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
+        btn = wx.Button(conpanel, label="Key In")
+        self.Bind(wx.EVT_BUTTON, self.OnInsertKey, id=btn.GetId())
+        consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
+        
         conpanel.SetSizer(consizer)
         sizer.Add(conpanel, 0, wx.ALIGN_CENTER, 1)
         
@@ -259,8 +307,29 @@ class AnimationControl(wx.Window):
         self.prevx, self.prevy = 0, 0
         self.grab = None
         
+    def OnInsertKey(self, e):
+        key = (randrange(12), randrange(12))
+        self.panel.InsertKey(key)
+        
+    def OnLeftDown(self, e):
+        self.prevx, self.prevy = e.Position
+        self.grab = None
+        
+        if self.panel.IsEndFrameHandle(self.prevx, self.prevy):
+            self.grab = END_FRAME_HANDLE
+        else:
+            self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
+            self.panel.SelectHighlighted(self.prevx, self.prevy)
+    def OnLeftUp(self, e):
+        self.grab = None
+        
+    def OnMiddleDown(self, e):
+        self.prevx, self.prevy = e.Position
+
     def OnMouseMove(self, e):
         x, y = e.Position
+        self.panel.UnSetHighlightedSlot()
+        
         if e.middleIsDown:
             self.panel.Pan(x-self.prevx)
             self.panel.Refresh()
@@ -281,20 +350,6 @@ class AnimationControl(wx.Window):
             
         self.prevx, self.prevy = x, y
         
-    def OnLeftDown(self, e):
-        self.prevx, self.prevy = e.Position
-        self.grab = None
-        if self.panel.IsEndFrameHandle(self.prevx, self.prevy):
-            self.grab = END_FRAME_HANDLE
-        else:
-            self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
-
-    def OnLeftUp(self, e):
-        self.grab = None
-        
-    def OnMiddleDown(self, e):
-        self.prevx, self.prevy = e.Position
-
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
         self.panel.ZoomOnPosition(*e.Position, amt)
