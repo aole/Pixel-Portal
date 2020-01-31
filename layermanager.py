@@ -481,16 +481,6 @@ class LayerManager:
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         self.surface.Line(x0, y0, x1, y1, color, size, clip)
         
-    def RearrangeLayer(self, layer, position):
-        c = self.layers.index(layer)
-        if c==position or c==position-1:
-            return
-        if position>c:
-            position-=1
-        self.layers.remove(layer)
-        self.layers.insert(position, layer)
-        self.currentLayer = min(position, len(self.layers)-1)
-        
     def MergeDown(self):
         cl = self.layers[self.currentLayer]
         
@@ -501,6 +491,16 @@ class LayerManager:
         
         self.layers[self.currentLayer+1].Draw(alphalayer)
         del self.layers[self.currentLayer]
+        
+    def RearrangeLayer(self, layer, position):
+        c = self.layers.index(layer)
+        if c==position or c==position-1:
+            return
+        if position>c:
+            position-=1
+        self.layers.remove(layer)
+        self.layers.insert(position, layer)
+        self.currentLayer = min(position, len(self.layers)-1)
         
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         self.surface.Rectangle(x, y, w, h, color, size, clip)
@@ -515,6 +515,9 @@ class LayerManager:
                 self.currentLayer = len(self.layers)-1
         
         return layer
+        
+    def RemoveSelected(self):
+        self.Remove(self.Current())
         
     def RemoveAll(self):
         self.surface = None

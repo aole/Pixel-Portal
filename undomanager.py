@@ -70,6 +70,30 @@ class DuplicateLayerCommand(Command):
     def __str__(self):
         return "Duplicate "+self.layermgr[self.oldidx].name
         
+class MergeDownLayerCommand(Command):
+    def __init__(self, layermgr, idx, layerAbove, layerBelow):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.idx = idx
+        self.layerAbove = layerAbove
+        self.layerBelow = layerBelow
+        
+    def Do(self):
+        self.layermgr.SelectIndex(self.idx)
+        self.layermgr.MergeDown()
+        return True
+
+    def Undo(self):
+        self.layermgr.SelectIndex(self.idx)
+        self.layermgr.RemoveSelected()
+        self.layermgr.AppendSelect(self.layerBelow)
+        self.layermgr.AppendSelect(self.layerAbove)
+        return True
+
+    def __str__(self):
+        return "Merge "+self.layerAbove.name+" + "+self.layerBelow.name
+        
 class RemoveLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
