@@ -8,6 +8,8 @@ import wx
 from math import sqrt
 from random import randrange
 
+from document import *
+
 COLOR_BLANK = wx.Colour(0,0,0,0)
 COLOR_BLANK1 = wx.Colour(0,0,0,1)
 
@@ -320,12 +322,9 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
-class LayerManager:
+class LayerManager(Document):
     def __init__(self, width=0, height=0):
-        self.layers = []
-        self.currentLayer = -1
-        self.width = width
-        self.height = height
+        super().__init__(width, height)
         
         self.surface = None
         if width>0 and height>0:

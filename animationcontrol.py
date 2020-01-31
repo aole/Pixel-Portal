@@ -29,7 +29,7 @@ class PlayTimer(wx.Timer):
         self.parent.NextFrame()
         
 class AnimationPanel(wx.Panel):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, document=None):
         super().__init__(parent)
 
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -37,14 +37,10 @@ class AnimationPanel(wx.Panel):
 
         self.SINGLE_KEY_PER_FRAME = True
         
+        self.document = document
         self.startAnimationBlock = 25
         self.horizontalScale = 12
-        self.currentFrame = 0
-        self.fps = 8
         self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
-        self.selectedSlot = [1, 0, 1]
-        
-        self.keys = {}
         self.SetTotalFrames(24)
         self.SetCurrentFrame(1)
         self.playTimer = PlayTimer(self)
@@ -52,11 +48,11 @@ class AnimationPanel(wx.Panel):
         self.SetMinSize(wx.Size(100, 100))
         
     def CurrentFrameToSelected(self):
-        self.SetCurrentFrame(self.selectedSlot[0])
+        self.SetCurrentFrame(self.document.selectedSlot[0])
         
     def DeleteSelectedKey(self):
-        if self.selectedSlot[0] in self.keys:
-            del self.keys[self.selectedSlot[0]]
+        if self.document.selectedSlot[0] in self.document.keys:
+            del self.document.keys[self.document.selectedSlot[0]]
         
         self.Refresh()
         
@@ -65,10 +61,10 @@ class AnimationPanel(wx.Panel):
         
     def GetKey(self, frame):
         f = frame
-        while not f in self.keys and f>0:
+        while not f in self.document.keys and f>0:
             f -= 1
-        if f in self.keys:
-            key = self.keys[f]
+        if f in self.document.keys:
+            key = self.document.keys[f]
             if self.SINGLE_KEY_PER_FRAME:
                 key = key[0]
             return key
@@ -86,23 +82,23 @@ class AnimationPanel(wx.Panel):
             return
             
         self.highlightedSlot[0] = f
-        if not f in self.keys or self.SINGLE_KEY_PER_FRAME:
+        if not f in self.document.keys or self.SINGLE_KEY_PER_FRAME:
             self.highlightedSlot[2] = 1
         else:
             h -= INFO_BAR_HEIGHT*2
             y -= INFO_BAR_HEIGHT
-            key = self.keys[f]
+            key = self.document.keys[f]
             self.highlightedSlot[2] = len(key)+1
             self.highlightedSlot[1] = int(y/(h/self.highlightedSlot[2]))
             
     def InsertKey(self, key):
-        if self.selectedSlot[2]:
-            if self.selectedSlot[2]<2 or self.SINGLE_KEY_PER_FRAME:
-                self.keys[self.selectedSlot[0]] = [key]
-                self.selectedSlot[2] = 1
+        if self.document.selectedSlot[2]:
+            if self.document.selectedSlot[2]<2 or self.SINGLE_KEY_PER_FRAME:
+                self.document.keys[self.document.selectedSlot[0]] = [key]
+                self.document.selectedSlot[2] = 1
             else:
-                self.keys[self.selectedSlot[0]].insert(self.selectedSlot[1], key)
-                self.selectedSlot[2] += 1
+                self.document.keys[self.document.selectedSlot[0]].insert(self.document.selectedSlot[1], key)
+                self.document.selectedSlot[2] += 1
             
             self.Refresh()
         else:
@@ -113,11 +109,11 @@ class AnimationPanel(wx.Panel):
         return x>=pos and x<pos+margin
         
     def NextFrame(self):
-        nf = 1 if self.currentFrame>=self.totalFrames else self.currentFrame+1
+        nf = 1 if self.document.currentFrame>=self.totalFrames else self.document.currentFrame+1
         self.SetCurrentFrame(nf)
         
     def NextFrameSelected(self):
-        self.selectedSlot[0] = 1 if self.selectedSlot[0]>=self.totalFrames else self.selectedSlot[0]+1
+        self.document.selectedSlot[0] = 1 if self.document.selectedSlot[0]>=self.totalFrames else self.document.selectedSlot[0]+1
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
@@ -127,7 +123,7 @@ class AnimationPanel(wx.Panel):
         gc = wx.GraphicsContext.Create(dc)
         
         w, h = self.GetClientSize()
-        cf = self.currentFrame
+        cf = self.document.currentFrame
         hs = self.horizontalScale
         tf = self.totalFrames
         sab = self.startAnimationBlock
@@ -142,7 +138,7 @@ class AnimationPanel(wx.Panel):
         c.Set(c.red, c.green+20, c.blue)
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(c))
         gc.SetPen(wx.NullPen)
-        for f, key in self.keys.items():
+        for f, key in self.document.keys.items():
             fi = f - 1
             numslots = len(key)
             sh = (h-INFO_BAR_HEIGHT*2)/numslots
@@ -154,10 +150,10 @@ class AnimationPanel(wx.Panel):
         # selected slot
         gc.SetBrush(wx.NullBrush)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 1))
-        if self.selectedSlot[2]>0:
-            x = sab + (self.selectedSlot[0]-1) * hs
-            sh = (h - INFO_BAR_HEIGHT*2) / self.selectedSlot[2]
-            gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.selectedSlot[1] + 2, hs - 4, sh - 4, 5)
+        if self.document.selectedSlot[2]>0:
+            x = sab + (self.document.selectedSlot[0]-1) * hs
+            sh = (h - INFO_BAR_HEIGHT*2) / self.document.selectedSlot[2]
+            gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.document.selectedSlot[1] + 2, hs - 4, sh - 4, 5)
             
         # highlighted slot
         c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
@@ -232,25 +228,25 @@ class AnimationPanel(wx.Panel):
             self.startAnimationBlock = w-10
     
     def Play(self):
-        self.playTimer.Start(milliseconds=1000.0/self.fps)
+        self.playTimer.Start(milliseconds=1000.0/self.document.fps)
         
     def SelectCurrentFrame(self):
-        self.selectedSlot[0] = self.currentFrame
+        self.document.selectedSlot[0] = self.document.currentFrame
         
     def SelectHighlighted(self, x, y):
         if self.highlightedSlot[2]:
-            self.selectedSlot[0] = self.highlightedSlot[0]
-            self.selectedSlot[1] = self.highlightedSlot[1]
-            self.selectedSlot[2] = self.highlightedSlot[2]
+            self.document.selectedSlot[0] = self.highlightedSlot[0]
+            self.document.selectedSlot[1] = self.highlightedSlot[1]
+            self.document.selectedSlot[2] = self.highlightedSlot[2]
             self.Refresh()
         
     def SetCurrentFrame(self, frame):
-        if self.currentFrame != frame:
+        if self.document.currentFrame != frame:
             key = self.GetKey(frame)
-            evt = FrameChangedEvent(key = key, frame = frame, lastFrame = self.currentFrame)
+            evt = FrameChangedEvent(key = key, frame = frame, lastFrame = self.document.currentFrame)
             wx.PostEvent(self, evt)
             
-            self.currentFrame = frame
+            self.document.currentFrame = frame
             self.Refresh()
             
     def SetCurrentFrameFromPosition(self, x, y):
@@ -265,6 +261,10 @@ class AnimationPanel(wx.Panel):
             return
         self.SetTotalFrames(newf)
         
+    def SetDocument(self, document):
+        self.document = document
+        self.Refresh()
+        
     def SetTotalFrames(self, frames):
         self.totalFrames = frames
         self.Refresh()
@@ -278,9 +278,9 @@ class AnimationPanel(wx.Panel):
         self.highlightedSlot[2] = 0
         
     def UnSetSelectedSlot(self):
-        self.selectedSlot[0] = 0
-        self.selectedSlot[1] = 0
-        self.selectedSlot[2] = 0
+        self.document.selectedSlot[0] = 0
+        self.document.selectedSlot[1] = 0
+        self.document.selectedSlot[2] = 0
         
     def ZoomOnPosition(self, x, y, amt):
         ps = self.horizontalScale*self.totalFrames
@@ -290,6 +290,7 @@ class AnimationPanel(wx.Panel):
             self.horizontalScale = max(3, self.horizontalScale-1)
             
         self.startAnimationBlock -= int((self.horizontalScale*self.totalFrames-ps)*((x - self.startAnimationBlock)/(ps)))
+        self.Refresh()
         
 class AnimationView(wx.Panel):
     def __init__(self, parent=None):
@@ -339,13 +340,13 @@ class AnimationView(wx.Panel):
             gc.DrawBitmap(self.bitmap, max(0, (w-self.bitmap.width)/2), max(0, (h-self.bitmap.height)/2), self.bitmap.width, self.bitmap.height)
             
 class AnimationControl(wx.Window):
-    def __init__(self, parent=None, layermgr=None):
+    def __init__(self, parent=None, document=None):
         super().__init__(parent)
         
-        self.layermgr = layermgr
+        self.document = document
         
         # ANIMATION PANEL
-        self.panel = AnimationPanel(self)
+        self.panel = AnimationPanel(self, document)
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.panel.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.panel.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
@@ -395,13 +396,27 @@ class AnimationControl(wx.Window):
         self.prevx, self.prevy = 0, 0
         self.grab = None
         
+    def GetAnimationFrames(self):
+        bitmaps = []
+        for f in range(1, self.panel.totalFrames+1):
+            key = self.panel.GetKey(f)
+            if key:
+                bitmap = Layer.Create(key[0].width, key[0].height)
+                bitmap.DrawAll(key)
+                bitmaps.append(bitmap)
+        
+        return bitmaps
+        
+    def GetFPS(self):
+        return self.panel.fps
+        
     def OnDeleteKey(self, e):
         self.panel.DeleteSelectedKey()
         
     def OnInsertKey(self, e):
-        if self.layermgr:
+        if self.document:
             key = []
-            for layer in self.layermgr:
+            for layer in self.document:
                 if layer.visible:
                     key.insert(0, layer)
             self.panel.InsertKey(key)
@@ -417,6 +432,7 @@ class AnimationControl(wx.Window):
         else:
             self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
             self.panel.SelectHighlighted(self.prevx, self.prevy)
+            
     def OnLeftUp(self, e):
         self.grab = None
         
@@ -450,7 +466,6 @@ class AnimationControl(wx.Window):
     def OnMouseWheel(self, e):
         amt = e.GetWheelRotation()
         self.panel.ZoomOnPosition(*e.Position, amt)
-        self.panel.Refresh()
         
     def OnPlay(self, e):
         self.panel.Play()
@@ -461,6 +476,10 @@ class AnimationControl(wx.Window):
         
     def OnStop(self, e):
         self.panel.Stop()
+        
+    def SetDocument(self, document):
+        self.document = document
+        self.panel.SetDocument(document)
         
 if __name__ == '__main__':
     app = wx.App()
