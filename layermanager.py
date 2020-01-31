@@ -428,6 +428,14 @@ class LayerManager:
     def Current(self):
         return self.layers[self.currentLayer]
     
+    def DuplicateAndSelect(self, index):
+        layer = self.layers[index]
+        name = 'Copy of ' + layer.name
+        self.AppendSelect(layer.Copy(name))
+        
+    def DuplicateAndSelectCurrent(self):
+        self.DuplicateAndSelect(self.currentLayer)
+        
     def Ellipse(self, x, y, w, h, color, size=1, clip=None):
         self.surface.Ellipse(x, y, w, h, color, size, clip)
         

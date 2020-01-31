@@ -191,8 +191,10 @@ class Canvas(wx.Panel):
             self.DrawPixel(x, self.GetYMirror(y), color, False, False)
 
     def DuplicateLayer(self):
-        name = 'Copy of ' + self.layers.Current().name
-        self.layers.AppendSelect(self.layers.Current().Copy(name))
+        oldidx = self.layers.currentLayer
+        self.layers.DuplicateAndSelectCurrent()
+        self.history.Store(DuplicateLayerCommand(self.layers, oldidx, self.layers.currentLayer))
+        
         # TODO: undo/redo
         
     def ErasePixel(self, x, y, canmirrorx=True, canmirrory=True):

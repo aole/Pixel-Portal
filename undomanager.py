@@ -49,6 +49,27 @@ class AddLayerCommand(Command):
     def __str__(self):
         return "Add "+self.layer.name
         
+class DuplicateLayerCommand(Command):
+    def __init__(self, layermgr, oldidx, newidx):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.oldidx = oldidx
+        self.newidx = newidx
+        
+    def Do(self):
+        self.layermgr.currentLayer = self.oldidx
+        self.layermgr.DuplicateAndSelectCurrent()
+        return True
+
+    def Undo(self):
+        self.layermgr.currentLayer = self.newidx
+        self.layermgr.Remove()
+        return True
+
+    def __str__(self):
+        return "Duplicate "+self.layermgr[self.oldidx].name
+        
 class RemoveLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
