@@ -1304,6 +1304,7 @@ class Frame(wx.Frame):
         self.saveFile = None
         
         self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyDown)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_SIZE, self.OnResize)
 
         self.canvas = Canvas(self)
@@ -1317,12 +1318,12 @@ class Frame(wx.Frame):
         mfile = wx.Menu()
         mbar.Append(mfile, "&File")
         
-        mnew = wx.Menu()
-        mfile.AppendSubMenu(mnew, "New")
-        self.AddMenuItem(mnew, "32 x 32", self.OnNew32x32)
+        self.AddMenuItem(mfile, "New\tCtrl+N", self.OnNew)
         
         self.AddMenuItem(mfile, "Save\tCtrl+S", self.OnSave)
-        self.AddMenuItem(mfile, "Save As", self.OnSaveAs)
+        self.AddMenuItem(mfile, "Save As\tCtrl+Alt+S", self.OnSaveAs)
+        mfile.AppendSeparator()
+        self.AddMenuItem(mfile, "Exit\tAlt+F4", self.OnClose)
         
         medit = wx.Menu()
         mbar.Append(medit, "&Edit")
@@ -1431,6 +1432,56 @@ class Frame(wx.Frame):
         menu.Bind(wx.EVT_MENU, func, id=self.menuid)
         self.menuid += 1
 
+    def AddToggleButton(self, tb, label, function, icon, default=False):
+        btn = tb.AddCheckTool(wx.ID_ANY, label, icon, shortHelp=label)
+        tb.ToggleTool(btn.GetId(), default)
+        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
+        return btn
+        
+    def AddToolButton(self, tb, label, function, icon):
+        btn = tb.AddTool(wx.ID_ANY, label, icon, shortHelp=label)
+        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
+        return btn
+        
+    def AddToolControl(self, tb, control):
+        control.SetSize(wx.DefaultCoord, wx.DefaultCoord, 30, wx.DefaultCoord)
+        tb.AddControl(control)
+
+    def CheckDirty(self):
+        if self.canvas.IsDirty():
+            diag = wx.GenericMessageDialog(self, 'Save Changes?', style=wx.YES_NO | wx.CANCEL)
+            ret = diag.ShowModal()
+            if ret == wx.ID_YES:
+                self.OnSave(None)
+                return True
+            elif ret == wx.ID_CANCEL:
+                return False
+
+        return True
+
+    def ImageSizeChanged(self, w, h):
+        self.txtWidth.SetValue(str(w))
+        self.txtHeight.SetValue(str(h))
+        
+    def OnAddLayer(self, e):
+        self.canvas.AddLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnCenter(self, e):
+        self.canvas.CenterCanvasInPanel(self.canvas.Size)
+        self.canvas.Refresh()
+
+    def OnClear(self, e):
+        self.canvas.ClearCurrentLayer()
+        self.RefreshLayers()
+
+    def OnClose(self, e):
+        if not self.CheckDirty():
+            return
+            
+        self.Destroy()
+        
     def OnColor(self, e):
         data = wx.ColourData()
         data.SetColour(self.canvas.GetPenColor())
@@ -1455,74 +1506,81 @@ class Frame(wx.Frame):
             
             self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
         
-    def PenColorChanged(self, color):
-        bitmap = self.colorbtn.GetBitmap()
-        mdc = wx.MemoryDC(bitmap)
-        clip = wx.Region(0,0,32,32)
-        clip.Subtract(wx.Rect(9, 9, 14, 14))
-        mdc.SetDeviceClippingRegion(clip)
-        mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-        mdc.SetPen(wx.NullPen)
-        mdc.DrawRectangle(0,0,32,32)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-        self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
-
-    def ImageSizeChanged(self, w, h):
-        self.txtWidth.SetValue(str(w))
-        self.txtHeight.SetValue(str(h))
+    def OnDeselect(self, e):
+        self.canvas.Select(wx.Region())
+        self.Refresh()
         
-    def PixelSizeChanged(self, value):
-        self.txtPixel.SetValue(str(value))
-
-    def Undid(self):
-        self.RefreshLayers()
-        
-    def Redid(self):
-        self.Undid()
-        
-    def AddToolButton(self, tb, label, function, icon):
-        btn = tb.AddTool(wx.ID_ANY, label, icon, shortHelp=label)
-        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
-        return btn
-        
-    def AddToggleButton(self, tb, label, function, icon, default=False):
-        btn = tb.AddCheckTool(wx.ID_ANY, label, icon, shortHelp=label)
-        tb.ToggleTool(btn.GetId(), default)
-        self.Bind(wx.EVT_TOOL, function, id=btn.GetId())
-        return btn
-        
-    def AddToolControl(self, tb, control):
-        control.SetSize(wx.DefaultCoord, wx.DefaultCoord, 30, wx.DefaultCoord)
-        tb.AddControl(control)
-
-    def OnClear(self, e):
-        self.canvas.ClearCurrentLayer()
-        self.RefreshLayers()
-
     def OnDocResize(self, e):
         width = int(self.txtWidth.GetValue())
         height = int(self.txtHeight.GetValue())
         self.canvas.Resize(width, height)
 
-    def CheckDirty(self):
-        if self.canvas.IsDirty():
-            diag = wx.GenericMessageDialog(self, 'Save Changes?', style=wx.YES_NO | wx.CANCEL)
-            ret = diag.ShowModal()
-            if ret == wx.ID_YES:
-                self.OnSave(None)
-                return True
-            elif ret == wx.ID_CANCEL:
-                return False
+    def OnDuplicateLayer(self, e):
+        self.canvas.DuplicateLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnGradient(self, e):
+        dlg = GradientEditor(self, self.canvas.GetGradientStops())
+        if dlg.ShowModal() == wx.ID_OK:
+            stops = dlg.GetStops()
+            self.canvas.SetGradientStops(stops)
+            
+            bitmap = e.GetEventObject().GetBitmap()
+            mdc = wx.MemoryDC(bitmap)
+            gc = wx.GraphicsContext.Create(mdc)
+            
+            clip = wx.Region(2,2,60,28)
+            mdc.SetDeviceClippingRegion(clip)
+            
+            brush = gc.CreateLinearGradientBrush(0, 0, 64, 0, stops)
+            gc.SetBrush(brush)
+            gc.SetPen(wx.NullPen)
+            gc.DrawRectangle(0,0,64,32)
+            
+            mdc.SelectObject(wx.NullBitmap)
+            del mdc
+            
+            e.GetEventObject().SetBitmap(bitmap)
+        dlg.Destroy()
+        
+    def OnKeyDown(self, e):
+        keycode = e.GetUnicodeKey()
 
-        return True
+        if keycode == ord('Z'):
+            if e.ControlDown():
+                if e.ShiftDown():
+                    self.canvas.Redo()
+                else:
+                    self.canvas.Undo()
+        elif keycode == ord('['):
+            self.canvas.AdjustBrushSize(-1)
+        elif keycode == ord(']'):
+            self.canvas.AdjustBrushSize(1)
+        elif keycode == ord('F'):
+            self.canvas.OnFloodFill(e)
+        else:
+            e.Skip()
 
-    def OnRefImage(self, e):
-        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
-        if ret:
-            self.canvas.LoadRefImage(ret)
-            self.canvas.Refresh()
-
+    def OnLayerAlphaChange(self, e):
+        self.canvas.layers.SetAlpha(e.alpha)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnLayerClicked(self, e):
+        self.canvas.layers.SelectIndex(e.index)
+        self.RefreshLayers()
+        
+    def OnLayerDrop(self, e):
+        self.canvas.layers.RearrangeLayer(e.layer, e.position)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnLayerVisibility(self, e):
+        self.canvas.layers.ToggleVisible(e.index)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
     def OnLoad(self, e):
         if not self.CheckDirty():
             return
@@ -1570,13 +1628,27 @@ class Frame(wx.Frame):
     def OnNew32x32(self, e):
         self.OnNew(e, 32, 32)
         
-    def OnToggleGrid(self, e):
-        self.canvas.gridVisible = e.IsChecked()
-        self.canvas.Refresh()
+    def OnRefImage(self, e):
+        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
+        if ret:
+            self.canvas.LoadRefImage(ret)
+            self.canvas.Refresh()
 
-    def OnSmoothLine(self, e):
-        self.canvas.smoothLine = e.IsChecked()
+    def OnRemoveLayer(self, e):
+        self.canvas.RemoveLayer()
         self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnReselect(self, e):
+        self.canvas.Reselect()
+        self.Refresh()
+        
+    def OnResize(self, e):
+        if self.FirstTimeResize:
+            self.OnCenter(e)
+            self.FirstTimeResize = False
+        self.canvas.Refresh()
+        e.Skip()
 
     def OnSave(self, e):
         if not self.saveFile:
@@ -1606,121 +1678,56 @@ class Frame(wx.Frame):
         if ret:
             self.canvas.SaveGif(ret)
 
-    def OnKeyDown(self, e):
-        keycode = e.GetUnicodeKey()
-
-        if keycode == ord('Z'):
-            if e.ControlDown():
-                if e.ShiftDown():
-                    self.canvas.Redo()
-                else:
-                    self.canvas.Undo()
-        elif keycode == ord('['):
-            self.canvas.AdjustBrushSize(-1)
-        elif keycode == ord(']'):
-            self.canvas.AdjustBrushSize(1)
-        elif keycode == ord('F'):
-            self.canvas.OnFloodFill(e)
-        else:
-            e.Skip()
-
-    def OnTool(self, e):
-        self.canvas.SetTool(e.GetString())
-
-    def OnGradient(self, e):
-        dlg = GradientEditor(self, self.canvas.GetGradientStops())
-        if dlg.ShowModal() == wx.ID_OK:
-            stops = dlg.GetStops()
-            self.canvas.SetGradientStops(stops)
-            
-            bitmap = e.GetEventObject().GetBitmap()
-            mdc = wx.MemoryDC(bitmap)
-            gc = wx.GraphicsContext.Create(mdc)
-            
-            clip = wx.Region(2,2,60,28)
-            mdc.SetDeviceClippingRegion(clip)
-            
-            brush = gc.CreateLinearGradientBrush(0, 0, 64, 0, stops)
-            gc.SetBrush(brush)
-            gc.SetPen(wx.NullPen)
-            gc.DrawRectangle(0,0,64,32)
-            
-            mdc.SelectObject(wx.NullBitmap)
-            del mdc
-            
-            e.GetEventObject().SetBitmap(bitmap)
-        dlg.Destroy()
-        
-    def OnCenter(self, e):
-        self.canvas.CenterCanvasInPanel(self.canvas.Size)
-        self.canvas.Refresh()
-
-    def OnResize(self, e):
-        if self.FirstTimeResize:
-            self.OnCenter(e)
-            self.FirstTimeResize = False
-        self.canvas.Refresh()
-        e.Skip()
-
     def OnSelectAll(self, e):
         self.canvas.Select()
-        self.Refresh()
-        
-    def OnDeselect(self, e):
-        self.canvas.Select(wx.Region())
-        self.Refresh()
-        
-    def OnReselect(self, e):
-        self.canvas.Reselect()
         self.Refresh()
         
     def OnSelectInvert(self, e):
         self.canvas.SelectInvert()
         self.Refresh()
     
-    def OnLayerClicked(self, e):
-        self.canvas.layers.SelectIndex(e.index)
-        self.RefreshLayers()
-        
-    def OnLayerVisibility(self, e):
-        self.canvas.layers.ToggleVisible(e.index)
+    def OnSmoothLine(self, e):
+        self.canvas.smoothLine = e.IsChecked()
         self.canvas.Refresh()
-        self.RefreshLayers()
-        
-    def OnLayerAlphaChange(self, e):
-        self.canvas.layers.SetAlpha(e.alpha)
+
+    def OnToggleGrid(self, e):
+        self.canvas.gridVisible = e.IsChecked()
         self.canvas.Refresh()
-        self.RefreshLayers()
-        
-    def OnLayerDrop(self, e):
-        self.canvas.layers.RearrangeLayer(e.layer, e.position)
-        self.canvas.Refresh()
-        self.RefreshLayers()
-        
-    def OnAddLayer(self, e):
-        self.canvas.AddLayer()
-        self.canvas.Refresh()
-        self.RefreshLayers()
-        
-    def OnDuplicateLayer(self, e):
-        self.canvas.DuplicateLayer()
-        self.canvas.Refresh()
-        self.RefreshLayers()
-        
-    def OnRemoveLayer(self, e):
-        self.canvas.RemoveLayer()
-        self.canvas.Refresh()
-        self.RefreshLayers()
-        
+
+    def OnTool(self, e):
+        self.canvas.SetTool(e.GetString())
+
     def OnMergeDown(self, e):
         self.canvas.MergeDown()
         self.canvas.Refresh()
         self.RefreshLayers()
         
+    def PenColorChanged(self, color):
+        bitmap = self.colorbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        clip = wx.Region(0,0,32,32)
+        clip.Subtract(wx.Rect(9, 9, 14, 14))
+        mdc.SetDeviceClippingRegion(clip)
+        mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        mdc.SetPen(wx.NullPen)
+        mdc.DrawRectangle(0,0,32,32)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+        self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
+
+    def PixelSizeChanged(self, value):
+        self.txtPixel.SetValue(str(value))
+
+    def Redid(self):
+        self.Undid()
+        
     def RefreshLayers(self):
         self.lyrctrl.UpdateLayers(self.canvas.layers)
         self.lyrctrl.FitInside()
         self.UpdateTitle()
+        
+    def Undid(self):
+        self.RefreshLayers()
         
     def UpdateTitle(self):
         if not self.saveFile:
