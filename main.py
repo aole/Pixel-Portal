@@ -124,6 +124,11 @@ class Canvas(wx.Panel):
 
         self.listeners = []
 
+    def AddLayer(self):
+        index = self.layers.currentLayer
+        layer = self.layers.AppendSelect().Copy()
+        self.history.Store(AddLayerCommand(self.layers, index, layer))
+        
     def ClearCurrentLayer(self):
         self.beforeLayer = self.layers.Current().Copy()
 
@@ -185,6 +190,11 @@ class Canvas(wx.Panel):
         if canmirrory and self.mirrory:
             self.DrawPixel(x, self.GetYMirror(y), color, False, False)
 
+    def DuplicateLayer(self):
+        name = 'Copy of ' + self.layers.Current().name
+        self.layers.AppendSelect(self.layers.Current().Copy(name))
+        # TODO: undo/redo
+        
     def ErasePixel(self, x, y, canmirrorx=True, canmirrory=True):
         self.layers.ErasePixel(x, y, size=self.penSize, clip=self.selection)
         if canmirrorx and self.mirrorx:
@@ -1275,11 +1285,6 @@ class Canvas(wx.Panel):
 
         self.Refresh()
 
-    def AddLayer(self):
-        index = self.layers.currentLayer
-        layer = self.layers.AppendSelect().Copy()
-        self.history.Store(AddLayerCommand(self.layers, index, layer))
-        
     def RemoveLayer(self):
         index = self.layers.currentLayer
         layer = self.layers.Remove().Copy()
@@ -1334,6 +1339,7 @@ class Frame(wx.Frame):
         menu = wx.Menu()
         mbar.Append(menu, "&Layer")
         self.AddMenuItem(menu, "&Add Layer\tCtrl+Shift+N", self.OnAddLayer)
+        self.AddMenuItem(menu, "&Duplicate Layer\tCtrl+J", self.OnDuplicateLayer)
         self.AddMenuItem(menu, "&Remove Layer", self.OnRemoveLayer)
         self.AddMenuItem(menu, "&Merge Down\tCtrl+E", self.OnMergeDown)
         menu.AppendSeparator()
@@ -1669,6 +1675,11 @@ class Frame(wx.Frame):
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnDuplicateLayer(self, e):
+        self.canvas.DuplicateLayer()
         self.canvas.Refresh()
         self.RefreshLayers()
         
