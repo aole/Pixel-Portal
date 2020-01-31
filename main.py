@@ -1298,10 +1298,11 @@ class Canvas(wx.Panel):
         
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title=PROGRAM_NAME, size=WINDOW_SIZE)
+        super().__init__(None, size=WINDOW_SIZE)
 
         self.FirstTimeResize = True
-
+        self.saveFile = None
+        
         self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyDown)
         self.Bind(wx.EVT_SIZE, self.OnResize)
 
@@ -1319,6 +1320,9 @@ class Frame(wx.Frame):
         mnew = wx.Menu()
         mfile.AppendSubMenu(mnew, "New")
         self.AddMenuItem(mnew, "32 x 32", self.OnNew32x32)
+        
+        self.AddMenuItem(mfile, "Save\tCtrl+S", self.OnSave)
+        self.AddMenuItem(mfile, "Save As", self.OnSaveAs)
         
         medit = wx.Menu()
         mbar.Append(medit, "&Edit")
@@ -1420,6 +1424,7 @@ class Frame(wx.Frame):
         layerPanel.SetSizer(bsp)
         layerPanel.FitInside()
         self.SetSizer(bstop)
+        self.UpdateTitle()
 
     def AddMenuItem(self, menu, name, func):
         menu.Append(self.menuid, name)
@@ -1529,13 +1534,11 @@ class Frame(wx.Frame):
                 return
                 
             pixel = int(self.txtPixel.GetValue())
-            self.canvas.Load(pixel, fd.GetPath())
-            self.canvas.Refresh()
-            self.RefreshLayers()
-
-    def OnToggleGrid(self, e):
-        self.canvas.gridVisible = e.IsChecked()
+            self.saveFile = fd.GetPath()
+            
+        self.canvas.Load(pixel, self.saveFile)
         self.canvas.Refresh()
+        self.RefreshLayers()
 
     def OnMirrorX(self, e):
         self.canvas.mirrorx = e.IsChecked()
@@ -1545,17 +1548,11 @@ class Frame(wx.Frame):
         self.canvas.mirrory = e.IsChecked()
         self.canvas.Refresh()
 
-    def OnSmoothLine(self, e):
-        self.canvas.smoothLine = e.IsChecked()
-        self.canvas.Refresh()
-
-    def OnNew32x32(self, e):
-        self.OnNew(e, 32, 32)
-        
     def OnNew(self, e, width=None, height=None):
         if not self.CheckDirty():
             return
 
+        self.saveFile = None
         pixel = int(self.txtPixel.GetValue())
         if width:
             self.txtWidth.SetValue(str(width))
@@ -1570,13 +1567,39 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.RefreshLayers()
         
+    def OnNew32x32(self, e):
+        self.OnNew(e, 32, 32)
+        
+    def OnToggleGrid(self, e):
+        self.canvas.gridVisible = e.IsChecked()
+        self.canvas.Refresh()
+
+    def OnSmoothLine(self, e):
+        self.canvas.smoothLine = e.IsChecked()
+        self.canvas.Refresh()
+
     def OnSave(self, e):
+        if not self.saveFile:
+            with wx.FileDialog(self, "Save Image file", wildcard="tif files (*.tif)|*.tif|png files (*.png)|*.png",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
+                if fd.ShowModal() == wx.ID_CANCEL:
+                    return
+                    
+                self.saveFile = fd.GetPath()
+            
+        self.canvas.Save(self.saveFile)
+        self.UpdateTitle()
+
+    def OnSaveAs(self, e):
         with wx.FileDialog(self, "Save Image file", wildcard="tif files (*.tif)|*.tif|png files (*.png)|*.png",
-                       style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
             if fd.ShowModal() == wx.ID_CANCEL:
                 return
                 
-            self.canvas.Save(fd.GetPath())
+            self.saveFile = fd.GetPath()
+            
+            self.canvas.Save(self.saveFile)
+            self.UpdateTitle()
 
     def OnSaveGif(self, e):
         ret = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
@@ -1697,7 +1720,18 @@ class Frame(wx.Frame):
     def RefreshLayers(self):
         self.lyrctrl.UpdateLayers(self.canvas.layers)
         self.lyrctrl.FitInside()
+        self.UpdateTitle()
         
+    def UpdateTitle(self):
+        if not self.saveFile:
+            title = PROGRAM_NAME+ ' - [Unsaved]'
+        else:
+            title = PROGRAM_NAME+ ' - ' + self.saveFile
+            if self.canvas.IsDirty():
+                title += ' *'
+                
+        self.SetTitle(title)
+            
 def CreateWindows():
     global app
 
