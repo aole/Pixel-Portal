@@ -1646,9 +1646,6 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.RefreshLayers()
         
-    def OnNew32x32(self, e):
-        self.OnNew(e, 32, 32)
-        
     def OnRefImage(self, e):
         ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
         if ret:

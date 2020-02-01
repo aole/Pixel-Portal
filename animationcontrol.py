@@ -373,21 +373,21 @@ class AnimationControl(wx.Window):
         conpanel = wx.Panel(self)
         consizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        btn = wx.Button(conpanel, label="Play")
+        btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/play.png"))
         self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
-        btn = wx.Button(conpanel, label="Stop")
+        btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/stop.png"))
         self.Bind(wx.EVT_BUTTON, self.OnStop, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
         consizer.AddSpacer(50)
         
-        btn = wx.Button(conpanel, label="Insert")
+        btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/key.png"))
         self.Bind(wx.EVT_BUTTON, self.OnInsertKey, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
-        btn = wx.Button(conpanel, label="Delete")
+        btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/keydelete.png"))
         self.Bind(wx.EVT_BUTTON, self.OnDeleteKey, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
