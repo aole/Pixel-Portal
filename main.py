@@ -1327,7 +1327,7 @@ class Frame(wx.Frame):
         mbar.Append(mfile, "&File")
         
         self.AddMenuItem(mfile, "New\tCtrl+N", self.OnNew)
-        
+        self.AddMenuItem(mfile, "Open\tCtrl+O", self.OnOpen)
         self.AddMenuItem(mfile, "Save\tCtrl+S", self.OnSave)
         self.AddMenuItem(mfile, "Save As\tCtrl+Alt+S", self.OnSaveAs)
         self.AddMenuItem(mfile, "Export Animation\tCtrl+E", self.OnExportAnimation)
@@ -1378,7 +1378,7 @@ class Frame(wx.Frame):
         self.AddToolControl(tb, self.txtHeight)
 
         self.AddToolButton(tb, 'New', self.OnNew, icon=wx.Bitmap("icons/new.png"))
-        self.AddToolButton(tb, 'Load', self.OnLoad, icon=wx.Bitmap("icons/load.png"))
+        self.AddToolButton(tb, 'Load', self.OnOpen, icon=wx.Bitmap("icons/load.png"))
         self.AddToolButton(tb, 'Save', self.OnSave, icon=wx.Bitmap("icons/save.png"))
         self.AddToolButton(tb, 'Gif', self.OnSaveGif, icon=wx.Bitmap("icons/gif.png"))
         tb.AddSeparator()
@@ -1614,24 +1614,11 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.RefreshLayers()
         
-    def OnLoad(self, e):
-        if not self.CheckDirty():
-            return
-
-        with wx.FileDialog(self, "Open Image file",
-                           wildcard=FILE_DIALOG_FILTERS,
-                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_PREVIEW) as fd:
-            if fd.ShowModal() == wx.ID_CANCEL:
-                return
-                
-            pixel = int(self.txtPixel.GetValue())
-            self.saveFile = fd.GetPath()
-            
-        self.canvas.Load(pixel, self.saveFile)
+    def OnMergeDown(self, e):
+        self.canvas.MergeDown()
         self.canvas.Refresh()
-        self.animControl.SetDocument(self.canvas.document)
         self.RefreshLayers()
-
+        
     def OnMirrorX(self, e):
         self.canvas.mirrorx = e.IsChecked()
         self.canvas.Refresh()
@@ -1668,6 +1655,24 @@ class Frame(wx.Frame):
             self.canvas.LoadRefImage(ret)
             self.canvas.Refresh()
 
+    def OnOpen(self, e):
+        if not self.CheckDirty():
+            return
+
+        with wx.FileDialog(self, "Open Image file",
+                           wildcard=FILE_DIALOG_FILTERS,
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_PREVIEW) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+                
+            pixel = int(self.txtPixel.GetValue())
+            self.saveFile = fd.GetPath()
+            
+        self.canvas.Load(pixel, self.saveFile)
+        self.canvas.Refresh()
+        self.animControl.SetDocument(self.canvas.document)
+        self.RefreshLayers()
+
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()
         self.canvas.Refresh()
@@ -1697,7 +1702,7 @@ class Frame(wx.Frame):
         self.UpdateTitle()
 
     def OnSaveAs(self, e):
-        with wx.FileDialog(self, "Save Image file", wildcard="tif files (*.tif)|*.tif|png files (*.png)|*.png",
+        with wx.FileDialog(self, "Save Image file", wildcard = FILE_DIALOG_FILTERS,
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
             if fd.ShowModal() == wx.ID_CANCEL:
                 return
@@ -1731,11 +1736,6 @@ class Frame(wx.Frame):
     def OnTool(self, e):
         self.canvas.SetTool(e.GetString())
 
-    def OnMergeDown(self, e):
-        self.canvas.MergeDown()
-        self.canvas.Refresh()
-        self.RefreshLayers()
-        
     def PenColorChanged(self, color):
         bitmap = self.colorbtn.GetBitmap()
         mdc = wx.MemoryDC(bitmap)

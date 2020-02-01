@@ -5,7 +5,8 @@ Bhupendra Aole
 """
 
 import sys
-from pickle import load, dump
+from pickle import loads, dumps
+from zipfile import ZipFile, ZIP_LZMA
 
 class Document:
     def __init__(self, width, height):
@@ -21,13 +22,13 @@ class Document:
         self.totalFrames = 8
 
     def Save(self, filename):
-        file = open(filename, 'wb') 
-        dump(self, file)
-        file.close()
+        with ZipFile(filename, 'w', ZIP_LZMA) as zf:
+            data = dumps(self)
+            zf.writestr('data', data)
         
     def Load(filename):
-        file = open(filename, 'rb') 
-        data = load(file)
-        file.close()
+        with ZipFile(filename, compression=ZIP_LZMA) as zf:
+            with zf.open('data') as data:
+                data = loads(data.read())
         return data
             
