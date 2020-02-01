@@ -1,11 +1,11 @@
 # Pixel-Portal
 Pixel Art drawing program
 
+![Screenshot](screenshot8.jpg?raw=true)
 ![Screenshot](screenshot7.jpg?raw=true)
 ![Screenshot](screenshot6.jpg?raw=true)
 ![Screenshot](screenshot5.jpg?raw=true)
 ![Screenshot](screenshot4.jpg?raw=true)
-![Screenshot](screenshot3.jpg?raw=true)
 
 Features
 --------
@@ -16,7 +16,7 @@ Features
     SHIFT to draw with equal sides
 - Grid, ruler display
 - Undo/redo (can be saved as a gif)
-- Save/load png
+- Save/load native, tiff, png
 - Mirror in both X and Y
 - Zoom (Mouse wheel) / Pan (MMB)
 - Painting with LMB / Erasing with RMB
@@ -31,3 +31,6 @@ Features
 	Visibility
 	Alpha
 	Naming
+- ANIMATION
+	Animation preview window
+	
