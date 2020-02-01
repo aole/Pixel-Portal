@@ -1420,7 +1420,7 @@ class Frame(wx.Frame):
         self.animControl = AnimationControl(self, self.canvas.document)
         bstop.Add(self.animControl, 0, wx.EXPAND|wx.ALL, 2)
         
-        # LAYERS LIST
+        # LAYERS PANEL
         bsp = wx.BoxSizer(wx.VERTICAL)
         self.lyrctrl = LayerControl(layerPanel)
         self.lyrctrl.UpdateLayers(self.canvas.document)
@@ -1429,6 +1429,28 @@ class Frame(wx.Frame):
         self.lyrctrl.Bind(EVT_LAYER_ALPHA_EVENT, self.OnLayerAlphaChange)
         self.lyrctrl.Bind(EVT_LAYER_DROP_EVENT, self.OnLayerDrop)
         bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
+        
+        # CONTROLS
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        conpanel = wx.Panel(layerPanel)
+        but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layernew.png'))
+        self.Bind(wx.EVT_BUTTON, self.OnAddLayer, id=but.GetId())
+        sizer.Add(but, 0, 0, 1)
+        sizer.AddSpacer(10)
+        but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layerdelete.png'))
+        self.Bind(wx.EVT_BUTTON, self.OnRemoveLayer, id=but.GetId())
+        sizer.Add(but, 0, 0, 1)
+        sizer.AddSpacer(10)
+        but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layerduplicate.png'))
+        self.Bind(wx.EVT_BUTTON, self.OnDuplicateLayer, id=but.GetId())
+        sizer.Add(but, 0, 0, 1)
+        sizer.AddSpacer(10)
+        but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layermerge.png'))
+        self.Bind(wx.EVT_BUTTON, self.OnMergeDown, id=but.GetId())
+        sizer.Add(but, 0, 0, 1)
+        sizer.AddSpacer(10)
+        conpanel.SetSizer(sizer)
+        bsp.Add(conpanel, 0, wx.EXPAND | wx.ALL, 2)
         
         self.OnNew(None, *DEFAULT_DOC_SIZE)
         
@@ -1531,6 +1553,11 @@ class Frame(wx.Frame):
         height = int(self.txtHeight.GetValue())
         self.canvas.Resize(width, height)
 
+    def OnDuplicateLayer(self, e):
+        self.canvas.DuplicateLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
     def OnExportAnimation(self, e):
         filename = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
         if filename:
@@ -1547,11 +1574,6 @@ class Frame(wx.Frame):
             
     def OnExportHistory(self, e):
         print('OnExportHistory')
-        
-    def OnDuplicateLayer(self, e):
-        self.canvas.DuplicateLayer()
-        self.canvas.Refresh()
-        self.RefreshLayers()
         
     def OnGradient(self, e):
         dlg = GradientEditor(self, self.canvas.GetGradientStops())
@@ -1646,12 +1668,6 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.RefreshLayers()
         
-    def OnRefImage(self, e):
-        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
-        if ret:
-            self.canvas.LoadRefImage(ret)
-            self.canvas.Refresh()
-
     def OnOpen(self, e):
         if not self.CheckDirty():
             return
@@ -1669,6 +1685,12 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.animControl.SetDocument(self.canvas.document)
         self.RefreshLayers()
+
+    def OnRefImage(self, e):
+        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
+        if ret:
+            self.canvas.LoadRefImage(ret)
+            self.canvas.Refresh()
 
     def OnRemoveLayer(self, e):
         self.canvas.RemoveLayer()

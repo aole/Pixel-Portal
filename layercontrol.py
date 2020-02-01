@@ -137,19 +137,20 @@ class LayerControl(wx.ScrolledWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        
+        # LAYERS
         self.panel = LayerPanel(self)
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.panel.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         
+        # ALPHA SLIDER
         self.slider = wx.Slider(self, value=255, maxValue=255)
         self.slider.Bind(wx.EVT_SLIDER, self.OnSlider)
         
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.slider, 0, wx.EXPAND | wx.ALL, 3)
-        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 3)
+        sizer.Add(self.slider, 0, wx.EXPAND | wx.ALL, 2)
+        sizer.Add(self.panel, 1, wx.EXPAND | wx.ALL, 2)
         self.SetSizer(sizer)
         
         self.FitInside()

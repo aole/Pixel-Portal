@@ -374,7 +374,7 @@ class AnimationControl(wx.Window):
         consizer = wx.BoxSizer(wx.HORIZONTAL)
         
         btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/play.png"))
-        self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
+        #self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
         btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/stop.png"))
