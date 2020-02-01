@@ -4,11 +4,14 @@ Bhupendra Aole
 1/19/2020
 """
 
-import wx
 from math import sqrt
 from random import randrange
 
+import numpy as np
+import wx
+
 from document import *
+from pickle import load, dump
 
 COLOR_BLANK = wx.Colour(0,0,0,0)
 COLOR_BLANK1 = wx.Colour(0,0,0,1)
@@ -26,6 +29,19 @@ class Layer(wx.Bitmap):
         
         self.visible = True
         self.alpha = 1.0
+        
+    def __getstate__(self):
+        buf = np.zeros(self.width * self.height * 4)
+        self.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
+        self.__dict__['buffer'] = buf #np.array_str(buf, precision=0, suppress_small=4)
+        return self.__dict__
+    
+    def __setstate__(self, dict):
+        self.__dict__ = dict
+        buf = dict['buffer']
+        super().__init__()
+        self.Create(self.width, self.height, 32)
+        self.CopyFromBuffer(buf, wx.BitmapBufferFormat_RGBA)
         
     def Clear(self, clip=None, color=COLOR_BLANK):
         mdc = wx.MemoryDC(self)
@@ -60,7 +76,7 @@ class Layer(wx.Bitmap):
         layer.name = name if name else self.name
         return layer
         
-    def Create(width, height, color=COLOR_BLANK):
+    def CreateLayer(width, height, color=COLOR_BLANK):
         layer = Layer(wx.Bitmap.FromRGBA(width, height, 255, 255, 255, 255))
         layer.Clear(color=color)
         return layer
@@ -84,7 +100,14 @@ class Layer(wx.Bitmap):
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         for layer in layers:
-            gc.DrawBitmap(layer, x, y, self.width, self.height)
+            if layer.alpha==0:
+                continue
+            
+            if layer.alpha<1:
+                alphalayer = layer.ConvertToImage().AdjustChannels(1,1,1,layer.alpha).ConvertToBitmap()
+            else:
+                alphalayer = layer
+            gc.DrawBitmap(alphalayer, x, y, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
@@ -284,7 +307,6 @@ class Layer(wx.Bitmap):
         if h == 0:
             h = layer.height
 
-        #print('blit:',self.name,x,y,self.width, self.height,'from',layer.name, w, h)
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
@@ -328,7 +350,7 @@ class LayerManager(Document):
         
         self.surface = None
         if width>0 and height>0:
-            self.surface = Layer.Create(width, height)
+            self.surface = Layer.CreateLayer(width, height)
             
         self.compositeLayer = None
         
@@ -344,7 +366,7 @@ class LayerManager(Document):
         
     def AppendSelect(self, layer=None):
         if not layer:
-            layer = Layer.Create(self.width, self.height)
+            layer = Layer.CreateLayer(self.width, self.height)
             
         if self.currentLayer<0:
             self.currentLayer = 0
@@ -364,7 +386,7 @@ class LayerManager(Document):
         
     def Composite(self, mx=0, my=0, drawCurrent=True, drawSurface=True):
         if not self.compositeLayer:
-            self.compositeLayer = Layer.Create(self.width, self.height)
+            self.compositeLayer = Layer.CreateLayer(self.width, self.height)
         else:
             self.compositeLayer.Clear()
         
@@ -404,7 +426,7 @@ class LayerManager(Document):
         lm = LayerManager(width, height)
         for i in range(numlayers):
             if not i:
-                lm.AppendSelect(Layer.Create(width, height, wx.WHITE))
+                lm.AppendSelect(Layer.CreateLayer(width, height, wx.WHITE))
             else:
                 lm.AppendSelect()
                 lm.Clear()
@@ -421,7 +443,7 @@ class LayerManager(Document):
             l = self.appendSelect()
             l.Draw(layer.GetSubBitmap(rect))
         self.currentLayer = lm.currentLayer
-        self.surface = Layer.Create(self.width, self.height)
+        self.surface = Layer.CreateLayer(self.width, self.height)
         self.compositeLayer = None
         
     def Current(self):
@@ -469,7 +491,7 @@ class LayerManager(Document):
         self.height = height
         
         self.currentLayer = -1
-        self.surface = Layer.Create(width, height)
+        self.surface = Layer.CreateLayer(width, height)
         self.compositeLayer = None
         
     def InsertBottom(self, layer):
@@ -536,7 +558,7 @@ class LayerManager(Document):
             l.name = layer.name
             
         self.currentLayer = lm.currentLayer
-        self.surface = Layer.Create(self.width, self.height)
+        self.surface = Layer.CreateLayer(self.width, self.height)
         self.compositeLayer = None
         
     def ReverseIndex(self):
@@ -589,3 +611,9 @@ class LayerManager(Document):
             idx = self.currentLayer
         self.layers[idx].visible = not self.layers[idx].visible
         
+if __name__ == '__main__':
+    app = wx.App()
+    lm = LayerManager.CreateDummy(20,20,2)
+    print(lm.width, lm.height)
+    print(lm.layers)
+    

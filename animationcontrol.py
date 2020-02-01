@@ -263,6 +263,9 @@ class AnimationPanel(wx.Panel):
         
     def SetDocument(self, document):
         self.document = document
+        key = self.GetKey(self.document.currentFrame)
+        evt = FrameChangedEvent(key = key, frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
+        wx.PostEvent(self, evt)
         self.Refresh()
         
     def SetTotalFrames(self, frames):

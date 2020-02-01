@@ -29,6 +29,8 @@ WINDOW_SIZE = (800, 700)
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
+FILE_DIALOG_FILTERS = "supported|*.aole;*.tif;*.png|aole files (*.aole)|*.aole|tif files (*.tif)|*.tif|png files (*.png)|*.png"
+
 TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
          "Select":          (wx.CURSOR_CROSS,       "toolselectrect.png"),
          "Line":            (wx.CURSOR_CROSS,       "toolline.png"),
@@ -494,7 +496,8 @@ class Canvas(wx.Panel):
 
     def Load(self, pixel, filename):
         if filename[-4:]=="aole":
-            self.document = Document.load(filename)
+            self.document = Document.Load(filename)
+            width, height = self.document.width, self.document.height
         elif filename[-3:]=="png":
             image = wx.Image(filename)
             self.pixelSize = pixel
@@ -534,13 +537,13 @@ class Canvas(wx.Panel):
         self.pixelSize = pixel
 
         # to ensure alpha
-        bglayer = Layer.Create(width, height, wx.WHITE)
+        bglayer = Layer.CreateLayer(width, height, wx.WHITE)
         bglayer.name = "background"
         
         self.document.width = width
         self.document.height = height
         self.document.RemoveAll()
-        self.document.surface = Layer.Create(width, height)
+        self.document.surface = Layer.CreateLayer(width, height)
         self.document.surface.name = 'Surface'
         self.document.AppendSelect(bglayer)
         self.document.AppendSelect()
@@ -1168,7 +1171,7 @@ class Canvas(wx.Panel):
 
     def Save(self, filename):
         if filename[-4:]=="aole":
-            self.document.save(filename)
+            self.document.Save(filename)
         elif filename[-3:]=="png":
             self.document.Composite().Scaled(self.pixelSize).SaveFile(filename, wx.BITMAP_TYPE_PNG)
         elif filename[-3:]=="tif":
@@ -1472,23 +1475,6 @@ class Frame(wx.Frame):
     def GetPixelSize(self):
         return int(self.txtPixel.GetValue())
         
-    def OnExportAnimation(self, e):
-        filename = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
-        if filename:
-            frames = self.animControl.GetAnimationFrames()
-            if frames:
-                fps = self.animControl.GetFPS()
-                images = []
-                for frame in frames:
-                    wxImage = frame.Scaled(self.GetPixelSize()).ConvertToImage()
-                    pilImage = Image.new('RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
-                    pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
-                    images.append(pilImage)
-                images[0].save(filename, save_all=True, append_images=images[1:], optimize=False, duration=1000/fps, loop=0)
-            
-    def OnExportHistory(self, e):
-        print('OnExportHistory')
-        
     def ImageSizeChanged(self, w, h):
         self.txtWidth.SetValue(str(w))
         self.txtHeight.SetValue(str(h))
@@ -1545,6 +1531,23 @@ class Frame(wx.Frame):
         height = int(self.txtHeight.GetValue())
         self.canvas.Resize(width, height)
 
+    def OnExportAnimation(self, e):
+        filename = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
+        if filename:
+            frames = self.animControl.GetAnimationFrames()
+            if frames:
+                fps = self.animControl.GetFPS()
+                images = []
+                for frame in frames:
+                    wxImage = frame.Scaled(self.GetPixelSize()).ConvertToImage()
+                    pilImage = Image.new('RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
+                    pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
+                    images.append(pilImage)
+                images[0].save(filename, save_all=True, append_images=images[1:], optimize=False, duration=1000/fps, loop=0)
+            
+    def OnExportHistory(self, e):
+        print('OnExportHistory')
+        
     def OnDuplicateLayer(self, e):
         self.canvas.DuplicateLayer()
         self.canvas.Refresh()
@@ -1616,7 +1619,7 @@ class Frame(wx.Frame):
             return
 
         with wx.FileDialog(self, "Open Image file",
-                           wildcard="supported|*.tif;*.png|tif files (*.tif)|*.tif|png files (*.png)|*.png",
+                           wildcard=FILE_DIALOG_FILTERS,
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_PREVIEW) as fd:
             if fd.ShowModal() == wx.ID_CANCEL:
                 return
@@ -1626,6 +1629,7 @@ class Frame(wx.Frame):
             
         self.canvas.Load(pixel, self.saveFile)
         self.canvas.Refresh()
+        self.animControl.SetDocument(self.canvas.document)
         self.RefreshLayers()
 
     def OnMirrorX(self, e):
@@ -1682,7 +1686,7 @@ class Frame(wx.Frame):
 
     def OnSave(self, e):
         if not self.saveFile:
-            with wx.FileDialog(self, "Save Image file", wildcard="tif files (*.tif)|*.tif|png files (*.png)|*.png",
+            with wx.FileDialog(self, "Save Image file", wildcard = FILE_DIALOG_FILTERS,
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
                 if fd.ShowModal() == wx.ID_CANCEL:
                     return
