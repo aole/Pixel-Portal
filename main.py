@@ -1430,7 +1430,7 @@ class Frame(wx.Frame):
         self.lyrctrl.Bind(EVT_LAYER_DROP_EVENT, self.OnLayerDrop)
         bsp.Add(self.lyrctrl, 1, wx.EXPAND | wx.ALL, 3)
         
-        # CONTROLS
+        # LAYER CONTROLS
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         conpanel = wx.Panel(layerPanel)
         but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layernew.png'))

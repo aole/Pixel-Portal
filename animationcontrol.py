@@ -384,6 +384,18 @@ class AnimationControl(wx.Window):
         self.Bind(wx.EVT_BUTTON, self.OnDeleteKey, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
+        consizer.AddSpacer(50)
+        
+        self.txtFPS = wx.StaticText(conpanel, label=str(self.document.fps))
+        self.txtFPS.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False))
+        consizer.Add(self.txtFPS, 0, wx.ALIGN_CENTER, 1)
+        
+        consizer.AddSpacer(5)
+        
+        btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/fps.png"))
+        self.Bind(wx.EVT_BUTTON, self.OnFPSChange, id=btn.GetId())
+        consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
+        
         conpanel.SetSizer(consizer)
         panelsizer.Add(conpanel, 0, wx.ALIGN_CENTER, 1)
         
@@ -408,7 +420,14 @@ class AnimationControl(wx.Window):
         
     def OnDeleteKey(self, e):
         self.panel.DeleteSelectedKey()
-        
+    
+    def OnFPSChange(self, e):
+        num = wx.GetNumberFromUser("Enter FPS", "FPS", "Pixel Portal", self.document.fps, 1, 1000, self)
+        if num>0:
+            self.document.fps = num
+            self.txtFPS.SetLabel(str(num))
+            self.Layout()
+            
     def OnInsertKey(self, e):
         if self.document:
             key = []
