@@ -22,6 +22,7 @@ from gradienteditor import *
 from layercontrol import *
 from animationcontrol import *
 from document import *
+from settings import *
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (800, 700)
@@ -1344,6 +1345,8 @@ class Frame(wx.Frame):
         self.AddMenuItem(medit, "Remove Reference Image", self.canvas.RemoveRefImage)
         self.AddMenuItem(medit, "Rotate 90 CW", self.canvas.Rotate90)
         self.AddMenuItem(medit, "Crop to Selection", self.canvas.OnCropToSelection)
+        medit.AppendSeparator()
+        self.AddMenuItem(medit, "Settings ...", self.OnSettings)
         
         mselect = wx.Menu()
         mbar.Append(mselect, "&Selection")
@@ -1744,6 +1747,10 @@ class Frame(wx.Frame):
         self.canvas.SelectInvert()
         self.Refresh()
     
+    def OnSettings(self, e):
+        #Settings(self).Show()
+        pass
+        
     def OnSmoothLine(self, e):
         self.canvas.smoothLine = e.IsChecked()
         self.canvas.Refresh()
