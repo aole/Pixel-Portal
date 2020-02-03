@@ -33,7 +33,7 @@ class Layer(wx.Bitmap):
     def __getstate__(self):
         buf = np.zeros(self.width * self.height * 4)
         self.CopyToBuffer(buf, wx.BitmapBufferFormat_RGBA)
-        self.__dict__['buffer'] = buf #np.array_str(buf, precision=0, suppress_small=4)
+        self.__dict__['buffer'] = buf
         return self.__dict__
     
     def __setstate__(self, dict):

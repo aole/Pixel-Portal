@@ -233,13 +233,6 @@ class AnimationPanel(wx.Panel):
     def SelectCurrentFrame(self):
         self.document.selectedSlot[0] = self.document.currentFrame
         
-    def SelectHighlighted(self, x, y):
-        if self.highlightedSlot[2]:
-            self.document.selectedSlot[0] = self.highlightedSlot[0]
-            self.document.selectedSlot[1] = self.highlightedSlot[1]
-            self.document.selectedSlot[2] = self.highlightedSlot[2]
-            self.Refresh()
-        
     def SetCurrentFrame(self, frame):
         if self.document.currentFrame != frame:
             key = self.GetKey(frame)
@@ -251,9 +244,9 @@ class AnimationPanel(wx.Panel):
             
     def SetCurrentFrameFromPosition(self, x, y):
         w, h = self.GetClientSize()
-        if y>20 and y<h-20:
-            return
-        self.SetCurrentFrame(max(1, self.GetFrameFromPosition(x, y)))
+        frame = max(1, self.GetFrameFromPosition(x, y))
+        self.SetCurrentFrame(frame)
+        self.SelectCurrentFrame()
         
     def SetEndFrameToPosition(self, x, y):
         newf = int((x - self.startAnimationBlock)/self.horizontalScale)
@@ -434,7 +427,6 @@ class AnimationControl(wx.Window):
             self.grab = END_FRAME_HANDLE
         else:
             self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
-            self.panel.SelectHighlighted(self.prevx, self.prevy)
             
     def OnLeftUp(self, e):
         self.grab = None
