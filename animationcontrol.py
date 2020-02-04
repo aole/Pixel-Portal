@@ -47,6 +47,8 @@ class AnimationPanel(wx.Panel):
         
         self.SetMinSize(wx.Size(100, 100))
         
+        self.grabbedKey = None
+        
     def CurrentFrameToSelected(self):
         self.SetCurrentFrame(self.document.selectedSlot[0])
         
@@ -59,6 +61,10 @@ class AnimationPanel(wx.Panel):
     def GetFrameFromPosition(self, x, y):
         return int((x - self.startAnimationBlock)/self.horizontalScale) + 1
         
+    def GetGrabbedKey(self):
+        return self.grabbedKey
+        
+    # get key on this frame or any previous one
     def GetKey(self, frame):
         f = frame
         while not f in self.document.keys and f>0:
@@ -70,6 +76,17 @@ class AnimationPanel(wx.Panel):
             return key
             
         return None
+        
+    # get key from this frame only
+    def GetKeyAbsolute(self, frame):
+        if frame in self.document.keys:
+            return self.document.keys[frame]
+        else:
+            return None
+            
+    def GrabKey(self, key, frame):
+        self.grabbedKey = key
+        del self.document.keys[frame]
         
     def HighlightSlotFromPosition(self, x, y):
         w, h = self.GetClientSize()
@@ -146,7 +163,17 @@ class AnimationPanel(wx.Panel):
             for i in range(numslots):
                 gc.DrawRoundedRectangle(sab+fi*hs+2, y, hs-4, sh, 5)
                 y += sh
-            
+        
+        # grabbed key
+        if self.grabbedKey:
+            fi = self.document.currentFrame - 1
+            numslots = len(self.grabbedKey)
+            sh = (h-INFO_BAR_HEIGHT*2)/numslots
+            y = INFO_BAR_HEIGHT
+            for i in range(numslots):
+                gc.DrawRoundedRectangle(sab+fi*hs+2, y, hs-4, sh, 5)
+                y += sh
+                
         # selected slot
         gc.SetBrush(wx.NullBrush)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 1))
@@ -187,6 +214,7 @@ class AnimationPanel(wx.Panel):
         gc.SetFont(wx.Font(LABEL_FONT_SIZE, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_LIGHT), wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT))
         tw, th, td, tel = gc.GetFullTextExtent(str(tf))
         gc.DrawText(str(tf), pos - tw/2, 5)
+        
             # current frame number
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNHIGHLIGHT)))
         pos = sab + cf * hs
@@ -217,9 +245,10 @@ class AnimationPanel(wx.Panel):
             gc.DrawText(str(f), sab+f*hs-tw/2, h-15)
         
         # vertical line for current frame
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 3))
-        x = sab+cf*hs
-        gc.StrokeLine(x, INFO_BAR_HEIGHT, x, h-INFO_BAR_HEIGHT)
+        if not self.grabbedKey: # a bit distracting
+            gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 3))
+            x = sab+cf*hs
+            gc.StrokeLine(x, INFO_BAR_HEIGHT, x, h-INFO_BAR_HEIGHT)
         
     def Pan(self, dx):
         self.startAnimationBlock += dx
@@ -229,6 +258,11 @@ class AnimationPanel(wx.Panel):
     
     def Play(self):
         self.playTimer.Start(milliseconds=1000.0/self.document.fps)
+        
+    def ReleaseKey(self):
+        if self.grabbedKey:
+            self.SetKeyToCurrentFrame(self.grabbedKey)
+            self.grabbedKey = None
         
     def SelectCurrentFrame(self):
         self.document.selectedSlot[0] = self.document.currentFrame
@@ -248,16 +282,22 @@ class AnimationPanel(wx.Panel):
         self.SetCurrentFrame(frame)
         self.SelectCurrentFrame()
         
+    def SetDocument(self, document):
+        self.document = document
+        key = self.GetKey(self.document.currentFrame)
+        evt = FrameChangedEvent(key = key, frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
+        wx.PostEvent(self, evt)
+        self.Refresh()
+        
     def SetEndFrameToPosition(self, x, y):
         newf = int((x - self.startAnimationBlock)/self.horizontalScale)
         if newf<2:
             return
         self.SetTotalFrames(newf)
         
-    def SetDocument(self, document):
-        self.document = document
-        key = self.GetKey(self.document.currentFrame)
-        evt = FrameChangedEvent(key = key, frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
+    def SetKeyToCurrentFrame(self, key):
+        self.document.keys[self.document.currentFrame] = key
+        evt = FrameChangedEvent(key = key[0], frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
         wx.PostEvent(self, evt)
         self.Refresh()
         
@@ -297,9 +337,13 @@ class AnimationView(wx.Panel):
 
         self.SetMinSize(wx.Size(100, 100))
         
+        self.freeze = False
         self.bitmap = None
         
     def Display(self, key):
+        if self.freeze:
+            return
+            
         if key:
             w, h = self.GetClientSize()
             ar = w/h
@@ -320,6 +364,10 @@ class AnimationView(wx.Panel):
         else:
             self.bitmap = None
             
+    def Freeze(self, key):
+        self.Display(key)
+        self.freeze = True
+        
     def OnFrameChanged(self, e):
         self.Display(e.key)
         self.Refresh()
@@ -334,7 +382,10 @@ class AnimationView(wx.Panel):
         w, h = self.GetClientSize()
         if self.bitmap:
             gc.DrawBitmap(self.bitmap, max(0, (w-self.bitmap.width)/2), max(0, (h-self.bitmap.height)/2), self.bitmap.width, self.bitmap.height)
-            
+    
+    def UnFreeze(self):
+        self.freeze = False
+        
 class AnimationControl(wx.Window):
     def __init__(self, parent=None, document=None):
         super().__init__(parent)
@@ -367,7 +418,7 @@ class AnimationControl(wx.Window):
         consizer = wx.BoxSizer(wx.HORIZONTAL)
         
         btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/play.png"))
-        #self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
+        self.Bind(wx.EVT_BUTTON, self.OnPlay, id=btn.GetId())
         consizer.Add(btn, 0, wx.ALIGN_CENTER, 1)
         
         btn = wx.BitmapButton(conpanel, bitmap=wx.Bitmap("icons/stop.png"))
@@ -441,15 +492,24 @@ class AnimationControl(wx.Window):
     def OnLeftDown(self, e):
         self.prevx, self.prevy = e.Position
         self.grab = None
+        self.grabbedKey = None
         
         if self.panel.IsEndFrameHandle(self.prevx, self.prevy):
             self.grab = END_FRAME_HANDLE
         else:
             self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
+            # below can be different from above
+            f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
+            gk = self.panel.GetKeyAbsolute(f)
+            if gk:
+                self.panel.GrabKey(gk, f)
+                self.view.Freeze(gk[0])
             
     def OnLeftUp(self, e):
         self.grab = None
-        
+        self.panel.ReleaseKey()
+        self.view.UnFreeze()
+            
     def OnMiddleDown(self, e):
         self.prevx, self.prevy = e.Position
 
@@ -465,6 +525,7 @@ class AnimationControl(wx.Window):
                 self.panel.SetEndFrameToPosition(x, y)
             else:
                 self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
+                    
         elif e.rightIsDown:
             pass
         else:
