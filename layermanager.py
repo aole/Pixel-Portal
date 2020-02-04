@@ -588,6 +588,12 @@ class LayerManager(Document):
     def SetVisible(self, v=True):
         self.layers[self.currentLayer].visible = v
         
+    def SetVisibleExclusive(self, layers):
+        for layer in self.layers:
+            layer.visible = False
+        for layer in layers:
+            layer.visible = True
+            
     def SourceFromSurface(self):
         self.layers[self.currentLayer].PasteSource(self.surface)
         

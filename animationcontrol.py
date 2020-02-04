@@ -17,7 +17,8 @@ NUN_LABEL_WIDTH = 30
 LABEL_FONT_SIZE = 8
 MIN_MARKER_SIZE = 20
 
-FrameChangedEvent,      EVT_FRAME_CHANGED_EVENT     = wx.lib.newevent.NewEvent()
+FrameChangedEvent,           EVT_FRAME_CHANGED_EVENT          = wx.lib.newevent.NewEvent()
+VisibilityChangedEvent,      EVT_VISIBILITY_CHANGED_EVENT     = wx.lib.newevent.NewEvent()
 
 class PlayTimer(wx.Timer):
     def __init__(self, parent=None):
@@ -348,7 +349,7 @@ class AnimationView(wx.Panel):
             w, h = self.GetClientSize()
             ar = w/h
             
-            kw, kh = key[0].width, key[1].height
+            kw, kh = key[0].width, key[0].height
             kar = kw/kh
             
             if kar>ar:
@@ -397,6 +398,7 @@ class AnimationControl(wx.Window):
         self.panel.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.panel.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.panel.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.panel.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         self.panel.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.panel.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         
@@ -488,6 +490,14 @@ class AnimationControl(wx.Window):
             self.panel.InsertKey(key)
             self.panel.NextFrameSelected()
             self.panel.CurrentFrameToSelected()
+    
+    def OnLeftDClick(self, e):
+        self.prevx, self.prevy = e.Position
+        f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
+        gk = self.panel.GetKeyAbsolute(f)
+        if gk:
+            evt = VisibilityChangedEvent(key = gk[0], frame = self.document.currentFrame)
+            wx.PostEvent(self, evt)
             
     def OnLeftDown(self, e):
         self.prevx, self.prevy = e.Position

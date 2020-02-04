@@ -1421,6 +1421,7 @@ class Frame(wx.Frame):
         
         # ANIMATION CONTROL
         self.animControl = AnimationControl(self, self.canvas.document)
+        self.animControl.Bind(EVT_VISIBILITY_CHANGED_EVENT, self.OnLayerVisibilityFromKey)
         bstop.Add(self.animControl, 0, wx.EXPAND|wx.ALL, 2)
         
         # LAYERS PANEL
@@ -1636,6 +1637,11 @@ class Frame(wx.Frame):
         
     def OnLayerVisibility(self, e):
         self.canvas.document.ToggleVisible(e.index)
+        self.canvas.Refresh()
+        self.RefreshLayers()
+        
+    def OnLayerVisibilityFromKey(self, e):
+        self.canvas.document.SetVisibleExclusive(e.key)
         self.canvas.Refresh()
         self.RefreshLayers()
         
