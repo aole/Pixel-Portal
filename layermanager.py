@@ -594,13 +594,13 @@ class LayerManager(Document):
     def SourceToSurface(self):
         self.surface.PasteSource(self.layers[self.currentLayer])
         
-    def Spline(self, pts, color):
+    def Spline(self, pts, color, size=1):
         mdc = wx.MemoryDC(self.surface)
         gcdc = wx.GCDC(mdc)
         gc = gcdc.GraphicsContext
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gcdc.SetPen(wx.Pen(color, 1))
+        gcdc.SetPen(wx.Pen(color, size))
         gcdc.DrawSpline(pts)
         del gcdc
         mdc.SelectObject(wx.NullBitmap)

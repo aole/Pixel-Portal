@@ -1277,7 +1277,7 @@ class Canvas(wx.Panel):
         self.SetCursor(wx.Cursor(TOOLS[tool][0]))
 
     def Spline(self, pts, color, canmirrorx=True, canmirrory=True):
-        self.document.Spline(pts, color)
+        self.document.Spline(pts, color, size=self.penSize)
         if canmirrorx and self.mirrorx:
             mpts = [(self.GetXMirror(x), y) for x,y in pts]
             self.Spline(mpts, color, False, True)
