@@ -9,6 +9,7 @@ from shapely.geometry   import Polygon, MultiPolygon, LineString
 from shapely.ops        import unary_union
 
 import wx
+import wx.lib.agw.genericmessagedialog as GMD
 from wx.adv import BitmapComboBox
 from wx.lib.agw.cubecolourdialog import CubeColourDialog
 
@@ -1364,6 +1365,10 @@ class Frame(wx.Frame):
         menu.AppendSeparator()
         self.AddMenuItem(menu, "&Clear\tDelete", self.OnClear)
         
+        menu = wx.Menu()
+        mbar.Append(menu, "&Help")
+        self.AddMenuItem(menu, "&About", self.OnAbout)
+        
         self.SetMenuBar(mbar)
 
         # TOOLBAR
@@ -1504,6 +1509,16 @@ class Frame(wx.Frame):
     def ImageSizeChanged(self, w, h):
         self.txtWidth.SetValue(str(w))
         self.txtHeight.SetValue(str(h))
+    
+    def OnAbout(self, e):
+        msg = 'Pixel Portal\n' \
+              'Version 1\n' \
+              'Bhupendra Aole\n' \
+              'https://github.com/aole/Pixel-Portal'
+        dlg = GMD.GenericMessageDialog(self, msg, "About Pixel Portal",
+                               agwStyle=wx.ICON_INFORMATION | wx.OK)
+        dlg.ShowModal()
+        dlg.Destroy()
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
