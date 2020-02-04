@@ -19,6 +19,7 @@ MIN_MARKER_SIZE = 20
 
 FrameChangedEvent,           EVT_FRAME_CHANGED_EVENT          = wx.lib.newevent.NewEvent()
 VisibilityChangedEvent,      EVT_VISIBILITY_CHANGED_EVENT     = wx.lib.newevent.NewEvent()
+KeyInsertEvent,              EVT_KEY_INSERT_EVENT             = wx.lib.newevent.NewEvent()
 
 class PlayTimer(wx.Timer):
     def __init__(self, parent=None):
@@ -119,6 +120,7 @@ class AnimationPanel(wx.Panel):
                 self.document.selectedSlot[2] += 1
             
             self.Refresh()
+            
         else:
             print('Error: No selected slot!')
             
@@ -490,6 +492,8 @@ class AnimationControl(wx.Window):
             self.panel.InsertKey(key)
             self.panel.NextFrameSelected()
             self.panel.CurrentFrameToSelected()
+            evt = KeyInsertEvent(key = key)
+            wx.PostEvent(self, evt)
     
     def OnLeftDClick(self, e):
         self.prevx, self.prevy = e.Position

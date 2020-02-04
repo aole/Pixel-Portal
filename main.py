@@ -1427,6 +1427,7 @@ class Frame(wx.Frame):
         # ANIMATION CONTROL
         self.animControl = AnimationControl(self, self.canvas.document)
         self.animControl.Bind(EVT_VISIBILITY_CHANGED_EVENT, self.OnLayerVisibilityFromKey)
+        self.animControl.Bind(EVT_KEY_INSERT_EVENT, self.OnAnimationKeyInsert)
         bstop.Add(self.animControl, 0, wx.EXPAND|wx.ALL, 2)
         
         # LAYERS PANEL
@@ -1512,7 +1513,7 @@ class Frame(wx.Frame):
     
     def OnAbout(self, e):
         msg = 'Pixel Portal\n' \
-              'Version 1\n' \
+              'Version 1.0\n' \
               'Bhupendra Aole\n' \
               'https://github.com/aole/Pixel-Portal'
         dlg = GMD.GenericMessageDialog(self, msg, "About Pixel Portal",
@@ -1522,6 +1523,13 @@ class Frame(wx.Frame):
         
     def OnAddLayer(self, e):
         self.canvas.AddLayer()
+        self.canvas.Refresh()
+        self.RefreshLayers()
+    
+    def OnAnimationKeyInsert(self, e):
+        print(e)
+        self.canvas.document.Current().visible = False
+        self.canvas.document.DuplicateAndSelect()
         self.canvas.Refresh()
         self.RefreshLayers()
         

@@ -449,7 +449,9 @@ class LayerManager(Document):
     def Current(self):
         return self.layers[self.currentLayer]
     
-    def DuplicateAndSelect(self, index):
+    def DuplicateAndSelect(self, index=-1):
+        if index<0:
+            index = self.currentLayer
         layer = self.layers[index]
         name = 'Copy of ' + layer.name
         self.AppendSelect(layer.Copy(name))
