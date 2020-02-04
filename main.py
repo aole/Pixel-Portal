@@ -1748,8 +1748,7 @@ class Frame(wx.Frame):
         self.Refresh()
     
     def OnSettings(self, e):
-        #Settings(self).Show()
-        pass
+        Settings(self).ShowModal()
         
     def OnSmoothLine(self, e):
         self.canvas.smoothLine = e.IsChecked()
