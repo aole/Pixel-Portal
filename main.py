@@ -24,6 +24,7 @@ from layercontrol import *
 from animationcontrol import *
 from document import *
 from settings import *
+from dialogs.dictionarydialog import *
 
 PROGRAM_NAME = "Pixel Portal"
 WINDOW_SIZE = (800, 700)
@@ -1462,7 +1463,7 @@ class Frame(wx.Frame):
         conpanel.SetSizer(sizer)
         bsp.Add(conpanel, 0, wx.EXPAND | wx.ALL, 2)
         
-        self.OnNew(None, *DEFAULT_DOC_SIZE)
+        self.OnNew(None, *DEFAULT_DOC_SIZE, False)
         
         layerPanel.SetSizer(bsp)
         layerPanel.FitInside()
@@ -1681,7 +1682,7 @@ class Frame(wx.Frame):
         self.canvas.mirrory = e.IsChecked()
         self.canvas.Refresh()
 
-    def OnNew(self, e, width=None, height=None):
+    def OnNew(self, e, width=None, height=None, showDialog=True):
         if not self.CheckDirty():
             return
 
@@ -1696,6 +1697,14 @@ class Frame(wx.Frame):
         else:
             height = int(self.txtHeight.GetValue())
             
+        if showDialog:
+            dlg = DictionaryDialog(self, {'Width':width, 'Height':height})
+            if dlg.ShowModal() == wx.ID_OK:
+                width = dlg.Get('Width')
+                height = dlg.Get('Height')
+            else:
+                return
+                
         self.canvas.New(pixel, width, height)
         self.canvas.Refresh()
         self.RefreshLayers()
