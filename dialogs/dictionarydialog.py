@@ -45,7 +45,7 @@ class DictionaryDialog(wx.Dialog):
         
 if __name__ == '__main__':
     app = wx.App()
-    dlg = NewDialog(None, {'Width':10, 'Height':10})
+    dlg = DictionaryDialog(None, {'Width':10, 'Height':10})
     if dlg.ShowModal()==wx.ID_OK:
         print(dlg.Get('Width'), dlg.Get('Height'))
         

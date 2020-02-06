@@ -528,8 +528,8 @@ class LayerManager(Document):
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         self.surface.Rectangle(x, y, w, h, color, size, clip)
         
-    def Remove(self, layer=None):
-        if len(self.layers)>1:
+    def Remove(self, layer=None, force=False):
+        if len(self.layers)>1 or force:
             if not layer:
                 layer = self.layers[self.currentLayer]
             del self.layers[self.layers.index(layer)]
@@ -539,8 +539,8 @@ class LayerManager(Document):
         
         return layer
         
-    def RemoveSelected(self):
-        self.Remove(self.Current())
+    def RemoveSelected(self, force=False):
+        self.Remove(self.Current(), force)
         
     def RemoveAll(self):
         self.surface = None

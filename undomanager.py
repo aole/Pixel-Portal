@@ -86,9 +86,9 @@ class MergeDownLayerCommand(Command):
 
     def Undo(self):
         self.layermgr.SelectIndex(self.idx)
-        self.layermgr.RemoveSelected()
-        self.layermgr.AppendSelect(self.layerBelow)
-        self.layermgr.AppendSelect(self.layerAbove)
+        self.layermgr.RemoveSelected(True)
+        self.layermgr.AppendSelect(self.layerBelow.Copy())
+        self.layermgr.AppendSelect(self.layerAbove.Copy())
         return True
 
     def __str__(self):

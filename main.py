@@ -1131,8 +1131,7 @@ class Canvas(wx.Panel):
                 func((y - self.pany) / self.pixelSize))
 
     def Redo(self):
-        if PRINT_UNDO_REDO and self.history.Redo():
-            print('REDO:', str(self.history.GetCurrentCommand()))
+        self.history.Redo()
         self.Refresh()
         for l in self.listeners:
             l.Redid()
@@ -1288,8 +1287,6 @@ class Canvas(wx.Panel):
             self.Spline(mpts, color, False, False)
 
     def Undo(self):
-        if PRINT_UNDO_REDO:
-            print('UNDO:', str(self.history.GetCurrentCommand()))
         self.history.Undo()
         self.Refresh()
         for l in self.listeners:
