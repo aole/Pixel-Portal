@@ -118,7 +118,8 @@ class LayerPanel(wx.Panel):
             if self.textctrl and self.textctrl.Shown:
                 self.txtBoxLayer.name = self.textctrl.GetValue()
             self.textctrl.Hide()
-                
+            return
+            
         self.txtBoxLayer = layer
         w, h = self.GetClientSize()
         if layer and x>60 and x<w-25:
@@ -129,9 +130,10 @@ class LayerPanel(wx.Panel):
             self.textctrl.SetFocus()
         
     def OnTextEnter(self, e):
-        self.txtBoxLayer.name = self.textctrl.GetValue()
-        self.txtBoxLayer = None
-        self.textctrl.Hide()
+        if self.txtBoxLayer:
+            self.txtBoxLayer.name = self.textctrl.GetValue()
+            self.txtBoxLayer = None
+            self.textctrl.Hide()
         
 class LayerControl(wx.ScrolledWindow):
     def __init__(self, parent=None):

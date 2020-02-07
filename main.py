@@ -583,7 +583,9 @@ class Canvas(wx.Panel):
         x,y = wx.GetMousePosition()
         x,y = self.ScreenToClient(x,y)
         gx, gy = self.PixelAtPosition(x,y)
-        
+        if gx<0 or gx>self.document.width or gy<0 or gy>self.document.height:
+            return False
+            
         beforeLayer = self.document.Current().Copy()
         self.document.BlitToSurface()
         self.document.Current().Clear()
@@ -593,6 +595,7 @@ class Canvas(wx.Panel):
         
         self.history.Store(PaintCommand(self.document, self.document.currentLayer, beforeLayer, self.document.Current().Copy()))
         self.Refresh()
+        return True
         
     def OnLeftDClick(self, e):
         x, y = e.GetPosition()
@@ -1430,18 +1433,25 @@ class Frame(wx.Frame):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         conpanel = wx.Panel(layerPanel)
         but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layernew.png'))
+        but.SetToolTip('Add new layer')
         self.Bind(wx.EVT_BUTTON, self.OnAddLayer, id=but.GetId())
         sizer.Add(but, 0, 0, 1)
+        
         sizer.AddSpacer(10)
         but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layerdelete.png'))
+        but.SetToolTip('Delete layer')
         self.Bind(wx.EVT_BUTTON, self.OnRemoveLayer, id=but.GetId())
         sizer.Add(but, 0, 0, 1)
+        
         sizer.AddSpacer(10)
         but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layerduplicate.png'))
+        but.SetToolTip('Duplicate layer')
         self.Bind(wx.EVT_BUTTON, self.OnDuplicateLayer, id=but.GetId())
         sizer.Add(but, 0, 0, 1)
+        
         sizer.AddSpacer(10)
         but = wx.BitmapButton(conpanel, bitmap=wx.Bitmap('icons/layermerge.png'))
+        but.SetToolTip('Merge down')
         self.Bind(wx.EVT_BUTTON, self.OnMergeDown, id=but.GetId())
         sizer.Add(but, 0, 0, 1)
         sizer.AddSpacer(10)
@@ -1487,9 +1497,6 @@ class Frame(wx.Frame):
 
         return True
 
-    def GetPixelSize(self):
-        return int(self.txtPixel.GetValue())
-        
     def OnAbout(self, e):
         msg = 'Pixel Portal\n' \
               'Version 1.0\n' \
@@ -1616,12 +1623,16 @@ class Frame(wx.Frame):
                     self.canvas.Redo()
                 else:
                     self.canvas.Undo()
+            else:
+                # skip for other controls (eg renaming layer)
+                e.Skip()
         elif keycode == ord('['):
             self.canvas.AdjustBrushSize(-1)
         elif keycode == ord(']'):
             self.canvas.AdjustBrushSize(1)
         elif keycode == ord('F'):
-            self.canvas.OnFloodFill(e)
+            if not self.canvas.OnFloodFill(e):
+                e.Skip()
         else:
             e.Skip()
 
