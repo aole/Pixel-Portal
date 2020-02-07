@@ -484,6 +484,9 @@ class LayerManager(Document):
             stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
         self.surface.FillRGradient(x0, y0, x1, y1, stops, clip)
         
+    def GetIndex(self, layer):
+        return self.layers.index(layer)
+        
     def GetVisible(self):
         return self.layers[self.currentLayer].visible
         
@@ -516,14 +519,19 @@ class LayerManager(Document):
         del self.layers[self.currentLayer]
         
     def RearrangeLayer(self, layer, position):
-        c = self.layers.index(layer)
-        if c==position or c==position-1:
-            return
-        if position>c:
-            position-=1
-        self.layers.remove(layer)
-        self.layers.insert(position, layer)
-        self.currentLayer = min(position, len(self.layers)-1)
+        idx = self.layers.index(layer)
+        self.RearrangeIndex(idx, position)
+        
+    def RearrangeIndex(self, frmpos, topos):
+        if topos>=len(self.layers):
+            topos -= 1
+        if frmpos>=len(self.layers):
+            frmpos -= 1
+        if frmpos==topos:
+            return False
+        self.layers.insert(topos, self.layers.pop(frmpos))
+        self.currentLayer = topos
+        return True
         
     def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         self.surface.Rectangle(x, y, w, h, color, size, clip)

@@ -93,6 +93,25 @@ class MergeDownLayerCommand(Command):
 
     def __str__(self):
         return "Merge "+self.layerAbove.name+" + "+self.layerBelow.name
+
+class RearrangeLayerCommand(Command):
+    def __init__(self, layermgr, frmpos, topos):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.frmpos = frmpos
+        self.topos = topos
+        
+    def Do(self):
+        self.layermgr.RearrangeIndex(self.frmpos, self.topos)
+        return True
+
+    def Undo(self):
+        self.layermgr.RearrangeIndex(self.topos, self.frmpos)
+        return True
+
+    def __str__(self):
+        return "Rearrange "+str(self.frmpos)+' -> '+str(self.topos)
         
 class RemoveLayerCommand(Command):
     def __init__(self, layermgr, index, layer):

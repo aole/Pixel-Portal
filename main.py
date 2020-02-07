@@ -1128,6 +1128,12 @@ class Canvas(wx.Panel):
         return (func((x - self.panx) / self.pixelSize),
                 func((y - self.pany) / self.pixelSize))
 
+    def RearrangeLayer(self, layer, position):
+        idx = self.document.GetIndex(layer)
+        if idx!=position:
+            if self.document.RearrangeIndex(idx, position):
+                self.history.Store(RearrangeLayerCommand(self.document, idx, position))
+            
     def Redo(self):
         self.history.Redo()
         self.Refresh()
@@ -1646,7 +1652,7 @@ class Frame(wx.Frame):
         self.RefreshLayers()
         
     def OnLayerDrop(self, e):
-        self.canvas.document.RearrangeLayer(e.layer, e.position)
+        self.canvas.RearrangeLayer(e.layer, e.position)
         self.canvas.Refresh()
         self.RefreshLayers()
         
