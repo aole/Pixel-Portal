@@ -32,8 +32,6 @@ WINDOW_SIZE = (800, 700)
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
 
-FILE_DIALOG_FILTERS = "supported|*.aole;*.tif;*.png|aole files (*.aole)|*.aole|tif files (*.tif)|*.tif|png files (*.png)|*.png"
-
 TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
          "Select":          (wx.CURSOR_CROSS,       "toolselectrect.png"),
          "Line":            (wx.CURSOR_CROSS,       "toolline.png"),
@@ -60,6 +58,9 @@ def minmax(a, b):
     else:
         return a, b
 
+def nvl(v, nv):
+    return v if v else nv
+    
 class Canvas(wx.Panel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -521,9 +522,6 @@ class Canvas(wx.Panel):
         self.history.ClearCommands()
         self.Deselect()
 
-        for l in self.listeners:
-            l.ImageSizeChanged(width, height)
-            
     def LoadRefImage(self, filename):
         image = Image.open(filename)
         image.putalpha(int(self.refAlpha*255))
@@ -839,9 +837,6 @@ class Canvas(wx.Panel):
                 self.pixelSize -= 1
                 if self.pixelSize < 1:
                     self.pixelSize = 1
-
-            for l in self.listeners:
-                l.PixelSizeChanged(self.pixelSize)
 
         self.Refresh()
 
@@ -1376,13 +1371,6 @@ class Frame(wx.Frame):
         self.AddToolButton(tb, 'Clear', self.OnClear, icon=wx.Bitmap("icons/clear.png"))
         self.AddToolButton(tb, 'Resize', self.OnDocResize, icon=wx.Bitmap("icons/resize.png"))
 
-        self.txtPixel = wx.TextCtrl(tb, value=str(DEFAULT_PIXEL_SIZE))
-        self.AddToolControl(tb, self.txtPixel)
-        self.txtWidth = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[0]))
-        self.AddToolControl(tb, self.txtWidth)
-        self.txtHeight = wx.TextCtrl(tb, value=str(DEFAULT_DOC_SIZE[1]))
-        self.AddToolControl(tb, self.txtHeight)
-
         self.AddToolButton(tb, 'New', self.OnNew, icon=wx.Bitmap("icons/new.png"))
         self.AddToolButton(tb, 'Load', self.OnOpen, icon=wx.Bitmap("icons/load.png"))
         self.AddToolButton(tb, 'Save', self.OnSave, icon=wx.Bitmap("icons/save.png"))
@@ -1499,16 +1487,9 @@ class Frame(wx.Frame):
 
         return True
 
-    def GetDocumentSize(self):
-        return int(self.txtWidth.GetValue()), int(self.txtHeight.GetValue())
-        
     def GetPixelSize(self):
         return int(self.txtPixel.GetValue())
         
-    def ImageSizeChanged(self, w, h):
-        self.txtWidth.SetValue(str(w))
-        self.txtHeight.SetValue(str(h))
-    
     def OnAbout(self, e):
         msg = 'Pixel Portal\n' \
               'Version 1.0\n' \
@@ -1574,9 +1555,11 @@ class Frame(wx.Frame):
         self.Refresh()
         
     def OnDocResize(self, e):
-        width = int(self.txtWidth.GetValue())
-        height = int(self.txtHeight.GetValue())
-        self.canvas.Resize(width, height)
+        dlg = ResizeDialog(self, self.canvas.document.Composite(), self.canvas.pixelSize)
+        if dlg.ShowModal()==wx.ID_OK:
+            width = dlg.GetWidth()
+            height = dlg.GetHeight()
+            self.canvas.Resize(width, height)
 
     def OnDuplicateLayer(self, e):
         self.canvas.DuplicateLayer()
@@ -1684,27 +1667,18 @@ class Frame(wx.Frame):
             return
 
         self.saveFile = None
-        pixel = int(self.txtPixel.GetValue())
-        if width:
-            self.txtWidth.SetValue(str(width))
-        else:
-            width = int(self.txtWidth.GetValue())
-        if height:
-            self.txtHeight.SetValue(str(height))
-        else:
-            height = int(self.txtHeight.GetValue())
-            
         if showDialog:
-            dlg = DictionaryDialog(self, {'Width':width, 'Height':height})
+            dlg = DictionaryDialog(self, {'Width':nvl(width, 80), 'Height':nvl(height, 80)})
             if dlg.ShowModal() == wx.ID_OK:
                 width = dlg.Get('Width')
                 height = dlg.Get('Height')
             else:
                 return
                 
-        self.canvas.New(pixel, width, height)
-        self.canvas.Refresh()
-        self.RefreshLayers()
+        if width and height:
+            self.canvas.New(5, width, height)
+            self.canvas.Refresh()
+            self.RefreshLayers()
         
     def OnOpen(self, e):
         if not self.CheckDirty():
@@ -1716,13 +1690,17 @@ class Frame(wx.Frame):
             if fd.ShowModal() == wx.ID_CANCEL:
                 return
                 
-            pixel = int(self.txtPixel.GetValue())
             self.saveFile = fd.GetPath()
+            ps = 1
+            if self.saveFile[-5:]!='.aole': # not native format as we already know the pixel size
+                cpd = ChangePixelDialog(self, wx.Bitmap(self.saveFile))
+                cpd.ShowModal()
+                ps = cpd.GetPixelSize()
             
-        self.canvas.Load(pixel, self.saveFile)
-        self.canvas.Refresh()
-        self.animControl.SetDocument(self.canvas.document)
-        self.RefreshLayers()
+            self.canvas.Load(ps, self.saveFile)
+            self.canvas.Refresh()
+            self.animControl.SetDocument(self.canvas.document)
+            self.RefreshLayers()
 
     def OnRefImage(self, e):
         ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
@@ -1808,9 +1786,6 @@ class Frame(wx.Frame):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
         self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
-
-    def PixelSizeChanged(self, value):
-        self.txtPixel.SetValue(str(value))
 
     def Redid(self):
         self.Undid()
