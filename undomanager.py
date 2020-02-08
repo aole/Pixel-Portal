@@ -7,27 +7,7 @@ Bhupendra Aole
 from wx import Command, Bitmap, CommandProcessor, Region
 
 NUM_UNDOS = 100
-
-class PaintCommand(Command):
-    def __init__(self, layermgr, index, before, after):
-        super().__init__(True)
-
-        self.layermgr = layermgr
-        self.index = index
-        self.before = before
-        self.after = after
-
-    def Do(self):
-        self.layermgr.layers[self.index].PasteSource(self.after)
-        return True
-
-    def Undo(self):
-        self.layermgr.layers[self.index].PasteSource(self.before)
-        return True
-
-    def __str__(self):
-        return self.before.name+" -> paint -> "+ self.after.name
-        
+ 
 class AddLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -69,7 +49,25 @@ class DuplicateLayerCommand(Command):
 
     def __str__(self):
         return "Duplicate "+self.layermgr[self.oldidx].name
+
+class FlipCommand(Command):
+    def __init__(self, layermgr, horizontal=True):
+        super().__init__(True)
+        self.layermgr = layermgr
+        self.horizontal = horizontal
         
+    def Do(self):
+        self.layermgr.Flip(self.horizontal)
+        return True
+
+    def Undo(self):
+        self.layermgr.Flip(self.horizontal)
+        return True
+
+    def __str__(self):
+        return "Flip "+("Horizontally" if self.horizontal else "Vertically")
+
+
 class MergeDownLayerCommand(Command):
     def __init__(self, layermgr, idx, layerAbove, layerBelow):
         super().__init__(True)
@@ -94,6 +92,26 @@ class MergeDownLayerCommand(Command):
     def __str__(self):
         return "Merge "+self.layerAbove.name+" + "+self.layerBelow.name
 
+class PaintCommand(Command):
+    def __init__(self, layermgr, index, before, after):
+        super().__init__(True)
+
+        self.layermgr = layermgr
+        self.index = index
+        self.before = before
+        self.after = after
+
+    def Do(self):
+        self.layermgr.layers[self.index].PasteSource(self.after)
+        return True
+
+    def Undo(self):
+        self.layermgr.layers[self.index].PasteSource(self.before)
+        return True
+
+    def __str__(self):
+        return self.before.name+" -> paint -> "+ self.after.name
+       
 class RearrangeLayerCommand(Command):
     def __init__(self, layermgr, frmpos, topos):
         super().__init__(True)

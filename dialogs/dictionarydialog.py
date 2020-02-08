@@ -9,7 +9,7 @@
 import wx
 
 FILE_DIALOG_FILTERS = "supported|*.aole;*.tif;*.png;*jpg;*jpeg|aole files (*.aole)|*.aole|tif files (*.tif)|*.tif|png files (*.png)|*.png|*.jpg files (*.jpg)|*.jpg|jpeg files (*.jpeg)|*jpeg"
-REF_FILE_DIALOG_FILTERS = "supported|*.jpg;*.jpeg;*.png|*.jpg files (*.jpg)|*.jpg|jpeg files (*.jpeg)|*.jpeg|png files (*.png)|*.png"
+REF_FILE_DIALOG_FILTERS = "supported|*.jpg;*.jpeg;*.png|jpg files (*.jpg)|*.jpg|jpeg files (*.jpeg)|*.jpeg|png files (*.png)|*.png"
 
 class ImageOpenProperty:
     def __init__(self, filename):

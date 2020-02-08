@@ -43,6 +43,20 @@ class Layer(wx.Bitmap):
         self.Create(self.width, self.height, 32)
         self.CopyFromBuffer(buf, wx.BitmapBufferFormat_RGBA)
         
+    def Blit(self, layer, x=0, y=0, w=0, h=0):
+        if w == 0:
+            w = layer.width
+        if h == 0:
+            h = layer.height
+
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.DrawBitmap(layer, x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
     def Clear(self, clip=None, color=COLOR_BLANK):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -111,42 +125,19 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
-    def GetPixel(self, x, y):
-        mdc = wx.MemoryDC(self)
-        col = mdc.GetPixel(x, y)
-        del mdc
-        
-        return col
-
-    def Scaled(self, factor):
-        bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
-        mdcd = wx.MemoryDC(bitmap)
-        mdcs = wx.MemoryDC(self)
-        mdcd.StretchBlit(0, 0,
-                         self.width * factor, self.height * factor,
-                         mdcs,
-                         0,
-                         0,
-                         self.width, self.height)
-        mdcd.SelectObject(wx.NullBitmap)
-        mdcs.SelectObject(wx.NullBitmap)
-        del mdcs
-        del mdcd
-        
-        return bitmap
-
-    def SetPixel(self, x, y, color, size=1, clip=None):
+    def EraseLine(self, x0, y0, x1, y1, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
         if clip and not clip.IsEmpty():
             gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-        gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
+        gc.StrokeLine(x0, y0, x1, y1)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
-        
+
     def ErasePixel(self, x, y, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -160,19 +151,10 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
         
-    def SetPixels(self, pixels, color, size=1, clip=None):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-        for x, y in pixels:
-            gc.DrawRectangle(x, y, 1, 1)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-
+    def Flip(self, horizontal=True):
+        flipped = self.ConvertToImage().Mirror(horizontal).ConvertToBitmap()
+        self.PasteSource(flipped)
+        
     # BUG?? FloodFill is painting with alpha=0
     def FloodFill(self, x, y, color, clip=None):
         mdc = wx.MemoryDC(self)
@@ -203,6 +185,13 @@ class Layer(wx.Bitmap):
         #del gcdc
         #del mdc
         
+    def GetPixel(self, x, y):
+        mdc = wx.MemoryDC(self)
+        col = mdc.GetPixel(x, y)
+        del mdc
+        
+        return col
+
     def Line(self, x0, y0, x1, y1, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -212,44 +201,6 @@ class Layer(wx.Bitmap):
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
         gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
         gc.StrokeLine(x0, y0, x1, y1)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-
-    def EraseLine(self, x0, y0, x1, y1, size=1, clip=None):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
-        gc.StrokeLine(x0, y0, x1, y1)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-
-    def Rectangle(self, x, y, w, h, color, size=1, clip=None):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
-        gc.DrawRectangle(x, y, w, h)
-        mdc.SelectObject(wx.NullBitmap)
-        del mdc
-
-    def EraseRectangle(self, x, y, w, h, size=1, clip=None):
-        mdc = wx.MemoryDC(self)
-        gc = wx.GraphicsContext.Create(mdc)
-        if clip and not clip.IsEmpty():
-            gc.Clip(clip)
-        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
-        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
-        gc.DrawRectangle(x, y, w, h)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
@@ -278,6 +229,19 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
+    def EraseRectangle(self, x, y, w, h, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(COLOR_BLANK, size))
+        gc.DrawRectangle(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
     def FillGradient(self, x0, y0, x1, y1, stops, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
@@ -301,17 +265,16 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
         
-    def Blit(self, layer, x=0, y=0, w=0, h=0):
-        if w == 0:
-            w = layer.width
-        if h == 0:
-            h = layer.height
+    def Load(self, name):
+        bitmap = wx.Bitmap()
+        bitmap.LoadFile(name)
 
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
+        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(layer, x, y, w, h)
+        gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
@@ -331,16 +294,57 @@ class Layer(wx.Bitmap):
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
-    def Load(self, name):
-        bitmap = wx.Bitmap()
-        bitmap.LoadFile(name)
-
+    def Rectangle(self, x, y, w, h, color, size=1, clip=None):
         mdc = wx.MemoryDC(self)
         gc = wx.GraphicsContext.Create(mdc)
-        gc.SetCompositionMode(wx.COMPOSITION_SOURCE)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
         gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
         gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
-        gc.DrawBitmap(bitmap, 0, 0, self.width, self.height)
+        gc.SetPen(wx.ThePenList.FindOrCreatePen(color, size))
+        gc.DrawRectangle(x, y, w, h)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
+    def Scaled(self, factor):
+        bitmap = wx.Bitmap.FromRGBA(self.width * factor, self.height * factor, 0, 0, 0, 0)
+        mdcd = wx.MemoryDC(bitmap)
+        mdcs = wx.MemoryDC(self)
+        mdcd.StretchBlit(0, 0,
+                         self.width * factor, self.height * factor,
+                         mdcs,
+                         0,
+                         0,
+                         self.width, self.height)
+        mdcd.SelectObject(wx.NullBitmap)
+        mdcs.SelectObject(wx.NullBitmap)
+        del mdcs
+        del mdcd
+        
+        return bitmap
+
+    def SetPixel(self, x, y, color, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        gc.DrawRectangle(int(x-size/2+.5), int(y-size/2+.5), size, size)
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+        
+    def SetPixels(self, pixels, color, size=1, clip=None):
+        mdc = wx.MemoryDC(self)
+        gc = wx.GraphicsContext.Create(mdc)
+        if clip and not clip.IsEmpty():
+            gc.Clip(clip)
+        gc.SetAntialiasMode(wx.ANTIALIAS_NONE)
+        gc.SetInterpolationQuality(wx.INTERPOLATION_NONE)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        for x, y in pixels:
+            gc.DrawRectangle(x, y, 1, 1)
         mdc.SelectObject(wx.NullBitmap)
         del mdc
 
@@ -484,6 +488,10 @@ class LayerManager(Document):
             stops = wx.GraphicsGradientStops(wx.BLACK, wx.WHITE)
         self.surface.FillRGradient(x0, y0, x1, y1, stops, clip)
         
+    def Flip(self, horizontal=True):
+        for layer in self.layers:
+            layer.Flip(horizontal)
+            
     def GetIndex(self, layer):
         return self.layers.index(layer)
         

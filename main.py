@@ -502,7 +502,7 @@ class Canvas(wx.Panel):
         if filename[-4:]=="aole":
             self.document = Document.Load(filename)
             width, height = self.document.width, self.document.height
-        elif filename[-3:] in ("png", "jpg", "jpeg"):
+        elif filename[-4:] in (".png", ".jpg", "jpeg"):
             image = wx.Image(filename)
             self.pixelSize = pixel
             width, height = int(image.GetWidth() / pixel), int(image.GetHeight() / pixel)
@@ -570,13 +570,13 @@ class Canvas(wx.Panel):
         self.Refresh()
         
     def OnFlipH(self, e):
-        before = self.document.Current().Copy()
-        after = self.GetMirror(before)
-        after.name = before.name+' mirror'
+        self.history.Store(FlipCommand(self.document))
+        self.document.Flip()
+        self.Refresh()
 
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
-        self.document.Current().Draw(after)
-
+    def OnFlipV(self, e):
+        self.history.Store(FlipCommand(self.document))
+        self.document.Flip(False)
         self.Refresh()
 
     def OnFloodFill(self, e):
