@@ -502,7 +502,7 @@ class Canvas(wx.Panel):
         if filename[-4:]=="aole":
             self.document = Document.Load(filename)
             width, height = self.document.width, self.document.height
-        elif filename[-3:]=="png":
+        elif filename[-3:] in ("png", "jpg", "jpeg"):
             image = wx.Image(filename)
             self.pixelSize = pixel
             width, height = int(image.GetWidth() / pixel), int(image.GetHeight() / pixel)
@@ -1312,6 +1312,7 @@ class Frame(wx.Frame):
     def __init__(self):
         super().__init__(None, size=WINDOW_SIZE)
 
+        self.SetIcon(wx.Icon('icons/application.png'))
         self.FirstTimeResize = True
         self.saveFile = None
         
@@ -1720,9 +1721,13 @@ class Frame(wx.Frame):
             self.RefreshLayers()
 
     def OnRefImage(self, e):
-        ret = wx.LoadFileSelector(PROGRAM_NAME, "png", parent=self)
-        if ret:
-            self.canvas.LoadRefImage(ret)
+        with wx.FileDialog(self, "Open Reference Image file",
+                           wildcard=REF_FILE_DIALOG_FILTERS,
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_PREVIEW) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+                
+            self.canvas.LoadRefImage(fd.GetPath())
             self.canvas.Refresh()
 
     def OnRemoveLayer(self, e):
