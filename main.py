@@ -27,7 +27,6 @@ from settings import *
 from dialogs.dictionarydialog import *
 
 PROGRAM_NAME = "Pixel Portal"
-WINDOW_SIZE = (800, 700)
 
 DEFAULT_DOC_SIZE = (80, 80)
 DEFAULT_PIXEL_SIZE = 5
@@ -487,6 +486,9 @@ class Canvas(wx.Panel):
     def GetPenColor(self):
         return self.penColor
 
+    def GetPenSize(self):
+        return self.penSize
+        
     def GetPolyCoords(self, x, y, w, h):
         return (x,y), (x,y+h), (x+w, y+h), (x+w,y)
         
@@ -1279,6 +1281,9 @@ class Canvas(wx.Panel):
     def SetPenColor(self, color):
         self.penColor = color
 
+    def SetPenSize(self, size):
+        self.penSize = size
+        
     def SetTool(self, tool):
         self.current_tool = tool
         self.original_tool = tool
@@ -1313,7 +1318,7 @@ class Canvas(wx.Panel):
         
 class Frame(wx.Frame):
     def __init__(self):
-        super().__init__(None, size=WINDOW_SIZE)
+        super().__init__(None)
 
         self.SetIcon(wx.Icon('icons/application.png'))
         self.FirstTimeResize = True
@@ -1472,6 +1477,8 @@ class Frame(wx.Frame):
         
         self.OnNew(None, *DEFAULT_DOC_SIZE, False)
         
+        self.LoadConfiguration()
+        
         layerPanel.SetSizer(bsp)
         layerPanel.FitInside()
         self.SetSizer(bstop)
@@ -1509,6 +1516,24 @@ class Frame(wx.Frame):
 
         return True
 
+    def LoadConfiguration(self):
+        config = wx.Config("Pixel-Portal")
+        fw = config.ReadInt("Frame/Width", 800)
+        fh = config.ReadInt("Frame/Height", 700)
+        self.SetSize(fw, fh)
+        px = config.ReadInt("Frame/PosX", 0)
+        py = config.ReadInt("Frame/PosY", 0)
+        self.SetPosition(wx.Point(px, py))
+        
+        pc = config.ReadInt("General/PenColor", wx.BLACK.GetRGBA())
+        c = wx.Colour()
+        c.SetRGBA(pc)
+        self.canvas.SetPenColor(c)
+        self.PenColorChanged(c)
+        
+        ps = config.ReadInt("General/PenSize", 1)
+        self.canvas.SetPenSize(ps)
+        
     def OnAbout(self, e):
         msg = 'Pixel Portal\n' \
               'Version 1.0\n' \
@@ -1547,6 +1572,8 @@ class Frame(wx.Frame):
         if not self.CheckDirty():
             return
             
+        self.SaveConfiguration()
+        
         self.Destroy()
         
     def OnColor(self, e):
@@ -1825,6 +1852,18 @@ class Frame(wx.Frame):
         self.lyrctrl.UpdateLayers(self.canvas.document)
         self.lyrctrl.FitInside()
         self.UpdateTitle()
+    
+    def SaveConfiguration(self):
+        config = wx.Config("Pixel-Portal")
+        sw, sh = self.GetSize()
+        config.WriteInt("Frame/Width", sw)
+        config.WriteInt("Frame/Height", sh)
+        px, py = self.GetPosition()
+        config.WriteInt("Frame/PosX", px)
+        config.WriteInt("Frame/PosY", py)
+        
+        config.WriteInt("General/PenColor", self.canvas.GetPenColor().GetRGBA())
+        config.WriteInt("General/PenSize", self.canvas.GetPenSize())
         
     def Undid(self):
         self.RefreshLayers()
