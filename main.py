@@ -1518,9 +1518,11 @@ class Frame(wx.Frame):
 
     def LoadConfiguration(self):
         config = wx.Config("Pixel-Portal")
+        
         fw = config.ReadInt("Frame/Width", 800)
         fh = config.ReadInt("Frame/Height", 700)
         self.SetSize(fw, fh)
+        
         px = config.ReadInt("Frame/PosX", 0)
         py = config.ReadInt("Frame/PosY", 0)
         self.SetPosition(wx.Point(px, py))
@@ -1855,9 +1857,11 @@ class Frame(wx.Frame):
     
     def SaveConfiguration(self):
         config = wx.Config("Pixel-Portal")
+        
         sw, sh = self.GetSize()
         config.WriteInt("Frame/Width", sw)
         config.WriteInt("Frame/Height", sh)
+        
         px, py = self.GetPosition()
         config.WriteInt("Frame/PosX", px)
         config.WriteInt("Frame/PosY", py)
