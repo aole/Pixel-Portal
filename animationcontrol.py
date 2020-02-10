@@ -36,6 +36,8 @@ class AnimationPanel(wx.Panel):
     def __init__(self, parent=None, document=None):
         super().__init__(parent)
 
+        self.CURRENT_FRAME_COLOR = wx.Colour(*wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT).Get(False), 50)
+
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
@@ -54,20 +56,13 @@ class AnimationPanel(wx.Panel):
         self.grabbedKey = None
         self.grabbedFrame = -1
         
-    def CurrentFrameToSelected(self):
-        self.SetCurrentFrame(self.document.selectedSlot[0])
-        
-    def DeleteKey(self, frame):
+    def DeleteKey(self, frame=None):
+        if not frame:
+            frame = self.currentFrame
         key = self.document.keys[frame]
         del self.document.keys[frame]
         self.Refresh()
         return key[0]
-        
-    def DeleteSelectedKey(self):
-        if self.document.selectedSlot[0] in self.document.keys:
-            del self.document.keys[self.document.selectedSlot[0]]
-        
-        self.Refresh()
         
     def GetCurrentFrame(self):
         return self.document.currentFrame
@@ -128,7 +123,6 @@ class AnimationPanel(wx.Panel):
             
     def InsertKey(self, frame, key):
         self.document.keys[frame] = [key]
-        self.SelectCurrentFrame()
         self.Refresh()
             
     def IsEndFrameHandle(self, x, y, margin=10):
@@ -136,16 +130,13 @@ class AnimationPanel(wx.Panel):
         return x>=pos and x<pos+margin
     
     def MoveKey(self, frame, key):
+        self.document.keys[self.document.currentFrame] = key
         if not frame == self.document.currentFrame:
-            self.document.keys[self.document.currentFrame] = key
             self.Refresh()
-        
+    
     def NextFrame(self):
         nf = 1 if self.document.currentFrame>=self.totalFrames else self.document.currentFrame+1
         self.SetCurrentFrame(nf)
-        
-    def NextFrameSelected(self):
-        self.document.selectedSlot[0] = 1 if self.document.selectedSlot[0]>=self.totalFrames else self.document.selectedSlot[0]+1
         
     def OnPaint(self, e):
         dc = wx.AutoBufferedPaintDC(self)
@@ -189,14 +180,6 @@ class AnimationPanel(wx.Panel):
                 gc.DrawRoundedRectangle(sab+fi*hs+2, y, hs-4, sh, 5)
                 y += sh
                 
-        # selected slot
-        gc.SetBrush(wx.NullBrush)
-        gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 1))
-        if self.document.selectedSlot[2]>0:
-            x = sab + (self.document.selectedSlot[0]-1) * hs
-            sh = (h - INFO_BAR_HEIGHT*2) / self.document.selectedSlot[2]
-            gc.DrawRoundedRectangle(x+2, INFO_BAR_HEIGHT + sh * self.document.selectedSlot[1] + 2, hs - 4, sh - 4, 5)
-            
         # highlighted slot
         c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
         c.Set(c.red, c.green, c.blue, 128)
@@ -218,7 +201,7 @@ class AnimationPanel(wx.Panel):
         gc.DrawRectangle(0, 0, w, INFO_BAR_HEIGHT)
             # last frame number
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNHIGHLIGHT)))
-        pos = sab + tf * hs
+        pos = sab + tf * hs - hs/2
         mx = NUN_LABEL_WIDTH+NUN_LABEL_WIDTH/2 if cf>tf else NUN_LABEL_WIDTH/2
         if pos+mx>w:
             pos = w-mx
@@ -232,7 +215,7 @@ class AnimationPanel(wx.Panel):
         
             # current frame number
         gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNHIGHLIGHT)))
-        pos = sab + cf * hs
+        pos = sab + cf * hs - hs/2
         mx = NUN_LABEL_WIDTH+NUN_LABEL_WIDTH/2 if cf<=tf else NUN_LABEL_WIDTH/2
         if pos+mx>w:
             pos = w-mx
@@ -261,9 +244,10 @@ class AnimationPanel(wx.Panel):
         
         # vertical line for current frame
         if not self.grabbedKey: # a bit distracting
-            gc.SetPen(wx.ThePenList.FindOrCreatePen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT), 3))
+            gc.SetPen(wx.NullPen)
+            gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(self.CURRENT_FRAME_COLOR))
             x = sab+cf*hs
-            gc.StrokeLine(x, INFO_BAR_HEIGHT, x, h-INFO_BAR_HEIGHT)
+            gc.DrawRectangle(x-hs, INFO_BAR_HEIGHT, hs, (h-INFO_BAR_HEIGHT*2))
         
     def Pan(self, dx):
         self.startAnimationBlock += dx
@@ -280,9 +264,6 @@ class AnimationPanel(wx.Panel):
             self.grabbedKey = None
             self.grabbedFrame = -1
         
-    def SelectCurrentFrame(self):
-        self.document.selectedSlot[0] = self.document.currentFrame
-        
     def SetCurrentFrame(self, frame):
         if self.document.currentFrame != frame:
             key = self.GetKey(frame)
@@ -296,7 +277,6 @@ class AnimationPanel(wx.Panel):
         w, h = self.GetClientSize()
         frame = max(1, self.GetFrameFromPosition(x, y))
         self.SetCurrentFrame(frame)
-        self.SelectCurrentFrame()
         
     def SetDocument(self, document):
         self.document = document
@@ -326,11 +306,6 @@ class AnimationPanel(wx.Panel):
         self.highlightedSlot[0] = 0
         self.highlightedSlot[1] = 0
         self.highlightedSlot[2] = 0
-        
-    def UnSetSelectedSlot(self):
-        self.document.selectedSlot[0] = 0
-        self.document.selectedSlot[1] = 0
-        self.document.selectedSlot[2] = 0
         
     def ZoomOnPosition(self, x, y, amt):
         ps = self.horizontalScale*self.totalFrames
@@ -517,8 +492,7 @@ class AnimationControl(wx.Window):
             evt = KeyInsertEvent(frame = self.panel.GetCurrentFrame(), key = key)
             wx.PostEvent(self, evt)
             
-            self.panel.NextFrameSelected()
-            self.panel.CurrentFrameToSelected()
+            self.panel.NextFrame()
     
     def OnLeftDClick(self, e):
         self.prevx, self.prevy = e.Position
