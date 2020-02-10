@@ -134,7 +134,7 @@ class Canvas(wx.Panel):
     def AddLayer(self):
         index = self.document.currentLayer
         layer = self.document.AppendSelect().Copy()
-        self.history.Store(AddLayerCommand(self.document, index, layer))
+        self.AddUndo(AddLayerCommand(self.document, index, layer))
         
     def AdjustBrushSize(self, amount):
         self.penSize += amount
@@ -142,6 +142,9 @@ class Canvas(wx.Panel):
             self.penSize = 1
             
         self.Refresh()
+    
+    def AddUndo(self, command):
+        self.history.Store(command)
         
     def CenterCanvasInPanel(self, size):
         self.panx = int(size[0] / 2 - self.document.width * self.pixelSize / 2)
@@ -162,7 +165,7 @@ class Canvas(wx.Panel):
 
         self.document.Current().Clear(clip=self.selection)
 
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
+        self.AddUndo(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
         self.beforeLayer = None
         self.Refresh()
 
@@ -304,7 +307,7 @@ class Canvas(wx.Panel):
     def DuplicateLayer(self):
         oldidx = self.document.currentLayer
         self.document.DuplicateAndSelectCurrent()
-        self.history.Store(DuplicateLayerCommand(self.document, oldidx, self.document.currentLayer))
+        self.AddUndo(DuplicateLayerCommand(self.document, oldidx, self.document.currentLayer))
         
     def EraseEllipse(self, x0, y0, x1, y1, canmirrorx=True, canmirrory=True, equal=False, center=False):
         x = min(x0, x1)
@@ -531,7 +534,7 @@ class Canvas(wx.Panel):
     def MergeDown(self):
         curidx = self.document.currentLayer
         if curidx<self.document.Count()-1 and self.document.Current().visible:
-            self.history.Store(MergeDownLayerCommand(self.document, curidx, self.document.Current().Copy(), self.document[curidx+1].Copy()))
+            self.AddUndo(MergeDownLayerCommand(self.document, curidx, self.document.Current().Copy(), self.document[curidx+1].Copy()))
             self.document.MergeDown()
         
     def New(self, pixel, width, height):
@@ -570,12 +573,12 @@ class Canvas(wx.Panel):
         self.Refresh()
         
     def OnFlipH(self, e):
-        self.history.Store(FlipCommand(self.document))
+        self.AddUndo(FlipCommand(self.document))
         self.document.Flip()
         self.Refresh()
 
     def OnFlipV(self, e):
-        self.history.Store(FlipCommand(self.document))
+        self.AddUndo(FlipCommand(self.document))
         self.document.Flip(False)
         self.Refresh()
 
@@ -593,7 +596,7 @@ class Canvas(wx.Panel):
         self.document.BlitFromSurface()
         self.document.surface.Clear()
         
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, beforeLayer, self.document.Current().Copy()))
+        self.AddUndo(PaintCommand(self.document, self.document.currentLayer, beforeLayer, self.document.Current().Copy()))
         self.Refresh()
         return True
         
@@ -709,7 +712,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
+            self.AddUndo(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
         self.beforeLayer = None
 
         self.noUndo = False
@@ -737,7 +740,7 @@ class Canvas(wx.Panel):
         after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, int(before.width / 2), before.height))
 
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
+        self.AddUndo(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
         self.document.Set(after)
 
         self.Refresh()
@@ -748,7 +751,7 @@ class Canvas(wx.Panel):
         after.name = before.name+' mirror'
         after.Draw(before, wx.Region(0, 0, before.width, int(before.height / 2)))
 
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
+        self.AddUndo(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
         self.document.Set(after)
 
         self.Refresh()
@@ -847,9 +850,9 @@ class Canvas(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         alphadc = wx.MemoryDC(self.alphabg)
         
-        skipCurrent = self.mouseState == 2 or (self.mouseState==1 and self.current_tool in ("Move"))
+        drawCurrent = not self.mouseState==2 or (self.mouseState==1 and self.current_tool in ("Move"))
         composite = self.document.Composite(self.movex, self.movey,
-                                          drawCurrent=not skipCurrent,
+                                          drawCurrent=drawCurrent,
                                           drawSurface=self.mouseState != 0)
         compositedc = wx.MemoryDC(composite)
         
@@ -1114,7 +1117,7 @@ class Canvas(wx.Panel):
 
         # create an undo command
         if not self.noUndo:
-            self.history.Store(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
+            self.AddUndo(PaintCommand(self.document, self.document.currentLayer, self.beforeLayer, self.document.Current().Copy()))
             self.noUndo = True
             
         self.current_tool = self.original_tool
@@ -1132,7 +1135,7 @@ class Canvas(wx.Panel):
         idx = self.document.GetIndex(layer)
         if idx!=position:
             if self.document.RearrangeIndex(idx, position):
-                self.history.Store(RearrangeLayerCommand(self.document, idx, position))
+                self.AddUndo(RearrangeLayerCommand(self.document, idx, position))
             
     def Redo(self):
         self.history.Redo()
@@ -1143,7 +1146,7 @@ class Canvas(wx.Panel):
     def RemoveLayer(self):
         index = self.document.currentLayer
         layer = self.document.Remove().Copy()
-        self.history.Store(RemoveLayerCommand(self.document, index, layer))
+        self.AddUndo(RemoveLayerCommand(self.document, index, layer))
         
     def RemoveRefImage(self, e):
         self.reference = None
@@ -1160,7 +1163,7 @@ class Canvas(wx.Panel):
         image = image.Rotate90(clockwise)
         after = image.ConvertToBitmap()
 
-        self.history.Store(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
+        self.AddUndo(PaintCommand(self.document, self.document.currentLayer, before, after.Copy()))
         self.document.Current().Draw(after)
 
         self.Refresh()
@@ -1171,7 +1174,7 @@ class Canvas(wx.Panel):
         old = self.document.Copy()
         #self.document = LayerManager()
         self.document.Resize(old, width, height)
-        self.history.Store(ResizeCommand(self.document, old, self.document.Copy()))
+        self.AddUndo(ResizeCommand(self.document, old, self.document.Copy()))
         
         self.Refresh()
 
@@ -1422,8 +1425,10 @@ class Frame(wx.Frame):
         
         # ANIMATION CONTROL
         self.animControl = AnimationControl(self, self.canvas.document)
+        self.animControl.Bind(EVT_KEY_SET_EVENT, self.OnAnimationKeySet)
         self.animControl.Bind(EVT_VISIBILITY_CHANGED_EVENT, self.OnLayerVisibilityFromKey)
         self.animControl.Bind(EVT_KEY_INSERT_EVENT, self.OnAnimationKeyInsert)
+        self.animControl.Bind(EVT_KEY_DELETE_EVENT, self.OnAnimationKeyDelete)
         bstop.Add(self.animControl, 0, wx.EXPAND|wx.ALL, 2)
         
         # LAYERS PANEL
@@ -1519,12 +1524,17 @@ class Frame(wx.Frame):
         self.canvas.Refresh()
         self.RefreshLayers()
     
+    def OnAnimationKeyDelete(self, e):
+        self.canvas.AddUndo(KeyDeleteCommand(self.animControl, e.frame, e.key.copy()))
+        
     def OnAnimationKeyInsert(self, e):
-        print(e)
-        self.canvas.document.Current().visible = False
-        self.canvas.document.DuplicateAndSelect()
         self.canvas.Refresh()
         self.RefreshLayers()
+        self.canvas.AddUndo(KeyInsertCommand(self.animControl, e.frame, e.key.copy()))
+        
+    def OnAnimationKeySet(self, e):
+        print('OnAnimationKeySet', e.frame, e.fromFrame)
+        self.canvas.AddUndo(KeyMoveCommand(self.animControl, e.frame, e.fromFrame))
         
     def OnCenter(self, e):
         self.canvas.CenterCanvasInPanel(self.canvas.Size)
@@ -1819,6 +1829,7 @@ class Frame(wx.Frame):
         
     def Undid(self):
         self.RefreshLayers()
+        self.animControl.Refresh()
         
     def UpdateTitle(self):
         if not self.saveFile:

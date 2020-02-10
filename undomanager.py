@@ -67,6 +67,62 @@ class FlipCommand(Command):
     def __str__(self):
         return "Flip "+("Horizontally" if self.horizontal else "Vertically")
 
+class KeyDeleteCommand(Command):
+    def __init__(self, anim, frame, key):
+        super().__init__(True)
+        self.anim = anim
+        self.frame = frame
+        self.key = key
+    
+    def Do(self):
+        self.anim.DeleteKey(self.frame)
+        return True
+
+    def Undo(self):
+        self.anim.InsertKey(self.frame, self.key)
+        return True
+
+    def __str__(self):
+        return "Delete Key @"+str(self.frame)
+
+class KeyInsertCommand(Command):
+    def __init__(self, anim, frame, key):
+        super().__init__(True)
+        self.anim = anim
+        self.frame = frame
+        self.key = key
+        
+    def Do(self):
+        self.anim.InsertKey(self.frame, self.key)
+        return True
+
+    def Undo(self):
+        self.anim.DeleteKey(self.frame)
+        return True
+
+    def __str__(self):
+        return "Insert Key @"+str(self.frame)
+
+class KeyMoveCommand(Command):
+    def __init__(self, anim, tofrm, frmfrm):
+        super().__init__(True)
+        self.anim = anim
+        self.frmfrm = frmfrm
+        self.tofrm = tofrm
+        print(tofrm, frmfrm)
+        
+    def Do(self):
+        key = self.anim.DeleteKey(self.frmfrm)
+        self.anim.InsertKey(self.tofrm, key)
+        return True
+
+    def Undo(self):
+        key = self.anim.DeleteKey(self.tofrm)
+        self.anim.InsertKey(self.frmfrm, key)
+        return True
+
+    def __str__(self):
+        return "Move Key: "+str(self.frmfrm)+" to "+str(self.tofrm)
 
 class MergeDownLayerCommand(Command):
     def __init__(self, layermgr, idx, layerAbove, layerBelow):

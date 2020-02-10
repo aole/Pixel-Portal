@@ -20,6 +20,8 @@ MIN_MARKER_SIZE = 20
 FrameChangedEvent,           EVT_FRAME_CHANGED_EVENT          = wx.lib.newevent.NewEvent()
 VisibilityChangedEvent,      EVT_VISIBILITY_CHANGED_EVENT     = wx.lib.newevent.NewEvent()
 KeyInsertEvent,              EVT_KEY_INSERT_EVENT             = wx.lib.newevent.NewEvent()
+KeyDeleteEvent,              EVT_KEY_DELETE_EVENT             = wx.lib.newevent.NewEvent()
+KeySetEvent,                 EVT_KEY_SET_EVENT                = wx.lib.newevent.NewEvent()
 
 class PlayTimer(wx.Timer):
     def __init__(self, parent=None):
@@ -54,17 +56,29 @@ class AnimationPanel(wx.Panel):
     def CurrentFrameToSelected(self):
         self.SetCurrentFrame(self.document.selectedSlot[0])
         
+    def DeleteKey(self, frame):
+        key = self.document.keys[frame]
+        del self.document.keys[frame]
+        self.Refresh()
+        return key[0]
+        
     def DeleteSelectedKey(self):
         if self.document.selectedSlot[0] in self.document.keys:
             del self.document.keys[self.document.selectedSlot[0]]
         
         self.Refresh()
         
+    def GetCurrentFrame(self):
+        return self.document.currentFrame
+        
     def GetFrameFromPosition(self, x, y):
         return int((x - self.startAnimationBlock)/self.horizontalScale) + 1
         
     def GetGrabbedKey(self):
         return self.grabbedKey
+        
+    def GetDisplayKey(self):
+        return self.GetKey(self.document.currentFrame)
         
     # get key on this frame or any previous one
     def GetKey(self, frame):
@@ -80,7 +94,7 @@ class AnimationPanel(wx.Panel):
         return None
         
     # get key from this frame only
-    def GetKeyAbsolute(self, frame):
+    def GetAbsoluteKey(self, frame):
         if frame in self.document.keys:
             return self.document.keys[frame]
         else:
@@ -88,6 +102,7 @@ class AnimationPanel(wx.Panel):
             
     def GrabKey(self, key, frame):
         self.grabbedKey = key
+        self.grabbedFrame = frame
         del self.document.keys[frame]
         
     def HighlightSlotFromPosition(self, x, y):
@@ -110,23 +125,21 @@ class AnimationPanel(wx.Panel):
             self.highlightedSlot[2] = len(key)+1
             self.highlightedSlot[1] = int(y/(h/self.highlightedSlot[2]))
             
-    def InsertKey(self, key):
-        if self.document.selectedSlot[2]:
-            if self.document.selectedSlot[2]<2 or self.SINGLE_KEY_PER_FRAME:
-                self.document.keys[self.document.selectedSlot[0]] = [key]
-                self.document.selectedSlot[2] = 1
-            else:
-                self.document.keys[self.document.selectedSlot[0]].insert(self.document.selectedSlot[1], key)
-                self.document.selectedSlot[2] += 1
-            
-            self.Refresh()
-            
-        else:
-            print('Error: No selected slot!')
+    def InsertKey(self, frame, key):
+        self.document.keys[frame] = [key]
+        self.SelectCurrentFrame()
+        self.Refresh()
             
     def IsEndFrameHandle(self, x, y, margin=10):
         pos = self.startAnimationBlock + self.totalFrames * self.horizontalScale
         return x>=pos and x<pos+margin
+    
+    def MoveKey(self, frmFrame, key):
+        self.document.keys[self.document.currentFrame] = key
+        evt = KeySetEvent(key = key[0], frame = self.document.currentFrame, fromFrame = frmFrame)
+        wx.PostEvent(self, evt)
+        print('MoveKey', self.document.currentFrame, frmFrame)
+        self.Refresh()
         
     def NextFrame(self):
         nf = 1 if self.document.currentFrame>=self.totalFrames else self.document.currentFrame+1
@@ -264,7 +277,7 @@ class AnimationPanel(wx.Panel):
         
     def ReleaseKey(self):
         if self.grabbedKey:
-            self.SetKeyToCurrentFrame(self.grabbedKey)
+            self.MoveKey(self.grabbedFrame, self.grabbedKey)
             self.grabbedKey = None
         
     def SelectCurrentFrame(self):
@@ -300,8 +313,6 @@ class AnimationPanel(wx.Panel):
         
     def SetKeyToCurrentFrame(self, key):
         self.document.keys[self.document.currentFrame] = key
-        evt = FrameChangedEvent(key = key[0], frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
-        wx.PostEvent(self, evt)
         self.Refresh()
         
     def SetTotalFrames(self, frames):
@@ -458,6 +469,11 @@ class AnimationControl(wx.Window):
         
         self.prevx, self.prevy = 0, 0
         self.grab = None
+    
+    def DeleteKey(self, frame):
+        key = self.panel.DeleteKey(frame)
+        self.Refresh()
+        return key
         
     def GetAnimationFrames(self):
         bitmaps = []
@@ -473,9 +489,16 @@ class AnimationControl(wx.Window):
     def GetFPS(self):
         return self.panel.fps
         
+    def InsertKey(self, frame, key):
+        self.panel.InsertKey(frame, key)
+        self.Refresh()
+        
     def OnDeleteKey(self, e):
-        self.panel.DeleteSelectedKey()
+        key = self.DeleteKey(self.panel.GetCurrentFrame())
     
+        evt = KeyDeleteEvent(frame = self.panel.GetCurrentFrame(), key = key)
+        wx.PostEvent(self, evt)
+        
     def OnFPSChange(self, e):
         num = wx.GetNumberFromUser("Enter FPS", "FPS", "Pixel Portal", self.document.fps, 1, 1000, self)
         if num>0:
@@ -489,16 +512,18 @@ class AnimationControl(wx.Window):
             for layer in self.document:
                 if layer.visible:
                     key.insert(0, layer)
-            self.panel.InsertKey(key)
+            self.InsertKey(self.panel.GetCurrentFrame(), key)
+            
+            evt = KeyInsertEvent(frame = self.panel.GetCurrentFrame(), key = key)
+            wx.PostEvent(self, evt)
+            
             self.panel.NextFrameSelected()
             self.panel.CurrentFrameToSelected()
-            evt = KeyInsertEvent(key = key)
-            wx.PostEvent(self, evt)
     
     def OnLeftDClick(self, e):
         self.prevx, self.prevy = e.Position
         f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
-        gk = self.panel.GetKeyAbsolute(f)
+        gk = self.panel.GetAbsoluteKey(f)
         if gk:
             evt = VisibilityChangedEvent(key = gk[0], frame = self.document.currentFrame)
             wx.PostEvent(self, evt)
@@ -514,7 +539,7 @@ class AnimationControl(wx.Window):
             self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
             # below can be different from above
             f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
-            gk = self.panel.GetKeyAbsolute(f)
+            gk = self.panel.GetAbsoluteKey(f)
             if gk:
                 self.panel.GrabKey(gk, f)
                 self.view.Freeze(gk[0])
@@ -565,6 +590,14 @@ class AnimationControl(wx.Window):
         
     def OnStop(self, e):
         self.panel.Stop()
+    
+    def Refresh(self):
+        self.panel.Refresh()
+        self.view.Display(self.panel.GetDisplayKey())
+        super().Refresh()
+    
+    def SetCurrentFrame(self, frame):
+        self.panel.SetCurrentFrame(frame)
         
     def SetDocument(self, document):
         self.document = document
@@ -574,6 +607,11 @@ if __name__ == '__main__':
     app = wx.App()
     f = wx.Frame(None, title="Animation Control")
     l = AnimationControl(f, LayerManager.CreateDummy(50, 50, 3))
+    l.OnInsertKey(None)
+    key = l.DeleteKey(1)
+    l.InsertKey(4, key)
+    l.SetCurrentFrame(4)
+    l.OnDeleteKey(None)
     f.Show()
     app.MainLoop()
     
