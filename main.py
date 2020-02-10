@@ -1533,7 +1533,6 @@ class Frame(wx.Frame):
         self.canvas.AddUndo(KeyInsertCommand(self.animControl, e.frame, e.key.copy()))
         
     def OnAnimationKeySet(self, e):
-        print('OnAnimationKeySet', e.frame, e.fromFrame)
         self.canvas.AddUndo(KeyMoveCommand(self.animControl, e.frame, e.fromFrame))
         
     def OnCenter(self, e):

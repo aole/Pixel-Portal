@@ -109,7 +109,6 @@ class KeyMoveCommand(Command):
         self.anim = anim
         self.frmfrm = frmfrm
         self.tofrm = tofrm
-        print(tofrm, frmfrm)
         
     def Do(self):
         key = self.anim.DeleteKey(self.frmfrm)

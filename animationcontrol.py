@@ -52,6 +52,7 @@ class AnimationPanel(wx.Panel):
         self.SetMinSize(wx.Size(100, 100))
         
         self.grabbedKey = None
+        self.grabbedFrame = -1
         
     def CurrentFrameToSelected(self):
         self.SetCurrentFrame(self.document.selectedSlot[0])
@@ -134,12 +135,10 @@ class AnimationPanel(wx.Panel):
         pos = self.startAnimationBlock + self.totalFrames * self.horizontalScale
         return x>=pos and x<pos+margin
     
-    def MoveKey(self, frmFrame, key):
-        self.document.keys[self.document.currentFrame] = key
-        evt = KeySetEvent(key = key[0], frame = self.document.currentFrame, fromFrame = frmFrame)
-        wx.PostEvent(self, evt)
-        print('MoveKey', self.document.currentFrame, frmFrame)
-        self.Refresh()
+    def MoveKey(self, frame, key):
+        if not frame == self.document.currentFrame:
+            self.document.keys[self.document.currentFrame] = key
+            self.Refresh()
         
     def NextFrame(self):
         nf = 1 if self.document.currentFrame>=self.totalFrames else self.document.currentFrame+1
@@ -279,6 +278,7 @@ class AnimationPanel(wx.Panel):
         if self.grabbedKey:
             self.MoveKey(self.grabbedFrame, self.grabbedKey)
             self.grabbedKey = None
+            self.grabbedFrame = -1
         
     def SelectCurrentFrame(self):
         self.document.selectedSlot[0] = self.document.currentFrame
@@ -546,6 +546,9 @@ class AnimationControl(wx.Window):
             
     def OnLeftUp(self, e):
         self.grab = None
+        if self.panel.grabbedKey and not self.panel.document.currentFrame == self.panel.grabbedFrame:
+            evt = KeySetEvent(key = self.panel.grabbedKey[0], frame = self.panel.document.currentFrame, fromFrame = self.panel.grabbedFrame)
+            wx.PostEvent(self, evt)
         self.panel.ReleaseKey()
         self.view.UnFreeze()
             
