@@ -10,6 +10,7 @@ import wx
 import wx.lib.newevent
 
 from layermanager import *
+from settings import *
 
 END_FRAME_HANDLE = 0
 INFO_BAR_HEIGHT = 20
@@ -62,9 +63,6 @@ class AnimationPanel(wx.Panel):
         self.Refresh()
         return key[0]
         
-    def GetCurrentFrame(self):
-        return self.document.currentFrame
-        
     def GetFrameFromPosition(self, x, y):
         return int((x - self.startAnimationBlock)/self.horizontalScale) + 1
         
@@ -88,7 +86,11 @@ class AnimationPanel(wx.Panel):
         return None
         
     # get key from this frame only
-    def GetAbsoluteKey(self, frame):
+    def GetAbsoluteKey(self, x, y):
+        w, h = self.GetClientSize()
+        if y < INFO_BAR_HEIGHT or y > h-INFO_BAR_HEIGHT:
+            return None
+        frame = int((x - self.startAnimationBlock)/self.horizontalScale) + 1
         if frame in self.document.keys:
             return self.document.keys[frame]
         else:
@@ -275,6 +277,7 @@ class AnimationPanel(wx.Panel):
         w, h = self.GetClientSize()
         frame = max(1, self.GetFrameFromPosition(x, y))
         self.SetCurrentFrame(frame)
+        return frame
         
     def SetDocument(self, document):
         self.document = document
@@ -446,6 +449,7 @@ class AnimationControl(wx.Window):
     
     def DeleteKey(self, frame):
         key = self.panel.DeleteKey(frame)
+        self.document.currentFrame = frame
         self.Refresh()
         return key
         
@@ -465,12 +469,13 @@ class AnimationControl(wx.Window):
         
     def InsertKey(self, frame, key):
         self.panel.InsertKey(frame, key)
+        self.document.currentFrame = frame
         self.Refresh()
         
     def OnDeleteKey(self, e):
-        key = self.DeleteKey(self.panel.GetCurrentFrame())
+        key = self.DeleteKey(self.document.currentFrame)
     
-        evt = KeyDeleteEvent(frame = self.panel.GetCurrentFrame(), key = key)
+        evt = KeyDeleteEvent(frame = self.document.currentFrame, key = key)
         wx.PostEvent(self, evt)
         
     def OnFPSChange(self, e):
@@ -486,17 +491,17 @@ class AnimationControl(wx.Window):
             for layer in self.document:
                 if layer.visible:
                     key.insert(0, layer)
-            self.InsertKey(self.panel.GetCurrentFrame(), key)
+            self.InsertKey(self.document.currentFrame, key)
             
-            evt = KeyInsertEvent(frame = self.panel.GetCurrentFrame(), key = key)
+            evt = KeyInsertEvent(frame = self.document.currentFrame, key = key)
             wx.PostEvent(self, evt)
             
-            self.panel.NextFrame()
+            if GetSetting('Animation', 'Move To Next Frame'):
+                self.panel.NextFrame()
     
     def OnLeftDClick(self, e):
         self.prevx, self.prevy = e.Position
-        f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
-        gk = self.panel.GetAbsoluteKey(f)
+        gk = self.panel.GetAbsoluteKey(self.prevx, self.prevy)
         if gk:
             evt = VisibilityChangedEvent(key = gk[0], frame = self.document.currentFrame)
             wx.PostEvent(self, evt)
@@ -509,19 +514,30 @@ class AnimationControl(wx.Window):
         if self.panel.IsEndFrameHandle(self.prevx, self.prevy):
             self.grab = END_FRAME_HANDLE
         else:
-            self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
+            f = self.panel.SetCurrentFrameFromPosition(self.prevx, self.prevy)
             # below can be different from above
-            f = self.panel.GetFrameFromPosition(self.prevx, self.prevy)
-            gk = self.panel.GetAbsoluteKey(f)
+            #self.panel.GetFrameFromPosition(self.prevx, self.prevy)
+            gk = self.panel.GetAbsoluteKey(self.prevx, self.prevy)
             if gk:
                 self.panel.GrabKey(gk, f)
                 self.view.Freeze(gk[0])
             
+        if not self.panel.HasCapture():
+            self.panel.CaptureMouse()
+
     def OnLeftUp(self, e):
-        self.grab = None
+        if self.panel.HasCapture():
+            # to avoid
+            # wx._core.wxAssertionError: C++ assertion "!wxMouseCapture::stack.empty()"
+            self.panel.ReleaseMouse()
+
         if self.panel.grabbedKey and not self.panel.document.currentFrame == self.panel.grabbedFrame:
             evt = KeySetEvent(key = self.panel.grabbedKey[0], frame = self.panel.document.currentFrame, fromFrame = self.panel.grabbedFrame)
             wx.PostEvent(self, evt)
+            
+        self.grab = None
+        self.grabbedKey = None
+        
         self.panel.ReleaseKey()
         self.view.UnFreeze()
             

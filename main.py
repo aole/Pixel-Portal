@@ -242,7 +242,7 @@ class Canvas(wx.Panel):
             if self.mirrorx:
                 x = midpx+self.panx
                 if self.mirrorPixelCenter:
-                    x-self.pixelSize
+                    x -= self.pixelSize
                 path.MoveToPoint(x, self.pany)
                 path.AddLineToPoint(x, min(self.pany + self.document.height * self.pixelSize, h))
         if midpy:
@@ -251,7 +251,7 @@ class Canvas(wx.Panel):
             if self.mirrory:
                 y = midpy+self.pany
                 if self.mirrorPixelCenter:
-                    y-self.pixelSize
+                    y -= self.pixelSize
                 path.MoveToPoint(self.panx, y)
                 path.AddLineToPoint(min(self.panx + self.document.width * self.pixelSize, w), y)
         gc.StrokePath(path)
@@ -1581,9 +1581,9 @@ class Frame(wx.Frame):
         if GetSetting('Animation', 'Hide Current Layer'):
             self.canvas.document.SetVisible(False)
         if GetSetting('Animation', 'Duplicate Layer'):
-            self.canvas.document.DuplicateAndSelect()
+            self.canvas.DuplicateLayer()
         if GetSetting('Animation', 'Insert Layer'):
-            self.canvas.document.AppendSelect()
+            self.canvas.AddLayer()
             
         self.canvas.Refresh()
         self.RefreshLayers()

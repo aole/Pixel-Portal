@@ -28,6 +28,7 @@ def InitSettings():
                                 
     global_settings['Animation'] = {'FPS': wx.propgrid.UIntProperty('Frames/Second (FPS)', value=12),
                              'Total Frames': wx.propgrid.UIntProperty('Total Frames', value=12),
+                             'Move To Next Frame': wx.propgrid.BoolProperty('Move To Next Frame when Key added', value=True),
                              'Hide Current Layer': wx.propgrid.BoolProperty('Hide Current Layer when Key added', value=False),
                              'Duplicate Layer': wx.propgrid.BoolProperty('Duplicate Current Layer when Key added', value=False),
                              'Insert Layer': wx.propgrid.BoolProperty('Insert New Layer when Key added', value=False)}
