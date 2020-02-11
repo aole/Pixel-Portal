@@ -28,9 +28,6 @@ from dialogs.dictionarydialog import *
 
 PROGRAM_NAME = "Pixel Portal"
 
-DEFAULT_DOC_SIZE = (80, 80)
-DEFAULT_PIXEL_SIZE = 5
-
 TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
          "Select":          (wx.CURSOR_CROSS,       "toolselectrect.png"),
          "Line":            (wx.CURSOR_CROSS,       "toolline.png"),
@@ -100,8 +97,6 @@ class Canvas(wx.Panel):
         self.mirrory = False
         self.gridVisible = True
 
-        self.pixelSize = DEFAULT_PIXEL_SIZE
-
         self.penSize = 1
         self.penColor = wx.BLACK
         self.palette = None
@@ -128,6 +123,9 @@ class Canvas(wx.Panel):
 
         self.SetCursor(wx.Cursor(TOOLS[self.current_tool][0]))
 
+        self.pixelSize = GetSetting('New Document', 'Pixel Size')
+        self.SettingsUpdated()
+        
         self.listeners = []
 
     def AddLayer(self):
@@ -242,14 +240,20 @@ class Canvas(wx.Panel):
             path.MoveToPoint(midpx+self.panx, self.pany)
             path.AddLineToPoint(midpx+self.panx, min(self.pany + self.document.height * self.pixelSize, h))
             if self.mirrorx:
-                path.MoveToPoint(midpx+self.panx-self.pixelSize, self.pany)
-                path.AddLineToPoint(midpx+self.panx-self.pixelSize, min(self.pany + self.document.height * self.pixelSize, h))
+                x = midpx+self.panx
+                if self.mirrorPixelCenter:
+                    x-self.pixelSize
+                path.MoveToPoint(x, self.pany)
+                path.AddLineToPoint(x, min(self.pany + self.document.height * self.pixelSize, h))
         if midpy:
             path.MoveToPoint(self.panx, midpy+self.pany)
             path.AddLineToPoint(min(self.panx + self.document.width * self.pixelSize, w), midpy+self.pany)
             if self.mirrory:
-                path.MoveToPoint(self.panx, midpy+self.pany-self.pixelSize)
-                path.AddLineToPoint(min(self.panx + self.document.width * self.pixelSize, w), midpy+self.pany-self.pixelSize)
+                y = midpy+self.pany
+                if self.mirrorPixelCenter:
+                    y-self.pixelSize
+                path.MoveToPoint(self.panx, y)
+                path.AddLineToPoint(min(self.panx + self.document.width * self.pixelSize, w), y)
         gc.StrokePath(path)
 
     def DrawLine(self, x0, y0, x1, y1, color, canmirrorx=True, canmirrory=True):
@@ -494,11 +498,19 @@ class Canvas(wx.Panel):
         
     def GetXMirror(self, x):
         w = int(self.document.width / 2)
-        return ((x + 1 - w) * -1) + w - 1
+        if self.mirrorPixelCenter:
+            t = -1
+        else:
+            t = 0
+        return ((x + 1 - w) * -1) + w + t
 
     def GetYMirror(self, y):
         h = int(self.document.height / 2)
-        return ((y + 1 - h) * -1) + h - 1
+        if self.mirrorPixelCenter:
+            t = -1
+        else:
+            t = 0
+        return ((y + 1 - h) * -1) + h + t
 
     def IsDirty(self):
         return self.history.IsDirty()
@@ -539,11 +551,11 @@ class Canvas(wx.Panel):
             self.AddUndo(MergeDownLayerCommand(self.document, curidx, self.document.Current().Copy(), self.document[curidx+1].Copy()))
             self.document.MergeDown()
         
-    def New(self, pixel, width, height):
-        self.pixelSize = pixel
+    def New(self, width, height):
+        self.pixelSize = GetSetting('New Document', 'Pixel Size')
 
         # to ensure alpha
-        bglayer = Layer.CreateLayer(width, height, wx.WHITE)
+        bglayer = Layer.CreateLayer(width, height, GetSetting('New Document', 'First Layer Fill Color'))
         bglayer.name = "background"
         
         self.document.width = width
@@ -552,8 +564,12 @@ class Canvas(wx.Panel):
         self.document.surface = Layer.CreateLayer(width, height)
         self.document.surface.name = 'Surface'
         self.document.AppendSelect(bglayer)
-        self.document.AppendSelect()
+        for i in range(GetSetting('New Document', 'Number Of Layers')-1):
+            self.document.AppendSelect()
 
+        self.document.fps = GetSetting('Animation', 'FPS')
+        self.document.totalFrames = GetSetting('Animation', 'Total Frames')
+        
         self.history.ClearCommands()
         self.Deselect()
         
@@ -1284,6 +1300,9 @@ class Canvas(wx.Panel):
     def SetPenSize(self, size):
         self.penSize = size
         
+    def SettingsUpdated(self):
+        self.mirrorPixelCenter = GetSetting('General', 'Mirror Around Pixel Center')
+        
     def SetTool(self, tool):
         self.current_tool = tool
         self.original_tool = tool
@@ -1320,6 +1339,8 @@ class Frame(wx.Frame):
     def __init__(self):
         super().__init__(None)
 
+        self.settings = Settings(self)
+        
         self.SetIcon(wx.Icon('icons/application.png'))
         self.FirstTimeResize = True
         self.saveFile = None
@@ -1475,7 +1496,9 @@ class Frame(wx.Frame):
         conpanel.SetSizer(sizer)
         bsp.Add(conpanel, 0, wx.EXPAND | wx.ALL, 2)
         
-        self.OnNew(None, *DEFAULT_DOC_SIZE, False)
+        docw = GetSetting('New Document', 'Document Width')
+        doch = GetSetting('New Document', 'Document Height')
+        self.OnNew(None, docw, doch, False)
         
         self.LoadConfiguration()
         
@@ -1555,6 +1578,13 @@ class Frame(wx.Frame):
         self.canvas.AddUndo(KeyDeleteCommand(self.animControl, e.frame, e.key.copy()))
         
     def OnAnimationKeyInsert(self, e):
+        if GetSetting('Animation', 'Hide Current Layer'):
+            self.canvas.document.SetVisible(False)
+        if GetSetting('Animation', 'Duplicate Layer'):
+            self.canvas.document.DuplicateAndSelect()
+        if GetSetting('Animation', 'Insert Layer'):
+            self.canvas.document.AppendSelect()
+            
         self.canvas.Refresh()
         self.RefreshLayers()
         self.canvas.AddUndo(KeyInsertCommand(self.animControl, e.frame, e.key.copy()))
@@ -1575,6 +1605,7 @@ class Frame(wx.Frame):
             return
             
         self.SaveConfiguration()
+        self.settings.Destroy()
         
         self.Destroy()
         
@@ -1724,7 +1755,7 @@ class Frame(wx.Frame):
 
         self.saveFile = None
         if showDialog:
-            dlg = DictionaryDialog(self, {'Width':nvl(width, 80), 'Height':nvl(height, 80)})
+            dlg = DictionaryDialog(self, {'Width':nvl(width, GetSetting('New Document', 'Document Width')), 'Height':nvl(height, GetSetting('New Document', 'Document Height'))})
             if dlg.ShowModal() == wx.ID_OK:
                 width = dlg.Get('Width')
                 height = dlg.Get('Height')
@@ -1732,7 +1763,8 @@ class Frame(wx.Frame):
                 return
                 
         if width and height:
-            self.canvas.New(5, width, height)
+            self.canvas.New(width, height)
+            self.animControl.SetDocument(self.canvas.document)
             self.canvas.Refresh()
             self.RefreshLayers()
         
@@ -1821,7 +1853,8 @@ class Frame(wx.Frame):
         self.Refresh()
     
     def OnSettings(self, e):
-        Settings(self).ShowModal()
+        if self.settings.ShowModal():
+            self.canvas.SettingsUpdated()
         
     def OnSmoothLine(self, e):
         self.canvas.smoothLine = e.IsChecked()
@@ -1888,6 +1921,9 @@ def CreateWindows():
 
     app = wx.App()
 
+    InitSettings()
+    LoadSettings('settings.ini')
+    
     Frame().Show()
 
 def RunProgram():

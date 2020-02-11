@@ -18,7 +18,6 @@ class Document:
         
         self.currentFrame = 1
         self.fps = 8
-        self.selectedSlot = [1, 0, 1]
         self.keys = {}
         self.totalFrames = 8
 

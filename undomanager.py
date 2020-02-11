@@ -6,8 +6,8 @@ Bhupendra Aole
 
 from wx import Command, Bitmap, CommandProcessor, Region
 
-NUM_UNDOS = 100
- 
+from settings import *
+
 class AddLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -244,7 +244,7 @@ class SelectionCommand(Command):
 
 class UndoManager(CommandProcessor):
     def __init__(self):
-        super().__init__(NUM_UNDOS)
+        super().__init__(GetSetting('General', 'Number Of Undos'))
 
     def Store(self, command):
         super().Store(command)

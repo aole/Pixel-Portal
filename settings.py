@@ -9,27 +9,83 @@ import wx.propgrid
 
 import configparser
 
-settings = {}
+global_settings = {}
 
-def GetSetting(section, property, value):
-    global settings
+def InitSettings():
+    global global_settings
     
-    lp = property.lower()
-    if section not in settings:
-        settings[section] = {}
-    if lp not in settings[section]:
-        settings[section][property] = value
-        return value
+    nos = wx.propgrid.UIntProperty('Number of Undos', value=100)
+    nos.SetHelpString('[Restart Required]')
+    
+    global_settings['General'] = {'Number Of Undos': nos,
+                           'Mirror Around Pixel Center': wx.propgrid.BoolProperty('Mirror around Pixel Center', value=False)}
+                           
+    global_settings['New Document'] = {'Document Width': wx.propgrid.UIntProperty('Document Width', value=80),
+                                'Document Height': wx.propgrid.UIntProperty('Document Height', value=80),
+                                'Pixel Size': wx.propgrid.UIntProperty('Pixel Size', value=5),
+                                'Number Of Layers': wx.propgrid.UIntProperty('Number of Layers', value=2),
+                                'First Layer Fill Color': wx.propgrid.ColourProperty('First Layer Fill Color', value=wx.WHITE)}
+                                
+    global_settings['Animation'] = {'FPS': wx.propgrid.UIntProperty('Frames/Second (FPS)', value=12),
+                             'Total Frames': wx.propgrid.UIntProperty('Total Frames', value=12),
+                             'Hide Current Layer': wx.propgrid.BoolProperty('Hide Current Layer when Key added', value=False),
+                             'Duplicate Layer': wx.propgrid.BoolProperty('Duplicate Current Layer when Key added', value=False),
+                             'Insert Layer': wx.propgrid.BoolProperty('Insert New Layer when Key added', value=False)}
+                             
+def GetSetting(section, property):
+    global global_settings
+    
+    if section not in global_settings:
+        return None
+    if property not in global_settings[section]:
+        return None
         
-    return settings[section].get(lp).GetValue()
-        
+    return global_settings[section].get(property).GetValue()
+    
+def LoadSettings(file):
+    global global_settings
+    
+    config = configparser.RawConfigParser()
+    config.optionxform = lambda option: option
+    config.read(file)
+    
+    for section in config.sections():
+        for prop in config[section]:
+            value = config[section][prop]
+            if section not in global_settings:
+                global_settings[section] = {}
+            if not prop in global_settings[section]:
+                global_settings[section][prop] = wx.propgrid.StringProperty(prop, value=value)
+            else:
+                global_settings[section][prop].SetValueFromString(value)
+    
+def SaveSettings(file):
+    global global_settings
+    
+    config = configparser.RawConfigParser()
+    # case sensitive
+    config.optionxform = lambda option: option
+    # first read all
+    config.read(file)
+    # then update
+    for sec, props in global_settings.items():
+        if not sec in config:
+            config[sec] = {}
+        section = config[sec]
+        for key, value in props.items():
+            value = value.GetValueAsString()
+            section[key] = value
+            
+    with open(file, 'w') as configfile:
+        config.write(configfile)
+    
 class Settings(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title="Pixel Portal Settings", style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
 
-        sizerb = self.CreateSeparatedButtonSizer(wx.OK)
+        sizerb = self.CreateSeparatedButtonSizer(wx.OK|wx.CANCEL)
         
-        self.pgm = wx.propgrid.PropertyGridManager(self, size=wx.Size(400,300),
+        self.pgm = wx.propgrid.PropertyGridManager(self, size=wx.Size(400, 400),
             # These and other similar styles are automatically
             # passed to the embedded wx.PropertyGrid.
             style = wx.propgrid.PG_BOLD_MODIFIED|wx.propgrid.PG_SPLITTER_AUTO_CENTER|
@@ -39,84 +95,39 @@ class Settings(wx.Dialog):
             wx.propgrid.PG_DESCRIPTION |
             # Plus defaults.
             wx.propgrid.PGMAN_DEFAULT_STYLE)
-            
-        sizerb.Insert(0, self.pgm, 1, wx.EXPAND|wx.ALL, 2)
-            
-        self.pgm.SetDescBoxHeight(40)
         
-        self.LoadSettings('settings.ini')
+        sizerb.Insert(0, self.pgm, 1, wx.EXPAND|wx.ALL, 2)
+        self.CreateGrid()
+        
+        self.pgm.SetDescBoxHeight(50)
+        self.pgm.SetSplitterLeft()
         
         self.SetSizerAndFit(sizerb)
         
-    def GetProperty(typ, prop, value):
-        typ = typ.lower()
-        if typ=='uint':
-            return wx.propgrid.UIntProperty(prop, value=int(value))
-        elif typ=='int':
-            return wx.propgrid.IntProperty(prop, value=int(value))
-        elif typ in ('color', 'colour'):
-            return wx.propgrid.ColourProperty(prop, value=wx.Colour(value))
-        elif typ in ('bool', 'boolean'):
-            return wx.propgrid.BoolProperty(prop, value=eval(value.title()))
-        elif typ in ('string', 'char'):
-            return wx.propgrid.StringProperty(prop, value=value)
+    def CreateGrid(self):
+        global global_settings
         
-        return wx.propgrid.StringProperty(prop, value=value)
-        
-    def LoadSettings(self, file):
-        global settings
-        
-        config = configparser.ConfigParser()
-        config.read(file)
-        
-        settings.clear()
         page = self.pgm.AddPage("General")
-        for section in config.sections():
+        for section, props in global_settings.items():
             page.Append(wx.propgrid.PropertyCategory(section))
-            settings[section] = {}
-            for prop in config[section]:
-                value = config[section][prop]
-                prop, typ = prop.split('/')
-                prop = prop.strip()
-                gp = Settings.GetProperty(typ.strip(), prop.title(), value)
-                settings[section][prop] = gp
-                page.Append(gp)
-    
-    def SaveSettings(self, file):
-        global settings
-        
-        config = configparser.ConfigParser()
-        for sec, props in settings.items():
-            config[sec] = {}
-            section = config[sec]
-            for key, value in props.items():
-                if isinstance(value, wx.propgrid.IntProperty):
-                    key += '/int'
-                elif isinstance(value, wx.propgrid.UIntProperty):
-                    key += '/uint'
-                elif isinstance(value, wx.propgrid.ColourProperty):
-                    key += '/color'
-                elif isinstance(value, wx.propgrid.BoolProperty):
-                    key += '/bool'
-                elif isinstance(value, wx.propgrid.StringProperty):
-                    key += '/string'
-                else:
-                    print('error')
-                value = value.GetValueAsString()
-                section[key] = value
+            for prop, value in props.items():
+                page.Append(value)
                 
-        with open(file, 'w') as configfile:
-            config.write(configfile)
-    
     def ShowModal(self):
-        super().ShowModal()
-        self.SaveSettings('settings.ini')
-        
+        if super().ShowModal()==wx.ID_OK:
+            SaveSettings('settings.ini')
+            return True
+        else:
+            LoadSettings('settings.ini')
+            return False
+            
 if __name__ == '__main__':
     app = wx.App()
+    InitSettings()
+    LoadSettings('settings.ini')
     s = Settings(None)
-    print(GetSetting('New Document', 'Document Width', 80))
+    print(GetSetting('New Document', 'First Layer Fill Color'))
     s.ShowModal()
-    print(GetSetting('New Document', 'Document Width', 80))
+    print(GetSetting('New Document', 'First Layer Fill Color'))
     s.Destroy()
     

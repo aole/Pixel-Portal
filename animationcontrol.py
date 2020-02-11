@@ -47,8 +47,6 @@ class AnimationPanel(wx.Panel):
         self.startAnimationBlock = 25
         self.horizontalScale = 12
         self.highlightedSlot = [0, 0, 0] # frame | slot | of num slots
-        self.SetTotalFrames(24)
-        self.SetCurrentFrame(1)
         self.playTimer = PlayTimer(self)
         
         self.SetMinSize(wx.Size(100, 100))
@@ -58,7 +56,7 @@ class AnimationPanel(wx.Panel):
         
     def DeleteKey(self, frame=None):
         if not frame:
-            frame = self.currentFrame
+            frame = self.document.currentFrame
         key = self.document.keys[frame]
         del self.document.keys[frame]
         self.Refresh()
@@ -108,7 +106,7 @@ class AnimationPanel(wx.Panel):
         if y < INFO_BAR_HEIGHT or y > h-INFO_BAR_HEIGHT:
             return
         f = self.GetFrameFromPosition(x, y)
-        if f<=0: # or f>self.totalFrames:
+        if f<=0: # or f>self.document.totalFrames:
             return
             
         self.highlightedSlot[0] = f
@@ -126,7 +124,7 @@ class AnimationPanel(wx.Panel):
         self.Refresh()
             
     def IsEndFrameHandle(self, x, y, margin=10):
-        pos = self.startAnimationBlock + self.totalFrames * self.horizontalScale
+        pos = self.startAnimationBlock + self.document.totalFrames * self.horizontalScale
         return x>=pos and x<pos+margin
     
     def MoveKey(self, frame, key):
@@ -135,7 +133,7 @@ class AnimationPanel(wx.Panel):
             self.Refresh()
     
     def NextFrame(self):
-        nf = 1 if self.document.currentFrame>=self.totalFrames else self.document.currentFrame+1
+        nf = 1 if self.document.currentFrame>=self.document.totalFrames else self.document.currentFrame+1
         self.SetCurrentFrame(nf)
         
     def OnPaint(self, e):
@@ -148,7 +146,7 @@ class AnimationPanel(wx.Panel):
         w, h = self.GetClientSize()
         cf = self.document.currentFrame
         hs = self.horizontalScale
-        tf = self.totalFrames
+        tf = self.document.totalFrames
         sab = self.startAnimationBlock
         
         # block for total animation length
@@ -280,6 +278,7 @@ class AnimationPanel(wx.Panel):
         
     def SetDocument(self, document):
         self.document = document
+        
         key = self.GetKey(self.document.currentFrame)
         evt = FrameChangedEvent(key = key, frame = self.document.currentFrame, lastFrame = self.document.currentFrame)
         wx.PostEvent(self, evt)
@@ -296,7 +295,7 @@ class AnimationPanel(wx.Panel):
         self.Refresh()
         
     def SetTotalFrames(self, frames):
-        self.totalFrames = frames
+        self.document.totalFrames = frames
         self.Refresh()
         
     def Stop(self):
@@ -308,13 +307,13 @@ class AnimationPanel(wx.Panel):
         self.highlightedSlot[2] = 0
         
     def ZoomOnPosition(self, x, y, amt):
-        ps = self.horizontalScale*self.totalFrames
+        ps = self.horizontalScale*self.document.totalFrames
         if amt>0:
             self.horizontalScale += 1
         else:
             self.horizontalScale = max(3, self.horizontalScale-1)
             
-        self.startAnimationBlock -= int((self.horizontalScale*self.totalFrames-ps)*((x - self.startAnimationBlock)/(ps)))
+        self.startAnimationBlock -= int((self.horizontalScale*self.document.totalFrames-ps)*((x - self.startAnimationBlock)/(ps)))
         self.Refresh()
         
 class AnimationView(wx.Panel):
@@ -579,6 +578,7 @@ class AnimationControl(wx.Window):
     def SetDocument(self, document):
         self.document = document
         self.panel.SetDocument(document)
+        self.txtFPS.SetLabel(str(self.document.fps))
         
 if __name__ == '__main__':
     app = wx.App()
