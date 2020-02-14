@@ -8,6 +8,7 @@ from math import ceil
 from shapely.geometry   import Polygon, MultiPolygon, LineString
 from shapely.ops        import unary_union
 
+import wx.html
 import wx
 import wx.lib.agw.genericmessagedialog as GMD
 from wx.adv import BitmapComboBox
@@ -1399,6 +1400,7 @@ class Frame(wx.Frame):
         
         menu = wx.Menu()
         mbar.Append(menu, "&Help")
+        #self.AddMenuItem(menu, "&Manual", self.OnManual)
         self.AddMenuItem(menu, "&About", self.OnAbout)
         
         self.SetMenuBar(mbar)
@@ -1495,6 +1497,10 @@ class Frame(wx.Frame):
         sizer.AddSpacer(10)
         conpanel.SetSizer(sizer)
         bsp.Add(conpanel, 0, wx.EXPAND | wx.ALL, 2)
+        
+        # HELP
+        # only if needed
+        self.help = None
         
         docw = GetSetting('New Document', 'Document Width')
         doch = GetSetting('New Document', 'Document Height')
@@ -1735,6 +1741,12 @@ class Frame(wx.Frame):
         self.canvas.document.SetVisibleExclusive(e.key)
         self.canvas.Refresh()
         self.RefreshLayers()
+    
+    def OnManual(self, e):
+        if not self.help:
+            self.help = wx.html.HtmlHelpController(self)
+            self.help.AddBook('help/Manual.hhp')
+        self.help.DisplayContents()
         
     def OnMergeDown(self, e):
         self.canvas.MergeDown()
