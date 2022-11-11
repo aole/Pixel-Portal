@@ -8,6 +8,7 @@ from wx import Command, Bitmap, CommandProcessor, Region
 
 from settings import *
 
+
 class AddLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -15,7 +16,7 @@ class AddLayerCommand(Command):
         self.layermgr = layermgr
         self.index = index
         self.layer = layer
-        
+
     def Do(self):
         self.layermgr.currentLayer = self.index
         self.layermgr.AppendSelect(self.layer)
@@ -28,7 +29,8 @@ class AddLayerCommand(Command):
 
     def __str__(self):
         return "Add "+self.layer.name
-        
+
+
 class DuplicateLayerCommand(Command):
     def __init__(self, layermgr, oldidx, newidx):
         super().__init__(True)
@@ -36,7 +38,7 @@ class DuplicateLayerCommand(Command):
         self.layermgr = layermgr
         self.oldidx = oldidx
         self.newidx = newidx
-        
+
     def Do(self):
         self.layermgr.currentLayer = self.oldidx
         self.layermgr.DuplicateAndSelectCurrent()
@@ -50,12 +52,33 @@ class DuplicateLayerCommand(Command):
     def __str__(self):
         return "Duplicate "+self.layermgr[self.oldidx].name
 
+
+class LayerRenameCommand(Command):
+    def __init__(self, layer, oldName, newName):
+        super().__init__(True)
+
+        self.layer = layer
+        self.oldName = oldName
+        self.newName = newName
+
+    def Do(self):
+        self.layer.name = self.newName
+        return True
+
+    def Undo(self):
+        self.layer.name = self.oldName
+        return True
+
+    def __str__(self):
+        return f"Rename {self.oldName} -> {self.newName}"
+
+
 class FlipCommand(Command):
     def __init__(self, layermgr, horizontal=True):
         super().__init__(True)
         self.layermgr = layermgr
         self.horizontal = horizontal
-        
+
     def Do(self):
         self.layermgr.Flip(self.horizontal)
         return True
@@ -67,13 +90,14 @@ class FlipCommand(Command):
     def __str__(self):
         return "Flip "+("Horizontally" if self.horizontal else "Vertically")
 
+
 class KeyDeleteCommand(Command):
     def __init__(self, anim, frame, key):
         super().__init__(True)
         self.anim = anim
         self.frame = frame
         self.key = key
-    
+
     def Do(self):
         self.anim.DeleteKey(self.frame)
         return True
@@ -85,13 +109,14 @@ class KeyDeleteCommand(Command):
     def __str__(self):
         return "Delete Key @"+str(self.frame)
 
+
 class KeyInsertCommand(Command):
     def __init__(self, anim, frame, key):
         super().__init__(True)
         self.anim = anim
         self.frame = frame
         self.key = key
-        
+
     def Do(self):
         self.anim.InsertKey(self.frame, self.key)
         return True
@@ -103,13 +128,14 @@ class KeyInsertCommand(Command):
     def __str__(self):
         return "Insert Key @"+str(self.frame)
 
+
 class KeyMoveCommand(Command):
     def __init__(self, anim, tofrm, frmfrm):
         super().__init__(True)
         self.anim = anim
         self.frmfrm = frmfrm
         self.tofrm = tofrm
-        
+
     def Do(self):
         key = self.anim.DeleteKey(self.frmfrm)
         self.anim.InsertKey(self.tofrm, key)
@@ -123,6 +149,7 @@ class KeyMoveCommand(Command):
     def __str__(self):
         return "Move Key: "+str(self.frmfrm)+" to "+str(self.tofrm)
 
+
 class MergeDownLayerCommand(Command):
     def __init__(self, layermgr, idx, layerAbove, layerBelow):
         super().__init__(True)
@@ -131,7 +158,7 @@ class MergeDownLayerCommand(Command):
         self.idx = idx
         self.layerAbove = layerAbove
         self.layerBelow = layerBelow
-        
+
     def Do(self):
         self.layermgr.SelectIndex(self.idx)
         self.layermgr.MergeDown()
@@ -146,6 +173,7 @@ class MergeDownLayerCommand(Command):
 
     def __str__(self):
         return "Merge "+self.layerAbove.name+" + "+self.layerBelow.name
+
 
 class PaintCommand(Command):
     def __init__(self, layermgr, index, before, after):
@@ -165,8 +193,9 @@ class PaintCommand(Command):
         return True
 
     def __str__(self):
-        return self.before.name+" -> paint -> "+ self.after.name
-       
+        return self.before.name+" -> paint -> " + self.after.name
+
+
 class RearrangeLayerCommand(Command):
     def __init__(self, layermgr, frmpos, topos):
         super().__init__(True)
@@ -174,7 +203,7 @@ class RearrangeLayerCommand(Command):
         self.layermgr = layermgr
         self.frmpos = frmpos
         self.topos = topos
-        
+
     def Do(self):
         self.layermgr.RearrangeIndex(self.frmpos, self.topos)
         return True
@@ -185,7 +214,8 @@ class RearrangeLayerCommand(Command):
 
     def __str__(self):
         return "Rearrange "+str(self.frmpos)+' -> '+str(self.topos)
-        
+
+
 class RemoveLayerCommand(Command):
     def __init__(self, layermgr, index, layer):
         super().__init__(True)
@@ -193,7 +223,7 @@ class RemoveLayerCommand(Command):
         self.layermgr = layermgr
         self.index = index
         self.layer = layer
-        
+
     def Do(self):
         self.layermgr.currentLayer = self.index
         self.layermgr.Remove()
@@ -206,7 +236,8 @@ class RemoveLayerCommand(Command):
 
     def __str__(self):
         return "Remove "+self.layer.name
-        
+
+
 class ResizeCommand(Command):
     def __init__(self, layermgr, blayermgr, alayermgr):
         super().__init__(True)
@@ -225,11 +256,12 @@ class ResizeCommand(Command):
 
     def __str__(self):
         return str(self.blayermgr.width)+", "+str(self.blayermgr.height)+" -> Resize -> "+str(self.alayermgr.width)+", "+str(self.alayermgr.height)
-        
+
+
 class SelectionCommand(Command):
     def __init__(self, canvas, before, after):
         super().__init__(True)
-        
+
         self.canvas = canvas
         self.before = before
         self.after = after
@@ -241,6 +273,7 @@ class SelectionCommand(Command):
     def Undo(self):
         self.canvas.selection = Region(self.before)
         return True
+
 
 class UndoManager(CommandProcessor):
     def __init__(self):
