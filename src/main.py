@@ -1517,53 +1517,7 @@ class Frame(wx.Frame):
 
         self.SetMenuBar(mbar)
 
-        # TOOLBAR
-        self.toolbar = tb = self.CreateToolBar()
-        tb.SetToolBitmapSize((32, 32))
-
-        self.AddToolButton(tb, 'Clear', self.OnClear,
-                           icon=wx.Bitmap("icons/clear.png"))
-        self.AddToolButton(tb, 'Resize', self.OnDocResize,
-                           icon=wx.Bitmap("icons/resize.png"))
-
-        self.AddToolButton(tb, 'New', self.OnNew,
-                           icon=wx.Bitmap("icons/new.png"))
-        self.AddToolButton(tb, 'Load', self.OnOpen,
-                           icon=wx.Bitmap("icons/load.png"))
-        self.AddToolButton(tb, 'Save', self.OnSave,
-                           icon=wx.Bitmap("icons/save.png"))
-        self.AddToolButton(tb, 'Gif', self.OnSaveGif,
-                           icon=wx.Bitmap("icons/gif.png"))
-        tb.AddSeparator()
-
-        self.colorbtn = self.AddToolButton(
-            tb, 'Foreground Color', self.OnColor, icon=wx.Bitmap("icons/forecolor.png"))
-
-        # Tool combo box
-        bcb = BitmapComboBox(tb, style=wx.CB_READONLY)
-        for k, v in TOOLS.items():
-            bcb.Append(k, wx.Bitmap("icons/"+v[1]))
-        self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=bcb.GetId())
-        bcb.SetSelection(0)
-        tb.AddControl(bcb)
-
-        # Gradient editor
-        gbtn = wx.BitmapButton(tb, bitmap=wx.Bitmap("icons/gradient.png"))
-        self.Bind(wx.EVT_BUTTON, self.OnGradient, id=gbtn.GetId())
-        tb.AddControl(gbtn)
-
-        self.AddToggleButton(tb, 'Grid', self.OnToggleGrid,
-                             icon=wx.Bitmap("icons/grid.png"), default=True)
-        self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX,
-                             icon=wx.Bitmap("icons/mirrorx.png"))
-        self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY,
-                             icon=wx.Bitmap("icons/mirrory.png"))
-        self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine,
-                             icon=wx.Bitmap("icons/smooth.png"))
-        self.AddToolButton(tb, 'Center', self.OnCenter,
-                           icon=wx.Bitmap("icons/center.png"))
-
-        tb.Realize()
+        self.Create_Toolbar()
 
         bstop = wx.BoxSizer(wx.VERTICAL)
         # add CANVAS
@@ -1641,6 +1595,58 @@ class Frame(wx.Frame):
         layerPanel.FitInside()
         self.SetSizer(bstop)
         self.UpdateTitle()
+
+        # paint pen color button
+        self.SetColor(self.canvas.GetPenColor())
+
+    def Create_Toolbar(self):
+        # TOOLBAR
+        self.toolbar = tb = self.CreateToolBar()
+        tb.SetToolBitmapSize((32, 32))
+
+        self.AddToolButton(tb, 'Clear', self.OnClear,
+                           icon=wx.Bitmap("icons/clear.png"))
+        self.AddToolButton(tb, 'Resize', self.OnDocResize,
+                           icon=wx.Bitmap("icons/resize.png"))
+
+        self.AddToolButton(tb, 'New', self.OnNew,
+                           icon=wx.Bitmap("icons/new.png"))
+        self.AddToolButton(tb, 'Load', self.OnOpen,
+                           icon=wx.Bitmap("icons/load.png"))
+        self.AddToolButton(tb, 'Save', self.OnSave,
+                           icon=wx.Bitmap("icons/save.png"))
+        self.AddToolButton(tb, 'Gif', self.OnSaveGif,
+                           icon=wx.Bitmap("icons/gif.png"))
+        tb.AddSeparator()
+
+        self.colorbtn = self.AddToolButton(
+            tb, 'Foreground Color', self.OnColorBtn, icon=wx.Bitmap("icons/forecolor.png"))
+
+        # Tool combo box
+        bcb = BitmapComboBox(tb, style=wx.CB_READONLY)
+        for k, v in TOOLS.items():
+            bcb.Append(k, wx.Bitmap("icons/"+v[1]))
+        self.Bind(wx.EVT_COMBOBOX, self.OnTool, id=bcb.GetId())
+        bcb.SetSelection(0)
+        tb.AddControl(bcb)
+
+        # Gradient editor
+        gbtn = wx.BitmapButton(tb, bitmap=wx.Bitmap("icons/gradient.png"))
+        self.Bind(wx.EVT_BUTTON, self.OnGradientBtn, id=gbtn.GetId())
+        tb.AddControl(gbtn)
+
+        self.AddToggleButton(tb, 'Grid', self.OnToggleGrid,
+                             icon=wx.Bitmap("icons/grid.png"), default=True)
+        self.AddToggleButton(tb, 'Mirror X', self.OnMirrorX,
+                             icon=wx.Bitmap("icons/mirrorx.png"))
+        self.AddToggleButton(tb, 'Mirror Y', self.OnMirrorY,
+                             icon=wx.Bitmap("icons/mirrory.png"))
+        self.AddToggleButton(tb, 'Smooth Line', self.OnSmoothLine,
+                             icon=wx.Bitmap("icons/smooth.png"))
+        self.AddToolButton(tb, 'Center', self.OnCenter,
+                           icon=wx.Bitmap("icons/center.png"))
+
+        tb.Realize()
 
     def AddMenuItem(self, menu, name, func):
         menu.Append(self.menuid, name)
@@ -1748,29 +1754,57 @@ class Frame(wx.Frame):
 
         self.Destroy()
 
-    def OnColor(self, e):
+    def SetColor(self, color):
+        self.canvas.SetPenColor(color)
+
+        bitmap = self.colorbtn.GetBitmap()
+        mdc = wx.MemoryDC(bitmap)
+        gc = wx.GraphicsContext.Create(mdc)
+
+        clip = wx.Region(0, 0, 32, 32)
+        clip.Subtract(wx.Rect(9, 9, 14, 14))
+
+        gc.Clip(clip)
+        gc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
+        gc.SetPen(wx.NullPen)
+        gc.DrawRectangle(0, 0, 32, 32)
+
+        mdc.SelectObject(wx.NullBitmap)
+        del mdc
+
+        self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
+
+    def OnColorBtn(self, e):
         data = wx.ColourData()
         data.SetColour(self.canvas.GetPenColor())
         dlg = CubeColourDialog(self, data)
         if dlg.ShowModal() == wx.ID_OK:
             color = dlg.GetColourData().GetColour()
-            self.canvas.SetPenColor(color)
+            self.SetColor(color)
 
-            bitmap = self.colorbtn.GetBitmap()
+    def OnGradientBtn(self, e):
+        dlg = GradientEditor(self, self.canvas.GetGradientStops())
+        if dlg.ShowModal() == wx.ID_OK:
+            stops = dlg.GetStops()
+            self.canvas.SetGradientStops(stops)
+
+            bitmap = e.GetEventObject().GetBitmap()
             mdc = wx.MemoryDC(bitmap)
+            gc = wx.GraphicsContext.Create(mdc)
 
-            clip = wx.Region(0, 0, 32, 32)
-            clip.Subtract(wx.Rect(9, 9, 14, 14))
-            mdc.SetDeviceClippingRegion(clip)
+            clip = wx.Region(2, 2, 60, 28)
+            gc.Clip(clip)
 
-            mdc.SetBrush(wx.TheBrushList.FindOrCreateBrush(color))
-            mdc.SetPen(wx.NullPen)
-            mdc.DrawRectangle(0, 0, 32, 32)
+            brush = gc.CreateLinearGradientBrush(0, 0, 64, 0, stops)
+            gc.SetBrush(brush)
+            gc.SetPen(wx.NullPen)
+            gc.DrawRectangle(0, 0, 64, 32)
 
             mdc.SelectObject(wx.NullBitmap)
             del mdc
 
-            self.toolbar.SetToolNormalBitmap(self.colorbtn.GetId(), bitmap)
+            e.GetEventObject().SetBitmap(bitmap)
+        dlg.Destroy()
 
     def OnDeselect(self, e):
         self.canvas.Select(wx.Region())
@@ -1808,30 +1842,6 @@ class Frame(wx.Frame):
 
     def OnExportHistory(self, e):
         print('OnExportHistory')
-
-    def OnGradient(self, e):
-        dlg = GradientEditor(self, self.canvas.GetGradientStops())
-        if dlg.ShowModal() == wx.ID_OK:
-            stops = dlg.GetStops()
-            self.canvas.SetGradientStops(stops)
-
-            bitmap = e.GetEventObject().GetBitmap()
-            mdc = wx.MemoryDC(bitmap)
-            gc = wx.GraphicsContext.Create(mdc)
-
-            clip = wx.Region(2, 2, 60, 28)
-            mdc.SetDeviceClippingRegion(clip)
-
-            brush = gc.CreateLinearGradientBrush(0, 0, 64, 0, stops)
-            gc.SetBrush(brush)
-            gc.SetPen(wx.NullPen)
-            gc.DrawRectangle(0, 0, 64, 32)
-
-            mdc.SelectObject(wx.NullBitmap)
-            del mdc
-
-            e.GetEventObject().SetBitmap(bitmap)
-        dlg.Destroy()
 
     def OnKeyDown(self, e):
         keycode = e.GetUnicodeKey()
