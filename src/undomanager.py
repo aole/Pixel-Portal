@@ -183,6 +183,7 @@ class PaintCommand(Command):
         self.index = index
         self.before = before
         self.after = after
+        self.composite = layermgr.Composite().Copy()
 
     def Do(self):
         self.layermgr.layers[self.index].PasteSource(self.after)
@@ -278,6 +279,11 @@ class SelectionCommand(Command):
 class UndoManager(CommandProcessor):
     def __init__(self):
         super().__init__(GetSetting('General', 'Number Of Undos'))
+        self.composite = None
 
     def Store(self, command):
         super().Store(command)
+
+    def Reset(self, composite):
+        self.composite = composite.Copy()
+        self.ClearCommands()

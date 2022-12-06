@@ -596,7 +596,7 @@ class Canvas(wx.Panel):
                     Layer(Layer(bitmap).Scaled(1/pixel)))
             self.document.currentLayer = 0
 
-        self.history.ClearCommands()
+        self.history.Reset(self.document.Composite())
         self.Deselect()
 
     def LoadRefImage(self, filename):
@@ -633,7 +633,7 @@ class Canvas(wx.Panel):
         self.document.fps = GetSetting('Animation', 'FPS')
         self.document.totalFrames = GetSetting('Animation', 'Total Frames')
 
-        self.history.ClearCommands()
+        self.history.Reset(self.document.Composite())
         self.Deselect()
 
     def OnCropToSelection(self, e):
@@ -1851,12 +1851,12 @@ class Frame(wx.Frame):
         filename = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
         if filename:
             frames = self.animControl.GetAnimationFrames()
+            pxlsz = self.canvas.GetPixelSize()
             if frames:
                 fps = self.animControl.GetFPS()
                 images = []
                 for frame in frames:
-                    wxImage = frame.Scaled(
-                        self.canvas.GetPixelSize()).ConvertToImage()
+                    wxImage = frame.Scaled(pxlsz).ConvertToImage()
                     pilImage = Image.new(
                         'RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
                     pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
@@ -1869,7 +1869,29 @@ class Frame(wx.Frame):
                 print('No frames available! [Frame.OnExportAninmation]')
 
     def OnExportHistory(self, e):
-        print('OnExportHistory')
+        filename = wx.SaveFileSelector(PROGRAM_NAME, "gif", parent=self)
+        if filename:
+            images = []
+            pxlsz = self.canvas.GetPixelSize()
+            for command in self.canvas.history.GetCommands():
+                wxImage = command.composite.Scaled(pxlsz).ConvertToImage()
+                pilImage = Image.new(
+                    'RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
+                pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
+                images.append(pilImage)
+
+            if images:
+                print('Saving to', filename)
+                fps = self.animControl.GetFPS()
+                # render original image first
+                wxImage = self.canvas.history.composite.Scaled(
+                    pxlsz).ConvertToImage()
+                pilImage = Image.new(
+                    'RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
+                pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
+                # save to gif
+                pilImage.save(filename, save_all=True, append_images=images,
+                              optimize=False, duration=1000/fps, loop=0)
 
     def OnKeyDown(self, e):
         keycode = e.GetUnicodeKey()
