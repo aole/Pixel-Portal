@@ -3,7 +3,9 @@
 ### Bhupendra Aole ###
 """
 
-from math import ceil
+from constants import *
+
+from math import ceil, atan2
 
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from shapely.ops import unary_union
@@ -35,6 +37,7 @@ TOOLS = {"Pen":             (wx.CURSOR_PENCIL,      "toolpen.png"),
          "Rectangle":       (wx.CURSOR_CROSS,       "toolrect.png"),
          "Ellipse":         (wx.CURSOR_CROSS,       "toolellipse.png"),
          "Move":            (wx.CURSOR_SIZING,      "toolmove.png"),
+         # "Rotate":          (wx.CURSOR_SIZING,      "toolrotate.png"), -- results not good enough
          "Bucket":          (wx.CURSOR_PAINT_BRUSH, "toolbucket.png"),
          "Picker":          (wx.CURSOR_RIGHT_ARROW, "toolpicker.png"),
          "Gradient":        (wx.CURSOR_CROSS,       "toolgradient.png"),
@@ -89,10 +92,12 @@ class Canvas(wx.Panel):
         self.smoothLine = False
 
         self.movex, self.movey = 0, 0
+        self.rotateImage = 0
+
         self.selection = wx.Region()
         self.lastSelection = None
 
-        self.mouseState = 0
+        self.mouseState = MOUSESTATE_NONE
         self.doubleClick = False
 
         self.current_tool = "Pen"
@@ -542,6 +547,9 @@ class Canvas(wx.Panel):
     def GetPenSize(self):
         return self.penSize
 
+    def GetPixelSize(self):
+        return self.pixelSize
+
     def GetPolyCoords(self, x, y, w, h):
         return (x, y), (x, y+h), (x+w, y+h), (x+w, y)
 
@@ -574,7 +582,7 @@ class Canvas(wx.Panel):
             width, height = int(image.GetWidth() /
                                 pixel), int(image.GetHeight() / pixel)
 
-            self.New(pixel, width, height)
+            self.New(width, height)
 
             self.document.Current().Load(filename)
         elif filename[-3:] == "tif" or filename[-4:] == "tiff":
@@ -606,7 +614,7 @@ class Canvas(wx.Panel):
             self.document.MergeDown()
 
     def New(self, width, height):
-        self.pixelSize = GetSetting('New Document', 'Pixel Size')
+        # self.pixelSize = GetSetting('New Document', 'Pixel Size')
 
         # to ensure alpha
         bglayer = Layer.CreateLayer(width, height, GetSetting(
@@ -685,7 +693,7 @@ class Canvas(wx.Panel):
     def OnLeftDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
         self.origx, self.origy = e.GetPosition()
-        self.mouseState = 1
+        self.mouseState = MOUSESTATE_LEFT
         gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
 
         self.noUndo = False
@@ -711,6 +719,11 @@ class Canvas(wx.Panel):
             else:
                 self.DrawPixel(gx, gy, self.penColor)
         elif self.current_tool == "Move":
+            self.document.surface.Draw(
+                self.document.Current(), clip=self.selection)
+            if not e.ControlDown():
+                self.document.Current().Clear(clip=self.selection)
+        elif self.current_tool == "Rotate":
             self.document.surface.Draw(
                 self.document.Current(), clip=self.selection)
             if not e.ControlDown():
@@ -746,7 +759,7 @@ class Canvas(wx.Panel):
     def OnLeftUp(self, e):
         x, y = e.GetPosition()
         gx, gy = self.PixelAtPosition(x, y)
-        self.mouseState = 0
+        self.mouseState = MOUSESTATE_NONE
 
         if self.HasCapture():
             # to avoid
@@ -773,6 +786,11 @@ class Canvas(wx.Panel):
             if not self.selection.IsEmpty():
                 ox, oy = self.PixelAtPosition(self.origx, self.origy)
                 self.selection.Offset(self.movex, self.movey)
+        elif self.current_tool == "Rotate":
+            self.document.BlitFromSurface(self.movex, self.movey)
+            if not self.selection.IsEmpty():
+                ox, oy = self.PixelAtPosition(self.origx, self.origy)
+                self.selection.Offset(self.movex, self.movey)
         elif self.current_tool == "Select" and not self.doubleClick:
             self.UpdateSelection(x, y, self.origx, self.origy, e.AltDown())
             self.doubleClick = False
@@ -782,6 +800,7 @@ class Canvas(wx.Panel):
             self.noUndo = True
 
         self.movex, self.movey = 0, 0
+        self.rotateImage = 0
 
         self.document.surface.Clear()
 
@@ -803,11 +822,11 @@ class Canvas(wx.Panel):
     def OnMiddleDown(self, e):
         self.prevx, self.prevy = e.GetPosition()
         self.origx, self.origy = e.GetPosition()
-        self.mouseState = 3
+        self.mouseState = MOUSESTATE_MIDDLE
         self.noUndo = False
 
     def OnMiddleUp(self, e):
-        self.mouseState = 0
+        self.mouseState = MOUSESTATE_NONE
         self.noUndo = False
 
     def OnMirrorTR(self, e):
@@ -845,7 +864,7 @@ class Canvas(wx.Panel):
         self.prevgx, self.prevgy = gx, gy
 
         # draw with 1st color
-        if self.mouseState == 1:
+        if self.mouseState == MOUSESTATE_LEFT:
             if self.current_tool == "Pen":
                 if self.smoothLine:
                     self.linePoints.append((gx, gy))  # for smoothing later
@@ -866,6 +885,9 @@ class Canvas(wx.Panel):
             elif self.current_tool == "Move":
                 self.movex, self.movey = int(
                     (x - self.origx) / self.pixelSize), int((y - self.origy) / self.pixelSize)
+            elif self.current_tool == "Rotate":
+                self.rotateImage = atan2(x - self.origx, y - self.origy)
+                print(self.rotateImage)
             elif self.current_tool == "Picker":
                 color = self.document.Current().GetPixel(gx, gy)
                 self.ChangePenColor(color)
@@ -881,7 +903,7 @@ class Canvas(wx.Panel):
                 self.helper[2] = (x - self.panx)/self.pixelSize
                 self.helper[3] = (y - self.pany)/self.pixelSize
         # draw with 2nd color
-        elif self.mouseState == 2:
+        elif self.mouseState == MOUSESTATE_RIGHT:
             if self.current_tool == "Pen":
                 self.EraseLine(
                     *self.PixelAtPosition(self.prevx, self.prevy), gx, gy)
@@ -907,7 +929,7 @@ class Canvas(wx.Panel):
                 self.helper[2] += (x - self.prevx)/self.pixelSize
                 self.helper[3] += (y - self.prevy)/self.pixelSize
 
-        elif self.mouseState == 3:
+        elif self.mouseState == MOUSESTATE_MIDDLE:
             self.panx += x - self.prevx
             self.pany += y - self.prevy
 
@@ -938,11 +960,12 @@ class Canvas(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         alphadc = wx.MemoryDC(self.alphabg)
 
-        drawCurrent = not self.mouseState == 2 or (
-            self.mouseState == 1 and self.current_tool in ("Move"))
+        drawCurrent = not self.mouseState == MOUSESTATE_RIGHT or (
+            self.mouseState == MOUSESTATE_LEFT and self.current_tool in ("Move", "Rotate"))
         composite = self.document.Composite(self.movex, self.movey,
+                                            self.rotateImage,
                                             drawCurrent=drawCurrent,
-                                            drawSurface=self.mouseState != 0)
+                                            drawSurface=self.mouseState != MOUSESTATE_NONE)
         compositedc = wx.MemoryDC(composite)
 
         lw, lh = self.document.width, self.document.height
@@ -1017,7 +1040,7 @@ class Canvas(wx.Panel):
         gc = wx.GraphicsContext.Create(dc)
 
         # BRUSH PREVIEW
-        if RENDER_BRUSH_OUTLINE and self.mouseState != 1 and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
+        if RENDER_BRUSH_OUTLINE and self.mouseState != MOUSESTATE_LEFT and self.current_tool in ["Pen", "Line", "Rectangle", "Ellipse"]:
             self.DrawBrushOnCanvas(gc, self.prevgx, self.prevgy)
 
         # REFERENCE
@@ -1048,13 +1071,13 @@ class Canvas(wx.Panel):
 
         # SELECTION
         display_selection_rect = True
-        if self.mouseState == 1 and self.current_tool in ("Move"):
+        if self.mouseState == MOUSESTATE_LEFT and self.current_tool in ("Move"):
             display_selection_rect = False
 
         # XOR ADD CLEAR not supported on windows
         # print(gc.SetCompositionMode(wx.COMPOSITION_CLEAR))
         gc.SetBrush(wx.NullBrush)
-        if self.mouseState == 1 and self.current_tool == "Select":
+        if self.mouseState == MOUSESTATE_LEFT and self.current_tool == "Select":
             gc.SetPen(wx.ThePenList.FindOrCreatePen(
                 "#22443388", 2, wx.PENSTYLE_LONG_DASH))
             gc.DrawRectangle(min(self.prevx, self.origx), min(self.prevy, self.origy), abs(self.prevx - self.origx),
@@ -1157,7 +1180,7 @@ class Canvas(wx.Panel):
         self.prevx, self.prevy = e.GetPosition()
         self.origx, self.origy = e.GetPosition()
         gx, gy = self.PixelAtPosition(self.prevx, self.prevy)
-        self.mouseState = 2
+        self.mouseState = MOUSESTATE_RIGHT
 
         self.noUndo = False
         # store a copy of the before picture
@@ -1209,7 +1232,7 @@ class Canvas(wx.Panel):
     def OnRightUp(self, e):
         x, y = e.GetPosition()
         gx, gy = self.PixelAtPosition(x, y)
-        self.mouseState = 0
+        self.mouseState = MOUSESTATE_NONE
 
         if self.HasCapture():
             # to avoid
@@ -1221,6 +1244,7 @@ class Canvas(wx.Panel):
             self.document.SourceFromSurface()
 
         self.movex, self.movey = 0, 0
+        self.rotateImage = 0
 
         self.document.surface.Clear()
 
@@ -1832,13 +1856,17 @@ class Frame(wx.Frame):
                 images = []
                 for frame in frames:
                     wxImage = frame.Scaled(
-                        self.GetPixelSize()).ConvertToImage()
+                        self.canvas.GetPixelSize()).ConvertToImage()
                     pilImage = Image.new(
                         'RGB', (wxImage.GetWidth(), wxImage.GetHeight()))
                     pilImage.frombytes(np.array(wxImage.GetDataBuffer()))
                     images.append(pilImage)
+
+                print('Saving to', filename)
                 images[0].save(filename, save_all=True, append_images=images[1:],
                                optimize=False, duration=1000/fps, loop=0)
+            else:
+                print('No frames available! [Frame.OnExportAninmation]')
 
     def OnExportHistory(self, e):
         print('OnExportHistory')

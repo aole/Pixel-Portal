@@ -490,17 +490,18 @@ class AnimationControl(wx.Window):
 
     def GetAnimationFrames(self):
         bitmaps = []
-        for f in range(1, self.panel.totalFrames+1):
+        for f in range(1, self.document.totalFrames+1):
             key = self.panel.GetKey(f)
             if key:
-                bitmap = Layer.Create(key[0].width, key[0].height)
+                bitmap = Layer(wx.Bitmap.FromRGBA(
+                    key[0].width, key[0].height, 0, 0, 0, 0))
                 bitmap.DrawAll(key)
                 bitmaps.append(bitmap)
 
         return bitmaps
 
     def GetFPS(self):
-        return self.panel.fps
+        return self.document.fps
 
     def InsertKey(self, frame, key):
         self.panel.InsertKey(frame, key)
