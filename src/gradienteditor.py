@@ -66,7 +66,7 @@ class GradientControl(wx.Window):
             
     def MarkerUnderLocation(self, mx, my):
         for marker in self.markers[2:]:
-            x = (self.width-GradientControl.PADDING2) * marker.Position + GradientControl.PADDING
+            x = int((self.width-GradientControl.PADDING2) * marker.Position + GradientControl.PADDING)
             y = 75
             r = wx.Rect(x-4, y-6, 8, 25)
             if r.Contains(mx, my):
@@ -180,10 +180,10 @@ class GradientControl(wx.Window):
                     # interpolate before and after color
                     w = aft.Position - bef.Position
                     ip = (pos-bef.Position)/w
-                    icr = bef.Colour.red+(aft.Colour.red - bef.Colour.red)*ip
-                    icg = bef.Colour.green+(aft.Colour.green - bef.Colour.green)*ip
-                    icb = bef.Colour.blue+(aft.Colour.blue - bef.Colour.blue)*ip
-                    ica = bef.Colour.alpha+(aft.Colour.alpha - bef.Colour.alpha)*ip
+                    icr = int(bef.Colour.red+(aft.Colour.red - bef.Colour.red)*ip)
+                    icg = int(bef.Colour.green+(aft.Colour.green - bef.Colour.green)*ip)
+                    icb = int(bef.Colour.blue+(aft.Colour.blue - bef.Colour.blue)*ip)
+                    ica = int(bef.Colour.alpha+(aft.Colour.alpha - bef.Colour.alpha)*ip)
                     stop = GradientStop(wx.Colour(icr, icg, icb, ica), pos)
                     
                     self.markers.append(stop)

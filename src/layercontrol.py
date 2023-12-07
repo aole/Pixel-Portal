@@ -185,7 +185,7 @@ class LayerControl(wx.ScrolledWindow):
     def UpdateLayers(self, layers=None):
         if layers:
             self.panel.UpdateLayers(layers)
-            self.slider.SetValue(layers.Current().alpha*255)
+            self.slider.SetValue(int(layers.Current().alpha*255))
 
         self.Refresh()
 

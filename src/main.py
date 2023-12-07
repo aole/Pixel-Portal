@@ -20,6 +20,8 @@ from PIL import Image, ImageDraw, ImageSequence
 
 import numpy as np
 
+from array import array
+
 from undomanager import *
 from layermanager import *
 from gradienteditor import *
