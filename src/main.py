@@ -30,6 +30,7 @@ from animationcontrol import *
 from document import *
 from settings import *
 from dialogs.dictionarydialog import *
+from dialogs.aidialogs import *
 
 PROGRAM_NAME = "Pixel Portal"
 
@@ -1536,6 +1537,11 @@ class Frame(wx.Frame):
         menu.AppendSeparator()
         self.AddMenuItem(menu, "&Clear\tDelete", self.OnClear)
 
+        maimenu = wx.Menu()
+        mbar.Append(maimenu, "&AI")
+        self.AddMenuItem(maimenu, "Image from Prompt...", self.OnGenerateImage)
+        self.AddMenuItem(maimenu, "Layer from Prompt...", self.OnGenerateLayer)
+
         menu = wx.Menu()
         mbar.Append(menu, "&Help")
         #self.AddMenuItem(menu, "&Manual", self.OnManual)
@@ -1983,6 +1989,24 @@ class Frame(wx.Frame):
             self.animControl.SetDocument(self.canvas.document)
             self.canvas.Refresh()
             self.RefreshLayers()
+
+    def OnGenerateImage(self, e):
+        props = {'Width': GetSetting('New Document', 'Document Width'),
+                 'Height': GetSetting('New Document', 'Document Height'),
+                 'Prompt': ''}
+        dlg = GenerateImageDialog(self, props)
+        if dlg.ShowModal() == wx.ID_OK:
+            # No functionality needed for OK yet
+            pass
+
+    def OnGenerateLayer(self, e):
+        props = {'Width': self.canvas.document.width,
+                 'Height': self.canvas.document.height,
+                 'Prompt': ''}
+        dlg = GenerateLayerDialog(self, props)
+        if dlg.ShowModal() == wx.ID_OK:
+            # No functionality needed for OK yet
+            pass
 
     def OnOpen(self, e):
         if not self.CheckDirty():
