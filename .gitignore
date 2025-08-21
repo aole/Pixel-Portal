@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# model files
+/models/sdxl/*
+/models/lora_sdxl/*
