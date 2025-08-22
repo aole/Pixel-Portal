@@ -2011,7 +2011,7 @@ class Frame(wx.Frame):
             progress.Destroy()
 
             if filename:
-                self.canvas.Load(1, filename)
+                self.canvas.Load(8, filename)
                 self.canvas.Refresh()
                 self.RefreshLayers()
 
