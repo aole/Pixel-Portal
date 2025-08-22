@@ -38,8 +38,8 @@ class DownloadThread(threading.Thread):
                 print("[Debug] Starting download loop...")
                 with open(self.filename, "wb") as f:
                     for chunk in r.iter_content(chunk_size=chunk_size):
-                        if self.cancelled or not self.progress_dialog.IsShown():
-                            print("[Debug] Download cancelled or dialog closed.")
+                        if self.cancelled:
+                            print("[Debug] Download cancelled by flag.")
                             return
                         if chunk:
                             f.write(chunk)
