@@ -3,6 +3,7 @@ import requests
 import wx
 from settings import GetSetting
 import threading
+import time
 
 class DownloadThread(threading.Thread):
     def __init__(self, parent, url, filename, progress_dialog):
@@ -19,7 +20,6 @@ class DownloadThread(threading.Thread):
             with requests.get(self.url, stream=True) as r:
                 r.raise_for_status()
                 total_size = int(r.headers.get('content-length', 0))
-
                 wx.CallAfter(self.progress_dialog.SetRange, total_size)
 
                 chunk_size = 8192
@@ -27,9 +27,7 @@ class DownloadThread(threading.Thread):
                 with open(self.filename, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=chunk_size):
                         if not self.progress_dialog.IsShown():
-                            # Dialog was cancelled
                             return
-
                         f.write(chunk)
                         bytes_downloaded += len(chunk)
                         wx.CallAfter(self.progress_dialog.Update, bytes_downloaded)
@@ -46,15 +44,15 @@ def DownloadAIModel(parent, url, filename):
         "Downloading",
         f"Downloading {os.path.basename(filename)}",
         parent=parent,
-        style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT
+        style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME
     )
 
     thread = DownloadThread(parent, url, filename, progress_dialog)
     thread.start()
 
-    progress_dialog.ShowModal()
-
-    thread.join()
+    while thread.is_alive():
+        wx.Yield()
+        time.sleep(0.1)
 
     return thread.success
 
