@@ -84,9 +84,9 @@ def CheckAIModels(parent):
     model_path = GetSetting('AI', 'Model')
     lora_path = GetSetting('AI', 'Lora')
 
-    # Model IDs from original issue description
-    model_id = "1759168"
-    lora_id = "135931"
+    # Model IDs from user's feedback
+    model_id = "133005"
+    lora_id = "120096"
 
     if not os.path.exists(model_path):
         model_url = get_civitai_download_url(model_id)
