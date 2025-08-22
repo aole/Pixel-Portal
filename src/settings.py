@@ -32,6 +32,19 @@ def InitSettings():
                              'Hide Current Layer': wx.propgrid.BoolProperty('Hide Current Layer when Key added', value=False),
                              'Duplicate Layer': wx.propgrid.BoolProperty('Duplicate Current Layer when Key added', value=False),
                              'Insert Layer': wx.propgrid.BoolProperty('Insert New Layer when Key added', value=False)}
+
+    model_prop = wx.propgrid.FileProperty('Model', value='')
+    model_prop.SetAttribute("Wildcard", "SafeTensor files (*.safetensors)|*.safetensors")
+    model_prop.SetHelpString('Path to the SDXL model file.')
+    model_prop.SetAttribute("ShowFullPath", True)
+
+    lora_prop = wx.propgrid.FileProperty('Lora', value='')
+    lora_prop.SetAttribute("Wildcard", "SafeTensor files (*.safetensors)|*.safetensors")
+    lora_prop.SetHelpString('Path to the LoRA file.')
+    lora_prop.SetAttribute("ShowFullPath", True)
+
+    global_settings['AI'] = {'Model': model_prop,
+                           'Lora': lora_prop}
                              
 def GetSetting(section, property):
     global global_settings
@@ -51,14 +64,18 @@ def LoadSettings(file):
     config.read(file)
     
     for section in config.sections():
-        for prop in config[section]:
-            value = config[section][prop]
+        for prop_name in config[section]:
+            value = config[section][prop_name]
             if section not in global_settings:
                 global_settings[section] = {}
-            if not prop in global_settings[section]:
-                global_settings[section][prop] = wx.propgrid.StringProperty(prop, value=value)
+            if not prop_name in global_settings[section]:
+                global_settings[section][prop_name] = wx.propgrid.StringProperty(prop_name, value=value)
             else:
-                global_settings[section][prop].SetValueFromString(value)
+                prop = global_settings[section][prop_name]
+                if isinstance(prop, wx.propgrid.FileProperty):
+                    # Normalize path before setting it, to handle cross-platform settings files.
+                    value = value.replace('\\', '/')
+                prop.SetValueFromString(value)
     
 def SaveSettings(file):
     global global_settings

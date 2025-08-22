@@ -4,6 +4,18 @@ import wx
 from src.settings import GetSetting
 import threading
 import time
+from PIL import Image
+
+def _get_model_paths():
+    model_path = GetSetting('AI', 'Model')
+    lora_path = GetSetting('AI', 'Lora')
+
+    if not model_path:
+        model_path = os.path.join("models", "sdxl", "juggernautXL_ragnarokBy.safetensors")
+    if not lora_path:
+        lora_path = os.path.join("models", "lora_sdxl", "pixel-art-xl-v1.1.safetensors")
+
+    return model_path, lora_path
 
 class DownloadThread(threading.Thread):
     def __init__(self, parent, url, filename, progress_dialog):
@@ -75,18 +87,58 @@ def DownloadAIModel(parent, url, filename):
     return thread.success
 
 def CheckAIModels(parent):
-    model_path = GetSetting('AI', 'Model')
-    lora_path = GetSetting('AI', 'Lora')
+    model_path, lora_path = _get_model_paths()
 
     model_url = "https://civitai.com/api/download/models/1759168?type=Model&format=SafeTensor"
     lora_url = "https://civitai.com/api/download/models/135931?type=Model&format=SafeTensor"
 
-    if model_path and not os.path.exists(model_path):
+    if not os.path.exists(model_path):
         if not DownloadAIModel(parent, model_url, model_path):
             return False
 
-    if lora_path and not os.path.exists(lora_path):
+    if not os.path.exists(lora_path):
         if not DownloadAIModel(parent, lora_url, lora_path):
             return False
 
     return True
+
+def GenerateImage(prompt, width, height, num_inference_steps=20):
+    model_path, lora_path = _get_model_paths()
+
+    if not os.path.exists(model_path):
+        wx.MessageBox("Model file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
+        return None
+
+    if not os.path.exists(lora_path):
+        wx.MessageBox("LoRA file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
+        return None
+
+    import torch
+    from diffusers import StableDiffusionXLPipeline
+
+    try:
+        pipe = StableDiffusionXLPipeline.from_single_file(model_path, torch_dtype=torch.float16, variant="fp16")
+        pipe.load_lora_weights(lora_path)
+        pipe.to("cuda")
+
+        image = pipe(prompt, width=width*8, height=height*8, num_inference_steps=num_inference_steps).images[0]
+
+        # Scale the image using nearest neighbour
+        w, h = image.size
+        scaled_image = image.resize((w//8, h//8), Image.Resampling.NEAREST)
+
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # create a valid filename from the prompt
+        filename = "".join([c for c in prompt if c.isalpha() or c.isdigit() or c.isspace()]).rstrip()
+        if len(filename) > 50:
+            filename = filename[:50]
+        filename = os.path.join(output_dir, f"{filename}.png")
+
+        scaled_image.save(filename)
+
+        return filename
+    except Exception as e:
+        wx.MessageBox(f"Failed to generate image: {e}", "Error", wx.OK | wx.ICON_ERROR)
+        return None
