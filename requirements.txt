@@ -1,5 +1,5 @@
-numpy==1.26.2
-Pillow==10.1.0
-shapely==2.0.2
-six==1.16.0
-wxPython==4.2.1
+numpy
+Pillow
+shapely
+six
+wxPython
