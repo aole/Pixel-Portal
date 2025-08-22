@@ -16,22 +16,13 @@ from src.settings import (
 )
 from src.ui.mainframe import Frame
 
-app = None
-
-def CreateWindows():
-    global app
-
-    app = wx.App()
-
+def main():
     InitSettings()
+    app = wx.App()
     LoadSettings('settings.ini')
-
-    Frame().Show()
-
-
-def RunProgram():
+    frame = Frame()
+    frame.Show()
     app.MainLoop()
 
-
-CreateWindows()
-RunProgram()
+if __name__ == '__main__':
+    main()
