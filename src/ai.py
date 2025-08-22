@@ -1,7 +1,7 @@
 import os
 import requests
 import wx
-from settings import GetSetting
+from src.settings import GetSetting
 import threading
 import time
 

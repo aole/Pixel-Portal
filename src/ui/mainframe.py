@@ -1538,7 +1538,8 @@ class Frame(wx.Frame):
         maimenu = wx.Menu()
         mbar.Append(maimenu, "&AI")
         self.AddMenuItem(maimenu, "Image from Prompt...", self.OnGenerateImage)
-        self.AddMenuItem(maimenu, "Layer from Prompt...", self.OnGenerateLayer)
+        item = self.AddMenuItem(maimenu, "Layer from Prompt...", self.OnGenerateLayer)
+        item.Enable(False)
 
         menu = wx.Menu()
         mbar.Append(menu, "&Help")
@@ -1679,9 +1680,10 @@ class Frame(wx.Frame):
         tb.Realize()
 
     def AddMenuItem(self, menu, name, func):
-        menu.Append(self.menuid, name)
+        item = menu.Append(self.menuid, name)
         menu.Bind(wx.EVT_MENU, func, id=self.menuid)
         self.menuid += 1
+        return item
 
     def AddToggleButton(self, tb, label, function, icon, default=False):
         btn = tb.AddCheckTool(wx.ID_ANY, label, icon, shortHelp=label)
@@ -1992,8 +1994,8 @@ class Frame(wx.Frame):
         if not ai.CheckAIModels(self):
             return
 
-        props = {'Width': GetSetting('New Document', 'Document Width'),
-                 'Height': GetSetting('New Document', 'Document Height'),
+        props = {'Width': 64,
+                 'Height': 64,
                  'Prompt': ''}
         dlg = GenerateImageDialog(self, props)
         if dlg.ShowModal() == wx.ID_OK:
