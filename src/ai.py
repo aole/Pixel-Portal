@@ -5,6 +5,17 @@ from src.settings import GetSetting
 import threading
 import time
 
+def _get_model_paths():
+    model_path = GetSetting('AI', 'Model')
+    lora_path = GetSetting('AI', 'Lora')
+
+    if not model_path:
+        model_path = os.path.join("models", "sdxl", "juggernautXL_ragnarokBy.safetensors")
+    if not lora_path:
+        lora_path = os.path.join("models", "lora_sdxl", "pixel-art-xl-v1.1.safetensors")
+
+    return model_path, lora_path
+
 class DownloadThread(threading.Thread):
     def __init__(self, parent, url, filename, progress_dialog):
         super().__init__()
@@ -75,31 +86,29 @@ def DownloadAIModel(parent, url, filename):
     return thread.success
 
 def CheckAIModels(parent):
-    model_path = GetSetting('AI', 'Model')
-    lora_path = GetSetting('AI', 'Lora')
+    model_path, lora_path = _get_model_paths()
 
     model_url = "https://civitai.com/api/download/models/1759168?type=Model&format=SafeTensor"
     lora_url = "https://civitai.com/api/download/models/135931?type=Model&format=SafeTensor"
 
-    if model_path and not os.path.exists(model_path):
+    if not os.path.exists(model_path):
         if not DownloadAIModel(parent, model_url, model_path):
             return False
 
-    if lora_path and not os.path.exists(lora_path):
+    if not os.path.exists(lora_path):
         if not DownloadAIModel(parent, lora_url, lora_path):
             return False
 
     return True
 
 def GenerateImage(prompt, width, height, num_inference_steps=20):
-    model_path = GetSetting('AI', 'Model')
-    lora_path = GetSetting('AI', 'Lora')
+    model_path, lora_path = _get_model_paths()
 
-    if not model_path or not os.path.exists(model_path):
+    if not os.path.exists(model_path):
         wx.MessageBox("Model file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
         return None
 
-    if not lora_path or not os.path.exists(lora_path):
+    if not os.path.exists(lora_path):
         wx.MessageBox("LoRA file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
         return None
 
