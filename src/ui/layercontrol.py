@@ -7,7 +7,7 @@ Bhupendra Aole
 import wx
 import wx.lib.newevent
 
-from layermanager import *
+from src.layermanager import LayerManager
 
 LayerClickedEvent,      EVT_LAYER_CLICKED_EVENT = wx.lib.newevent.NewEvent()
 LayerVisibilityEvent,   EVT_LAYER_VISIBILITY_EVENT = wx.lib.newevent.NewEvent()

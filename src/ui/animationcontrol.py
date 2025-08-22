@@ -9,8 +9,8 @@ from random import randrange
 import wx
 import wx.lib.newevent
 
-from layermanager import *
-from settings import *
+from src.layermanager import Layer, LayerManager
+from src.settings import *
 
 END_FRAME_HANDLE = 0
 INFO_BAR_HEIGHT = 20

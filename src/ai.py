@@ -81,11 +81,11 @@ def CheckAIModels(parent):
     model_url = "https://civitai.com/api/download/models/1759168?type=Model&format=SafeTensor"
     lora_url = "https://civitai.com/api/download/models/135931?type=Model&format=SafeTensor"
 
-    if not os.path.exists(model_path):
+    if model_path and not os.path.exists(model_path):
         if not DownloadAIModel(parent, model_url, model_path):
             return False
 
-    if not os.path.exists(lora_path):
+    if lora_path and not os.path.exists(lora_path):
         if not DownloadAIModel(parent, lora_url, lora_path):
             return False
 
