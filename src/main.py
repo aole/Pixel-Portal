@@ -31,6 +31,7 @@ from document import *
 from settings import *
 from dialogs.dictionarydialog import *
 from dialogs.aidialogs import *
+import ai
 
 PROGRAM_NAME = "Pixel Portal"
 
@@ -1991,6 +1992,9 @@ class Frame(wx.Frame):
             self.RefreshLayers()
 
     def OnGenerateImage(self, e):
+        if not ai.CheckAIModels(self):
+            return
+
         props = {'Width': GetSetting('New Document', 'Document Width'),
                  'Height': GetSetting('New Document', 'Document Height'),
                  'Prompt': ''}
@@ -2000,6 +2004,9 @@ class Frame(wx.Frame):
             pass
 
     def OnGenerateLayer(self, e):
+        if not ai.CheckAIModels(self):
+            return
+
         props = {'Width': self.canvas.document.width,
                  'Height': self.canvas.document.height,
                  'Prompt': ''}
@@ -2007,6 +2014,7 @@ class Frame(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             # No functionality needed for OK yet
             pass
+
 
     def OnOpen(self, e):
         if not self.CheckDirty():

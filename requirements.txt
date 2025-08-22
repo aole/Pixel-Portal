@@ -3,3 +3,4 @@ Pillow
 shapely
 six
 wxPython
+requests
