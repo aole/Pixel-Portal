@@ -2,35 +2,61 @@ import os
 import requests
 import wx
 from settings import GetSetting
+import threading
+
+class DownloadThread(threading.Thread):
+    def __init__(self, parent, url, filename, progress_dialog):
+        threading.Thread.__init__(self)
+        self.parent = parent
+        self.url = url
+        self.filename = filename
+        self.progress_dialog = progress_dialog
+        self.success = False
+
+    def run(self):
+        try:
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+            with requests.get(self.url, stream=True) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+
+                wx.CallAfter(self.progress_dialog.SetRange, total_size)
+
+                chunk_size = 8192
+                bytes_downloaded = 0
+                with open(self.filename, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=chunk_size):
+                        if not self.progress_dialog.IsShown():
+                            # Dialog was cancelled
+                            return
+
+                        f.write(chunk)
+                        bytes_downloaded += len(chunk)
+                        wx.CallAfter(self.progress_dialog.Update, bytes_downloaded)
+
+            self.success = True
+        except Exception as e:
+            wx.CallAfter(wx.MessageBox, f"Failed to download {self.filename}: {e}", "Error", wx.OK | wx.ICON_ERROR)
+        finally:
+            if self.progress_dialog.IsShown():
+                wx.CallAfter(self.progress_dialog.Destroy)
 
 def DownloadAIModel(parent, url, filename):
-    try:
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
+    progress_dialog = wx.ProgressDialog(
+        "Downloading",
+        f"Downloading {os.path.basename(filename)}",
+        parent=parent,
+        style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT
+    )
 
-            progress_dialog = wx.ProgressDialog(
-                "Downloading",
-                f"Downloading {os.path.basename(filename)}",
-                maximum=total_size,
-                parent=parent,
-                style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE
-            )
+    thread = DownloadThread(parent, url, filename, progress_dialog)
+    thread.start()
 
-            chunk_size = 8192
-            bytes_downloaded = 0
-            with open(filename, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=chunk_size):
-                    f.write(chunk)
-                    bytes_downloaded += len(chunk)
-                    progress_dialog.Update(bytes_downloaded)
+    progress_dialog.ShowModal()
 
-            progress_dialog.Destroy()
-            return True
-    except Exception as e:
-        wx.MessageBox(f"Failed to download {filename}: {e}", "Error", wx.OK | wx.ICON_ERROR)
-        return False
+    thread.join()
+
+    return thread.success
 
 def CheckAIModels(parent):
     model = GetSetting('AI', 'Model')
