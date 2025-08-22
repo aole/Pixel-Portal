@@ -4,3 +4,7 @@ shapely
 six
 wxPython
 requests
+torch
+diffusers
+transformers
+accelerate

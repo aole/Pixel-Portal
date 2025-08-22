@@ -90,3 +90,41 @@ def CheckAIModels(parent):
             return False
 
     return True
+
+def GenerateImage(prompt, width, height, num_inference_steps=20):
+    model_path = GetSetting('AI', 'Model')
+    lora_path = GetSetting('AI', 'Lora')
+
+    if not model_path or not os.path.exists(model_path):
+        wx.MessageBox("Model file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
+        return None
+
+    if not lora_path or not os.path.exists(lora_path):
+        wx.MessageBox("LoRA file not found. Please set the path in the settings.", "Error", wx.OK | wx.ICON_ERROR)
+        return None
+
+    import torch
+    from diffusers import StableDiffusionXLPipeline
+
+    try:
+        pipe = StableDiffusionXLPipeline.from_single_file(model_path, torch_dtype=torch.float16, variant="fp16")
+        pipe.load_lora_weights(lora_path)
+        pipe.to("cuda")
+
+        image = pipe(prompt, width=width*8, height=height*8, num_inference_steps=num_inference_steps).images[0]
+
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # create a valid filename from the prompt
+        filename = "".join([c for c in prompt if c.isalpha() or c.isdigit() or c.isspace()]).rstrip()
+        if len(filename) > 50:
+            filename = filename[:50]
+        filename = os.path.join(output_dir, f"{filename}.png")
+
+        image.save(filename)
+
+        return filename
+    except Exception as e:
+        wx.MessageBox(f"Failed to generate image: {e}", "Error", wx.OK | wx.ICON_ERROR)
+        return None

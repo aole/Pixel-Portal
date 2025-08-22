@@ -1999,8 +1999,21 @@ class Frame(wx.Frame):
                  'Prompt': ''}
         dlg = GenerateImageDialog(self, props)
         if dlg.ShowModal() == wx.ID_OK:
-            # No functionality needed for OK yet
-            pass
+            width = dlg.Get('Width')
+            height = dlg.Get('Height')
+            prompt = dlg.Get('Prompt')
+
+            progress = wx.ProgressDialog("Generating Image", "Please wait...", parent=self, style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+            progress.Pulse()
+
+            filename = ai.GenerateImage(prompt, width, height)
+
+            progress.Destroy()
+
+            if filename:
+                self.canvas.Load(1, filename)
+                self.canvas.Refresh()
+                self.RefreshLayers()
 
     def OnGenerateLayer(self, e):
         if not ai.CheckAIModels(self):
