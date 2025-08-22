@@ -6,13 +6,35 @@ import threading
 import time
 
 def _get_model_paths():
-    model_path = GetSetting('AI', 'Model')
-    lora_path = GetSetting('AI', 'Lora')
+    print("--- Getting model paths ---")
+
+    model_path_from_settings = GetSetting('AI', 'Model')
+    lora_path_from_settings = GetSetting('AI', 'Lora')
+
+    print(f"Path from settings (Model): '{model_path_from_settings}'")
+    print(f"Path from settings (Lora): '{lora_path_from_settings}'")
+
+    def _normalize_path(path):
+        if not path:
+            return None
+        # This handles both \ and / as separators, making it cross-platform.
+        normalized = os.path.join(*path.replace('\\', '/').split('/'))
+        print(f"Normalized path '{path}' -> '{normalized}'")
+        return normalized
+
+    model_path = _normalize_path(model_path_from_settings)
+    lora_path = _normalize_path(lora_path_from_settings)
 
     if not model_path:
         model_path = os.path.join("models", "sdxl", "juggernautXL_ragnarokBy.safetensors")
+        print(f"Model path is empty, using default: '{model_path}'")
     if not lora_path:
         lora_path = os.path.join("models", "lora_sdxl", "pixel-art-xl-v1.1.safetensors")
+        print(f"Lora path is empty, using default: '{lora_path}'")
+
+    print(f"Final model path: '{model_path}'")
+    print(f"Final lora path: '{lora_path}'")
+    print("--------------------------")
 
     return model_path, lora_path
 
