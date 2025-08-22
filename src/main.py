@@ -17,8 +17,8 @@ from src.settings import (
 from src.ui.mainframe import Frame
 
 def main():
-    InitSettings()
     app = wx.App()
+    InitSettings()
     LoadSettings('settings.ini')
     frame = Frame()
     frame.Show()
