@@ -6,7 +6,7 @@ Bhupendra Aole
 
 from wx import Command, Bitmap, CommandProcessor, Region
 
-from .settings import *
+from src.settings import *
 
 
 class AddLayerCommand(Command):

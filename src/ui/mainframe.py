@@ -3,7 +3,7 @@
 ### Bhupendra Aole ###
 """
 
-from ..constants import *
+from src.constants import *
 
 from math import ceil, atan2
 
@@ -22,16 +22,16 @@ import numpy as np
 
 from array import array
 
-from ..undomanager import *
-from ..layermanager import *
-from .gradienteditor import *
-from .layercontrol import *
-from .animationcontrol import *
-from ..document import *
-from ..settings import *
-from .dialogs.dictionarydialog import *
-from .dialogs.aidialogs import *
-from .. import ai
+from src.undomanager import *
+from src.layermanager import *
+from src.ui.gradienteditor import *
+from src.ui.layercontrol import *
+from src.ui.animationcontrol import *
+from src.document import *
+from src.settings import *
+from src.ui.dialogs.dictionarydialog import *
+from src.ui.dialogs.aidialogs import *
+from src import ai
 
 PROGRAM_NAME = "Pixel Portal"
 
