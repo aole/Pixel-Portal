@@ -36,10 +36,12 @@ def InitSettings():
     model_prop = wx.propgrid.FileProperty('Model', value='')
     model_prop.SetAttribute("Wildcard", "SafeTensor files (*.safetensors)|*.safetensors")
     model_prop.SetHelpString('Path to the SDXL model file.')
+    model_prop.SetAttribute("ShowFullPath", True)
 
     lora_prop = wx.propgrid.FileProperty('Lora', value='')
     lora_prop.SetAttribute("Wildcard", "SafeTensor files (*.safetensors)|*.safetensors")
     lora_prop.SetHelpString('Path to the LoRA file.')
+    lora_prop.SetAttribute("ShowFullPath", True)
 
     global_settings['AI'] = {'Model': model_prop,
                            'Lora': lora_prop}
