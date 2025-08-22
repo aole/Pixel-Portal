@@ -131,3 +131,6 @@ dmypy.json
 # model files
 /models/sdxl/*
 /models/lora_sdxl/*
+
+# model output
+/output/*
