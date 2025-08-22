@@ -4,6 +4,7 @@ import wx
 from src.settings import GetSetting
 import threading
 import time
+from PIL import Image
 
 def _get_model_paths():
     model_path = GetSetting('AI', 'Model')
@@ -122,6 +123,10 @@ def GenerateImage(prompt, width, height, num_inference_steps=20):
 
         image = pipe(prompt, width=width*8, height=height*8, num_inference_steps=num_inference_steps).images[0]
 
+        # Scale the image using nearest neighbour
+        w, h = image.size
+        scaled_image = image.resize((w//8, h//8), Image.Resampling.NEAREST)
+
         output_dir = "output"
         os.makedirs(output_dir, exist_ok=True)
 
@@ -131,7 +136,7 @@ def GenerateImage(prompt, width, height, num_inference_steps=20):
             filename = filename[:50]
         filename = os.path.join(output_dir, f"{filename}.png")
 
-        image.save(filename)
+        scaled_image.save(filename)
 
         return filename
     except Exception as e:
