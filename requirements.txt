@@ -8,3 +8,4 @@ torch
 diffusers
 transformers
 accelerate
+peft
