@@ -5,21 +5,6 @@ from settings import GetSetting
 import threading
 import time
 
-def get_civitai_download_url(model_id):
-    try:
-        api_url = f"https://civitai.com/api/v1/models/{model_id}"
-        response = requests.get(api_url)
-        response.raise_for_status()
-        data = response.json()
-
-        latest_version = data['modelVersions'][0]
-        file_info = latest_version['files'][0]
-
-        return file_info['downloadUrl']
-    except Exception as e:
-        wx.CallAfter(wx.MessageBox, f"Failed to get download URL for model {model_id}: {e}", "Error", wx.OK | wx.ICON_ERROR)
-        return None
-
 class DownloadThread(threading.Thread):
     def __init__(self, parent, url, filename, progress_dialog):
         super().__init__()
@@ -91,16 +76,14 @@ def CheckAIModels(parent):
     model_path = GetSetting('AI', 'Model')
     lora_path = GetSetting('AI', 'Lora')
 
-    model_id = "133005"
-    lora_id = "120096"
+    model_url = "https://civitai.com/api/download/models/1759168?type=Model&format=SafeTensor"
+    lora_url = "https://civitai.com/api/download/models/135931?type=Model&format=SafeTensor"
 
     if not os.path.exists(model_path):
-        model_url = get_civitai_download_url(model_id)
         if not DownloadAIModel(parent, model_url, model_path):
             return False
 
     if not os.path.exists(lora_path):
-        lora_url = get_civitai_download_url(lora_id)
         if not DownloadAIModel(parent, lora_url, lora_path):
             return False
 
