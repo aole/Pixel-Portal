@@ -73,6 +73,7 @@ def DownloadAIModel(parent, url, filename):
     )
 
     thread = DownloadThread(parent, url, filename, progress_dialog)
+    progress_dialog.Show()
     thread.start()
 
     keep_running = True
