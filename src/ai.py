@@ -16,22 +16,30 @@ class DownloadThread(threading.Thread):
         self.cancelled = False
 
     def run(self):
+        print("[Debug] DownloadThread.run: Starting thread.")
         try:
+            print(f"[Debug] Creating directory for {self.filename}")
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+
             headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/octet-stream"}
+            print(f"[Debug] Making request to URL: {self.url}")
+
             with requests.get(self.url, stream=True, headers=headers) as r:
+                print(f"[Debug] Request response status: {r.status_code}")
                 r.raise_for_status()
                 total_size = int(r.headers.get("content-length", 0))
+                print(f"[Debug] Content-Length: {total_size}")
 
                 if total_size > 0:
                     wx.CallAfter(self.progress_dialog.SetRange, total_size)
 
                 bytes_downloaded = 0
                 chunk_size = 8192
-
+                print("[Debug] Starting download loop...")
                 with open(self.filename, "wb") as f:
                     for chunk in r.iter_content(chunk_size=chunk_size):
                         if self.cancelled or not self.progress_dialog.IsShown():
+                            print("[Debug] Download cancelled or dialog closed.")
                             return
                         if chunk:
                             f.write(chunk)
@@ -40,12 +48,17 @@ class DownloadThread(threading.Thread):
                                 wx.CallAfter(self.progress_dialog.Update, bytes_downloaded)
                             else:
                                 wx.CallAfter(self.progress_dialog.Pulse)
+                print("[Debug] Download loop finished.")
 
             self.success = True
+            print("[Debug] Download successful.")
         except Exception as e:
+            print(f"[Debug] An exception occurred: {e}")
             wx.CallAfter(wx.MessageBox, f"Failed to download {self.filename}: {e}", "Error", wx.OK | wx.ICON_ERROR)
         finally:
+            print("[Debug] DownloadThread.run: Reached finally block.")
             if self.progress_dialog.IsShown():
+                print("[Debug] Destroying progress dialog.")
                 wx.CallAfter(self.progress_dialog.Destroy)
 
 def DownloadAIModel(parent, url, filename):
