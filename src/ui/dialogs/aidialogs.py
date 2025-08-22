@@ -15,10 +15,16 @@ class GenerateImageDialog(wx.Dialog):
         sizer = wx.GridBagSizer(2, 20)
         sizerb.Insert(0, sizer, 1, wx.EXPAND|wx.ALL, 5)
 
+        self.ctrls = {}
+        self.scaled_labels = {}
+
         row = 0
         for key, value in props.items():
             if isinstance(value, int):
                 self.AddIntInput(key, value, sizer, row)
+                if key in ['Width', 'Height']:
+                    self.scaled_labels[key] = wx.StaticText(self, label=f"x 8 = {value*8}")
+                    sizer.Add(self.scaled_labels[key], pos=(row, 4))
                 row += 1
             elif isinstance(value, str):
                 self.AddStringInput(key, value, sizer, row)
@@ -41,7 +47,7 @@ class GenerateImageDialog(wx.Dialog):
         ctrl = wx.SpinCtrl(self, min=1, max=10000, initial=value)
         ctrl.key = key
         ctrl.Bind(wx.EVT_SPINCTRL, self.SpinnerChange, id=ctrl.GetId())
-
+        self.ctrls[key] = ctrl
         self.AddControls(sizer, row, lbl, 1, ctrl, 1)
 
     def AddStringInput(self, key, value, sizer, row):
@@ -64,6 +70,9 @@ class GenerateImageDialog(wx.Dialog):
 
     def SpinnerChange(self, e):
         self.Set(e.GetEventObject().key, e.GetPosition())
+        key = e.GetEventObject().key
+        if key in self.scaled_labels:
+            self.scaled_labels[key].SetLabel(f"x 8 = {e.GetPosition()*8}")
 
     def TextChange(self, e):
         self.Set(e.GetEventObject().key, e.GetString())
