@@ -62,14 +62,18 @@ def LoadSettings(file):
     config.read(file)
     
     for section in config.sections():
-        for prop in config[section]:
-            value = config[section][prop]
+        for prop_name in config[section]:
+            value = config[section][prop_name]
             if section not in global_settings:
                 global_settings[section] = {}
-            if not prop in global_settings[section]:
-                global_settings[section][prop] = wx.propgrid.StringProperty(prop, value=value)
+            if not prop_name in global_settings[section]:
+                global_settings[section][prop_name] = wx.propgrid.StringProperty(prop_name, value=value)
             else:
-                global_settings[section][prop].SetValueFromString(value)
+                prop = global_settings[section][prop_name]
+                if isinstance(prop, wx.propgrid.FileProperty):
+                    # Normalize path before setting it, to handle cross-platform settings files.
+                    value = value.replace('\\', '/')
+                prop.SetValueFromString(value)
     
 def SaveSettings(file):
     global global_settings
