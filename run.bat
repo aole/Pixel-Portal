@@ -1,6 +1,5 @@
 @echo off
 CALL .venv\Scripts\activate.bat
 
-python src\main.py
-
+python -m portal.main
 pause
