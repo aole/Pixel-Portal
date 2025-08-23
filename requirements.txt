@@ -9,3 +9,5 @@ diffusers
 transformers
 accelerate
 peft
+PySide6
+pytest
