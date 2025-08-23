@@ -1,7 +1,7 @@
 import sys
 from PySide6.QtWidgets import QApplication
-from portal.ui import MainWindow
-from portal.app import App
+from ui import MainWindow
+from app import App
 
 if __name__ == "__main__":
     q_app = QApplication(sys.argv)
