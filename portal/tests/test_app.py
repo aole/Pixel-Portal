@@ -2,14 +2,17 @@ import sys
 import unittest
 from PySide6.QtWidgets import QApplication
 from portal.ui import MainWindow
+from portal.app import App
 
 class TestPortalApp(unittest.TestCase):
     def test_main_window_creation(self):
-        app = QApplication.instance()
-        if app is None:
-            app = QApplication(sys.argv)
+        q_app = QApplication.instance()
+        if q_app is None:
+            q_app = QApplication(sys.argv)
 
-        window = MainWindow()
+        app = App()
+        window = MainWindow(app)
+        app.set_window(window)
         self.assertIsNotNone(window)
 
         menu_bar = window.menuBar()
