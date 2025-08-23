@@ -121,11 +121,10 @@ def GenerateImage(prompt, width, height, num_inference_steps=20):
         pipe.load_lora_weights(lora_path)
         pipe.to("cuda")
 
-        image = pipe(prompt, width=width*8, height=height*8, num_inference_steps=num_inference_steps).images[0]
+        image = pipe(prompt, width=1024, height=1024, num_inference_steps=num_inference_steps).images[0]
 
         # Scale the image using nearest neighbour
-        w, h = image.size
-        scaled_image = image.resize((w//8, h//8), Image.Resampling.NEAREST)
+        scaled_image = image.resize((width, height), Image.Resampling.NEAREST)
 
         output_dir = "output"
         os.makedirs(output_dir, exist_ok=True)
