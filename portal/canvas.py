@@ -29,8 +29,21 @@ class Canvas(QWidget):
 
     def paintEvent(self, event):
         canvas_painter = QPainter(self)
+
+        # Fill background
+        canvas_painter.fillRect(self.rect(), self.palette().window())
+
+        # Center and draw document
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+        canvas_width = self.width()
+        canvas_height = self.height()
+
+        x = (canvas_width - doc_width) / 2
+        y = (canvas_height - doc_height) / 2
+
         image = self.app.document.image
-        canvas_painter.drawImage(self.rect(), image, image.rect())
+        canvas_painter.drawImage(x, y, image)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
