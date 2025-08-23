@@ -12,15 +12,27 @@ class Canvas(QWidget):
         self.drawing = False
         self.last_point = QPoint()
 
+    def get_doc_coords(self, canvas_pos):
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+        canvas_width = self.width()
+        canvas_height = self.height()
+
+        x_offset = (canvas_width - doc_width) / 2
+        y_offset = (canvas_height - doc_height) / 2
+
+        return QPoint(canvas_pos.x() - x_offset, canvas_pos.y() - y_offset)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drawing = True
-            self.last_point = event.pos()
+            self.last_point = self.get_doc_coords(event.pos())
 
     def mouseMoveEvent(self, event):
         if (event.buttons() & Qt.LeftButton) and self.drawing:
-            self.drawing_logic.draw_line(self.last_point, event.pos())
-            self.last_point = event.pos()
+            current_point = self.get_doc_coords(event.pos())
+            self.drawing_logic.draw_line(self.last_point, current_point)
+            self.last_point = current_point
             self.update()
 
     def mouseReleaseEvent(self, event):
