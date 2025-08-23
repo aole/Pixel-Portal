@@ -16,15 +16,18 @@ class GenerateImageDialog(wx.Dialog):
         sizerb.Insert(0, sizer, 1, wx.EXPAND|wx.ALL, 5)
 
         self.ctrls = {}
-        self.scaled_labels = {}
 
-        row = 0
+        sizer.Add(wx.StaticText(self, label="Size"), pos=(0, 0))
+        self.size_choice = wx.Choice(self, choices=["64x64", "128x128"])
+        self.size_choice.SetSelection(0)
+        sizer.Add(self.size_choice, pos=(0, 1))
+
+        row = 1
         for key, value in props.items():
+            if key in ['Width', 'Height']:
+                continue
             if isinstance(value, int):
                 self.AddIntInput(key, value, sizer, row)
-                if key in ['Width', 'Height']:
-                    self.scaled_labels[key] = wx.StaticText(self, label=f"x 8 = {value*8}")
-                    sizer.Add(self.scaled_labels[key], pos=(row, 4))
                 row += 1
             elif isinstance(value, str):
                 self.AddStringInput(key, value, sizer, row)
@@ -59,6 +62,10 @@ class GenerateImageDialog(wx.Dialog):
         self.AddControls(sizer, row, lbl, 1, ctrl, 1)
 
     def Get(self, prop):
+        if prop == 'Width':
+            return int(self.size_choice.GetStringSelection().split('x')[0])
+        if prop == 'Height':
+            return int(self.size_choice.GetStringSelection().split('x')[1])
         return self.props[prop]
 
     def GetLabel(self, key):
@@ -70,9 +77,6 @@ class GenerateImageDialog(wx.Dialog):
 
     def SpinnerChange(self, e):
         self.Set(e.GetEventObject().key, e.GetPosition())
-        key = e.GetEventObject().key
-        if key in self.scaled_labels:
-            self.scaled_labels[key].SetLabel(f"x 8 = {e.GetPosition()*8}")
 
     def TextChange(self, e):
         self.Set(e.GetEventObject().key, e.GetString())
