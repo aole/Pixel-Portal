@@ -11,6 +11,26 @@ class TestPortalApp(unittest.TestCase):
 
         window = MainWindow()
         self.assertIsNotNone(window)
+
+        menu_bar = window.menuBar()
+        self.assertIsNotNone(menu_bar)
+
+        file_menu = None
+        for action in menu_bar.actions():
+            if action.text() == "&File":
+                file_menu = action.menu()
+                break
+
+        self.assertIsNotNone(file_menu)
+
+        exit_action = None
+        for action in file_menu.actions():
+            if action.text() == "&Exit":
+                exit_action = action
+                break
+
+        self.assertIsNotNone(exit_action)
+
         window.close()
 
 if __name__ == '__main__':
