@@ -1,7 +1,7 @@
 import sys
 import unittest
 from PySide6.QtWidgets import QApplication
-from portal.main import MainWindow
+from portal.ui import MainWindow
 
 class TestPortalApp(unittest.TestCase):
     def test_main_window_creation(self):
