@@ -83,5 +83,42 @@ class TestDrawing(unittest.TestCase):
         # Check a pixel outside the filled area
         self.assertEqual(image.GetAlpha(1, 1), 0)
 
+    def test_erase_pixel(self):
+        self.canvas.DrawPixel(5, 5, wx.BLACK)
+        self.canvas.ErasePixel(5, 5)
+        image = self.canvas.document.Composite().ConvertToImage()
+        self.assertEqual(image.GetAlpha(5, 5), 0)
+
+    def test_erase_line(self):
+        self.canvas.DrawLine(1, 1, 8, 8, wx.BLACK)
+        self.canvas.EraseLine(1, 1, 8, 8)
+        image = self.canvas.document.Composite().ConvertToImage()
+        # Check a few pixels on the line
+        self.assertEqual(image.GetAlpha(1, 1), 0)
+        self.assertEqual(image.GetAlpha(5, 5), 0)
+        self.assertEqual(image.GetAlpha(8, 8), 0)
+
+    def test_erase_rectangle(self):
+        self.canvas.DrawRectangle(2, 2, 7, 7, wx.BLACK)
+        self.canvas.EraseRectangle(2, 2, 7, 7)
+        image = self.canvas.document.Composite().ConvertToImage()
+        # Check a few pixels on the rectangle
+        self.assertEqual(image.GetAlpha(2, 2), 0)
+        self.assertEqual(image.GetAlpha(8, 2), 0)
+        self.assertEqual(image.GetAlpha(2, 8), 0)
+        self.assertEqual(image.GetAlpha(8, 8), 0)
+
+    def test_erase_ellipse(self):
+        self.canvas.document = LayerManager(20, 20)
+        self.canvas.document.AppendSelect(Layer.CreateLayer(20, 20))
+        self.canvas.DrawEllipse(5, 5, 15, 15, wx.BLACK)
+        self.canvas.EraseEllipse(5, 5, 15, 15)
+        image = self.canvas.document.Composite().ConvertToImage()
+        # Check some pixels on the ellipse
+        self.assertEqual(image.GetAlpha(12, 5), 0)
+        self.assertEqual(image.GetAlpha(5, 12), 0)
+        self.assertEqual(image.GetAlpha(19, 12), 0)
+        self.assertEqual(image.GetAlpha(12, 19), 0)
+
 if __name__ == '__main__':
     unittest.main()
