@@ -10,7 +10,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Portal")
         self.resize(800, 600)
 
-        self.canvas = Canvas()
+        self.canvas = Canvas(self.app)
         self.setCentralWidget(self.canvas)
 
         # Menu bar

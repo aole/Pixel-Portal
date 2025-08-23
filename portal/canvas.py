@@ -1,13 +1,14 @@
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPainter
 from PySide6.QtCore import Qt, QPoint
-from .drawing import Drawing
+from .drawing import DrawingLogic
 
 
 class Canvas(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, app, parent=None):
         super().__init__(parent)
-        self.drawing_logic = Drawing(self.size())
+        self.app = app
+        self.drawing_logic = DrawingLogic(self.app)
         self.drawing = False
         self.last_point = QPoint()
 
@@ -28,8 +29,10 @@ class Canvas(QWidget):
 
     def paintEvent(self, event):
         canvas_painter = QPainter(self)
-        image = self.drawing_logic.get_image()
+        image = self.app.document.image
         canvas_painter.drawImage(self.rect(), image, image.rect())
 
     def resizeEvent(self, event):
-        self.drawing_logic.resize(self.size())
+        # The canvas widget has been resized.
+        # The document size does not change.
+        pass
