@@ -10,6 +10,7 @@ class Canvas(QWidget):
         self.app = app
         self.drawing_logic = DrawingLogic(self.app)
         self.drawing = False
+        self.dragging = False
         self.last_point = QPoint()
 
     def get_doc_coords(self, canvas_pos):
@@ -18,8 +19,8 @@ class Canvas(QWidget):
         canvas_width = self.width()
         canvas_height = self.height()
 
-        x_offset = (canvas_width - doc_width) / 2
-        y_offset = (canvas_height - doc_height) / 2
+        x_offset = (canvas_width - doc_width) / 2 + self.app.document.x_offset
+        y_offset = (canvas_height - doc_height) / 2 + self.app.document.y_offset
 
         return QPoint(canvas_pos.x() - x_offset, canvas_pos.y() - y_offset)
 
@@ -27,6 +28,9 @@ class Canvas(QWidget):
         if event.button() == Qt.LeftButton:
             self.drawing = True
             self.last_point = self.get_doc_coords(event.pos())
+        if event.button() == Qt.MiddleButton:
+            self.dragging = True
+            self.last_point = event.pos()
 
     def mouseMoveEvent(self, event):
         if (event.buttons() & Qt.LeftButton) and self.drawing:
@@ -34,10 +38,18 @@ class Canvas(QWidget):
             self.drawing_logic.draw_line(self.last_point, current_point)
             self.last_point = current_point
             self.update()
+        if (event.buttons() & Qt.MiddleButton) and self.dragging:
+            delta = event.pos() - self.last_point
+            self.app.document.x_offset += delta.x()
+            self.app.document.y_offset += delta.y()
+            self.last_point = event.pos()
+            self.update()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drawing = False
+        if event.button() == Qt.MiddleButton:
+            self.dragging = False
 
     def paintEvent(self, event):
         canvas_painter = QPainter(self)
@@ -51,8 +63,8 @@ class Canvas(QWidget):
         canvas_width = self.width()
         canvas_height = self.height()
 
-        x = (canvas_width - doc_width) / 2
-        y = (canvas_height - doc_height) / 2
+        x = (canvas_width - doc_width) / 2 + self.app.document.x_offset
+        y = (canvas_height - doc_height) / 2 + self.app.document.y_offset
 
         image = self.app.document.image
         canvas_painter.drawImage(x, y, image)
