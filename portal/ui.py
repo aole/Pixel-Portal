@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtGui import QAction
+from .canvas import Canvas
 
 
 class MainWindow(QMainWindow):
@@ -8,6 +9,9 @@ class MainWindow(QMainWindow):
         self.app = app
         self.setWindowTitle("Portal")
         self.resize(800, 600)
+
+        self.canvas = Canvas()
+        self.setCentralWidget(self.canvas)
 
         # Menu bar
         menu_bar = self.menuBar()
