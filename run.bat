@@ -1,2 +1,6 @@
 @echo off
-python src/main.py
+CALL .venv\Scripts\activate.bat
+
+python src\main.py
+
+pause
