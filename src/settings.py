@@ -1,7 +1,6 @@
 """
 settings.py
 Bhupendra Aole
-1/31/2020
 """
 
 import wx

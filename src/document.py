@@ -1,7 +1,6 @@
 """
 document.py
 Bhupendra Aole
-1/31/2020
 """
 
 from pickle import loads, dumps

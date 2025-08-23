@@ -1,7 +1,6 @@
 """
 layermanager.py
 Bhupendra Aole
-1/19/2020
 """
 
 from math import sqrt

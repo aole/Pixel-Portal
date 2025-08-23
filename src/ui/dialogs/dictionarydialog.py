@@ -1,9 +1,6 @@
 """
 #### Pixel Portal ####
 ### Bhupendra Aole ###
-
-# dictionarydialog.py #
-####  5-Feb-2020 #####
 """
 
 import wx

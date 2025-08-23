@@ -1,7 +1,6 @@
 """
 layercontrol.py
 Bhupendra Aole
-1/23/2020
 """
 
 import wx

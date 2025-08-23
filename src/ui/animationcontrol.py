@@ -1,7 +1,6 @@
 """
 animationcontrol.py
 Bhupendra Aole
-1/23/2020
 """
 
 from random import randrange

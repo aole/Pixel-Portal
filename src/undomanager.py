@@ -1,7 +1,6 @@
 """
 undomanager.py
 Bhupendra Aole
-1/19/2020
 """
 
 from wx import Command, Bitmap, CommandProcessor, Region
