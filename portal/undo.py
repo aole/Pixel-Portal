@@ -16,11 +16,13 @@ class UndoManager:
             return None
         state = self.undo_stack.pop()
         self.redo_stack.append(state)
-        return self.undo_stack[-1]
+        # Return a clone of the state to prevent modification
+        return self.undo_stack[-1].clone()
 
     def redo(self):
         if not self.redo_stack:
             return None
         state = self.redo_stack.pop()
         self.undo_stack.append(state)
-        return state
+        # Return a clone of the state to prevent modification
+        return state.clone()
