@@ -25,6 +25,7 @@ class Canvas(QWidget):
         self.background_pixmap = QPixmap("alphabg.png")
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
+        self.background_color = self.palette().window().color()
 
     def enterEvent(self, event):
         self.mouse_over_canvas = True
@@ -305,9 +306,8 @@ class Canvas(QWidget):
             # Invert the average color
             inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
         else:
-            # Fallback for transparent areas or if off-canvas: use a default color
-            # We can grab the background color of the canvas for a better fallback
-            bg_color = self.palette().window().color()
+            # Fallback for transparent areas or if off-canvas: use the cached background color
+            bg_color = self.background_color
             inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
 
         # Draw the cursor outline
