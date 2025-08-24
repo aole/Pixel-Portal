@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor
+from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -70,6 +70,7 @@ class Canvas(QWidget):
                 pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
                 painter.setPen(pen)
                 painter.drawPoint(self.last_point)
+                painter.end()
                 self.update()
 
         if event.button() == Qt.MiddleButton:
