@@ -1,10 +1,13 @@
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPainter, QWheelEvent
-from PySide6.QtCore import Qt, QPoint, QRect
+from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
 
 class Canvas(QWidget):
+    cursor_pos_changed = Signal(QPoint)
+    zoom_changed = Signal(float)
+
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
@@ -15,6 +18,12 @@ class Canvas(QWidget):
         self.y_offset = 0
         self.zoom = 1.0
         self.last_point = QPoint()
+        self.setMouseTracking(True)
+
+    def enterEvent(self, event):
+        self.zoom_changed.emit(self.zoom)
+        doc_pos = self.get_doc_coords(event.pos())
+        self.cursor_pos_changed.emit(doc_pos)
 
     def get_doc_coords(self, canvas_pos):
         doc_width_scaled = self.app.document.width * self.zoom
@@ -42,6 +51,9 @@ class Canvas(QWidget):
             self.last_point = event.pos()
 
     def mouseMoveEvent(self, event):
+        doc_pos = self.get_doc_coords(event.pos())
+        self.cursor_pos_changed.emit(doc_pos)
+
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
             self.drawing_logic.draw_line(self.last_point, current_point)
@@ -91,6 +103,7 @@ class Canvas(QWidget):
         self.y_offset = mouse_pos.y() - canvas_y_after_zoom_no_pan
 
         self.update()
+        self.zoom_changed.emit(self.zoom)
 
     def paintEvent(self, event):
         canvas_painter = QPainter(self)
