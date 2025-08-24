@@ -52,9 +52,10 @@ class Canvas(QWidget):
         if self.zoom == 0:
             return QPoint(0, 0)
 
-        x = (canvas_pos.x() - x_offset) / self.zoom
-        y = (canvas_pos.y() - y_offset) / self.zoom
-        return QPoint(math.floor(x), math.floor(y))
+        return QPoint(
+            (canvas_pos.x() - x_offset) / self.zoom,
+            (canvas_pos.y() - y_offset) / self.zoom,
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -268,8 +269,8 @@ class Canvas(QWidget):
         doc_pos = self.cursor_doc_pos
         offset = brush_size / 2
         doc_rect = QRect(
-            round(doc_pos.x() - offset),
-            round(doc_pos.y() - offset),
+            doc_pos.x() - int(math.floor(offset)),
+            doc_pos.y() - int(math.floor(offset)),
             brush_size,
             brush_size
         )
@@ -281,17 +282,11 @@ class Canvas(QWidget):
         screen_height = doc_rect.height() * self.zoom
 
         cursor_screen_rect = QRect(
-            round(screen_x),
-            round(screen_y),
-            round(screen_width),
-            round(screen_height)
+            int(screen_x),
+            int(screen_y),
+            max(1, int(screen_width)),
+            max(1, int(screen_height))
         )
-
-        # Ensure the cursor rect is at least 1x1 screen pixels
-        if cursor_screen_rect.width() < 1:
-            cursor_screen_rect.setWidth(1)
-        if cursor_screen_rect.height() < 1:
-            cursor_screen_rect.setHeight(1)
 
         # Sample the color from the document image instead of grabbing the screen
         total_r, total_g, total_b = 0, 0, 0
@@ -301,15 +296,17 @@ class Canvas(QWidget):
         clamped_doc_rect = doc_rect.intersected(doc_image.rect())
 
         if not clamped_doc_rect.isEmpty():
-            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right()):
-                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom()):
-                    color = doc_image.pixelColor(x, y)
-                    # Only consider visible pixels for the average
-                    if color.alpha() > 0:
-                        total_r += color.red()
-                        total_g += color.green()
-                        total_b += color.blue()
-                        pixel_count += 1
+            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right() + 1):
+                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom() + 1):
+                    # Clamp coordinates to be within the image bounds
+                    if 0 <= x < doc_image.width() and 0 <= y < doc_image.height():
+                        color = doc_image.pixelColor(x, y)
+                        # Only consider visible pixels for the average
+                        if color.alpha() > 0:
+                            total_r += color.red()
+                            total_g += color.green()
+                            total_b += color.blue()
+                            pixel_count += 1
 
         if pixel_count > 0:
             avg_r = total_r / pixel_count
