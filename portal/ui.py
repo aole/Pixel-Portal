@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap
 from PySide6.QtCore import Qt
 from .canvas import Canvas
@@ -54,12 +54,21 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.RightToolBarArea, color_toolbar)
         color_toolbar.setAllowedAreas(Qt.LeftToolBarArea | Qt.RightToolBarArea)
 
-        for color in self.COLORS:
+        color_container = QWidget()
+        color_layout = QGridLayout(color_container)
+        color_layout.setSpacing(0)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+
+        for i, color in enumerate(self.COLORS):
             button = QPushButton()
             button.setFixedSize(24, 24)
             button.setStyleSheet(f"background-color: {color}")
             button.setToolTip(color)
-            color_toolbar.addWidget(button)
+            row = i % 10
+            col = i // 10
+            color_layout.addWidget(button, row, col)
+
+        color_toolbar.addWidget(color_container)
 
     def update_cursor_pos_label(self, pos):
         self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
