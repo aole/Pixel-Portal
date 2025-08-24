@@ -8,5 +8,5 @@ class DrawingLogic:
 
     def draw_line(self, p1, p2):
         painter = QPainter(self.app.document.image)
-        painter.setPen(QColor(Qt.black))
+        painter.setPen(self.app.pen_color)
         painter.drawLine(p1, p2)

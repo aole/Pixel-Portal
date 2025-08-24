@@ -6,8 +6,8 @@ from .canvas import Canvas
 
 class MainWindow(QMainWindow):
     COLORS = [
-        "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF",
-        "#000000", "#FFFFFF", "#FF8000", "#8000FF", "#0080FF", "#FF0080",
+        "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
+        "#FF00FF", "#00FFFF", "#FF8000", "#8000FF", "#0080FF", "#FF0080",
         "#80FF00", "#00FF80", "#800000", "#008000", "#000080", "#808000",
         "#800080", "#008080"
     ]
@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
             button.setFixedSize(24, 24)
             button.setStyleSheet(f"background-color: {color}")
             button.setToolTip(color)
+            button.clicked.connect(lambda c=color: self.app.set_pen_color(c))
             row = i % 10
             col = i // 10
             color_layout.addWidget(button, row, col)
