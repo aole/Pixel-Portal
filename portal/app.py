@@ -8,6 +8,9 @@ class App:
     def set_window(self, window):
         self.window = window
 
+    def new_document(self, width, height):
+        self.document = Document(width, height)
+
     def exit(self):
         if self.window:
             self.window.close()
