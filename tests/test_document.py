@@ -6,9 +6,9 @@ def test_document_render(qtbot):
     """Test the Document.render() method."""
     doc = Document(1, 1)
 
-    # With one transparent layer, image should be transparent
+    # With one white layer, image should be white
     rendered_image = doc.render()
-    assert rendered_image.pixelColor(0, 0).alpha() == 0
+    assert rendered_image.pixelColor(0, 0) == QColor("white")
 
     # Draw on the layer and re-render
     red = QColor("red")

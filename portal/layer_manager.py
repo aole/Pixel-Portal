@@ -1,17 +1,23 @@
 from .layer import Layer
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QColor
+
 
 class LayerManager:
     """
     Manages the stack of layers in a document.
     """
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, create_background: bool = True):
         self.width = width
         self.height = height
         self.layers = []
         self.active_layer_index = -1
 
-        self.add_layer("Background")
+        if create_background:
+            self.add_layer("Background")
+            # Fill the background layer with white
+            if self.layers:
+                background_layer = self.layers[0]
+                background_layer.image.fill(QColor("white"))
 
     @property
     def active_layer(self) -> Layer | None:
@@ -93,7 +99,7 @@ class LayerManager:
 
     def clone(self):
         """Creates a deep copy of the layer manager."""
-        new_manager = LayerManager(self.width, self.height)
+        new_manager = LayerManager(self.width, self.height, create_background=False)
         new_manager.layers = [layer.clone() for layer in self.layers]
         new_manager.active_layer_index = self.active_layer_index
         return new_manager
