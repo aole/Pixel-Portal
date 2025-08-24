@@ -170,3 +170,18 @@ class Canvas(QWidget):
 
     def draw_line_for_test(self, p1, p2):
         self.drawing_logic.draw_line(p1, p2)
+
+    def set_initial_zoom(self):
+        canvas_width = self.width()
+        canvas_height = self.height()
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+
+        if doc_width == 0 or doc_height == 0:
+            return
+
+        zoom_x = (0.8 * canvas_width) / doc_width
+        zoom_y = (0.8 * canvas_height) / doc_height
+        self.zoom = min(zoom_x, zoom_y)
+        self.zoom_changed.emit(self.zoom)
+        self.update()

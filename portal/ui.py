@@ -119,3 +119,9 @@ class MainWindow(QMainWindow):
     def update_undo_redo_actions(self):
         self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 1)
         self.redo_action.setEnabled(len(self.app.undo_manager.redo_stack) > 0)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not hasattr(self, "initial_zoom_set"):
+            self.canvas.set_initial_zoom()
+            self.initial_zoom_set = True
