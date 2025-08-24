@@ -84,6 +84,15 @@ class Canvas(QWidget):
                 self.last_point = self.get_doc_coords(event.pos())
                 self.temp_image = active_layer.image.copy()
 
+                # Erase a single point for a click
+                painter = QPainter(self.temp_image)
+                painter.setCompositionMode(QPainter.CompositionMode_Clear)
+                pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                painter.setPen(pen)
+                painter.drawPoint(self.last_point)
+                painter.end()
+                self.update()
+
     def mouseMoveEvent(self, event):
         self.cursor_doc_pos = self.get_doc_coords(event.pos())
         self.cursor_pos_changed.emit(self.cursor_doc_pos)
@@ -193,23 +202,25 @@ class Canvas(QWidget):
         composite_image = self.app.document.render()
         image_to_draw_on = composite_image
 
-        # Draw the active layer (or the temp drawing image) on top
+        # Draw the active layer (or the temp drawing image) in the correct order
         active_layer = self.app.document.layer_manager.active_layer
         if (self.drawing or self.erasing) and self.temp_image and active_layer:
-            # We are actively drawing, composite the background with the temp drawing image
+            # We are actively drawing, so we need to composite the image with the temporary drawing
             final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
             painter = QPainter(final_image)
 
-            # Draw all layers except the active one
+            # Draw all layers in order
             for layer in self.app.document.layer_manager.layers:
-                if layer.visible and layer is not active_layer:
-                    painter.setOpacity(layer.opacity)
-                    painter.drawImage(0, 0, layer.image)
+                if layer.visible:
+                    image_to_draw = layer.image
+                    if layer is active_layer:
+                        # If it's the active layer, draw the temp image instead
+                        image_to_draw = self.temp_image
 
-            # Draw the temp image on top
-            painter.setOpacity(active_layer.opacity)
-            painter.drawImage(0, 0, self.temp_image)
+                    painter.setOpacity(layer.opacity)
+                    painter.drawImage(0, 0, image_to_draw)
+
             painter.end()
             canvas_painter.drawImage(target_rect, final_image)
             image_to_draw_on = final_image
