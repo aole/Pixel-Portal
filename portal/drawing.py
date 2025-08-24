@@ -12,6 +12,8 @@ class DrawingLogic:
         self.pen_color = color
 
     def draw_line(self, p1, p2):
-        painter = QPainter(self.app.document.image)
-        painter.setPen(self.pen_color)
-        painter.drawLine(p1, p2)
+        active_layer = self.app.document.layer_manager.active_layer
+        if active_layer:
+            painter = QPainter(active_layer.image)
+            painter.setPen(self.pen_color)
+            painter.drawLine(p1, p2)

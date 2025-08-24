@@ -1,7 +1,8 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
+from .layer_manager_widget import LayerManagerWidget
 
 
 class ColorButton(QPushButton):
@@ -95,6 +96,13 @@ class MainWindow(QMainWindow):
             color_layout.addWidget(button, row, col)
 
         color_toolbar.addWidget(color_container)
+
+        # Layer Manager Panel
+        self.layer_manager_widget = LayerManagerWidget(self.app)
+        self.layer_manager_widget.layer_changed.connect(self.canvas.update)
+        dock_widget = QDockWidget("Layers", self)
+        dock_widget.setWidget(self.layer_manager_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
 
     def update_cursor_pos_label(self, pos):
         self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")

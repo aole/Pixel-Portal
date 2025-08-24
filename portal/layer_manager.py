@@ -90,3 +90,10 @@ class LayerManager:
         if not (0 <= index < len(self.layers)):
             raise IndexError("Layer index out of range.")
         self.layers[index].visible = not self.layers[index].visible
+
+    def clone(self):
+        """Creates a deep copy of the layer manager."""
+        new_manager = LayerManager(self.width, self.height)
+        new_manager.layers = [layer.clone() for layer in self.layers]
+        new_manager.active_layer_index = self.active_layer_index
+        return new_manager
