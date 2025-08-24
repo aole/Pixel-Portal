@@ -4,6 +4,20 @@ from PySide6.QtCore import Qt
 from .canvas import Canvas
 
 
+class ColorButton(QPushButton):
+    def __init__(self, color, app):
+        super().__init__()
+        self.color = color
+        self.app = app
+        self.setFixedSize(24, 24)
+        self.setStyleSheet(f"background-color: {self.color}")
+        self.setToolTip(self.color)
+        self.clicked.connect(self.on_click)
+
+    def on_click(self):
+        self.app.set_pen_color(self.color)
+
+
 class MainWindow(QMainWindow):
     COLORS = [
         "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
@@ -63,11 +77,7 @@ class MainWindow(QMainWindow):
         color_layout.setContentsMargins(0, 0, 0, 0)
 
         for i, color in enumerate(self.COLORS):
-            button = QPushButton()
-            button.setFixedSize(24, 24)
-            button.setStyleSheet(f"background-color: {color}")
-            button.setToolTip(color)
-            button.clicked.connect(lambda c=color: self.app.set_pen_color(c))
+            button = ColorButton(color, self.app)
             row = i % 10
             col = i // 10
             color_layout.addWidget(button, row, col)
