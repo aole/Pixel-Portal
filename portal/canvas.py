@@ -171,7 +171,7 @@ class Canvas(QWidget):
 
         # Draw the active layer (or the temp drawing image) on top
         active_layer = self.app.document.layer_manager.active_layer
-        if self.drawing and self.temp_image and active_layer:
+        if (self.drawing or self.erasing) and self.temp_image and active_layer:
             # We are actively drawing, composite the background with the temp drawing image
             final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
