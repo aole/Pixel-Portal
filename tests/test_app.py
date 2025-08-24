@@ -63,8 +63,8 @@ class TestPortalApp(unittest.TestCase):
         # 4. Check if the document offset has been updated
         expected_offset_x = drag_end_pos.x() - drag_start_pos.x()
         expected_offset_y = drag_end_pos.y() - drag_start_pos.y()
-        self.assertEqual(self.app.document.x_offset, expected_offset_x)
-        self.assertEqual(self.app.document.y_offset, expected_offset_y)
+        self.assertEqual(self.canvas.x_offset, expected_offset_x)
+        self.assertEqual(self.canvas.y_offset, expected_offset_y)
 
 if __name__ == '__main__':
     unittest.main()

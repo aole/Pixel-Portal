@@ -11,6 +11,8 @@ class Canvas(QWidget):
         self.drawing_logic = DrawingLogic(self.app)
         self.drawing = False
         self.dragging = False
+        self.x_offset = 0
+        self.y_offset = 0
         self.last_point = QPoint()
 
     def get_doc_coords(self, canvas_pos):
@@ -19,8 +21,8 @@ class Canvas(QWidget):
         canvas_width = self.width()
         canvas_height = self.height()
 
-        x_offset = (canvas_width - doc_width) / 2 + self.app.document.x_offset
-        y_offset = (canvas_height - doc_height) / 2 + self.app.document.y_offset
+        x_offset = (canvas_width - doc_width) / 2 + self.x_offset
+        y_offset = (canvas_height - doc_height) / 2 + self.y_offset
 
         return QPoint(canvas_pos.x() - x_offset, canvas_pos.y() - y_offset)
 
@@ -40,8 +42,8 @@ class Canvas(QWidget):
             self.update()
         if (event.buttons() & Qt.MiddleButton) and self.dragging:
             delta = event.pos() - self.last_point
-            self.app.document.x_offset += delta.x()
-            self.app.document.y_offset += delta.y()
+            self.x_offset += delta.x()
+            self.y_offset += delta.y()
             self.last_point = event.pos()
             self.update()
 
@@ -63,8 +65,8 @@ class Canvas(QWidget):
         canvas_width = self.width()
         canvas_height = self.height()
 
-        x = (canvas_width - doc_width) / 2 + self.app.document.x_offset
-        y = (canvas_height - doc_height) / 2 + self.app.document.y_offset
+        x = (canvas_width - doc_width) / 2 + self.x_offset
+        y = (canvas_height - doc_height) / 2 + self.y_offset
 
         image = self.app.document.image
         canvas_painter.drawImage(x, y, image)
