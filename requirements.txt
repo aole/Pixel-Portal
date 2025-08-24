@@ -1,2 +1,8 @@
 PySide6
 pytest-qt
+torch
+diffusers
+transformers
+accelerate
+Pillow
+huggingface-hub
