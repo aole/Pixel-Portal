@@ -20,13 +20,20 @@ class Canvas(QWidget):
         self.zoom = 1.0
         self.last_point = QPoint()
         self.temp_image = None
+        self._cursor_pos = None
         self.setMouseTracking(True)
         self.background_pixmap = QPixmap("alphabg.png")
 
     def enterEvent(self, event):
+        self.setCursor(Qt.BlankCursor)
         self.zoom_changed.emit(self.zoom)
-        doc_pos = self.get_doc_coords(event.pos())
+        doc_pos = self.get_doc_coords(event.position().toPoint())
         self.cursor_pos_changed.emit(doc_pos)
+
+    def leaveEvent(self, event):
+        self.unsetCursor()
+        self._cursor_pos = None
+        self.update()
 
     def get_doc_coords(self, canvas_pos):
         doc_width_scaled = self.app.document.width * self.zoom
@@ -50,28 +57,30 @@ class Canvas(QWidget):
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 self.drawing = True
-                self.last_point = self.get_doc_coords(event.pos())
+                self.last_point = self.get_doc_coords(event.position().toPoint())
                 self.temp_image = active_layer.image.copy()
         if event.button() == Qt.MiddleButton:
             self.dragging = True
-            self.last_point = event.pos()
+            self.last_point = event.position().toPoint()
 
     def mouseMoveEvent(self, event):
-        doc_pos = self.get_doc_coords(event.pos())
+        doc_pos = self.get_doc_coords(event.position().toPoint())
+        self._cursor_pos = doc_pos
         self.cursor_pos_changed.emit(doc_pos)
+        self.update()
 
         if (event.buttons() & Qt.LeftButton) and self.drawing:
-            current_point = self.get_doc_coords(event.pos())
+            current_point = self.get_doc_coords(event.position().toPoint())
             painter = QPainter(self.temp_image)
             painter.setPen(self.app.pen_color)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
         if (event.buttons() & Qt.MiddleButton) and self.dragging:
-            delta = event.pos() - self.last_point
+            delta = event.position().toPoint() - self.last_point
             self.x_offset += delta.x()
             self.y_offset += delta.y()
-            self.last_point = event.pos()
+            self.last_point = event.position().toPoint()
             self.update()
 
     def mouseReleaseEvent(self, event):
@@ -169,6 +178,7 @@ class Canvas(QWidget):
             canvas_painter.drawImage(target_rect, composite_image)
 
         self.draw_grid(canvas_painter, target_rect)
+        self.draw_cursor(canvas_painter, target_rect)
 
     def draw_grid(self, painter, target_rect):
         if self.zoom <= 1.5:
@@ -212,6 +222,35 @@ class Canvas(QWidget):
         # The canvas widget has been resized.
         # The document size does not change.
         pass
+
+    def draw_cursor(self, painter, target_rect):
+        if not self._cursor_pos:
+            return
+
+        # Save painter state
+        painter.save()
+
+        # Set composition mode for inversion effect
+        painter.setCompositionMode(QPainter.CompositionMode_Difference)
+        painter.setPen(QColor("white"))
+        painter.setBrush(Qt.NoBrush)
+
+        # Calculate snapped cursor position in document coordinates
+        doc_x = math.floor(self._cursor_pos.x())
+        doc_y = math.floor(self._cursor_pos.y())
+
+        # Calculate cursor rectangle in canvas coordinates
+        cursor_rect = QRect(
+            int(target_rect.x() + doc_x * self.zoom),
+            int(target_rect.y() + doc_y * self.zoom),
+            int(self.app.pen_size * self.zoom),
+            int(self.app.pen_size * self.zoom),
+        )
+
+        painter.drawRect(cursor_rect)
+
+        # Restore painter state
+        painter.restore()
 
     def draw_line_for_test(self, p1, p2):
         self.drawing_logic.draw_line(p1, p2)

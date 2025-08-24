@@ -15,6 +15,7 @@ class App(QObject):
         self.document = Document(64, 64)
         self.tool = "Pen"
         self.pen_color = QColor("black")
+        self.pen_size = 1
         self.undo_manager = UndoManager()
         self._prime_undo_stack()
 
