@@ -240,6 +240,14 @@ class Canvas(QWidget):
     def draw_line_for_test(self, p1, p2):
         self.drawing_logic.draw_line(p1, p2)
 
+    def erase_line_for_test(self, p1, p2):
+        active_layer = self.app.document.layer_manager.active_layer
+        if active_layer:
+            painter = QPainter(active_layer.image)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.setPen(QColor(0, 0, 0, 0))
+            painter.drawLine(p1, p2)
+
     def set_initial_zoom(self):
         canvas_width = self.width()
         canvas_height = self.height()

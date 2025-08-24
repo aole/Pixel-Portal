@@ -85,3 +85,19 @@ def test_undo_redo_integration(app_and_window):
     app.redo()
     redone_rendered_image = app.document.render()
     assert redone_rendered_image.constBits() == drawn_rendered_image.constBits()
+
+def test_erase_and_test(app_and_window):
+    app, window, canvas = app_and_window
+
+    # 1. Start with a fresh document and fill it with a color
+    app.new_document(32, 32)
+    app.document.layer_manager.active_layer.image.fill(QColor(Qt.blue))
+
+    # 2. Erase a line
+    start_pos = QPoint(10, 10)
+    end_pos = QPoint(20, 20)
+    canvas.erase_line_for_test(start_pos, end_pos)
+
+    # 3. Check that the pixels on the erased line are transparent
+    pixel_color = app.document.layer_manager.active_layer.image.pixelColor(15, 15)
+    assert pixel_color.alpha() == 0
