@@ -45,9 +45,11 @@ class Canvas(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.drawing = True
-            self.last_point = self.get_doc_coords(event.pos())
-            self.temp_image = self.app.document.image.copy()
+            active_layer = self.app.document.layer_manager.active_layer
+            if active_layer:
+                self.drawing = True
+                self.last_point = self.get_doc_coords(event.pos())
+                self.temp_image = active_layer.image.copy()
         if event.button() == Qt.MiddleButton:
             self.dragging = True
             self.last_point = event.pos()
@@ -73,10 +75,12 @@ class Canvas(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.drawing:
             self.drawing = False
-            self.app.document.image = self.temp_image
-            self.temp_image = None
-            self.app.add_undo_state()
-            self.update()
+            active_layer = self.app.document.layer_manager.active_layer
+            if active_layer:
+                active_layer.image = self.temp_image
+                self.temp_image = None
+                self.app.add_undo_state()
+                self.update()
         if event.button() == Qt.MiddleButton:
             self.dragging = False
 
@@ -132,13 +136,21 @@ class Canvas(QWidget):
         x = (canvas_width - doc_width_scaled) / 2 + self.x_offset
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
 
-        if self.drawing and self.temp_image:
-            image = self.temp_image
-        else:
-            image = self.app.document.image
-
+        # Render all layers except the active one
+        active_layer = self.app.document.layer_manager.active_layer
+        background_image = self.app.document.render_except(active_layer)
         target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
-        canvas_painter.drawImage(target_rect, image)
+        canvas_painter.drawImage(target_rect, background_image)
+
+        # Draw the active layer (or the temp drawing image) on top
+        if active_layer:
+            if self.drawing and self.temp_image:
+                image_to_draw = self.temp_image
+            else:
+                image_to_draw = active_layer.image
+
+            canvas_painter.setOpacity(active_layer.opacity)
+            canvas_painter.drawImage(target_rect, image_to_draw)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
