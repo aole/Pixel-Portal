@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor
+from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -23,11 +23,22 @@ class Canvas(QWidget):
         self.temp_image = None
         self.setMouseTracking(True)
         self.background_pixmap = QPixmap("alphabg.png")
+        self.cursor_doc_pos = QPoint()
+        self.mouse_over_canvas = False
+        self.background_color = self.palette().window().color()
 
     def enterEvent(self, event):
+        self.mouse_over_canvas = True
+        self.setCursor(Qt.CursorShape.BlankCursor)
+        self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
         self.cursor_pos_changed.emit(doc_pos)
+
+    def leaveEvent(self, event):
+        self.mouse_over_canvas = False
+        self.unsetCursor()
+        self.update()
 
     def get_doc_coords(self, canvas_pos):
         doc_width_scaled = self.app.document.width * self.zoom
@@ -53,6 +64,15 @@ class Canvas(QWidget):
                 self.drawing = True
                 self.last_point = self.get_doc_coords(event.pos())
                 self.temp_image = active_layer.image.copy()
+
+                # Draw a single point for a click
+                painter = QPainter(self.temp_image)
+                pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                painter.setPen(pen)
+                painter.drawPoint(self.last_point)
+                painter.end()
+                self.update()
+
         if event.button() == Qt.MiddleButton:
             self.dragging = True
             self.last_point = event.pos()
@@ -65,13 +85,15 @@ class Canvas(QWidget):
                 self.temp_image = active_layer.image.copy()
 
     def mouseMoveEvent(self, event):
-        doc_pos = self.get_doc_coords(event.pos())
-        self.cursor_pos_changed.emit(doc_pos)
+        self.cursor_doc_pos = self.get_doc_coords(event.pos())
+        self.cursor_pos_changed.emit(self.cursor_doc_pos)
+        self.update()  # Redraw to show cursor updates
 
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
-            painter.setPen(self.app.pen_color)
+            pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
@@ -79,7 +101,8 @@ class Canvas(QWidget):
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.setPen(QColor(0, 0, 0, 0))
+            pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
@@ -168,6 +191,7 @@ class Canvas(QWidget):
 
         # Render all layers
         composite_image = self.app.document.render()
+        image_to_draw_on = composite_image
 
         # Draw the active layer (or the temp drawing image) on top
         active_layer = self.app.document.layer_manager.active_layer
@@ -188,11 +212,13 @@ class Canvas(QWidget):
             painter.drawImage(0, 0, self.temp_image)
             painter.end()
             canvas_painter.drawImage(target_rect, final_image)
+            image_to_draw_on = final_image
         else:
             # We are not drawing, just show the rendered document
             canvas_painter.drawImage(target_rect, composite_image)
 
         self.draw_grid(canvas_painter, target_rect)
+        self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
 
     def draw_grid(self, painter, target_rect):
         if self.zoom <= 1.5:
@@ -231,6 +257,81 @@ class Canvas(QWidget):
             else:
                 painter.setPen(minor_color)
             painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
+
+    def draw_cursor(self, painter, target_rect, doc_image):
+        if not self.mouse_over_canvas:
+            return
+
+        # Use the application's brush size
+        brush_size = self.app.pen_width
+
+        # Center the brush cursor around the mouse position
+        doc_pos = self.cursor_doc_pos
+        offset = brush_size / 2
+        doc_rect = QRect(
+            round(doc_pos.x() - offset),
+            round(doc_pos.y() - offset),
+            brush_size,
+            brush_size
+        )
+
+        # Convert document rectangle to screen coordinates for drawing
+        screen_x = target_rect.x() + doc_rect.x() * self.zoom
+        screen_y = target_rect.y() + doc_rect.y() * self.zoom
+        screen_width = doc_rect.width() * self.zoom
+        screen_height = doc_rect.height() * self.zoom
+
+        cursor_screen_rect = QRect(
+            round(screen_x),
+            round(screen_y),
+            round(screen_width),
+            round(screen_height)
+        )
+
+        # Ensure the cursor rect is at least 1x1 screen pixels
+        if cursor_screen_rect.width() < 1:
+            cursor_screen_rect.setWidth(1)
+        if cursor_screen_rect.height() < 1:
+            cursor_screen_rect.setHeight(1)
+
+        # Sample the color from the document image instead of grabbing the screen
+        total_r, total_g, total_b = 0, 0, 0
+        pixel_count = 0
+
+        # Clamp the doc_rect to the image boundaries
+        clamped_doc_rect = doc_rect.intersected(doc_image.rect())
+
+        if not clamped_doc_rect.isEmpty():
+            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right()):
+                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom()):
+                    color = doc_image.pixelColor(x, y)
+                    # Only consider visible pixels for the average
+                    if color.alpha() > 0:
+                        total_r += color.red()
+                        total_g += color.green()
+                        total_b += color.blue()
+                        pixel_count += 1
+
+        if pixel_count > 0:
+            avg_r = total_r / pixel_count
+            avg_g = total_g / pixel_count
+            avg_b = total_b / pixel_count
+            # Invert the average color
+            inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
+        else:
+            # Fallback for transparent areas or if off-canvas: use the cached background color
+            bg_color = self.background_color
+            inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
+
+        # Fill the cursor rectangle with the brush color
+        painter.setBrush(self.app.pen_color)
+        painter.setPen(Qt.NoPen) # No outline for the fill
+        painter.drawRect(cursor_screen_rect)
+
+        # Draw the inverted outline on top
+        painter.setPen(inverted_color)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(cursor_screen_rect)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
