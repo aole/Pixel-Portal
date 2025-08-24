@@ -179,6 +179,7 @@ class Canvas(QWidget):
 
         # Render all layers
         composite_image = self.app.document.render()
+        image_to_draw_on = composite_image
 
         # Draw the active layer (or the temp drawing image) on top
         active_layer = self.app.document.layer_manager.active_layer
@@ -199,12 +200,13 @@ class Canvas(QWidget):
             painter.drawImage(0, 0, self.temp_image)
             painter.end()
             canvas_painter.drawImage(target_rect, final_image)
+            image_to_draw_on = final_image
         else:
             # We are not drawing, just show the rendered document
             canvas_painter.drawImage(target_rect, composite_image)
 
         self.draw_grid(canvas_painter, target_rect)
-        self.draw_cursor(canvas_painter, target_rect)
+        self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
 
     def draw_grid(self, painter, target_rect):
         if self.zoom <= 1.5:
@@ -244,7 +246,7 @@ class Canvas(QWidget):
                 painter.setPen(minor_color)
             painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
 
-    def draw_cursor(self, painter, target_rect):
+    def draw_cursor(self, painter, target_rect, doc_image):
         if not self.mouse_over_canvas:
             return
 
@@ -278,34 +280,35 @@ class Canvas(QWidget):
         if cursor_screen_rect.height() < 1:
             cursor_screen_rect.setHeight(1)
 
-        # Grab the pixels under the cursor
-        grab_rect = cursor_screen_rect.adjusted(0, 0, -1, -1)
-        if grab_rect.width() <= 0 or grab_rect.height() <= 0:
-             # Fallback for very small cursors, just use a default color
-            inverted_color = QColor(0, 0, 0)
-        else:
-            pixmap = self.grab(grab_rect)
-            image = pixmap.toImage()
+        # Sample the color from the document image instead of grabbing the screen
+        total_r, total_g, total_b = 0, 0, 0
+        pixel_count = 0
 
-            # Calculate average color
-            total_r, total_g, total_b = 0, 0, 0
-            pixel_count = image.width() * image.height()
-            if pixel_count > 0:
-                for x in range(image.width()):
-                    for y in range(image.height()):
-                        color = image.pixelColor(x, y)
+        # Clamp the doc_rect to the image boundaries
+        clamped_doc_rect = doc_rect.intersected(doc_image.rect())
+
+        if not clamped_doc_rect.isEmpty():
+            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right()):
+                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom()):
+                    color = doc_image.pixelColor(x, y)
+                    # Only consider visible pixels for the average
+                    if color.alpha() > 0:
                         total_r += color.red()
                         total_g += color.green()
                         total_b += color.blue()
+                        pixel_count += 1
 
-                avg_r = total_r / pixel_count
-                avg_g = total_g / pixel_count
-                avg_b = total_b / pixel_count
-
-                # Invert the average color
-                inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
-            else:
-                 inverted_color = QColor(0, 0, 0)
+        if pixel_count > 0:
+            avg_r = total_r / pixel_count
+            avg_g = total_g / pixel_count
+            avg_b = total_b / pixel_count
+            # Invert the average color
+            inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
+        else:
+            # Fallback for transparent areas or if off-canvas: use a default color
+            # We can grab the background color of the canvas for a better fallback
+            bg_color = self.palette().window().color()
+            inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
 
         # Draw the cursor outline
         painter.setPen(inverted_color)
