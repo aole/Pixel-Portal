@@ -15,8 +15,12 @@ class App(QObject):
         self.document = Document(64, 64)
         self.tool = "Pen"
         self.pen_color = QColor("black")
+        self.pen_width = 5
         self.undo_manager = UndoManager()
         self._prime_undo_stack()
+
+    def set_pen_width(self, width):
+        self.pen_width = width
 
     def _prime_undo_stack(self):
         self.undo_manager.add_undo_state(self.document.layer_manager.clone())

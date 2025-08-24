@@ -64,6 +64,14 @@ class Canvas(QWidget):
                 self.drawing = True
                 self.last_point = self.get_doc_coords(event.pos())
                 self.temp_image = active_layer.image.copy()
+
+                # Draw a single point for a click
+                painter = QPainter(self.temp_image)
+                pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                painter.setPen(pen)
+                painter.drawPoint(self.last_point)
+                self.update()
+
         if event.button() == Qt.MiddleButton:
             self.dragging = True
             self.last_point = event.pos()
@@ -83,7 +91,8 @@ class Canvas(QWidget):
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
-            painter.setPen(self.app.pen_color)
+            pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
@@ -91,7 +100,8 @@ class Canvas(QWidget):
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.setPen(QColor(0, 0, 0, 0))
+            pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
@@ -251,13 +261,15 @@ class Canvas(QWidget):
         if not self.mouse_over_canvas:
             return
 
-        # Cursor size in document pixels (using a fixed size of 1 for now)
-        brush_size = 1
+        # Use the application's brush size
+        brush_size = self.app.pen_width
 
-        # Calculate the cursor rectangle in document coordinates
+        # Center the brush cursor around the mouse position
+        doc_pos = self.cursor_doc_pos
+        offset = brush_size / 2
         doc_rect = QRect(
-            self.cursor_doc_pos.x(),
-            self.cursor_doc_pos.y(),
+            round(doc_pos.x() - offset),
+            round(doc_pos.y() - offset),
             brush_size,
             brush_size
         )
@@ -310,7 +322,12 @@ class Canvas(QWidget):
             bg_color = self.background_color
             inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
 
-        # Draw the cursor outline
+        # Fill the cursor rectangle with the brush color
+        painter.setBrush(self.app.pen_color)
+        painter.setPen(Qt.NoPen) # No outline for the fill
+        painter.drawRect(cursor_screen_rect)
+
+        # Draw the inverted outline on top
         painter.setPen(inverted_color)
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(cursor_screen_rect)
