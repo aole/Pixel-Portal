@@ -52,3 +52,40 @@ def test_draw_zoom_and_test(qtbot):
 
     # 4. Check that the zoom level has changed
     assert canvas.zoom > initial_zoom
+
+def test_undo_redo_integration(qtbot):
+    app = App()
+    window = MainWindow(app)
+    app.set_window(window)
+    canvas = window.canvas
+    qtbot.addWidget(window)
+
+    # 1. Start with a fresh document and get the initial state
+    app.new_document(32, 32)
+    initial_image = app.document.image.copy()
+
+    # 2. Draw a line using the actual mouse events
+    # We can't easily simulate a drag, so we'll simulate the outcome
+    # of a drawing action:
+    # - A temp image is created
+    # - A line is drawn on it
+    # - It's copied back
+    # - An undo state is added
+
+    # Let's use the test helper and then manually add an undo state
+    start_pos = QPoint(10, 10)
+    end_pos = QPoint(20, 20)
+    canvas.draw_line_for_test(start_pos, end_pos)
+    drawn_image = app.document.image.copy()
+    app.add_undo_state() # Manually add the state like mouseRelease would
+
+    # 3. Check that the image has changed
+    assert app.document.image.pixel(15, 15) != initial_image.pixel(15, 15)
+
+    # 4. Undo the drawing
+    app.undo()
+    assert app.document.image.constBits() == initial_image.constBits()
+
+    # 5. Redo the drawing
+    app.redo()
+    assert app.document.image.constBits() == drawn_image.constBits()

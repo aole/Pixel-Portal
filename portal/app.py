@@ -1,4 +1,5 @@
 from .document import Document
+from .undo import UndoManager
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor
 
@@ -6,6 +7,7 @@ from PySide6.QtGui import QColor
 class App(QObject):
     tool_changed = Signal(str)
     pen_color_changed = Signal(QColor)
+    undo_stack_changed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -13,9 +15,16 @@ class App(QObject):
         self.document = Document(64, 64)
         self.tool = "Pen"
         self.pen_color = QColor("black")
+        self.undo_manager = UndoManager()
+        self._prime_undo_stack()
+
+    def _prime_undo_stack(self):
+        self.undo_manager.add_undo_state(self.document.image.copy())
+        self.undo_stack_changed.emit()
 
     def set_window(self, window):
         self.window = window
+        self.undo_stack_changed.emit()
 
     def set_tool(self, tool):
         self.tool = tool
@@ -27,6 +36,26 @@ class App(QObject):
 
     def new_document(self, width, height):
         self.document = Document(width, height)
+        self.undo_manager.clear()
+        self._prime_undo_stack()
+
+    def add_undo_state(self):
+        self.undo_manager.add_undo_state(self.document.image.copy())
+        self.undo_stack_changed.emit()
+
+    def undo(self):
+        image = self.undo_manager.undo()
+        if image:
+            self.document.image = image
+            self.window.canvas.update()
+            self.undo_stack_changed.emit()
+
+    def redo(self):
+        image = self.undo_manager.redo()
+        if image:
+            self.document.image = image
+            self.window.canvas.update()
+            self.undo_stack_changed.emit()
 
     def exit(self):
         if self.window:
