@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage
+from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -20,6 +20,7 @@ class Canvas(QWidget):
         self.last_point = QPoint()
         self.temp_image = None
         self.setMouseTracking(True)
+        self.background_pixmap = QPixmap("alphabg.png")
 
     def enterEvent(self, event):
         self.zoom_changed.emit(self.zoom)
@@ -121,10 +122,10 @@ class Canvas(QWidget):
         canvas_painter = QPainter(self)
         canvas_painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
 
-        # Fill background
+        # Fill background of entire canvas
         canvas_painter.fillRect(self.rect(), self.palette().window())
 
-        # Center and draw document
+        # Calculate document dimensions and position
         doc_width = self.app.document.width
         doc_height = self.app.document.height
         canvas_width = self.width()
@@ -135,10 +136,13 @@ class Canvas(QWidget):
 
         x = (canvas_width - doc_width_scaled) / 2 + self.x_offset
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
+        target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
+
+        # Draw the tiled background for the document area
+        canvas_painter.drawTiledPixmap(target_rect, self.background_pixmap)
 
         # Render all layers
         composite_image = self.app.document.render()
-        target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
 
         # Draw the active layer (or the temp drawing image) on top
         active_layer = self.app.document.layer_manager.active_layer
