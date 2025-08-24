@@ -103,6 +103,7 @@ class LayerManagerWidget(QWidget):
         """Adds a new layer."""
         num_layers = len(self.document.layer_manager.layers)
         self.document.layer_manager.add_layer(f"Layer {num_layers + 1}")
+        self.app.add_undo_state()
         self.refresh_layers()
         self.layer_changed.emit()
 
