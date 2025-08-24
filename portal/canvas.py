@@ -23,11 +23,21 @@ class Canvas(QWidget):
         self.temp_image = None
         self.setMouseTracking(True)
         self.background_pixmap = QPixmap("alphabg.png")
+        self.cursor_doc_pos = QPoint()
+        self.mouse_over_canvas = False
 
     def enterEvent(self, event):
+        self.mouse_over_canvas = True
+        self.setCursor(Qt.CursorShape.BlankCursor)
+        self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
         self.cursor_pos_changed.emit(doc_pos)
+
+    def leaveEvent(self, event):
+        self.mouse_over_canvas = False
+        self.unsetCursor()
+        self.update()
 
     def get_doc_coords(self, canvas_pos):
         doc_width_scaled = self.app.document.width * self.zoom
@@ -65,8 +75,9 @@ class Canvas(QWidget):
                 self.temp_image = active_layer.image.copy()
 
     def mouseMoveEvent(self, event):
-        doc_pos = self.get_doc_coords(event.pos())
-        self.cursor_pos_changed.emit(doc_pos)
+        self.cursor_doc_pos = self.get_doc_coords(event.pos())
+        self.cursor_pos_changed.emit(self.cursor_doc_pos)
+        self.update()  # Redraw to show cursor updates
 
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
@@ -193,6 +204,7 @@ class Canvas(QWidget):
             canvas_painter.drawImage(target_rect, composite_image)
 
         self.draw_grid(canvas_painter, target_rect)
+        self.draw_cursor(canvas_painter, target_rect)
 
     def draw_grid(self, painter, target_rect):
         if self.zoom <= 1.5:
@@ -231,6 +243,74 @@ class Canvas(QWidget):
             else:
                 painter.setPen(minor_color)
             painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
+
+    def draw_cursor(self, painter, target_rect):
+        if not self.mouse_over_canvas:
+            return
+
+        # Cursor size in document pixels (using a fixed size of 1 for now)
+        brush_size = 1
+
+        # Calculate the cursor rectangle in document coordinates
+        doc_rect = QRect(
+            self.cursor_doc_pos.x(),
+            self.cursor_doc_pos.y(),
+            brush_size,
+            brush_size
+        )
+
+        # Convert document rectangle to screen coordinates for drawing
+        screen_x = target_rect.x() + doc_rect.x() * self.zoom
+        screen_y = target_rect.y() + doc_rect.y() * self.zoom
+        screen_width = doc_rect.width() * self.zoom
+        screen_height = doc_rect.height() * self.zoom
+
+        cursor_screen_rect = QRect(
+            round(screen_x),
+            round(screen_y),
+            round(screen_width),
+            round(screen_height)
+        )
+
+        # Ensure the cursor rect is at least 1x1 screen pixels
+        if cursor_screen_rect.width() < 1:
+            cursor_screen_rect.setWidth(1)
+        if cursor_screen_rect.height() < 1:
+            cursor_screen_rect.setHeight(1)
+
+        # Grab the pixels under the cursor
+        grab_rect = cursor_screen_rect.adjusted(0, 0, -1, -1)
+        if grab_rect.width() <= 0 or grab_rect.height() <= 0:
+             # Fallback for very small cursors, just use a default color
+            inverted_color = QColor(0, 0, 0)
+        else:
+            pixmap = self.grab(grab_rect)
+            image = pixmap.toImage()
+
+            # Calculate average color
+            total_r, total_g, total_b = 0, 0, 0
+            pixel_count = image.width() * image.height()
+            if pixel_count > 0:
+                for x in range(image.width()):
+                    for y in range(image.height()):
+                        color = image.pixelColor(x, y)
+                        total_r += color.red()
+                        total_g += color.green()
+                        total_b += color.blue()
+
+                avg_r = total_r / pixel_count
+                avg_g = total_g / pixel_count
+                avg_b = total_b / pixel_count
+
+                # Invert the average color
+                inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
+            else:
+                 inverted_color = QColor(0, 0, 0)
+
+        # Draw the cursor outline
+        painter.setPen(inverted_color)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(cursor_screen_rect)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
