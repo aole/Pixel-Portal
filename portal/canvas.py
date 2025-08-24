@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent
+from PySide6.QtGui import QPainter, QWheelEvent, QImage
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -136,21 +136,32 @@ class Canvas(QWidget):
         x = (canvas_width - doc_width_scaled) / 2 + self.x_offset
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
 
-        # Render all layers except the active one
-        active_layer = self.app.document.layer_manager.active_layer
-        background_image = self.app.document.render_except(active_layer)
+        # Render all layers
+        composite_image = self.app.document.render()
         target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
-        canvas_painter.drawImage(target_rect, background_image)
 
         # Draw the active layer (or the temp drawing image) on top
-        if active_layer:
-            if self.drawing and self.temp_image:
-                image_to_draw = self.temp_image
-            else:
-                image_to_draw = active_layer.image
+        active_layer = self.app.document.layer_manager.active_layer
+        if self.drawing and self.temp_image and active_layer:
+            # We are actively drawing, composite the background with the temp drawing image
+            final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
+            final_image.fill(Qt.transparent)
+            painter = QPainter(final_image)
 
-            canvas_painter.setOpacity(active_layer.opacity)
-            canvas_painter.drawImage(target_rect, image_to_draw)
+            # Draw all layers except the active one
+            for layer in self.app.document.layer_manager.layers:
+                if layer.visible and layer is not active_layer:
+                    painter.setOpacity(layer.opacity)
+                    painter.drawImage(0, 0, layer.image)
+
+            # Draw the temp image on top
+            painter.setOpacity(active_layer.opacity)
+            painter.drawImage(0, 0, self.temp_image)
+            painter.end()
+            canvas_painter.drawImage(target_rect, final_image)
+        else:
+            # We are not drawing, just show the rendered document
+            canvas_painter.drawImage(target_rect, composite_image)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
