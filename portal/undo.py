@@ -3,16 +3,20 @@ class UndoManager:
         self.undo_stack = []
         self.redo_stack = []
 
+    def clear(self):
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+
     def add_undo_state(self, state):
         self.undo_stack.append(state)
         self.redo_stack.clear()
 
     def undo(self):
-        if not self.undo_stack:
+        if not self.undo_stack or len(self.undo_stack) == 1:
             return None
         state = self.undo_stack.pop()
         self.redo_stack.append(state)
-        return self.undo_stack[-1] if self.undo_stack else None
+        return self.undo_stack[-1]
 
     def redo(self):
         if not self.redo_stack:

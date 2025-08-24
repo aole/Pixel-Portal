@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout
-from PySide6.QtGui import QAction, QIcon, QColor, QPixmap
+from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
 
@@ -42,6 +42,17 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.app.exit)
         file_menu.addAction(exit_action)
 
+        edit_menu = menu_bar.addMenu("&Edit")
+        self.undo_action = QAction("&Undo", self)
+        self.undo_action.setShortcut(QKeySequence.Undo)
+        self.undo_action.triggered.connect(self.app.undo)
+        edit_menu.addAction(self.undo_action)
+
+        self.redo_action = QAction("&Redo", self)
+        self.redo_action.setShortcut(QKeySequence.Redo)
+        self.redo_action.triggered.connect(self.app.redo)
+        edit_menu.addAction(self.redo_action)
+
         # Status bar
         status_bar = self.statusBar()
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")
@@ -58,6 +69,7 @@ class MainWindow(QMainWindow):
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.app.tool_changed.connect(self.update_selected_tool_label)
         self.app.pen_color_changed.connect(self.update_pen_color_label)
+        self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
 
         # Toolbar
         toolbar = QToolBar("Tools")
@@ -95,3 +107,7 @@ class MainWindow(QMainWindow):
 
     def update_pen_color_label(self, color):
         self.pen_color_label.setText(f"Color: {color.name()}")
+
+    def update_undo_redo_actions(self):
+        self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 1)
+        self.redo_action.setEnabled(len(self.app.undo_manager.redo_stack) > 0)
