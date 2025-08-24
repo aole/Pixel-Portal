@@ -14,6 +14,7 @@ class Canvas(QWidget):
         self.app = app
         self.drawing_logic = DrawingLogic(self.app)
         self.drawing = False
+        self.erasing = False
         self.dragging = False
         self.x_offset = 0
         self.y_offset = 0
@@ -56,6 +57,13 @@ class Canvas(QWidget):
             self.dragging = True
             self.last_point = event.pos()
 
+        if event.button() == Qt.RightButton:
+            active_layer = self.app.document.layer_manager.active_layer
+            if active_layer:
+                self.erasing = True
+                self.last_point = self.get_doc_coords(event.pos())
+                self.temp_image = active_layer.image.copy()
+
     def mouseMoveEvent(self, event):
         doc_pos = self.get_doc_coords(event.pos())
         self.cursor_pos_changed.emit(doc_pos)
@@ -64,6 +72,14 @@ class Canvas(QWidget):
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
             painter.setPen(self.app.pen_color)
+            painter.drawLine(self.last_point, current_point)
+            self.last_point = current_point
+            self.update()
+        if (event.buttons() & Qt.RightButton) and self.erasing:
+            current_point = self.get_doc_coords(event.pos())
+            painter = QPainter(self.temp_image)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.setPen(QColor(0, 0, 0, 0))
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
             self.update()
@@ -77,6 +93,14 @@ class Canvas(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.drawing:
             self.drawing = False
+            active_layer = self.app.document.layer_manager.active_layer
+            if active_layer:
+                active_layer.image = self.temp_image
+                self.temp_image = None
+                self.app.add_undo_state()
+                self.update()
+        if event.button() == Qt.RightButton and self.erasing:
+            self.erasing = False
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 active_layer.image = self.temp_image
