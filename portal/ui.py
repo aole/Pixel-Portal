@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
             return []
 
     def update_cursor_pos_label(self, pos):
-        self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
+        self.cursor_pos_label.setText(f"Cursor: ({round(pos.x())}, {round(pos.y())})")
 
     def update_zoom_level_label(self, zoom):
         self.zoom_level_label.setText(f"Zoom: {int(zoom * 100)}%")

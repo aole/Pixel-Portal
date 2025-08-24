@@ -1,12 +1,12 @@
 import math
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen
-from PySide6.QtCore import Qt, QPoint, QRect, Signal
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, Signal
 from .drawing import DrawingLogic
 
 
 class Canvas(QWidget):
-    cursor_pos_changed = Signal(QPoint)
+    cursor_pos_changed = Signal(QPointF)
     zoom_changed = Signal(float)
 
     def __init__(self, app, parent=None):
@@ -23,7 +23,7 @@ class Canvas(QWidget):
         self.temp_image = None
         self.setMouseTracking(True)
         self.background_pixmap = QPixmap("alphabg.png")
-        self.cursor_doc_pos = QPoint()
+        self.cursor_doc_pos = QPointF()
         self.mouse_over_canvas = False
         self.background_color = self.palette().window().color()
 
@@ -50,9 +50,9 @@ class Canvas(QWidget):
         y_offset = (canvas_height - doc_height_scaled) / 2 + self.y_offset
 
         if self.zoom == 0:
-            return QPoint(0, 0)
+            return QPointF(0, 0)
 
-        return QPoint(
+        return QPointF(
             (canvas_pos.x() - x_offset) / self.zoom,
             (canvas_pos.y() - y_offset) / self.zoom,
         )
@@ -276,8 +276,8 @@ class Canvas(QWidget):
         )
 
         # Convert document rectangle to screen coordinates for drawing
-        screen_x = target_rect.x() + doc_rect.x() * self.zoom
-        screen_y = target_rect.y() + doc_rect.y() * self.zoom
+        screen_x = target_rect.x() + (doc_pos.x() - offset) * self.zoom
+        screen_y = target_rect.y() + (doc_pos.y() - offset) * self.zoom
         screen_width = doc_rect.width() * self.zoom
         screen_height = doc_rect.height() * self.zoom
 
