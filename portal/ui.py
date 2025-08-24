@@ -85,8 +85,8 @@ class MainWindow(QMainWindow):
         colors = self.load_palette()
         for i, color in enumerate(colors):
             button = ColorButton(color, self.app)
-            row = 0
-            col = i
+            row = i % 2
+            col = i // 2
             color_layout.addWidget(button, row, col)
 
         color_toolbar.addWidget(color_container)
