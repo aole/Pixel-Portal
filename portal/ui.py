@@ -1,10 +1,17 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget
+from PySide6.QtGui import QAction, QIcon, QColor, QPixmap
 from PySide6.QtCore import Qt
 from .canvas import Canvas
 
 
 class MainWindow(QMainWindow):
+    COLORS = [
+        "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF",
+        "#000000", "#FFFFFF", "#FF8000", "#8000FF", "#0080FF", "#FF0080",
+        "#80FF00", "#00FF80", "#800000", "#008000", "#000080", "#808000",
+        "#800080", "#008080"
+    ]
+
     def __init__(self, app):
         super().__init__()
         self.app = app
@@ -41,6 +48,18 @@ class MainWindow(QMainWindow):
         pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
         toolbar.addAction(pen_action)
+
+        # Color Swatch Panel
+        color_toolbar = QToolBar("Colors")
+        self.addToolBar(Qt.RightToolBarArea, color_toolbar)
+        color_toolbar.setAllowedAreas(Qt.LeftToolBarArea | Qt.RightToolBarArea)
+
+        for color in self.COLORS:
+            button = QPushButton()
+            button.setFixedSize(24, 24)
+            button.setStyleSheet(f"background-color: {color}")
+            button.setToolTip(color)
+            color_toolbar.addWidget(button)
 
     def update_cursor_pos_label(self, pos):
         self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
