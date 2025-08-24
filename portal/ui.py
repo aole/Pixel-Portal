@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.undo_action)
 
         self.redo_action = QAction("&Redo", self)
-        self.redo_action.setShortcut(QKeySequence.Redo)
+        self.redo_action.setShortcut("Ctrl+Shift+Z")
         self.redo_action.triggered.connect(self.app.redo)
         edit_menu.addAction(self.redo_action)
 
