@@ -1,0 +1,17 @@
+from PySide6.QtGui import QImage, QColor
+from PySide6.QtCore import QSize
+
+class Layer:
+    """
+    Represents a single layer in the document.
+    """
+    def __init__(self, width: int, height: int, name: str):
+        if not isinstance(name, str) or not name:
+            raise ValueError("Layer name must be a non-empty string.")
+
+        self.name = name
+        self.visible = True
+        self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
+
+        self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
+        self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
