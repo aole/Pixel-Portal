@@ -20,13 +20,6 @@ class ColorButton(QPushButton):
 
 
 class MainWindow(QMainWindow):
-    COLORS = [
-        "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
-        "#FF00FF", "#00FFFF", "#FF8000", "#8000FF", "#0080FF", "#FF0080",
-        "#80FF00", "#00FF80", "#800000", "#008000", "#000080", "#808000",
-        "#800080", "#008080"
-    ]
-
     def __init__(self, app):
         super().__init__()
         self.app = app
@@ -81,18 +74,19 @@ class MainWindow(QMainWindow):
 
         # Color Swatch Panel
         color_toolbar = QToolBar("Colors")
-        self.addToolBar(Qt.RightToolBarArea, color_toolbar)
-        color_toolbar.setAllowedAreas(Qt.LeftToolBarArea | Qt.RightToolBarArea)
+        self.addToolBar(Qt.BottomToolBarArea, color_toolbar)
+        color_toolbar.setAllowedAreas(Qt.TopToolBarArea | Qt.BottomToolBarArea)
 
         color_container = QWidget()
         color_layout = QGridLayout(color_container)
         color_layout.setSpacing(0)
         color_layout.setContentsMargins(0, 0, 0, 0)
 
-        for i, color in enumerate(self.COLORS):
+        colors = self.load_palette()
+        for i, color in enumerate(colors):
             button = ColorButton(color, self.app)
-            row = i % 10
-            col = i // 10
+            row = 0
+            col = i
             color_layout.addWidget(button, row, col)
 
         color_toolbar.addWidget(color_container)
@@ -103,6 +97,13 @@ class MainWindow(QMainWindow):
         dock_widget = QDockWidget("Layers", self)
         dock_widget.setWidget(self.layer_manager_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+
+    def load_palette(self):
+        try:
+            with open("palettes/default.colors", "r") as f:
+                return [line.strip() for line in f.readlines()]
+        except FileNotFoundError:
+            return []
 
     def update_cursor_pos_label(self, pos):
         self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
