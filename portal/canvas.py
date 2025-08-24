@@ -133,3 +133,6 @@ class Canvas(QWidget):
         # The canvas widget has been resized.
         # The document size does not change.
         pass
+
+    def draw_line_for_test(self, p1, p2):
+        self.drawing_logic.draw_line(p1, p2)

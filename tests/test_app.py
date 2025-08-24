@@ -19,11 +19,7 @@ def test_draw_and_test(qtbot):
     # 2. Draw a line
     start_pos = QPoint(10, 10)
     end_pos = QPoint(20, 20)
-    QTest.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
-    QTest.mouseMove(canvas, end_pos, -1, Qt.LeftButton)
-    QTest.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
-
-    qtbot.wait(100)
+    canvas.draw_line_for_test(start_pos, end_pos)
 
     # 3. Check that the image has changed
     pixel_color = app.document.image.pixelColor(15, 15)
@@ -42,9 +38,7 @@ def test_draw_zoom_and_test(qtbot):
     # 2. Draw a line
     start_pos = QPoint(10, 10)
     end_pos = QPoint(20, 20)
-    QTest.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
-    QTest.mouseMove(canvas, end_pos, -1, Qt.LeftButton)
-    QTest.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
+    canvas.draw_line_for_test(start_pos, end_pos)
 
     # 3. Zoom in
     initial_zoom = canvas.zoom

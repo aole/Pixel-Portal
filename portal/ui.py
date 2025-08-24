@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar
 from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt
 from .canvas import Canvas
 
 
@@ -36,7 +37,7 @@ class MainWindow(QMainWindow):
 
         # Toolbar
         toolbar = QToolBar("Tools")
-        self.addToolBar(toolbar)
+        self.addToolBar(Qt.LeftToolBarArea, toolbar)
         pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
         toolbar.addAction(pen_action)
