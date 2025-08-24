@@ -1,5 +1,6 @@
+import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap
+from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -166,6 +167,46 @@ class Canvas(QWidget):
         else:
             # We are not drawing, just show the rendered document
             canvas_painter.drawImage(target_rect, composite_image)
+
+        self.draw_grid(canvas_painter, target_rect)
+
+    def draw_grid(self, painter, target_rect):
+        if self.zoom <= 1.5:
+            return
+
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+
+        # Define colors for grid lines
+        minor_color = QColor(0, 0, 0, 40)
+        major_color = QColor(0, 0, 0, 100)
+
+        # Find the range of document coordinates currently visible on the canvas
+        doc_top_left = self.get_doc_coords(QPoint(0, 0))
+        doc_bottom_right = self.get_doc_coords(QPoint(self.width(), self.height()))
+
+        start_x = max(0, math.floor(doc_top_left.x()))
+        end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
+        start_y = max(0, math.floor(doc_top_left.y()))
+        end_y = min(doc_height, math.ceil(doc_bottom_right.y()))
+
+        # Draw vertical lines
+        for dx in range(start_x, end_x + 1):
+            canvas_x = target_rect.x() + dx * self.zoom
+            if dx % 8 == 0:
+                painter.setPen(major_color)
+            else:
+                painter.setPen(minor_color)
+            painter.drawLine(int(canvas_x), target_rect.top(), int(canvas_x), target_rect.bottom())
+
+        # Draw horizontal lines
+        for dy in range(start_y, end_y + 1):
+            canvas_y = target_rect.y() + dy * self.zoom
+            if dy % 8 == 0:
+                painter.setPen(major_color)
+            else:
+                painter.setPen(minor_color)
+            painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
