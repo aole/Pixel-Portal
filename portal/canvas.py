@@ -20,7 +20,9 @@ class Canvas(QWidget):
         self.y_offset = 0
         self.zoom = 1.0
         self.last_point = QPoint()
+        self.start_point = QPoint()
         self.temp_image = None
+        self.original_image = None
         self.setMouseTracking(True)
         self.background_pixmap = QPixmap("alphabg.png")
         self.cursor_doc_pos = QPoint()
@@ -29,7 +31,7 @@ class Canvas(QWidget):
         self.app.tool_changed.connect(self.on_tool_changed)
 
     def on_tool_changed(self, tool):
-        if tool == "Bucket":
+        if tool in ["Bucket", "Rectangle", "Ellipse", "Line"]:
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.BlankCursor)
@@ -75,16 +77,19 @@ class Canvas(QWidget):
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 self.drawing = True
-                self.last_point = self.get_doc_coords(event.pos())
-                self.temp_image = active_layer.image.copy()
+                self.start_point = self.get_doc_coords(event.pos())
+                self.last_point = self.start_point
+                self.original_image = active_layer.image.copy()
+                self.temp_image = self.original_image.copy()
 
-                # Draw a single point for a click
-                painter = QPainter(self.temp_image)
-                pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
-                painter.setPen(pen)
-                painter.drawPoint(self.last_point)
-                painter.end()
-                self.update()
+                if self.app.tool == "Pen":
+                    # Draw a single point for a click
+                    painter = QPainter(self.temp_image)
+                    pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
+                    painter.setPen(pen)
+                    painter.drawPoint(self.last_point)
+                    painter.end()
+                    self.update()
 
         if event.button() == Qt.MiddleButton:
             self.dragging = True
@@ -111,13 +116,29 @@ class Canvas(QWidget):
         self.cursor_pos_changed.emit(self.cursor_doc_pos)
         self.update()  # Redraw to show cursor updates
 
-        if (event.buttons() & Qt.LeftButton) and self.drawing and self.app.tool == "Pen":
+        if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
+
+            if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
+                # For shapes, we draw on a fresh copy of the original image each time
+                self.temp_image = self.original_image.copy()
+            
             painter = QPainter(self.temp_image)
             pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
-            painter.drawLine(self.last_point, current_point)
-            self.last_point = current_point
+
+            if self.app.tool == "Pen":
+                painter.drawLine(self.last_point, current_point)
+                self.last_point = current_point
+            elif self.app.tool == "Line":
+                painter.drawLine(self.start_point, current_point)
+            elif self.app.tool == "Rectangle":
+                rect = QRect(self.start_point, current_point).normalized()
+                self.drawing_logic.draw_rect(painter, rect)
+            elif self.app.tool == "Ellipse":
+                rect = QRect(self.start_point, current_point).normalized()
+                self.drawing_logic.draw_ellipse(painter, rect)
+                
             self.update()
         if (event.buttons() & Qt.RightButton) and self.erasing:
             current_point = self.get_doc_coords(event.pos())
@@ -140,10 +161,31 @@ class Canvas(QWidget):
             self.drawing = False
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
+                current_point = self.get_doc_coords(event.pos())
+                
+                if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
+                    self.temp_image = self.original_image.copy()
+                    painter = QPainter(self.temp_image)
+                    pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
+                    painter.setPen(pen)
+
+                    if self.app.tool == "Line":
+                        painter.drawLine(self.start_point, current_point)
+                    elif self.app.tool == "Rectangle":
+                        rect = QRect(self.start_point, current_point).normalized()
+                        self.drawing_logic.draw_rect(painter, rect)
+                    elif self.app.tool == "Ellipse":
+                        rect = QRect(self.start_point, current_point).normalized()
+                        self.drawing_logic.draw_ellipse(painter, rect)
+                    
+                    painter.end()
+
                 active_layer.image = self.temp_image
                 self.temp_image = None
+                self.original_image = None
                 self.app.add_undo_state()
                 self.update()
+                
         if event.button() == Qt.RightButton and self.erasing:
             self.erasing = False
             active_layer = self.app.document.layer_manager.active_layer

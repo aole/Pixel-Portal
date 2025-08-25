@@ -18,6 +18,14 @@ class DrawingLogic:
             painter.setPen(self.pen_color)
             painter.drawLine(p1, p2)
 
+    def draw_rect(self, painter, rect):
+        painter.setPen(self.pen_color)
+        painter.drawRect(rect)
+
+    def draw_ellipse(self, painter, rect):
+        painter.setPen(self.pen_color)
+        painter.drawEllipse(rect)
+
     def flood_fill(self, start_pos):
         active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:

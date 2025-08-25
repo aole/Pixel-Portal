@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
@@ -138,6 +138,28 @@ class MainWindow(QMainWindow):
         bucket_action = QAction(QIcon("icons/toolbucket.png"), "Bucket", self)
         bucket_action.triggered.connect(lambda: self.app.set_tool("Bucket"))
         toolbar.addAction(bucket_action)
+
+        # Shape Tools
+        shape_button = QToolButton(self)
+        shape_button.setIcon(QIcon("icons/toolline.png"))
+        shape_button.setPopupMode(QToolButton.MenuButtonPopup)
+        shape_menu = QMenu(shape_button)
+        shape_button.setMenu(shape_menu)
+
+        line_action = QAction(QIcon("icons/toolline.png"), "Line", self)
+        line_action.triggered.connect(lambda: self.app.set_tool("Line"))
+        shape_menu.addAction(line_action)
+        shape_button.setDefaultAction(line_action)
+
+        rect_action = QAction(QIcon("icons/toolrect.png"), "Rectangle", self)
+        rect_action.triggered.connect(lambda: self.app.set_tool("Rectangle"))
+        shape_menu.addAction(rect_action)
+
+        ellipse_action = QAction(QIcon("icons/toolellipse.png"), "Ellipse", self)
+        ellipse_action.triggered.connect(lambda: self.app.set_tool("Ellipse"))
+        shape_menu.addAction(ellipse_action)
+
+        toolbar.addWidget(shape_button)
 
         ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
