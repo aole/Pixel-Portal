@@ -67,7 +67,7 @@ class Canvas(QWidget):
 
                 # Draw a single point for a click
                 painter = QPainter(self.temp_image)
-                pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
                 painter.setPen(pen)
                 painter.drawPoint(self.last_point)
                 painter.end()
@@ -87,7 +87,7 @@ class Canvas(QWidget):
                 # Erase a single point for a click
                 painter = QPainter(self.temp_image)
                 painter.setCompositionMode(QPainter.CompositionMode_Clear)
-                pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
                 painter.setPen(pen)
                 painter.drawPoint(self.last_point)
                 painter.end()
@@ -101,7 +101,7 @@ class Canvas(QWidget):
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
-            pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
@@ -110,7 +110,7 @@ class Canvas(QWidget):
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
             painter.drawLine(self.last_point, current_point)
             self.last_point = current_point
@@ -154,7 +154,7 @@ class Canvas(QWidget):
             self.zoom /= 1.25
 
         # Clamp zoom level
-        self.zoom = max(0.1, min(self.zoom, 20.0))
+        self.zoom = max(1, min(self.zoom, 20.0))
 
         # Adjust pan to keep doc_pos_before_zoom at the same mouse_pos
         doc_width_scaled = self.app.document.width * self.zoom

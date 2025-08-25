@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor
 class App(QObject):
     tool_changed = Signal(str)
     pen_color_changed = Signal(QColor)
+    pen_width_changed = Signal(int)
     undo_stack_changed = Signal()
 
     def __init__(self):
@@ -21,6 +22,7 @@ class App(QObject):
 
     def set_pen_width(self, width):
         self.pen_width = width
+        self.pen_width_changed.emit(self.pen_width)
 
     def _prime_undo_stack(self):
         self.undo_manager.add_undo_state(self.document.layer_manager.clone())

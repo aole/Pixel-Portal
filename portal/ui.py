@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
@@ -64,11 +64,25 @@ class MainWindow(QMainWindow):
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.app.tool_changed.connect(self.update_selected_tool_label)
         self.app.pen_color_changed.connect(self.update_pen_color_label)
+        self.app.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
 
         # Toolbar
         toolbar = QToolBar("Tools")
         self.addToolBar(Qt.LeftToolBarArea, toolbar)
+
+        top_toolbar = QToolBar("Top Toolbar")
+        self.addToolBar(Qt.TopToolBarArea, top_toolbar)
+
+        # Brush size slider
+        top_toolbar.addWidget(QLabel("Brush Size:"))
+        self.pen_width_slider = QSlider(Qt.Horizontal)
+        self.pen_width_slider.setRange(1, 100)
+        self.pen_width_slider.setValue(self.app.pen_width)
+        self.pen_width_slider.setMinimumWidth(200)
+        self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
+        top_toolbar.addWidget(self.pen_width_slider)
+        
         pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
         toolbar.addAction(pen_action)
@@ -121,6 +135,9 @@ class MainWindow(QMainWindow):
 
     def update_pen_color_label(self, color):
         self.pen_color_label.setText(f"Color: {color.name()}")
+
+    def update_pen_width_slider(self, width):
+        self.pen_width_slider.setValue(width)
 
     def update_undo_redo_actions(self):
         self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 1)
