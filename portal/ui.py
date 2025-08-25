@@ -140,26 +140,26 @@ class MainWindow(QMainWindow):
         toolbar.addAction(bucket_action)
 
         # Shape Tools
-        shape_button = QToolButton(self)
-        shape_button.setIcon(QIcon("icons/toolline.png"))
-        shape_button.setPopupMode(QToolButton.MenuButtonPopup)
-        shape_menu = QMenu(shape_button)
-        shape_button.setMenu(shape_menu)
+        self.shape_button = QToolButton(self)
+        self.shape_button.setIcon(QIcon("icons/toolline.png"))
+        self.shape_button.setPopupMode(QToolButton.MenuButtonPopup)
+        shape_menu = QMenu(self.shape_button)
+        self.shape_button.setMenu(shape_menu)
 
         line_action = QAction(QIcon("icons/toolline.png"), "Line", self)
-        line_action.triggered.connect(lambda: self.app.set_tool("Line"))
+        line_action.triggered.connect(lambda: self.set_shape_tool(line_action))
         shape_menu.addAction(line_action)
-        shape_button.setDefaultAction(line_action)
+        self.shape_button.setDefaultAction(line_action)
 
         rect_action = QAction(QIcon("icons/toolrect.png"), "Rectangle", self)
-        rect_action.triggered.connect(lambda: self.app.set_tool("Rectangle"))
+        rect_action.triggered.connect(lambda: self.set_shape_tool(rect_action))
         shape_menu.addAction(rect_action)
 
         ellipse_action = QAction(QIcon("icons/toolellipse.png"), "Ellipse", self)
-        ellipse_action.triggered.connect(lambda: self.app.set_tool("Ellipse"))
+        ellipse_action.triggered.connect(lambda: self.set_shape_tool(ellipse_action))
         shape_menu.addAction(ellipse_action)
 
-        toolbar.addWidget(shape_button)
+        toolbar.addWidget(self.shape_button)
 
         ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
@@ -190,6 +190,11 @@ class MainWindow(QMainWindow):
         dock_widget = QDockWidget("Layers", self)
         dock_widget.setWidget(self.layer_manager_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+
+    def set_shape_tool(self, action):
+        self.app.set_tool(action.text())
+        self.shape_button.setIcon(action.icon())
+        self.shape_button.setDefaultAction(action)
 
     def load_palette(self):
         try:
