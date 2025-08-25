@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
 from .ai.dialog import AiDialog
+from .new_file_dialog import NewFileDialog
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -54,6 +55,11 @@ class MainWindow(QMainWindow):
         # Menu bar
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
+
+        new_action = QAction(QIcon("icons/new.png"), "&New", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.open_new_file_dialog)
+        file_menu.addAction(new_action)
 
         open_action = QAction(QIcon("icons/load.png"), "&Open", self)
         open_action.setShortcut("Ctrl+O")
@@ -108,6 +114,7 @@ class MainWindow(QMainWindow):
         top_toolbar = QToolBar("Top Toolbar")
         self.addToolBar(Qt.TopToolBarArea, top_toolbar)
 
+        top_toolbar.addAction(new_action)
         top_toolbar.addAction(open_action)
         top_toolbar.addAction(save_action)
         top_toolbar.addSeparator()
@@ -196,4 +203,8 @@ class MainWindow(QMainWindow):
 
     def open_ai_dialog(self):
         dialog = AiDialog(self.app, self)
+        dialog.exec()
+
+    def open_new_file_dialog(self):
+        dialog = NewFileDialog(self.app, self)
         dialog.exec()
