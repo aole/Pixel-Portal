@@ -5,6 +5,8 @@ from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
 from .ai.dialog import AiDialog
 
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
+
 
 class ColorButton(QPushButton):
     def __init__(self, color, app):
@@ -18,6 +20,25 @@ class ColorButton(QPushButton):
 
     def on_click(self):
         self.app.set_pen_color(self.color)
+
+
+class ActiveColorButton(QPushButton):
+    def __init__(self, app):
+        super().__init__()
+        self.app = app
+        self.setFixedSize(24, 24)
+        self.clicked.connect(self.on_click)
+        self.update_color(self.app.pen_color)
+        self.app.pen_color_changed.connect(self.update_color)
+
+    def on_click(self):
+        color = QColorDialog.getColor(self.app.pen_color, self)
+        if color.isValid():
+            self.app.set_pen_color(color.name())
+
+    def update_color(self, color):
+        self.setStyleSheet(f"background-color: {color.name()}")
+        self.setToolTip(color.name())
 
 
 class MainWindow(QMainWindow):
@@ -99,6 +120,9 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.setMinimumWidth(200)
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
+        
+        active_color_button = ActiveColorButton(self.app)
+        toolbar.addWidget(active_color_button)
         
         pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
