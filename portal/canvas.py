@@ -26,10 +26,17 @@ class Canvas(QWidget):
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.background_color = self.palette().window().color()
+        self.app.tool_changed.connect(self.on_tool_changed)
+
+    def on_tool_changed(self, tool):
+        if tool == "Bucket":
+            self.setCursor(Qt.CrossCursor)
+        else:
+            self.setCursor(Qt.BlankCursor)
 
     def enterEvent(self, event):
         self.mouse_over_canvas = True
-        self.setCursor(Qt.CursorShape.BlankCursor)
+        self.on_tool_changed(self.app.tool)
         self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
@@ -59,6 +66,12 @@ class Canvas(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            if self.app.tool == "Bucket":
+                self.drawing_logic.flood_fill(self.get_doc_coords(event.pos()))
+                self.app.add_undo_state()
+                self.update()
+                return
+
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 self.drawing = True
@@ -98,7 +111,7 @@ class Canvas(QWidget):
         self.cursor_pos_changed.emit(self.cursor_doc_pos)
         self.update()  # Redraw to show cursor updates
 
-        if (event.buttons() & Qt.LeftButton) and self.drawing:
+        if (event.buttons() & Qt.LeftButton) and self.drawing and self.app.tool == "Pen":
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
             pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
@@ -270,7 +283,7 @@ class Canvas(QWidget):
             painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
 
     def draw_cursor(self, painter, target_rect, doc_image):
-        if not self.mouse_over_canvas:
+        if not self.mouse_over_canvas or self.app.tool == "Bucket":
             return
 
         # Use the application's brush size

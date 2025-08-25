@@ -87,6 +87,10 @@ class MainWindow(QMainWindow):
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
         toolbar.addAction(pen_action)
 
+        bucket_action = QAction(QIcon("icons/toolbucket.png"), "Bucket", self)
+        bucket_action.triggered.connect(lambda: self.app.set_tool("Bucket"))
+        toolbar.addAction(bucket_action)
+
         ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
         toolbar.addAction(ai_action)

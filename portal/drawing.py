@@ -17,3 +17,37 @@ class DrawingLogic:
             painter = QPainter(active_layer.image)
             painter.setPen(self.pen_color)
             painter.drawLine(p1, p2)
+
+    def flood_fill(self, start_pos):
+        active_layer = self.app.document.layer_manager.active_layer
+        if not active_layer:
+            return
+
+        image = active_layer.image
+        width = image.width()
+        height = image.height()
+        x, y = start_pos.x(), start_pos.y()
+
+        if not (0 <= x < width and 0 <= y < height):
+            return
+
+        target_color = image.pixelColor(x, y)
+        fill_color = self.pen_color
+
+        if target_color == fill_color:
+            return
+
+        stack = [(x, y)]
+
+        while stack:
+            x, y = stack.pop()
+
+            if not (0 <= x < width and 0 <= y < height):
+                continue
+
+            if image.pixelColor(x, y) == target_color:
+                image.setPixelColor(x, y, fill_color)
+                stack.append((x + 1, y))
+                stack.append((x - 1, y))
+                stack.append((x, y + 1))
+                stack.append((x, y - 1))
