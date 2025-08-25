@@ -1,25 +1,32 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QComboBox, QPushButton, QProgressBar, QMessageBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QRadioButton, QPushButton, QProgressBar, QMessageBox, QButtonGroup
 from PySide6.QtCore import Qt, QThread, Signal
 from PIL import Image
-from .ai.image_generator import image_to_image
+from .image_generator import image_to_image, prompt_to_image
 
 class GenerationThread(QThread):
     generation_complete = Signal(Image.Image)
     generation_failed = Signal(str)
 
-    def __init__(self, image, prompt):
+    def __init__(self, mode, image, prompt, original_size):
         super().__init__()
+        self.mode = mode
         self.image = image
         self.prompt = prompt
+        self.original_size = original_size
 
     def run(self):
         try:
-            generated_image = image_to_image(self.image, self.prompt)
+            if self.mode == "Image to Image":
+                generated_image = image_to_image(self.image, self.prompt)
+            else:
+                generated_image = prompt_to_image(self.prompt, original_size=self.original_size)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
 
 class AiDialog(QDialog):
+    last_prompt = "Chibi warrior, fighting stance, plain background"
+
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
@@ -29,12 +36,19 @@ class AiDialog(QDialog):
         self.layout = QVBoxLayout(self)
 
         self.prompt_input = QLineEdit()
-        self.prompt_input.setPlaceholderText("Enter a prompt...")
+        self.prompt_input.setText(AiDialog.last_prompt)
         self.layout.addWidget(self.prompt_input)
 
-        self.generation_mode = QComboBox()
-        self.generation_mode.addItems(["Image to Image", "Prompt to Image"])
-        self.layout.addWidget(self.generation_mode)
+        self.radio_button_group = QButtonGroup()
+
+        self.image_to_image_radio = QRadioButton("Image to Image")
+        self.image_to_image_radio.setChecked(True)
+        self.layout.addWidget(self.image_to_image_radio)
+        self.radio_button_group.addButton(self.image_to_image_radio)
+
+        self.prompt_to_image_radio = QRadioButton("Prompt to Image")
+        self.layout.addWidget(self.prompt_to_image_radio)
+        self.radio_button_group.addButton(self.prompt_to_image_radio)
 
         self.generate_button = QPushButton("Generate")
         self.generate_button.clicked.connect(self.start_generation)
@@ -55,18 +69,20 @@ class AiDialog(QDialog):
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
             return
 
-        mode = self.generation_mode.currentText()
+        AiDialog.last_prompt = prompt
+
+        mode = "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
+
+        input_image = None
+        original_size = (self.app.document.width, self.app.document.height)
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
-        else:
-            # Create a blank image for prompt-to-image
-            input_image = Image.new("RGBA", (512, 512), (255, 255, 255, 255))
 
         self.progress_bar.setVisible(True)
         self.generate_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
 
-        self.thread = GenerationThread(input_image, prompt)
+        self.thread = GenerationThread(mode, input_image, prompt, original_size)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.start()
@@ -84,5 +100,5 @@ class AiDialog(QDialog):
     def get_settings(self):
         return {
             "prompt": self.prompt_input.text(),
-            "mode": self.generation_mode.currentText()
+            "mode": "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
         }

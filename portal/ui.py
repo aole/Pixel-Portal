@@ -3,7 +3,7 @@ from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
-from .ai_dialog import AiDialog
+from .ai.dialog import AiDialog
 
 
 class ColorButton(QPushButton):
