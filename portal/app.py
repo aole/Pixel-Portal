@@ -1,7 +1,8 @@
 from .document import Document
 from .undo import UndoManager
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QImage
+from PySide6.QtWidgets import QFileDialog
 
 
 class App(QObject):
@@ -47,6 +48,25 @@ class App(QObject):
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
+
+    def open_document(self):
+        file_path, _ = QFileDialog.getOpenFileName(self.window, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
+        if file_path:
+            image = QImage(file_path)
+            if not image.isNull():
+                self.document = Document(image.width(), image.height())
+                self.document.layer_manager.layers[0].image = image
+                self.undo_manager.clear()
+                self._prime_undo_stack()
+                if self.window:
+                    self.window.layer_manager_widget.refresh_layers()
+                    self.window.canvas.update()
+
+    def save_document(self):
+        file_path, _ = QFileDialog.getSaveFileName(self.window, "Save Image", "", "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp)")
+        if file_path:
+            image = self.document.render()
+            image.save(file_path)
 
     def add_undo_state(self):
         self.undo_manager.add_undo_state(self.document.layer_manager.clone())
