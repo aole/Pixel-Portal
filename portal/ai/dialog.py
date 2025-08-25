@@ -7,18 +7,19 @@ class GenerationThread(QThread):
     generation_complete = Signal(Image.Image)
     generation_failed = Signal(str)
 
-    def __init__(self, mode, image, prompt):
+    def __init__(self, mode, image, prompt, original_size):
         super().__init__()
         self.mode = mode
         self.image = image
         self.prompt = prompt
+        self.original_size = original_size
 
     def run(self):
         try:
             if self.mode == "Image to Image":
                 generated_image = image_to_image(self.image, self.prompt)
             else:
-                generated_image = prompt_to_image(self.prompt)
+                generated_image = prompt_to_image(self.prompt, original_size=self.original_size)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
@@ -73,6 +74,7 @@ class AiDialog(QDialog):
         mode = "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
 
         input_image = None
+        original_size = (self.app.document.width, self.app.document.height)
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
 
@@ -80,7 +82,7 @@ class AiDialog(QDialog):
         self.generate_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
 
-        self.thread = GenerationThread(mode, input_image, prompt)
+        self.thread = GenerationThread(mode, input_image, prompt, original_size)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.start()

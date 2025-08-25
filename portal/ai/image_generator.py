@@ -8,6 +8,7 @@ from huggingface_hub import hf_hub_download
 
 def prompt_to_image(
     prompt: str,
+    original_size: tuple[int, int],
     output_dir: str = "output",
 ) -> Image.Image:
     """
