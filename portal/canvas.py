@@ -271,7 +271,7 @@ class Canvas(QWidget):
                 painter.setPen(major_color)
             else:
                 painter.setPen(minor_color)
-            painter.drawLine(int(canvas_x), target_rect.top(), int(canvas_x), target_rect.bottom())
+            painter.drawLine(round(canvas_x), target_rect.top(), round(canvas_x), target_rect.bottom())
 
         # Draw horizontal lines
         for dy in range(start_y, end_y + 1):
@@ -280,7 +280,7 @@ class Canvas(QWidget):
                 painter.setPen(major_color)
             else:
                 painter.setPen(minor_color)
-            painter.drawLine(target_rect.left(), int(canvas_y), target_rect.right(), int(canvas_y))
+            painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
 
     def draw_cursor(self, painter, target_rect, doc_image):
         if not self.mouse_over_canvas or self.app.tool == "Bucket":
