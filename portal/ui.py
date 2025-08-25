@@ -3,6 +3,7 @@ from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
+from .ai_dialog import AiDialog
 
 
 class ColorButton(QPushButton):
@@ -72,6 +73,10 @@ class MainWindow(QMainWindow):
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
         toolbar.addAction(pen_action)
 
+        ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
+        ai_action.triggered.connect(self.open_ai_dialog)
+        toolbar.addAction(ai_action)
+
         # Color Swatch Panel
         color_toolbar = QToolBar("Colors")
         self.addToolBar(Qt.BottomToolBarArea, color_toolbar)
@@ -126,3 +131,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "initial_zoom_set"):
             self.canvas.set_initial_zoom()
             self.initial_zoom_set = True
+
+    def open_ai_dialog(self):
+        dialog = AiDialog(self.app, self)
+        dialog.exec()

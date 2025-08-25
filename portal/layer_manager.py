@@ -1,5 +1,6 @@
 from .layer import Layer
-from PySide6.QtGui import QPainter, QColor
+from PySide6.QtGui import QPainter, QColor, QImage
+from PIL.ImageQt import ImageQt
 
 
 class LayerManager:
@@ -29,6 +30,13 @@ class LayerManager:
     def add_layer(self, name: str):
         """Adds a new layer to the top of the stack."""
         new_layer = Layer(self.width, self.height, name)
+        self.layers.append(new_layer)
+        self.active_layer_index = len(self.layers) - 1
+
+    def add_layer_with_image(self, image):
+        q_image = ImageQt(image.convert("RGBA"))
+        new_layer = Layer(self.width, self.height, "AI Generated Layer")
+        new_layer.image = QImage(q_image)
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
 
