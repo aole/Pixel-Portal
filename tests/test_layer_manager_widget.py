@@ -16,7 +16,6 @@ def test_widget_creation(app_with_widget):
     app, widget = app_with_widget
     assert widget is not None
     assert widget.app == app
-    assert widget.document == app.document
 
 def test_refresh_layers(app_with_widget):
     """Test that the layer list refreshes correctly."""

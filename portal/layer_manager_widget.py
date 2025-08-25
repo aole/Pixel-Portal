@@ -16,7 +16,6 @@ class LayerManagerWidget(QWidget):
     def __init__(self, app: App):
         super().__init__()
         self.app = app
-        self.document = app.document
 
         self.setWindowTitle("Layers")
         self.layout = QVBoxLayout(self)
@@ -57,14 +56,14 @@ class LayerManagerWidget(QWidget):
         """Refreshes the layer list from the document's layer manager."""
         self.layer_list.blockSignals(True)
         self.layer_list.clear()
-        for layer in reversed(self.document.layer_manager.layers):
+        for layer in reversed(self.app.document.layer_manager.layers):
             item = QListWidgetItem(layer.name)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if layer.visible else Qt.Unchecked)
             self.layer_list.addItem(item)
 
-        if self.document.layer_manager.active_layer:
-            active_index = len(self.document.layer_manager.layers) - 1 - self.document.layer_manager.active_layer_index
+        if self.app.document.layer_manager.active_layer:
+            active_index = len(self.app.document.layer_manager.layers) - 1 - self.app.document.layer_manager.active_layer_index
             self.layer_list.setCurrentRow(active_index)
         self.layer_list.blockSignals(False)
 
@@ -76,18 +75,18 @@ class LayerManagerWidget(QWidget):
 
         # QListWidget is populated in reverse order
         index_in_list = self.layer_list.row(selected_items[0])
-        actual_index = len(self.document.layer_manager.layers) - 1 - index_in_list
-        self.document.layer_manager.select_layer(actual_index)
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
+        self.app.document.layer_manager.select_layer(actual_index)
         self.layer_changed.emit()
 
     def on_visibility_changed(self, item: QListWidgetItem):
         """Handles toggling layer visibility."""
         index_in_list = self.layer_list.row(item)
-        actual_index = len(self.document.layer_manager.layers) - 1 - index_in_list
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
 
         is_visible = item.checkState() == Qt.Checked
-        if self.document.layer_manager.layers[actual_index].visible != is_visible:
-            self.document.layer_manager.toggle_visibility(actual_index)
+        if self.app.document.layer_manager.layers[actual_index].visible != is_visible:
+            self.app.document.layer_manager.toggle_visibility(actual_index)
             self.layer_changed.emit()
 
     def on_layers_moved(self, parent, start, end, destination, row):
@@ -101,8 +100,8 @@ class LayerManagerWidget(QWidget):
 
     def add_layer(self):
         """Adds a new layer."""
-        num_layers = len(self.document.layer_manager.layers)
-        self.document.layer_manager.add_layer(f"Layer {num_layers + 1}")
+        num_layers = len(self.app.document.layer_manager.layers)
+        self.app.document.layer_manager.add_layer(f"Layer {num_layers + 1}")
         self.app.add_undo_state()
         self.refresh_layers()
         self.layer_changed.emit()
@@ -113,9 +112,9 @@ class LayerManagerWidget(QWidget):
         if current_row == -1:
             return
 
-        actual_index = len(self.document.layer_manager.layers) - 1 - current_row
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         try:
-            self.document.layer_manager.remove_layer(actual_index)
+            self.app.document.layer_manager.remove_layer(actual_index)
             self.refresh_layers()
             self.layer_changed.emit()
         except (ValueError, IndexError) as e:
@@ -124,17 +123,17 @@ class LayerManagerWidget(QWidget):
     def move_layer_up(self):
         current_row = self.layer_list.currentRow()
         if current_row == -1: return
-        actual_index = len(self.document.layer_manager.layers) - 1 - current_row
-        if actual_index < len(self.document.layer_manager.layers) - 1:
-            self.document.layer_manager.move_layer_up(actual_index)
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
+        if actual_index < len(self.app.document.layer_manager.layers) - 1:
+            self.app.document.layer_manager.move_layer_up(actual_index)
             self.refresh_layers()
             self.layer_changed.emit()
 
     def move_layer_down(self):
         current_row = self.layer_list.currentRow()
         if current_row == -1: return
-        actual_index = len(self.document.layer_manager.layers) - 1 - current_row
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         if actual_index > 0:
-            self.document.layer_manager.move_layer_down(actual_index)
+            self.app.document.layer_manager.move_layer_down(actual_index)
             self.refresh_layers()
             self.layer_changed.emit()
