@@ -33,6 +33,19 @@ class MainWindow(QMainWindow):
         # Menu bar
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
+
+        open_action = QAction(QIcon("icons/load.png"), "&Open", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.app.open_document)
+        file_menu.addAction(open_action)
+
+        save_action = QAction(QIcon("icons/save.png"), "&Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.app.save_document)
+        file_menu.addAction(save_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("&Exit", self)
         exit_action.triggered.connect(self.app.exit)
         file_menu.addAction(exit_action)
@@ -73,6 +86,10 @@ class MainWindow(QMainWindow):
 
         top_toolbar = QToolBar("Top Toolbar")
         self.addToolBar(Qt.TopToolBarArea, top_toolbar)
+
+        top_toolbar.addAction(open_action)
+        top_toolbar.addAction(save_action)
+        top_toolbar.addSeparator()
 
         # Brush size slider
         top_toolbar.addWidget(QLabel("Brush Size:"))
