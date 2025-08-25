@@ -69,3 +69,13 @@ class App(QObject):
     def exit(self):
         if self.window:
             self.window.close()
+
+    def get_current_image(self):
+        return self.document.get_current_image_for_ai()
+
+    def add_new_layer_with_image(self, image):
+        self.document.add_new_layer_with_image(image)
+        self.add_undo_state()
+        if self.window:
+            self.window.layer_manager_widget.refresh_layers()
+            self.window.canvas.update()

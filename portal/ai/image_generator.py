@@ -6,7 +6,7 @@ from PIL import Image
 import os
 from huggingface_hub import hf_hub_download
 
-def generate_pixel_art(
+def image_to_image(
     input_image: Image.Image,
     prompt: str,
     output_dir: str = "output",

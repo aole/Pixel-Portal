@@ -1,6 +1,8 @@
 from .layer_manager import LayerManager
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QBuffer
+from PIL import Image
+import io
 
 
 class Document:
@@ -22,6 +24,17 @@ class Document:
         painter.end()
 
         return final_image
+
+    def get_current_image_for_ai(self):
+        q_image = self.render()
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        q_image.save(buffer, "PNG")
+        pil_image = Image.open(io.BytesIO(buffer.data()))
+        return pil_image
+
+    def add_new_layer_with_image(self, image):
+        self.layer_manager.add_layer_with_image(image)
 
     def render_except(self, layer_to_exclude) -> QImage:
         """Composites all visible layers into a single image, except for the given layer."""
