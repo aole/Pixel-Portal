@@ -88,6 +88,23 @@ class MainWindow(QMainWindow):
         self.redo_action.triggered.connect(self.app.redo)
         edit_menu.addAction(self.redo_action)
 
+        select_menu = menu_bar.addMenu("&Select")
+
+        select_all_action = QAction("Select &All", self)
+        select_all_action.setShortcut("Ctrl+A")
+        select_all_action.triggered.connect(self.app.select_all)
+        select_menu.addAction(select_all_action)
+
+        select_none_action = QAction("Select &None", self)
+        select_none_action.setShortcut("Ctrl+D")
+        select_none_action.triggered.connect(self.app.select_none)
+        select_menu.addAction(select_none_action)
+
+        invert_selection_action = QAction("&Invert Selection", self)
+        invert_selection_action.setShortcut("Ctrl+I")
+        invert_selection_action.setEnabled(False)  # Not implemented yet
+        select_menu.addAction(invert_selection_action)
+
         # Status bar
         status_bar = self.statusBar()
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")
