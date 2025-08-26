@@ -19,3 +19,11 @@ class MainWindow(QMainWindow):
         exit_action = QAction("&Exit", self)
         exit_action.triggered.connect(self.app.exit)
         file_menu.addAction(exit_action)
+
+        select_menu = menu_bar.addMenu("&Select")
+        select_all_action = QAction("Select &All", self)
+        select_all_action.triggered.connect(self.app.select_all)
+        select_menu.addAction(select_all_action)
+        select_none_action = QAction("Select &None", self)
+        select_none_action.triggered.connect(self.app.select_none)
+        select_menu.addAction(select_none_action)

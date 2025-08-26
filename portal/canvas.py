@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtCore import Qt, QPoint
 from .drawing import DrawingLogic
 
@@ -70,6 +70,14 @@ class Canvas(QWidget):
 
         image = self.app.document.image
         canvas_painter.drawImage(x, y, image)
+
+        # Draw selection
+        if self.app.document.selection:
+            pen = QPen(QColor(0, 0, 0))
+            pen.setStyle(Qt.DashLine)
+            canvas_painter.setPen(pen)
+            selection_rect = self.app.document.selection.translated(x, y)
+            canvas_painter.drawRect(selection_rect)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
