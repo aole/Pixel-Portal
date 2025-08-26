@@ -16,6 +16,10 @@ class Layer:
         self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
         self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
 
+    def clear(self):
+        """Fills the layer with transparent color."""
+        self.image.fill(QColor(0, 0, 0, 0))
+
     def clone(self):
         """Creates a deep copy of this layer."""
         new_layer = Layer(self.image.width(), self.image.height(), self.name)

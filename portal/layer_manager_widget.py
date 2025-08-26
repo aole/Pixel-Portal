@@ -42,6 +42,10 @@ class LayerManagerWidget(QWidget):
         self.remove_button.clicked.connect(self.remove_layer)
         self.toolbar.addWidget(self.remove_button)
 
+        self.clear_button = QPushButton(QIcon("icons/clear.png"), "")
+        self.clear_button.clicked.connect(self.clear_layer)
+        self.toolbar.addWidget(self.clear_button)
+
         self.move_up_button = QPushButton(QIcon("icons/mirrorx.png"), "") # Placeholder icon
         self.move_up_button.clicked.connect(self.move_layer_up)
         self.toolbar.addWidget(self.move_up_button)
@@ -97,6 +101,13 @@ class LayerManagerWidget(QWidget):
         self.refresh_layers() # Simple refresh for now
         self.layer_changed.emit()
 
+    def clear_layer(self):
+        """Clears the active layer."""
+        active_layer = self.app.document.layer_manager.active_layer
+        if active_layer:
+            active_layer.clear()
+            self.app.add_undo_state()
+            self.layer_changed.emit()
 
     def add_layer(self):
         """Adds a new layer."""
