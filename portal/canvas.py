@@ -145,6 +145,11 @@ class Canvas(QWidget):
                 rect = QRect(self.start_point, current_point).normalized()
                 self.drawing_logic.draw_selection_ellipse(painter, rect)
             elif self.app.tool == "Select Lasso":
+                pen = painter.pen()
+                pen.setColor(QColor("black"))
+                pen.setWidth(1)
+                pen.setStyle(Qt.DashLine)
+                painter.setPen(pen)
                 painter.drawLine(self.last_point, current_point)
                 self.last_point = current_point
                 
