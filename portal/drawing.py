@@ -26,21 +26,19 @@ class DrawingLogic:
         painter.setPen(self.pen_color)
         painter.drawEllipse(rect)
 
-    def draw_selection_rect(self, painter, rect):
+    def draw_selection_rect(self, painter, rect, zoom):
         pen = painter.pen()
         pen.setColor(QColor("black"))
-        pen.setWidth(1)
+        pen.setWidthF(1.0 / zoom)
         pen.setStyle(Qt.DashLine)
-        pen.setCosmetic(True)
         painter.setPen(pen)
         painter.drawRect(rect)
 
-    def draw_selection_ellipse(self, painter, rect):
+    def draw_selection_ellipse(self, painter, rect, zoom):
         pen = painter.pen()
         pen.setColor(QColor("black"))
-        pen.setWidth(1)
+        pen.setWidthF(1.0 / zoom)
         pen.setStyle(Qt.DashLine)
-        pen.setCosmetic(True)
         painter.setPen(pen)
         painter.drawEllipse(rect)
 

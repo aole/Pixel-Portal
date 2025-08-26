@@ -140,16 +140,15 @@ class Canvas(QWidget):
                 self.drawing_logic.draw_ellipse(painter, rect)
             elif self.app.tool == "Select Rectangle":
                 rect = QRect(self.start_point, current_point).normalized()
-                self.drawing_logic.draw_selection_rect(painter, rect)
+                self.drawing_logic.draw_selection_rect(painter, rect, self.zoom)
             elif self.app.tool == "Select Circle":
                 rect = QRect(self.start_point, current_point).normalized()
-                self.drawing_logic.draw_selection_ellipse(painter, rect)
+                self.drawing_logic.draw_selection_ellipse(painter, rect, self.zoom)
             elif self.app.tool == "Select Lasso":
                 pen = painter.pen()
                 pen.setColor(QColor("black"))
-                pen.setWidth(1)
+                pen.setWidthF(1.0 / self.zoom)
                 pen.setStyle(Qt.DashLine)
-                pen.setCosmetic(True)
                 painter.setPen(pen)
                 painter.drawLine(self.last_point, current_point)
                 self.last_point = current_point
