@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen
+from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -28,10 +28,13 @@ class Canvas(QWidget):
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.background_color = self.palette().window().color()
+        self.selection_shape = None
         self.app.tool_changed.connect(self.on_tool_changed)
 
     def on_tool_changed(self, tool):
-        if tool in ["Bucket", "Rectangle", "Ellipse", "Line"]:
+        self.selection_shape = None
+        self.update()
+        if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.BlankCursor)
@@ -79,8 +82,17 @@ class Canvas(QWidget):
                 self.drawing = True
                 self.start_point = self.get_doc_coords(event.pos())
                 self.last_point = self.start_point
-                self.original_image = active_layer.image.copy()
-                self.temp_image = self.original_image.copy()
+
+                if self.app.tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
+                    self.original_image = active_layer.image.copy()
+                    self.temp_image = self.original_image.copy()
+
+                if self.app.tool == "Select Rectangle":
+                    self.selection_shape = QRect(self.start_point, self.start_point)
+                elif self.app.tool == "Select Circle":
+                    self.selection_shape = QRect(self.start_point, self.start_point)
+                elif self.app.tool == "Select Lasso":
+                    self.selection_shape = QPainterPath(self.start_point)
 
                 if self.app.tool == "Pen":
                     # Draw a single point for a click
@@ -122,7 +134,17 @@ class Canvas(QWidget):
             if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
                 # For shapes, we draw on a fresh copy of the original image each time
                 self.temp_image = self.original_image.copy()
-            
+
+            if self.app.tool in ["Select Rectangle", "Select Circle", "Select Lasso"]:
+                if self.app.tool == "Select Rectangle":
+                    self.selection_shape = QRect(self.start_point, current_point).normalized()
+                elif self.app.tool == "Select Circle":
+                    self.selection_shape = QRect(self.start_point, current_point).normalized()
+                elif self.app.tool == "Select Lasso":
+                    self.selection_shape.lineTo(current_point)
+                self.update()
+                return
+
             painter = QPainter(self.temp_image)
             pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
@@ -162,7 +184,8 @@ class Canvas(QWidget):
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 current_point = self.get_doc_coords(event.pos())
-                
+
+                # For shape tools, we need to do a final draw on mouse release
                 if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
                     self.temp_image = self.original_image.copy()
                     painter = QPainter(self.temp_image)
@@ -177,13 +200,16 @@ class Canvas(QWidget):
                     elif self.app.tool == "Ellipse":
                         rect = QRect(self.start_point, current_point).normalized()
                         self.drawing_logic.draw_ellipse(painter, rect)
-                    
+
                     painter.end()
 
-                active_layer.image = self.temp_image
-                self.temp_image = None
-                self.original_image = None
-                self.app.add_undo_state()
+                # For drawing tools, commit the temp image to the active layer.
+                if self.app.tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
+                    active_layer.image = self.temp_image
+                    self.app.add_undo_state()
+                    self.temp_image = None
+                    self.original_image = None
+
                 self.update()
                 
         if event.button() == Qt.RightButton and self.erasing:
@@ -285,6 +311,29 @@ class Canvas(QWidget):
 
         self.draw_grid(canvas_painter, target_rect)
         self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
+        if self.selection_shape:
+            self.draw_selection_overlay(canvas_painter, target_rect)
+
+    def draw_selection_overlay(self, painter, target_rect):
+        painter.save()
+
+        transform = QTransform()
+        transform.translate(target_rect.x(), target_rect.y())
+        transform.scale(self.zoom, self.zoom)
+        painter.setTransform(transform)
+
+        pen = QPen(QColor("black"), 1, Qt.DashLine)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+
+        if self.app.tool == "Select Rectangle":
+            painter.drawRect(self.selection_shape)
+        elif self.app.tool == "Select Circle":
+            painter.drawEllipse(self.selection_shape)
+        elif self.app.tool == "Select Lasso":
+            painter.drawPath(self.selection_shape)
+
+        painter.restore()
 
     def draw_grid(self, painter, target_rect):
         if self.zoom <= 1.5:
