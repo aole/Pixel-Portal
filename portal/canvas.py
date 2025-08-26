@@ -280,6 +280,13 @@ class Canvas(QWidget):
         # Draw the tiled background for the document area
         canvas_painter.drawTiledPixmap(target_rect, self.background_pixmap)
 
+        # Draw a border around the document
+        border_color = QColor("black")
+        border_pen = QPen(border_color, 1)
+        border_pen.setCosmetic(True)
+        canvas_painter.setPen(border_pen)
+        canvas_painter.drawRect(target_rect.adjusted(0, 0, -1, -1))
+
         # Render all layers
         composite_image = self.app.document.render()
         image_to_draw_on = composite_image
