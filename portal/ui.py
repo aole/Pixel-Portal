@@ -161,6 +161,28 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.shape_button)
 
+        # Selection Tools
+        self.selection_button = QToolButton(self)
+        self.selection_button.setIcon(QIcon("icons/toolselectrect.png"))
+        self.selection_button.setPopupMode(QToolButton.MenuButtonPopup)
+        selection_menu = QMenu(self.selection_button)
+        self.selection_button.setMenu(selection_menu)
+
+        select_rect_action = QAction(QIcon("icons/toolselectrect.png"), "Select Rectangle", self)
+        select_rect_action.triggered.connect(lambda: self.set_selection_tool(select_rect_action))
+        selection_menu.addAction(select_rect_action)
+        self.selection_button.setDefaultAction(select_rect_action)
+
+        select_circle_action = QAction(QIcon("icons/toolselectcircle.png"), "Select Circle", self)
+        select_circle_action.triggered.connect(lambda: self.set_selection_tool(select_circle_action))
+        selection_menu.addAction(select_circle_action)
+
+        select_lasso_action = QAction(QIcon("icons/toolselectlasso.png"), "Select Lasso", self)
+        select_lasso_action.triggered.connect(lambda: self.set_selection_tool(select_lasso_action))
+        selection_menu.addAction(select_lasso_action)
+
+        toolbar.addWidget(self.selection_button)
+
         ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
         toolbar.addAction(ai_action)
@@ -195,6 +217,11 @@ class MainWindow(QMainWindow):
         self.app.set_tool(action.text())
         self.shape_button.setIcon(action.icon())
         self.shape_button.setDefaultAction(action)
+
+    def set_selection_tool(self, action):
+        self.app.set_tool(action.text())
+        self.selection_button.setIcon(action.icon())
+        self.selection_button.setDefaultAction(action)
 
     def load_palette(self):
         try:

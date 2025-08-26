@@ -26,6 +26,18 @@ class DrawingLogic:
         painter.setPen(self.pen_color)
         painter.drawEllipse(rect)
 
+    def draw_selection_rect(self, painter, rect):
+        pen = painter.pen()
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        painter.drawRect(rect)
+
+    def draw_selection_ellipse(self, painter, rect):
+        pen = painter.pen()
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        painter.drawEllipse(rect)
+
     def flood_fill(self, start_pos):
         active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:

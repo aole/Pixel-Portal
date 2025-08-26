@@ -31,7 +31,7 @@ class Canvas(QWidget):
         self.app.tool_changed.connect(self.on_tool_changed)
 
     def on_tool_changed(self, tool):
-        if tool in ["Bucket", "Rectangle", "Ellipse", "Line"]:
+        if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.BlankCursor)
@@ -119,7 +119,7 @@ class Canvas(QWidget):
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
 
-            if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
+            if self.app.tool in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso"]:
                 # For shapes, we draw on a fresh copy of the original image each time
                 self.temp_image = self.original_image.copy()
             
@@ -138,6 +138,15 @@ class Canvas(QWidget):
             elif self.app.tool == "Ellipse":
                 rect = QRect(self.start_point, current_point).normalized()
                 self.drawing_logic.draw_ellipse(painter, rect)
+            elif self.app.tool == "Select Rectangle":
+                rect = QRect(self.start_point, current_point).normalized()
+                self.drawing_logic.draw_selection_rect(painter, rect)
+            elif self.app.tool == "Select Circle":
+                rect = QRect(self.start_point, current_point).normalized()
+                self.drawing_logic.draw_selection_ellipse(painter, rect)
+            elif self.app.tool == "Select Lasso":
+                painter.drawLine(self.last_point, current_point)
+                self.last_point = current_point
                 
             self.update()
         if (event.buttons() & Qt.RightButton) and self.erasing:
@@ -179,11 +188,16 @@ class Canvas(QWidget):
                         self.drawing_logic.draw_ellipse(painter, rect)
                     
                     painter.end()
+                    active_layer.image = self.temp_image
+                    self.app.add_undo_state()
 
-                active_layer.image = self.temp_image
+                if self.app.tool in ["Select Rectangle", "Select Circle", "Select Lasso"]:
+                    self.temp_image = self.original_image.copy()
+                    # In a real application, we would store the selection path here
+                    # For now, we just discard the temporary drawing
+
                 self.temp_image = None
                 self.original_image = None
-                self.app.add_undo_state()
                 self.update()
                 
         if event.button() == Qt.RightButton and self.erasing:
