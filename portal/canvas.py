@@ -171,7 +171,8 @@ class Canvas(QWidget):
             active_layer = self.app.document.layer_manager.active_layer
             if active_layer:
                 current_point = self.get_doc_coords(event.pos())
-                
+
+                # For shape tools, we need to do a final draw on mouse release
                 if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
                     self.temp_image = self.original_image.copy()
                     painter = QPainter(self.temp_image)
@@ -186,15 +187,14 @@ class Canvas(QWidget):
                     elif self.app.tool == "Ellipse":
                         rect = QRect(self.start_point, current_point).normalized()
                         self.drawing_logic.draw_ellipse(painter, rect)
-                    
+
                     painter.end()
+
+                # For drawing tools, commit the temp image to the active layer.
+                # For selection tools, we discard it.
+                if self.app.tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
                     active_layer.image = self.temp_image
                     self.app.add_undo_state()
-
-                if self.app.tool in ["Select Rectangle", "Select Circle", "Select Lasso"]:
-                    self.temp_image = self.original_image.copy()
-                    # In a real application, we would store the selection path here
-                    # For now, we just discard the temporary drawing
 
                 self.temp_image = None
                 self.original_image = None
