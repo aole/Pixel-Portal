@@ -1,5 +1,5 @@
 from PySide6.QtGui import QPainter, QColor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint
 
 
 class DrawingLogic:
@@ -26,7 +26,7 @@ class DrawingLogic:
         painter.setPen(self.pen_color)
         painter.drawEllipse(rect)
 
-    def flood_fill(self, start_pos):
+    def flood_fill(self, start_pos, selection_shape=None):
         active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:
             return
@@ -39,6 +39,9 @@ class DrawingLogic:
         if not (0 <= x < width and 0 <= y < height):
             return
 
+        if selection_shape and not selection_shape.contains(start_pos):
+            return
+            
         target_color = image.pixelColor(x, y)
         fill_color = self.pen_color
 
@@ -53,6 +56,9 @@ class DrawingLogic:
             if not (0 <= x < width and 0 <= y < height):
                 continue
 
+            if selection_shape and not selection_shape.contains(QPoint(x, y)):
+                continue
+                
             if image.pixelColor(x, y) == target_color:
                 image.setPixelColor(x, y, fill_color)
                 stack.append((x + 1, y))

@@ -88,7 +88,7 @@ class Canvas(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             if self.app.tool == "Bucket":
-                self.drawing_logic.flood_fill(self.get_doc_coords(event.pos()))
+                self.drawing_logic.flood_fill(self.get_doc_coords(event.pos()), self.selection_shape)
                 self.app.add_undo_state()
                 self.update()
                 return
@@ -113,6 +113,8 @@ class Canvas(QWidget):
                 if self.app.tool == "Pen":
                     # Draw a single point for a click
                     painter = QPainter(self.temp_image)
+                    if self.selection_shape:
+                        painter.setClipPath(self.selection_shape)
                     pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
                     painter.setPen(pen)
                     painter.drawPoint(self.last_point)
@@ -132,6 +134,8 @@ class Canvas(QWidget):
 
                 # Erase a single point for a click
                 painter = QPainter(self.temp_image)
+                if self.selection_shape:
+                    painter.setClipPath(self.selection_shape)
                 painter.setCompositionMode(QPainter.CompositionMode_Clear)
                 pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
                 painter.setPen(pen)
@@ -166,6 +170,8 @@ class Canvas(QWidget):
                 return
 
             painter = QPainter(self.temp_image)
+            if self.selection_shape:
+                painter.setClipPath(self.selection_shape)
             pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
 
@@ -185,6 +191,8 @@ class Canvas(QWidget):
         if (event.buttons() & Qt.RightButton) and self.erasing:
             current_point = self.get_doc_coords(event.pos())
             painter = QPainter(self.temp_image)
+            if self.selection_shape:
+                painter.setClipPath(self.selection_shape)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
             pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
             painter.setPen(pen)
@@ -209,6 +217,8 @@ class Canvas(QWidget):
                 if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
                     self.temp_image = self.original_image.copy()
                     painter = QPainter(self.temp_image)
+                    if self.selection_shape:
+                        painter.setClipPath(self.selection_shape)
                     pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
                     painter.setPen(pen)
 
