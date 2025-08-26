@@ -27,6 +27,7 @@ class Canvas(QWidget):
         self.background_pixmap = QPixmap("alphabg.png")
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
+        self.grid_visible = False
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.app.tool_changed.connect(self.on_tool_changed)
@@ -335,8 +336,12 @@ class Canvas(QWidget):
 
         painter.restore()
 
+    def toggle_grid(self):
+        self.grid_visible = not self.grid_visible
+        self.update()
+
     def draw_grid(self, painter, target_rect):
-        if self.zoom <= 1.5:
+        if self.zoom < 2 and not self.grid_visible:
             return
 
         doc_width = self.app.document.width

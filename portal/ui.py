@@ -128,6 +128,13 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
         
+        top_toolbar.addSeparator()
+
+        grid_action = QAction(QIcon("icons/grid.png"), "Toggle Grid", self)
+        grid_action.setCheckable(True)
+        grid_action.triggered.connect(self.canvas.toggle_grid)
+        top_toolbar.addAction(grid_action)
+        
         active_color_button = ActiveColorButton(self.app)
         toolbar.addWidget(active_color_button)
         
