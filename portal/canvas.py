@@ -33,7 +33,6 @@ class Canvas(QWidget):
         self.app.tool_changed.connect(self.on_tool_changed)
 
     def on_tool_changed(self, tool):
-        self.selection_shape = None
         self.update()
         if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
@@ -98,9 +97,9 @@ class Canvas(QWidget):
                     self.temp_image = self.original_image.copy()
 
                 if self.app.tool == "Select Rectangle":
-                    self.selection_shape = QRect(self.start_point, self.start_point)
+                    self.selection_shape = QPainterPath(self.start_point)
                 elif self.app.tool == "Select Circle":
-                    self.selection_shape = QRect(self.start_point, self.start_point)
+                    self.selection_shape = QPainterPath(self.start_point)
                 elif self.app.tool == "Select Lasso":
                     self.selection_shape = QPainterPath(self.start_point)
 
@@ -147,9 +146,13 @@ class Canvas(QWidget):
 
             if self.app.tool in ["Select Rectangle", "Select Circle", "Select Lasso"]:
                 if self.app.tool == "Select Rectangle":
-                    self.selection_shape = QRect(self.start_point, current_point).normalized()
+                    qpp = QPainterPath()
+                    qpp.addRect(QRect(self.start_point, current_point).normalized())
+                    self.selection_shape = qpp
                 elif self.app.tool == "Select Circle":
-                    self.selection_shape = QRect(self.start_point, current_point).normalized()
+                    qpp = QPainterPath()
+                    qpp.addEllipse(QRect(self.start_point, current_point).normalized())
+                    self.selection_shape = qpp
                 elif self.app.tool == "Select Lasso":
                     self.selection_shape.lineTo(current_point)
                 self.update()
@@ -336,12 +339,7 @@ class Canvas(QWidget):
         pen.setCosmetic(True)
         painter.setPen(pen)
 
-        if self.app.tool == "Select Rectangle":
-            painter.drawRect(self.selection_shape)
-        elif self.app.tool == "Select Circle":
-            painter.drawEllipse(self.selection_shape)
-        elif self.app.tool == "Select Lasso":
-            painter.drawPath(self.selection_shape)
+        painter.drawPath(self.selection_shape)
 
         painter.restore()
 
