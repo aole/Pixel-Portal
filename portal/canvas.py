@@ -40,12 +40,19 @@ class Canvas(QWidget):
             self.setCursor(Qt.BlankCursor)
 
     def select_all(self):
-        self.selection_shape = QRect(0, 0, self.app.document.width, self.app.document.height)
-        self.app.set_tool("Select Rectangle")
+        qpp = QPainterPath()
+        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
+        self.selection_shape = qpp
         self.update()
 
     def select_none(self):
         self.selection_shape = None
+        self.update()
+
+    def invert_selection(self):
+        qpp = QPainterPath()
+        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
+        self.selection_shape = qpp.subtracted(self.selection_shape)
         self.update()
 
     def enterEvent(self, event):

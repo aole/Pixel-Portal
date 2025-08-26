@@ -96,6 +96,10 @@ class App(QObject):
         if self.window:
             self.window.canvas.select_none()
 
+    def invert_selection(self):
+        if self.window:
+            self.window.canvas.invert_selection()
+
     def exit(self):
         if self.window:
             self.window.close()

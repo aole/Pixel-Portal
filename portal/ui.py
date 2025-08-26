@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
 
         invert_selection_action = QAction("&Invert Selection", self)
         invert_selection_action.setShortcut("Ctrl+I")
-        invert_selection_action.setEnabled(False)  # Not implemented yet
+        invert_selection_action.triggered.connect(self.app.invert_selection)
         select_menu.addAction(invert_selection_action)
 
         # Status bar
