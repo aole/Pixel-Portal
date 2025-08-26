@@ -32,8 +32,8 @@ class Canvas(QWidget):
         self.app.tool_changed.connect(self.on_tool_changed)
 
     def on_tool_changed(self, tool):
-        if tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
-            self.selection_shape = None
+        self.selection_shape = None
+        self.update()
         if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
         else:
