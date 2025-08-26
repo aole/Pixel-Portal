@@ -15,10 +15,6 @@ class LayerManager:
 
         if create_background:
             self.add_layer("Background")
-            # Fill the background layer with white
-            if self.layers:
-                background_layer = self.layers[0]
-                background_layer.image.fill(QColor("white"))
 
     @property
     def active_layer(self) -> Layer | None:

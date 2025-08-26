@@ -372,7 +372,7 @@ class Canvas(QWidget):
         self.update()
 
     def draw_grid(self, painter, target_rect):
-        if self.zoom < 2 and not self.grid_visible:
+        if self.zoom < 2 or not self.grid_visible:
             return
 
         doc_width = self.app.document.width
