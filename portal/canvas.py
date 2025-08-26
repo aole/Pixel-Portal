@@ -149,6 +149,7 @@ class Canvas(QWidget):
                 pen.setColor(QColor("black"))
                 pen.setWidth(1)
                 pen.setStyle(Qt.DashLine)
+                pen.setCosmetic(True)
                 painter.setPen(pen)
                 painter.drawLine(self.last_point, current_point)
                 self.last_point = current_point

@@ -31,6 +31,7 @@ class DrawingLogic:
         pen.setColor(QColor("black"))
         pen.setWidth(1)
         pen.setStyle(Qt.DashLine)
+        pen.setCosmetic(True)
         painter.setPen(pen)
         painter.drawRect(rect)
 
@@ -39,6 +40,7 @@ class DrawingLogic:
         pen.setColor(QColor("black"))
         pen.setWidth(1)
         pen.setStyle(Qt.DashLine)
+        pen.setCosmetic(True)
         painter.setPen(pen)
         painter.drawEllipse(rect)
 
