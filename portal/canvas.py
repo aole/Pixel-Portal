@@ -352,10 +352,17 @@ class Canvas(QWidget):
         transform.scale(self.zoom, self.zoom)
         painter.setTransform(transform)
 
-        pen = QPen(QColor("black"), 1, Qt.DashLine)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
+        black_pen = QPen(QColor("black"), 2)
+        black_pen.setCosmetic(True)
+        black_pen.setDashPattern([4, 4])
+        painter.setPen(black_pen)
+        painter.drawPath(self.selection_shape)
 
+        white_pen = QPen(QColor("white"), 2)
+        white_pen.setCosmetic(True)
+        white_pen.setDashPattern([4, 4])
+        white_pen.setDashOffset(4)
+        painter.setPen(white_pen)
         painter.drawPath(self.selection_shape)
 
         painter.restore()
