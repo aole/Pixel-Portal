@@ -88,6 +88,14 @@ class App(QObject):
             self.window.canvas.update()
             self.undo_stack_changed.emit()
 
+    def select_all(self):
+        if self.window:
+            self.window.canvas.select_all()
+
+    def select_none(self):
+        if self.window:
+            self.window.canvas.select_none()
+
     def exit(self):
         if self.window:
             self.window.close()
