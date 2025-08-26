@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
+from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 
@@ -307,7 +307,12 @@ class Canvas(QWidget):
         target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
 
         # Draw the tiled background for the document area
-        canvas_painter.drawTiledPixmap(target_rect, self.background_pixmap)
+        brush = QBrush(self.background_pixmap)
+        transform = QTransform()
+        transform.translate(target_rect.x(), target_rect.y())
+        transform.scale(self.zoom, self.zoom)
+        brush.setTransform(transform)
+        canvas_painter.fillRect(target_rect, brush)
 
         # Render all layers
         composite_image = self.app.document.render()
