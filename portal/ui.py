@@ -105,6 +105,7 @@ class MainWindow(QMainWindow):
         self.app.tool_changed.connect(self.update_selected_tool_label)
         self.app.pen_color_changed.connect(self.update_pen_color_label)
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
+        self.app.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
 
         # Toolbar
@@ -120,7 +121,11 @@ class MainWindow(QMainWindow):
         top_toolbar.addSeparator()
 
         # Brush size slider
-        top_toolbar.addWidget(QLabel("Brush Size:"))
+        top_toolbar.addWidget(QLabel("Brush Size "))
+        
+        self.pen_width_label = QLabel(str(self.app.pen_width))
+        top_toolbar.addWidget(self.pen_width_label)
+
         self.pen_width_slider = QSlider(Qt.Horizontal)
         self.pen_width_slider.setRange(1, 100)
         self.pen_width_slider.setValue(self.app.pen_width)
@@ -248,6 +253,9 @@ class MainWindow(QMainWindow):
 
     def update_pen_color_label(self, color):
         self.pen_color_label.setText(f"Color: {color.name()}")
+
+    def update_pen_width_label(self, width):
+        self.pen_width_label.setText(str(width))
 
     def update_pen_width_slider(self, width):
         self.pen_width_slider.setValue(width)
