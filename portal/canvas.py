@@ -373,7 +373,7 @@ class Canvas(QWidget):
 
         # Draw the active layer (or the temp drawing image) in the correct order
         active_layer = self.app.document.layer_manager.active_layer
-        if (self.drawing or self.erasing) and self.temp_image and active_layer:
+        if (self.drawing or self.erasing or self.moving_content) and self.temp_image and active_layer:
             # We are actively drawing, so we need to composite the image with the temporary drawing
             final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
