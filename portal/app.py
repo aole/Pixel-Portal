@@ -56,6 +56,15 @@ class App(QObject):
             if self.window:
                 self.window.canvas.update()
 
+    def crop_to_selection(self):
+        if self.window and self.window.canvas.selection_shape:
+            selection_rect = self.window.canvas.selection_shape.boundingRect().toRect()
+            self.document.crop(selection_rect)
+            self.window.canvas.select_none()
+            self.add_undo_state()
+            if self.window:
+                self.window.canvas.update()
+
     def paste_as_new_layer(self):
         clipboard = QApplication.clipboard()
         image = clipboard.image()

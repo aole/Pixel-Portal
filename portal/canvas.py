@@ -8,6 +8,7 @@ from .drawing import DrawingLogic
 class Canvas(QWidget):
     cursor_pos_changed = Signal(QPoint)
     zoom_changed = Signal(float)
+    selection_changed = Signal(bool)
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -57,16 +58,22 @@ class Canvas(QWidget):
         qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
         self.selection_shape = qpp
         self.update()
+        self.selection_changed.emit(True)
 
     def select_none(self):
         self.selection_shape = None
         self.update()
+        self.selection_changed.emit(False)
 
     def invert_selection(self):
         qpp = QPainterPath()
         qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
-        self.selection_shape = qpp.subtracted(self.selection_shape)
+        if self.selection_shape:
+            self.selection_shape = qpp.subtracted(self.selection_shape)
+        else:
+            self.selection_shape = qpp
         self.update()
+        self.selection_changed.emit(True)
 
     def enterEvent(self, event):
         self.mouse_over_canvas = True
@@ -292,6 +299,10 @@ class Canvas(QWidget):
                     self.app.add_undo_state()
                     self.temp_image = None
                     self.original_image = None
+                else:
+                    if self.selection_shape and self.selection_shape.isEmpty():
+                        self.selection_shape = None
+                    self.selection_changed.emit(self.selection_shape is not None)
 
                 self.update()
                 

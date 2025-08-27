@@ -37,6 +37,13 @@ class Document:
         for layer in self.layer_manager.layers:
             layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
 
+    def crop(self, rect):
+        self.width = rect.width()
+        self.height = rect.height()
+
+        for layer in self.layer_manager.layers:
+            layer.image = layer.image.copy(rect)
+
     def get_current_image_for_ai(self):
         q_image = self.render()
         buffer = QBuffer()
