@@ -37,31 +37,19 @@ class CanvasRenderer:
         composite_image = self.app.document.render()
         image_to_draw_on = composite_image
 
-        active_layer = self.app.document.layer_manager.active_layer
-        if self.canvas.temp_image and active_layer:
-            final_image = QImage(
-                self.app.document.width,
-                self.app.document.height,
-                QImage.Format_ARGB32,
-            )
+        if self.canvas.temp_image:
+            # We are actively drawing, so we need to composite the temp_image on top
+            final_image = QImage(composite_image.size(), QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
-            image_painter = QPainter(final_image)
 
-            for layer in self.app.document.layer_manager.layers:
-                if layer.visible:
-                    image_to_draw = layer.image
-                    if layer is active_layer:
-                        image_to_draw = self.canvas.temp_image
+            p = QPainter(final_image)
+            p.drawImage(0, 0, composite_image)
+            p.drawImage(0, 0, self.canvas.temp_image)
+            p.end()
 
-                    image_painter.setOpacity(layer.opacity)
-                    image_painter.drawImage(0, 0, image_to_draw)
-
-            image_painter.end()
-            painter.drawImage(target_rect, final_image)
             image_to_draw_on = final_image
-        else:
-            painter.drawImage(target_rect, composite_image)
 
+        painter.drawImage(target_rect, image_to_draw_on)
         return image_to_draw_on
 
     def _draw_border(self, painter, target_rect):
