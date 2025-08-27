@@ -294,7 +294,7 @@ class Canvas(QWidget):
     def draw_cursor(self, painter, target_rect, doc_image):
         if (
             not self.mouse_over_canvas
-            or self.app.tool == "Bucket"
+            or self.app.tool in ["Bucket", "Picker"]
             or self.app.tool.startswith("Select")
             or self.ctrl_pressed
         ):

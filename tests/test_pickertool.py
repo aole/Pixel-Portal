@@ -18,22 +18,31 @@ def app_and_window(qtbot):
     qtbot.addWidget(window)
     return app, window, window.canvas
 
-def test_picker_tool_pick_color(app_and_window):
+def test_picker_tool_pick_color_from_rendered_image(app_and_window):
     app, window, canvas = app_and_window
 
-    # 1. Start with a fresh document and fill it with blue
+    # 1. Start with a fresh document
     app.new_document(32, 32)
+
+    # 2. Bottom layer is blue
     blue = QColor("blue")
-    app.document.layer_manager.active_layer.image.fill(blue)
+    app.document.layer_manager.layers[0].image.fill(blue)
 
-    # 2. Get the picker tool
+    # 3. Add a new layer on top and fill it with semi-transparent red
+    app.document.layer_manager.add_layer("Top Layer")
+    red_transparent = QColor(255, 0, 0, 128) # Red with 50% opacity
+    app.document.layer_manager.active_layer.image.fill(red_transparent)
+
+    # 4. Get the expected color from the rendered image
+    rendered_image = app.document.render()
+    expected_color = rendered_image.pixelColor(10, 10)
+
+    # 5. Get the picker tool and pick the color
     picker_tool = canvas.tools["Picker"]
-
-    # 3. Call pick_color with a coordinate
     picker_tool.pick_color(QPoint(10, 10))
 
-    # 4. Check that the color has been picked
-    assert app.pen_color == blue
+    # 6. Check that the picked color matches the rendered color
+    assert app.pen_color == expected_color
 
 def test_picker_tool_switches_back(app_and_window):
     app, window, canvas = app_and_window

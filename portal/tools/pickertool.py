@@ -18,8 +18,8 @@ class PickerTool(BaseTool):
             self.app.set_tool(self.app.previous_tool)
 
     def pick_color(self, doc_pos):
-        active_layer = self.app.document.layer_manager.active_layer
-        if active_layer and active_layer.image.rect().contains(doc_pos):
-            color = active_layer.image.pixelColor(doc_pos)
+        rendered_image = self.app.document.render()
+        if rendered_image.rect().contains(doc_pos):
+            color = rendered_image.pixelColor(doc_pos)
             if color.alpha() > 0:  # Only pick visible colors
                 self.app.set_pen_color(color.name())
