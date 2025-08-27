@@ -397,6 +397,13 @@ class Canvas(QWidget):
             # We are not drawing, just show the rendered document
             canvas_painter.drawImage(target_rect, composite_image)
 
+        # Draw a border around the document
+        border_color = QColor("black")
+        border_pen = QPen(border_color, 1)
+        border_pen.setCosmetic(True)
+        canvas_painter.setPen(border_pen)
+        canvas_painter.drawRect(target_rect.adjusted(0, 0, -1, -1))
+
         self.draw_grid(canvas_painter, target_rect)
         self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
         if self.selection_shape:
