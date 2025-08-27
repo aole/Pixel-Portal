@@ -17,6 +17,7 @@ class App(QObject):
         self.window = None
         self.document = Document(64, 64)
         self.tool = "Pen"
+        self.previous_tool = "Pen"
         self.pen_color = QColor("black")
         self.pen_width = 1
         self.undo_manager = UndoManager()
@@ -35,6 +36,8 @@ class App(QObject):
         self.undo_stack_changed.emit()
 
     def set_tool(self, tool):
+        if self.tool != "Picker":
+            self.previous_tool = self.tool
         self.tool = tool
         self.tool_changed.emit(self.tool)
 

@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
+from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform, QCursor
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 from .renderer import CanvasRenderer
@@ -14,6 +14,7 @@ from .tools.selectcircletool import SelectCircleTool
 from .tools.selectlassotool import SelectLassoTool
 from .tools.movetool import MoveTool
 from .tools.erasertool import EraserTool
+from .tools.pickertool import PickerTool
 
 
 class Canvas(QWidget):
@@ -45,6 +46,7 @@ class Canvas(QWidget):
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
+        self.picker_cursor = QCursor(QPixmap("icons/eyedropper.png"), 0, 0)
 
         self.tools = {
             "Pen": PenTool(self),
@@ -57,6 +59,7 @@ class Canvas(QWidget):
             "Select Lasso": SelectLassoTool(self),
             "Move": MoveTool(self),
             "Eraser": EraserTool(self),
+            "Picker": PickerTool(self),
         }
         self.current_tool = self.tools["Pen"]
 
@@ -93,7 +96,9 @@ class Canvas(QWidget):
         if hasattr(self.current_tool, 'activate'):
             self.current_tool.activate()
         self.update()
-        if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
+        if tool == "Picker":
+            self.setCursor(self.picker_cursor)
+        elif tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.BlankCursor)
@@ -294,7 +299,7 @@ class Canvas(QWidget):
     def draw_cursor(self, painter, target_rect, doc_image):
         if (
             not self.mouse_over_canvas
-            or self.app.tool == "Bucket"
+            or self.app.tool in ["Bucket", "Picker"]
             or self.app.tool.startswith("Select")
             or self.ctrl_pressed
         ):
