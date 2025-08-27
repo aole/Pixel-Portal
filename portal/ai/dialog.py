@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QRadioButton, QPushButton, QProgressBar, QMessageBox, QButtonGroup
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QRadioButton, QPushButton, QProgressBar, QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QPixmap
 from PIL import Image
+from PIL.ImageQt import ImageQt
 from .image_generator import image_to_image, prompt_to_image
 
 class GenerationThread(QThread):
@@ -31,7 +33,8 @@ class AiDialog(QDialog):
         super().__init__(parent)
         self.app = app
         self.setWindowTitle("AI Image Generation")
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(512)
+        self.generated_image = None
 
         self.layout = QVBoxLayout(self)
 
@@ -39,29 +42,55 @@ class AiDialog(QDialog):
         self.prompt_input.setText(AiDialog.last_prompt)
         self.layout.addWidget(self.prompt_input)
 
-        self.radio_button_group = QButtonGroup()
+        self.image_viewer = QLabel()
+        self.image_viewer.setAlignment(Qt.AlignCenter)
+        self.image_viewer.setMinimumSize(512, 512)
+        self.alphabg_pixmap = QPixmap('alphabg.png')
+        self.image_viewer.setPixmap(self.alphabg_pixmap)
+        self.layout.addWidget(self.image_viewer)
 
+        self.radio_button_group = QButtonGroup()
         self.image_to_image_radio = QRadioButton("Image to Image")
         self.image_to_image_radio.setChecked(True)
         self.layout.addWidget(self.image_to_image_radio)
         self.radio_button_group.addButton(self.image_to_image_radio)
-
         self.prompt_to_image_radio = QRadioButton("Prompt to Image")
         self.layout.addWidget(self.prompt_to_image_radio)
         self.radio_button_group.addButton(self.prompt_to_image_radio)
 
+        # --- Buttons ---
+        self.generate_buttons_widget = QWidget()
+        generate_buttons_layout = QHBoxLayout(self.generate_buttons_widget)
+        generate_buttons_layout.setContentsMargins(0,0,0,0)
         self.generate_button = QPushButton("Generate")
-        self.generate_button.clicked.connect(self.start_generation)
-        self.layout.addWidget(self.generate_button)
+        self.cancel_button = QPushButton("Close")
+        generate_buttons_layout.addWidget(self.generate_button)
+        generate_buttons_layout.addWidget(self.cancel_button)
+        self.layout.addWidget(self.generate_buttons_widget)
 
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.clicked.connect(self.reject)
-        self.layout.addWidget(self.cancel_button)
+        self.viewer_buttons_widget = QWidget()
+        viewer_buttons_layout = QHBoxLayout(self.viewer_buttons_widget)
+        viewer_buttons_layout.setContentsMargins(0,0,0,0)
+        self.accept_button = QPushButton("Accept")
+        self.cancel_viewer_button = QPushButton("Cancel")
+        self.regenerate_button = QPushButton("Regenerate")
+        viewer_buttons_layout.addWidget(self.accept_button)
+        viewer_buttons_layout.addWidget(self.cancel_viewer_button)
+        viewer_buttons_layout.addWidget(self.regenerate_button)
+        self.layout.addWidget(self.viewer_buttons_widget)
+        self.viewer_buttons_widget.setVisible(False)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate
         self.progress_bar.setVisible(False)
         self.layout.addWidget(self.progress_bar)
+
+        # --- Connections ---
+        self.generate_button.clicked.connect(self.start_generation)
+        self.cancel_button.clicked.connect(self.reject)
+        self.accept_button.clicked.connect(self.accept_image)
+        self.cancel_viewer_button.clicked.connect(self.cancel_viewer)
+        self.regenerate_button.clicked.connect(self.regenerate_image)
 
     def start_generation(self):
         prompt = self.prompt_input.text()
@@ -70,17 +99,15 @@ class AiDialog(QDialog):
             return
 
         AiDialog.last_prompt = prompt
-
         mode = "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
-
         input_image = None
         original_size = (self.app.document.width, self.app.document.height)
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
 
         self.progress_bar.setVisible(True)
-        self.generate_button.setEnabled(False)
-        self.cancel_button.setEnabled(False)
+        self.generate_buttons_widget.setEnabled(False)
+        self.viewer_buttons_widget.setVisible(False)
 
         self.thread = GenerationThread(mode, input_image, prompt, original_size)
         self.thread.generation_complete.connect(self.on_generation_complete)
@@ -88,14 +115,40 @@ class AiDialog(QDialog):
         self.thread.start()
 
     def on_generation_complete(self, image):
-        self.app.add_new_layer_with_image(image)
-        self.accept()
+        self.generated_image = image
+        pixmap = self.pil_to_pixmap(image)
+        self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
+        
+        self.progress_bar.setVisible(False)
+        self.generate_buttons_widget.setVisible(False)
+        self.generate_buttons_widget.setEnabled(True)
+        self.viewer_buttons_widget.setVisible(True)
 
     def on_generation_failed(self, error_message):
         self.progress_bar.setVisible(False)
-        self.generate_button.setEnabled(True)
-        self.cancel_button.setEnabled(True)
+        self.generate_buttons_widget.setEnabled(True)
         QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
+
+    def accept_image(self):
+        if self.generated_image:
+            self.app.add_new_layer_with_image(self.generated_image)
+        self.accept()
+
+    def cancel_viewer(self):
+        self.viewer_buttons_widget.setVisible(False)
+        self.generate_buttons_widget.setVisible(True)
+        self.generated_image = None
+        self.image_viewer.setPixmap(self.alphabg_pixmap)
+
+    def regenerate_image(self):
+        self.viewer_buttons_widget.setVisible(False)
+        self.generate_buttons_widget.setVisible(True)
+        self.start_generation()
+
+    @staticmethod
+    def pil_to_pixmap(pil_image):
+        image_qt = ImageQt(pil_image)
+        return QPixmap.fromImage(image_qt)
 
     def get_settings(self):
         return {
