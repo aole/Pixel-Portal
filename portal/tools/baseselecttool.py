@@ -42,5 +42,7 @@ class BaseSelectTool(BaseTool):
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.moving_selection:
             self.moving_selection = False
+            if not self.is_on_selection_border(doc_pos):
+                self.canvas.setCursor(Qt.CrossCursor)
         else:
             super().mouseReleaseEvent(event, doc_pos)
