@@ -36,6 +36,15 @@ class Document:
     def add_new_layer_with_image(self, image):
         self.layer_manager.add_layer_with_image(image)
 
+    def add_layer_from_clipboard(self, q_image):
+        # Convert QImage to PIL Image
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        q_image.save(buffer, "PNG")
+        pil_image = Image.open(io.BytesIO(buffer.data()))
+
+        self.layer_manager.add_layer_with_image(pil_image)
+
     def render_except(self, layer_to_exclude) -> QImage:
         """Composites all visible layers into a single image, except for the given layer."""
         final_image = QImage(QSize(self.width, self.height), QImage.Format_ARGB32)
