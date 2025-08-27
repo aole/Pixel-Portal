@@ -1,8 +1,10 @@
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QPainter, QMouseEvent
+from PySide6.QtGui import QMouseEvent
+
 
 class BaseTool:
     """Abstract base class for all drawing tools."""
+
     def __init__(self, canvas):
         self.canvas = canvas
         self.app = canvas.app

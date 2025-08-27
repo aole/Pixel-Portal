@@ -3,6 +3,16 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
+from .tools.pentool import PenTool
+from .tools.buckettool import BucketTool
+from .tools.rectangletool import RectangleTool
+from .tools.ellipsetool import EllipseTool
+from .tools.linetool import LineTool
+from .tools.selectrectangletool import SelectRectangleTool
+from .tools.selectcircletool import SelectCircleTool
+from .tools.selectlassotool import SelectLassoTool
+from .tools.movetool import MoveTool
+from .tools.erasertool import EraserTool
 
 
 class Canvas(QWidget):
@@ -15,11 +25,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.app = app
         self.drawing_logic = DrawingLogic(self.app)
-        self.drawing = False
-        self.erasing = False
         self.dragging = False
-        self.moving_content = False
-        self.moving_selection = False
         self.x_offset = 0
         self.y_offset = 0
         self.zoom = 1.0
@@ -36,20 +42,53 @@ class Canvas(QWidget):
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
+
+        self.tools = {
+            "Pen": PenTool(self),
+            "Bucket": BucketTool(self),
+            "Rectangle": RectangleTool(self),
+            "Ellipse": EllipseTool(self),
+            "Line": LineTool(self),
+            "Select Rectangle": SelectRectangleTool(self),
+            "Select Circle": SelectCircleTool(self),
+            "Select Lasso": SelectLassoTool(self),
+            "Move": MoveTool(self),
+            "Eraser": EraserTool(self),
+        }
+        self.current_tool = self.tools["Pen"]
+
         self.app.tool_changed.connect(self.on_tool_changed)
         self.app.document_changed.connect(self.update)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = True
+            if hasattr(self.current_tool, 'deactivate'):
+                self.current_tool.deactivate()
+            self.current_tool = self.tools["Move"]
+            if hasattr(self.current_tool, 'activate'):
+                self.current_tool.activate()
             self.setCursor(Qt.ArrowCursor)
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = False
+            if hasattr(self.current_tool, 'deactivate'):
+                self.current_tool.deactivate()
+            self.current_tool = self.tools[self.app.tool]
+            if hasattr(self.current_tool, 'activate'):
+                self.current_tool.activate()
             self.on_tool_changed(self.app.tool)
 
     def on_tool_changed(self, tool):
+        if self.ctrl_pressed:
+            return
+
+        if hasattr(self.current_tool, 'deactivate'):
+            self.current_tool.deactivate()
+        self.current_tool = self.tools[tool]
+        if hasattr(self.current_tool, 'activate'):
+            self.current_tool.activate()
         self.update()
         if tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
@@ -117,158 +156,26 @@ class Canvas(QWidget):
         )
 
     def mousePressEvent(self, event):
+        doc_pos = self.get_doc_coords(event.pos())
         if event.button() == Qt.LeftButton:
-            if self.ctrl_pressed:
-                self.moving_content = True
-                self.start_point = self.get_doc_coords(event.pos())
-                self.last_point = self.start_point
-                active_layer = self.app.document.layer_manager.active_layer
-                if active_layer:
-                    if self.selection_shape:
-                        self.moving_selection = True
-
-                        # Copy the selected area to original_image
-                        self.original_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
-                        self.original_image.fill(Qt.transparent)
-                        painter = QPainter(self.original_image)
-                        painter.setClipPath(self.selection_shape)
-                        painter.drawImage(0, 0, active_layer.image)
-                        painter.end()
-
-                        # Clear the selected area from the active layer
-                        painter = QPainter(active_layer.image)
-                        painter.setClipPath(self.selection_shape)
-                        painter.setCompositionMode(QPainter.CompositionMode_Clear)
-                        painter.fillRect(active_layer.image.rect(), Qt.transparent)
-                        painter.end()
-
-                    else:
-                        self.original_image = active_layer.image.copy()
-                        
-                    self.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
-                    self.temp_image.fill(Qt.transparent)
-                return
-
-            if self.app.tool == "Bucket":
-                self.drawing_logic.flood_fill(self.get_doc_coords(event.pos()), self.selection_shape)
-                self.app.add_undo_state()
-                self.update()
-                return
-
-            active_layer = self.app.document.layer_manager.active_layer
-            if active_layer:
-                self.drawing = True
-                self.start_point = self.get_doc_coords(event.pos())
-                self.last_point = self.start_point
-
-                if self.app.tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
-                    self.original_image = active_layer.image.copy()
-                    self.temp_image = self.original_image.copy()
-
-                if self.app.tool in ("Select Rectangle", "Select Circle", "Select Lasso"):
-                    self._update_selection_and_emit_size(QPainterPath(self.start_point))
-
-                if self.app.tool == "Pen":
-                    # Draw a single point for a click
-                    painter = QPainter(self.temp_image)
-                    if self.selection_shape:
-                        painter.setClipPath(self.selection_shape)
-                    pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
-                    painter.setPen(pen)
-                    painter.drawPoint(self.last_point)
-                    painter.end()
-                    self.update()
-
-        if event.button() == Qt.MiddleButton:
+            self.current_tool.mousePressEvent(event, doc_pos)
+        elif event.button() == Qt.RightButton:
+            self.tools["Eraser"].mousePressEvent(event, doc_pos)
+        elif event.button() == Qt.MiddleButton:
             self.dragging = True
             self.last_point = event.pos()
-
-        if event.button() == Qt.RightButton:
-            active_layer = self.app.document.layer_manager.active_layer
-            if active_layer:
-                self.erasing = True
-                self.last_point = self.get_doc_coords(event.pos())
-                self.temp_image = active_layer.image.copy()
-
-                # Erase a single point for a click
-                painter = QPainter(self.temp_image)
-                if self.selection_shape:
-                    painter.setClipPath(self.selection_shape)
-                painter.setCompositionMode(QPainter.CompositionMode_Clear)
-                pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
-                painter.setPen(pen)
-                painter.drawPoint(self.last_point)
-                painter.end()
-                self.update()
 
     def mouseMoveEvent(self, event):
         self.cursor_doc_pos = self.get_doc_coords(event.pos())
         self.cursor_pos_changed.emit(self.cursor_doc_pos)
-        self.update()  # Redraw to show cursor updates
+        self.update()
 
-        if self.moving_content and (event.buttons() & Qt.LeftButton):
-            current_point = self.get_doc_coords(event.pos())
-            delta = current_point - self.start_point
-
-            self.temp_image.fill(Qt.transparent)
-            painter = QPainter(self.temp_image)
-            painter.drawImage(delta, self.original_image)
-            painter.end()
-            self.update()
-            return
-
-        if (event.buttons() & Qt.LeftButton) and self.drawing:
-            current_point = self.get_doc_coords(event.pos())
-
-            if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
-                # For shapes, we draw on a fresh copy of the original image each time
-                self.temp_image = self.original_image.copy()
-
-            if self.app.tool in ["Select Rectangle", "Select Circle", "Select Lasso"]:
-                if self.app.tool == "Select Rectangle":
-                    qpp = QPainterPath()
-                    qpp.addRect(QRect(self.start_point, current_point).normalized())
-                    self._update_selection_and_emit_size(qpp)
-                elif self.app.tool == "Select Circle":
-                    qpp = QPainterPath()
-                    qpp.addEllipse(QRect(self.start_point, current_point).normalized())
-                    self._update_selection_and_emit_size(qpp)
-                elif self.app.tool == "Select Lasso":
-                    self.selection_shape.lineTo(current_point)
-                    self._update_selection_and_emit_size(self.selection_shape)
-                return
-
-            painter = QPainter(self.temp_image)
-            if self.selection_shape:
-                painter.setClipPath(self.selection_shape)
-            pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
-            painter.setPen(pen)
-
-            if self.app.tool == "Pen":
-                painter.drawLine(self.last_point, current_point)
-                self.last_point = current_point
-            elif self.app.tool == "Line":
-                painter.drawLine(self.start_point, current_point)
-            elif self.app.tool == "Rectangle":
-                rect = QRect(self.start_point, current_point).normalized()
-                self.drawing_logic.draw_rect(painter, rect)
-            elif self.app.tool == "Ellipse":
-                rect = QRect(self.start_point, current_point).normalized()
-                self.drawing_logic.draw_ellipse(painter, rect)
-                
-            self.update()
-        if (event.buttons() & Qt.RightButton) and self.erasing:
-            current_point = self.get_doc_coords(event.pos())
-            painter = QPainter(self.temp_image)
-            if self.selection_shape:
-                painter.setClipPath(self.selection_shape)
-            painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
-            painter.setPen(pen)
-            painter.drawLine(self.last_point, current_point)
-            self.last_point = current_point
-            self.update()
-        if (event.buttons() & Qt.MiddleButton) and self.dragging:
+        doc_pos = self.get_doc_coords(event.pos())
+        if event.buttons() & Qt.LeftButton:
+            self.current_tool.mouseMoveEvent(event, doc_pos)
+        elif event.buttons() & Qt.RightButton:
+            self.tools["Eraser"].mouseMoveEvent(event, doc_pos)
+        elif (event.buttons() & Qt.MiddleButton) and self.dragging:
             delta = event.pos() - self.last_point
             self.x_offset += delta.x()
             self.y_offset += delta.y()
@@ -276,82 +183,12 @@ class Canvas(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.moving_content:
-            self.moving_content = False
-            active_layer = self.app.document.layer_manager.active_layer
-            if active_layer:
-                current_point = self.get_doc_coords(event.pos())
-                delta = current_point - self.start_point
-
-                if self.moving_selection:
-                    # If we were moving a selection, composite it onto the layer
-                    painter = QPainter(active_layer.image)
-                    painter.drawImage(delta, self.original_image)
-                    painter.end()
-                    self.moving_selection = False
-                else:
-                    # Otherwise, replace the whole layer
-                    active_layer.image.fill(Qt.transparent)
-                    painter = QPainter(active_layer.image)
-                    painter.drawImage(delta, self.original_image)
-                    painter.end()
-
-                self.app.add_undo_state()
-                self.temp_image = None
-                self.original_image = None
-                self.update()
-            return
-
-        if event.button() == Qt.LeftButton and self.drawing:
-            self.drawing = False
-            active_layer = self.app.document.layer_manager.active_layer
-            if active_layer:
-                current_point = self.get_doc_coords(event.pos())
-
-                # For shape tools, we need to do a final draw on mouse release
-                if self.app.tool in ["Line", "Rectangle", "Ellipse"]:
-                    self.temp_image = self.original_image.copy()
-                    painter = QPainter(self.temp_image)
-                    if self.selection_shape:
-                        painter.setClipPath(self.selection_shape)
-                    pen = QPen(self.app.pen_color, self.app.pen_width, Qt.SolidLine)
-                    painter.setPen(pen)
-
-                    if self.app.tool == "Line":
-                        painter.drawLine(self.start_point, current_point)
-                    elif self.app.tool == "Rectangle":
-                        rect = QRect(self.start_point, current_point).normalized()
-                        self.drawing_logic.draw_rect(painter, rect)
-                    elif self.app.tool == "Ellipse":
-                        rect = QRect(self.start_point, current_point).normalized()
-                        self.drawing_logic.draw_ellipse(painter, rect)
-
-                    painter.end()
-
-                # For drawing tools, commit the temp image to the active layer.
-                if self.app.tool not in ["Select Rectangle", "Select Circle", "Select Lasso"]:
-                    active_layer.image = self.temp_image
-                    self.app.add_undo_state()
-                    self.temp_image = None
-                    self.original_image = None
-                else:
-                    if self.app.tool == "Select Lasso":
-                        self.selection_shape.closeSubpath()
-                    if self.selection_shape and self.selection_shape.isEmpty():
-                        self.selection_shape = None
-                    self.selection_changed.emit(self.selection_shape is not None)
-
-                self.update()
-                
-        if event.button() == Qt.RightButton and self.erasing:
-            self.erasing = False
-            active_layer = self.app.document.layer_manager.active_layer
-            if active_layer:
-                active_layer.image = self.temp_image
-                self.temp_image = None
-                self.app.add_undo_state()
-                self.update()
-        if event.button() == Qt.MiddleButton:
+        doc_pos = self.get_doc_coords(event.pos())
+        if event.button() == Qt.LeftButton:
+            self.current_tool.mouseReleaseEvent(event, doc_pos)
+        elif event.button() == Qt.RightButton:
+            self.tools["Eraser"].mouseReleaseEvent(event, doc_pos)
+        elif event.button() == Qt.MiddleButton:
             self.dragging = False
 
     def wheelEvent(self, event: QWheelEvent):
@@ -421,7 +258,7 @@ class Canvas(QWidget):
 
         # Draw the active layer (or the temp drawing image) in the correct order
         active_layer = self.app.document.layer_manager.active_layer
-        if (self.drawing or self.erasing or self.moving_content) and self.temp_image and active_layer:
+        if self.temp_image and active_layer:
             # We are actively drawing, so we need to composite the image with the temporary drawing
             final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
@@ -431,17 +268,12 @@ class Canvas(QWidget):
             for layer in self.app.document.layer_manager.layers:
                 if layer.visible:
                     image_to_draw = layer.image
-                    if layer is active_layer and (self.drawing or self.erasing):
+                    if layer is active_layer:
                         # If it's the active layer, draw the temp image instead
                         image_to_draw = self.temp_image
 
                     painter.setOpacity(layer.opacity)
                     painter.drawImage(0, 0, image_to_draw)
-
-            # If moving, draw the temp_image on top of the composited image
-            if self.moving_content and self.temp_image and active_layer:
-                painter.setOpacity(active_layer.opacity)
-                painter.drawImage(0, 0, self.temp_image)
 
             painter.end()
             canvas_painter.drawImage(target_rect, final_image)
