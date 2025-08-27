@@ -34,6 +34,7 @@ class Canvas(QWidget):
         self.last_point = QPoint()
         self.start_point = QPoint()
         self.temp_image = None
+        self.temp_image_replaces_active_layer = False
         self.original_image = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -242,29 +243,6 @@ class Canvas(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         self.renderer.paint(painter)
-
-    def draw_selection_overlay(self, painter, target_rect):
-        painter.save()
-
-        transform = QTransform()
-        transform.translate(target_rect.x(), target_rect.y())
-        transform.scale(self.zoom, self.zoom)
-        painter.setTransform(transform)
-
-        black_pen = QPen(QColor("black"), 2)
-        black_pen.setCosmetic(True)
-        black_pen.setDashPattern([4, 4])
-        painter.setPen(black_pen)
-        painter.drawPath(self.selection_shape)
-
-        white_pen = QPen(QColor("white"), 2)
-        white_pen.setCosmetic(True)
-        white_pen.setDashPattern([4, 4])
-        white_pen.setDashOffset(4)
-        painter.setPen(white_pen)
-        painter.drawPath(self.selection_shape)
-
-        painter.restore()
 
     def toggle_grid(self):
         self.grid_visible = not self.grid_visible

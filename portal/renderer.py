@@ -34,23 +34,54 @@ class CanvasRenderer:
         painter.fillRect(target_rect, brush)
 
     def _draw_document(self, painter, target_rect):
-        composite_image = self.app.document.render()
-        image_to_draw_on = composite_image
-
-        if self.canvas.temp_image:
-            # We are actively drawing, so we need to composite the temp_image on top
-            final_image = QImage(composite_image.size(), QImage.Format_ARGB32)
+        if self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:
+            # This path is for tools like the Eraser, which operate on a copy of the active layer.
+            # The `temp_image` is a full replacement for the active layer's image.
+            # We need to reconstruct the entire document image, substituting the original active
+            # layer with the temporary one.
+            final_image = QImage(
+                self.app.document.width,
+                self.app.document.height,
+                QImage.Format_ARGB32,
+            )
             final_image.fill(QColor("transparent"))
+            image_painter = QPainter(final_image)
 
-            p = QPainter(final_image)
-            p.drawImage(0, 0, composite_image)
-            p.drawImage(0, 0, self.canvas.temp_image)
-            p.end()
+            active_layer = self.app.document.layer_manager.active_layer
+            for layer in self.app.document.layer_manager.layers:
+                if layer.visible:
+                    image_to_draw = layer.image
+                    if layer is active_layer:
+                        image_to_draw = self.canvas.temp_image
 
-            image_to_draw_on = final_image
+                    image_painter.setOpacity(layer.opacity)
+                    image_painter.drawImage(0, 0, image_to_draw)
 
-        painter.drawImage(target_rect, image_to_draw_on)
-        return image_to_draw_on
+            image_painter.end()
+            painter.drawImage(target_rect, final_image)
+            return final_image
+        else:
+            # This path is for tools like the Pen, Shapes, and Move tool. These tools create a
+            # sparse `temp_image` that is drawn as an overlay on top of the existing document.
+            # For the MoveTool specifically, it works because the tool itself clears the selected
+            # area from the active layer *before* `render()` is called, so the `composite_image`
+            # already has the "hole". We then just draw the `temp_image` (the selection) on top.
+            composite_image = self.app.document.render()
+            image_to_draw_on = composite_image
+
+            if self.canvas.temp_image:
+                final_image = QImage(composite_image.size(), QImage.Format_ARGB32)
+                final_image.fill(QColor("transparent"))
+
+                p = QPainter(final_image)
+                p.drawImage(0, 0, composite_image)
+                p.drawImage(0, 0, self.canvas.temp_image)
+                p.end()
+
+                image_to_draw_on = final_image
+
+            painter.drawImage(target_rect, image_to_draw_on)
+            return image_to_draw_on
 
     def _draw_border(self, painter, target_rect):
         border_color = QColor("black")
