@@ -18,6 +18,7 @@ class Canvas(QWidget):
         self.erasing = False
         self.dragging = False
         self.moving_content = False
+        self.moving_selection = False
         self.x_offset = 0
         self.y_offset = 0
         self.zoom = 1.0
@@ -113,7 +114,27 @@ class Canvas(QWidget):
                 self.last_point = self.start_point
                 active_layer = self.app.document.layer_manager.active_layer
                 if active_layer:
-                    self.original_image = active_layer.image.copy()
+                    if self.selection_shape:
+                        self.moving_selection = True
+
+                        # Copy the selected area to original_image
+                        self.original_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
+                        self.original_image.fill(Qt.transparent)
+                        painter = QPainter(self.original_image)
+                        painter.setClipPath(self.selection_shape)
+                        painter.drawImage(0, 0, active_layer.image)
+                        painter.end()
+
+                        # Clear the selected area from the active layer
+                        painter = QPainter(active_layer.image)
+                        painter.setClipPath(self.selection_shape)
+                        painter.setCompositionMode(QPainter.CompositionMode_Clear)
+                        painter.fillRect(active_layer.image.rect(), Qt.transparent)
+                        painter.end()
+
+                    else:
+                        self.original_image = active_layer.image.copy()
+                        
                     self.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
                     self.temp_image.fill(Qt.transparent)
                 return
@@ -256,10 +277,18 @@ class Canvas(QWidget):
                 current_point = self.get_doc_coords(event.pos())
                 delta = current_point - self.start_point
 
-                active_layer.image.fill(Qt.transparent)
-                painter = QPainter(active_layer.image)
-                painter.drawImage(delta, self.original_image)
-                painter.end()
+                if self.moving_selection:
+                    # If we were moving a selection, composite it onto the layer
+                    painter = QPainter(active_layer.image)
+                    painter.drawImage(delta, self.original_image)
+                    painter.end()
+                    self.moving_selection = False
+                else:
+                    # Otherwise, replace the whole layer
+                    active_layer.image.fill(Qt.transparent)
+                    painter = QPainter(active_layer.image)
+                    painter.drawImage(delta, self.original_image)
+                    painter.end()
 
                 self.app.add_undo_state()
                 self.temp_image = None
@@ -394,12 +423,17 @@ class Canvas(QWidget):
             for layer in self.app.document.layer_manager.layers:
                 if layer.visible:
                     image_to_draw = layer.image
-                    if layer is active_layer:
+                    if layer is active_layer and (self.drawing or self.erasing):
                         # If it's the active layer, draw the temp image instead
                         image_to_draw = self.temp_image
 
                     painter.setOpacity(layer.opacity)
                     painter.drawImage(0, 0, image_to_draw)
+
+            # If moving, draw the temp_image on top of the composited image
+            if self.moving_content and self.temp_image and active_layer:
+                painter.setOpacity(active_layer.opacity)
+                painter.drawImage(0, 0, self.temp_image)
 
             painter.end()
             canvas_painter.drawImage(target_rect, final_image)
