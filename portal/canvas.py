@@ -468,7 +468,12 @@ class Canvas(QWidget):
             painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
 
     def draw_cursor(self, painter, target_rect, doc_image):
-        if not self.mouse_over_canvas or self.app.tool == "Bucket" or self.ctrl_pressed:
+        if (
+            not self.mouse_over_canvas
+            or self.app.tool == "Bucket"
+            or self.app.tool.startswith("Select")
+            or self.ctrl_pressed
+        ):
             return
 
         # Use the application's brush size
