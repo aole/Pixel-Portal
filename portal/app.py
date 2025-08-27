@@ -49,6 +49,13 @@ class App(QObject):
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
 
+    def resize_document(self, width, height, interpolation):
+        if self.document:
+            self.document.resize(width, height, interpolation)
+            self.add_undo_state()
+            if self.window:
+                self.window.canvas.update()
+
     def paste_as_new_layer(self):
         clipboard = QApplication.clipboard()
         image = clipboard.image()

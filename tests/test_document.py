@@ -7,6 +7,7 @@ def test_document_render(qtbot):
     doc = Document(1, 1)
 
     # With one white layer, image should be white
+    doc.layer_manager.active_layer.image.fill(QColor("white"))
     rendered_image = doc.render()
     assert rendered_image.pixelColor(0, 0) == QColor("white")
 

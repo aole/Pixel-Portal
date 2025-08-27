@@ -25,6 +25,18 @@ class Document:
 
         return final_image
 
+    def resize(self, width, height, interpolation):
+        self.width = width
+        self.height = height
+
+        if interpolation == "Smooth":
+            mode = Qt.SmoothTransformation
+        else:
+            mode = Qt.FastTransformation
+
+        for layer in self.layer_manager.layers:
+            layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
+
     def get_current_image_for_ai(self):
         q_image = self.render()
         buffer = QBuffer()

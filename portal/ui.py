@@ -5,6 +5,7 @@ from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
 from .ai.dialog import AiDialog
 from .new_file_dialog import NewFileDialog
+from .resize_dialog import ResizeDialog
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -111,6 +112,12 @@ class MainWindow(QMainWindow):
         invert_selection_action.setShortcut("Ctrl+I")
         invert_selection_action.triggered.connect(self.app.invert_selection)
         select_menu.addAction(invert_selection_action)
+
+        image_menu = menu_bar.addMenu("&Image")
+        resize_action = QAction(QIcon("icons/resize.png"), "&Resize", self)
+        resize_action.setShortcut("Ctrl+R")
+        resize_action.triggered.connect(self.open_resize_dialog)
+        image_menu.addAction(resize_action)
 
         # Status bar
         status_bar = self.statusBar()
@@ -301,3 +308,10 @@ class MainWindow(QMainWindow):
     def open_new_file_dialog(self):
         dialog = NewFileDialog(self.app, self)
         dialog.exec()
+
+    def open_resize_dialog(self):
+        if self.app.document:
+            dialog = ResizeDialog(self, self.app.document.width, self.app.document.height)
+            if dialog.exec():
+                values = dialog.get_values()
+                self.app.resize_document(values["width"], values["height"], values["interpolation"])
