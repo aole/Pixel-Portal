@@ -188,6 +188,10 @@ class MainWindow(QMainWindow):
         bucket_action.triggered.connect(lambda: self.app.set_tool("Bucket"))
         toolbar.addAction(bucket_action)
 
+        picker_action = QAction(QIcon("icons/toolpicker.png"), "Picker", self)
+        picker_action.triggered.connect(lambda: self.app.set_tool("Picker"))
+        toolbar.addAction(picker_action)
+
         # Shape Tools
         self.shape_button = QToolButton(self)
         self.shape_button.setIcon(QIcon("icons/toolline.png"))
