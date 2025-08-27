@@ -119,6 +119,11 @@ class MainWindow(QMainWindow):
         resize_action.triggered.connect(self.open_resize_dialog)
         image_menu.addAction(resize_action)
 
+        self.crop_action = QAction("Crop to Selection", self)
+        self.crop_action.triggered.connect(self.app.crop_to_selection)
+        self.crop_action.setEnabled(False)
+        image_menu.addAction(self.crop_action)
+
         # Status bar
         status_bar = self.statusBar()
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")
@@ -133,6 +138,7 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
+        self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.tool_changed.connect(self.update_selected_tool_label)
         self.app.pen_color_changed.connect(self.update_pen_color_label)
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
@@ -315,3 +321,6 @@ class MainWindow(QMainWindow):
             if dialog.exec():
                 values = dialog.get_values()
                 self.app.resize_document(values["width"], values["height"], values["interpolation"])
+
+    def update_crop_action_state(self, has_selection):
+        self.crop_action.setEnabled(has_selection)
