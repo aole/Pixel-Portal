@@ -50,13 +50,13 @@ class AiDialog(QDialog):
         self.layout.addWidget(self.image_viewer)
 
         self.radio_button_group = QButtonGroup()
-        self.image_to_image_radio = QRadioButton("Image to Image")
-        self.image_to_image_radio.setChecked(True)
-        self.layout.addWidget(self.image_to_image_radio)
-        self.radio_button_group.addButton(self.image_to_image_radio)
         self.prompt_to_image_radio = QRadioButton("Prompt to Image")
+        self.prompt_to_image_radio.setChecked(True)
         self.layout.addWidget(self.prompt_to_image_radio)
         self.radio_button_group.addButton(self.prompt_to_image_radio)
+        self.image_to_image_radio = QRadioButton("Image to Image")
+        self.layout.addWidget(self.image_to_image_radio)
+        self.radio_button_group.addButton(self.image_to_image_radio)
 
         # --- Buttons ---
         self.generate_buttons_widget = QWidget()

@@ -9,6 +9,7 @@ class Canvas(QWidget):
     cursor_pos_changed = Signal(QPoint)
     zoom_changed = Signal(float)
     selection_changed = Signal(bool)
+    selection_size_changed = Signal(int, int)
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -55,19 +56,27 @@ class Canvas(QWidget):
         else:
             self.setCursor(Qt.BlankCursor)
 
-    def select_all(self):
-        qpp = QPainterPath()
-        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
-        self.selection_shape = qpp
+    def _update_selection_and_emit_size(self, shape):
+        self.selection_shape = shape
+        if shape is None:
+            self.selection_size_changed.emit(0, 0)
+        else:
+            bounds = shape.boundingRect()
+            self.selection_size_changed.emit(int(bounds.width()), int(bounds.height()))
         self.update()
         self.selection_changed.emit(True)
 
+    def select_all(self):
+        qpp = QPainterPath()
+        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
+        self._update_selection_and_emit_size(qpp)
+
     def select_none(self):
-        self.selection_shape = None
-        self.update()
-        self.selection_changed.emit(False)
+        self._update_selection_and_emit_size(None)
 
     def invert_selection(self):
+        if self.selection_shape is None:
+            return
         qpp = QPainterPath()
         qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
         if self.selection_shape:
@@ -75,7 +84,7 @@ class Canvas(QWidget):
         else:
             self.selection_shape = qpp
         self.update()
-        self.selection_changed.emit(True)
+        self._update_selection_and_emit_size(qpp.subtracted(self.selection_shape))
 
     def enterEvent(self, event):
         self.mouse_over_canvas = True
@@ -156,12 +165,8 @@ class Canvas(QWidget):
                     self.original_image = active_layer.image.copy()
                     self.temp_image = self.original_image.copy()
 
-                if self.app.tool == "Select Rectangle":
-                    self.selection_shape = QPainterPath(self.start_point)
-                elif self.app.tool == "Select Circle":
-                    self.selection_shape = QPainterPath(self.start_point)
-                elif self.app.tool == "Select Lasso":
-                    self.selection_shape = QPainterPath(self.start_point)
+                if self.app.tool in ("Select Rectangle", "Select Circle", "Select Lasso"):
+                    self._update_selection_and_emit_size(QPainterPath(self.start_point))
 
                 if self.app.tool == "Pen":
                     # Draw a single point for a click
@@ -223,14 +228,14 @@ class Canvas(QWidget):
                 if self.app.tool == "Select Rectangle":
                     qpp = QPainterPath()
                     qpp.addRect(QRect(self.start_point, current_point).normalized())
-                    self.selection_shape = qpp
+                    self._update_selection_and_emit_size(qpp)
                 elif self.app.tool == "Select Circle":
                     qpp = QPainterPath()
                     qpp.addEllipse(QRect(self.start_point, current_point).normalized())
-                    self.selection_shape = qpp
+                    self._update_selection_and_emit_size(qpp)
                 elif self.app.tool == "Select Lasso":
                     self.selection_shape.lineTo(current_point)
-                self.update()
+                    self._update_selection_and_emit_size(self.selection_shape)
                 return
 
             painter = QPainter(self.temp_image)
@@ -330,6 +335,8 @@ class Canvas(QWidget):
                     self.temp_image = None
                     self.original_image = None
                 else:
+                    if self.app.tool == "Select Lasso":
+                        self.selection_shape.closeSubpath()
                     if self.selection_shape and self.selection_shape.isEmpty():
                         self.selection_shape = None
                     self.selection_changed.emit(self.selection_shape is not None)

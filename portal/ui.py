@@ -129,18 +129,18 @@ class MainWindow(QMainWindow):
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")
         self.selected_tool_label = QLabel("Tool: Pen")
         self.zoom_level_label = QLabel("Zoom: 100%")
-        self.pen_color_label = QLabel(f"Color: {self.app.pen_color.name()}")
+        self.selection_size_label = QLabel("")
         status_bar.addWidget(self.cursor_pos_label)
         status_bar.addWidget(self.selected_tool_label)
         status_bar.addWidget(self.zoom_level_label)
-        status_bar.addWidget(self.pen_color_label)
+        status_bar.addWidget(self.selection_size_label)
 
         # Connect signals
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.tool_changed.connect(self.update_selected_tool_label)
-        self.app.pen_color_changed.connect(self.update_pen_color_label)
+        self.canvas.selection_size_changed.connect(self.update_selection_size_label)
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
@@ -288,8 +288,11 @@ class MainWindow(QMainWindow):
     def update_selected_tool_label(self, tool):
         self.selected_tool_label.setText(f"Tool: {tool}")
 
-    def update_pen_color_label(self, color):
-        self.pen_color_label.setText(f"Color: {color.name()}")
+    def update_selection_size_label(self, width, height):
+        if width > 0 and height > 0:
+            self.selection_size_label.setText(f"Selection: {width}x{height}")
+        else:
+            self.selection_size_label.setText("")
 
     def update_pen_width_label(self, width):
         self.pen_width_label.setText(str(width))
