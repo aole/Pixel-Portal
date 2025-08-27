@@ -38,7 +38,7 @@ class Document:
 
     def add_layer_from_clipboard(self, q_image):
         if q_image.width() > self.width or q_image.height() > self.height:
-            q_image = q_image.scaled(self.width, self.height, Qt.KeepAspectRatio, Qt.NearestNeighbor)
+            q_image = q_image.scaled(self.width, self.height, Qt.KeepAspectRatio, Qt.FastTransformation)
 
         # Convert QImage to PIL Image
         buffer = QBuffer()
