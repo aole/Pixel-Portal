@@ -25,6 +25,7 @@ class Canvas(QWidget):
         self.temp_image = None
         self.original_image = None
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
