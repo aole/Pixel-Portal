@@ -25,12 +25,13 @@ class BaseSelectTool(BaseTool):
         else:
             super().mousePressEvent(event, doc_pos)
 
-    def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
+    def mouseHoverEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.is_on_selection_border(doc_pos):
             self.canvas.setCursor(Qt.ArrowCursor)
         else:
             self.canvas.setCursor(Qt.CrossCursor)
 
+    def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.moving_selection:
             delta = doc_pos - self.selection_move_start_point
             self.canvas.selection_shape.translate(delta)

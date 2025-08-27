@@ -174,6 +174,11 @@ class Canvas(QWidget):
         self.update()
 
         doc_pos = self.get_doc_coords(event.pos())
+
+        if not (event.buttons() & Qt.LeftButton):
+            if hasattr(self.current_tool, "mouseHoverEvent"):
+                self.current_tool.mouseHoverEvent(event, doc_pos)
+
         if event.buttons() & Qt.LeftButton:
             self.current_tool.mouseMoveEvent(event, doc_pos)
         elif event.buttons() & Qt.RightButton:
