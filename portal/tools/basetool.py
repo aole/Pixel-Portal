@@ -18,6 +18,9 @@ class BaseTool:
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
         pass
 
+    def mouseHoverEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        pass
+
     def activate(self):
         """Called when the tool becomes active."""
         pass
