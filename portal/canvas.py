@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
+from .renderer import CanvasRenderer
 from .tools.pentool import PenTool
 from .tools.buckettool import BucketTool
 from .tools.rectangletool import RectangleTool
@@ -24,6 +25,7 @@ class Canvas(QWidget):
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
+        self.renderer = CanvasRenderer(self)
         self.drawing_logic = DrawingLogic(self.app)
         self.dragging = False
         self.x_offset = 0
@@ -32,6 +34,7 @@ class Canvas(QWidget):
         self.last_point = QPoint()
         self.start_point = QPoint()
         self.temp_image = None
+        self.temp_image_replaces_active_layer = False
         self.original_image = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -224,14 +227,7 @@ class Canvas(QWidget):
         self.update()
         self.zoom_changed.emit(self.zoom)
 
-    def paintEvent(self, event):
-        canvas_painter = QPainter(self)
-        canvas_painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
-
-        # Fill background of entire canvas
-        canvas_painter.fillRect(self.rect(), self.palette().window())
-
-        # Calculate document dimensions and position
+    def get_target_rect(self):
         doc_width = self.app.document.width
         doc_height = self.app.document.height
         canvas_width = self.width()
@@ -242,101 +238,11 @@ class Canvas(QWidget):
 
         x = (canvas_width - doc_width_scaled) / 2 + self.x_offset
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
-        target_rect = QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
+        return QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
 
-        # Draw the tiled background for the document area
-        brush = QBrush(self.background_pixmap)
-        transform = QTransform()
-        transform.translate(target_rect.x(), target_rect.y())
-        transform.scale(self.zoom, self.zoom)
-        brush.setTransform(transform)
-        canvas_painter.fillRect(target_rect, brush)
-
-        # Render all layers
-        composite_image = self.app.document.render()
-        image_to_draw_on = composite_image
-
-        # Draw the active layer (or the temp drawing image) in the correct order
-        active_layer = self.app.document.layer_manager.active_layer
-        if self.temp_image and active_layer:
-            # We are actively drawing, so we need to composite the image with the temporary drawing
-            final_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
-            final_image.fill(Qt.transparent)
-            painter = QPainter(final_image)
-
-            # Draw all layers in order
-            for layer in self.app.document.layer_manager.layers:
-                if layer.visible:
-                    image_to_draw = layer.image
-                    if layer is active_layer:
-                        # If it's the active layer, draw the temp image instead
-                        image_to_draw = self.temp_image
-
-                    painter.setOpacity(layer.opacity)
-                    painter.drawImage(0, 0, image_to_draw)
-
-            painter.end()
-            canvas_painter.drawImage(target_rect, final_image)
-            image_to_draw_on = final_image
-        else:
-            # We are not drawing, just show the rendered document
-            canvas_painter.drawImage(target_rect, composite_image)
-
-        # Draw a border around the document
-        border_color = QColor("black")
-        border_pen = QPen(border_color, 1)
-        border_pen.setCosmetic(True)
-        canvas_painter.setPen(border_pen)
-        canvas_painter.drawRect(target_rect.adjusted(0, 0, -1, -1))
-
-        self.draw_grid(canvas_painter, target_rect)
-        self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
-        if self.selection_shape:
-            self.draw_selection_overlay(canvas_painter, target_rect)
-
-        # Draw document dimensions
-        font = canvas_painter.font()
-        font.setPointSize(8)
-        canvas_painter.setFont(font)
-        canvas_painter.setPen(QColor("black"))
-
-        width_text = f"{self.app.document.width}px"
-        height_text = f"{self.app.document.height}px"
-
-        # Position for width (top-right)
-        width_rect = canvas_painter.fontMetrics().boundingRect(width_text)
-        width_x = target_rect.right() + 5
-        width_y = target_rect.top() + width_rect.height()
-        canvas_painter.drawText(width_x, width_y, width_text)
-
-        # Position for height (bottom-left)
-        height_rect = canvas_painter.fontMetrics().boundingRect(height_text)
-        height_x = target_rect.left() - height_rect.width() - 5
-        height_y = target_rect.bottom()
-        canvas_painter.drawText(height_x, height_y, height_text)
-
-    def draw_selection_overlay(self, painter, target_rect):
-        painter.save()
-
-        transform = QTransform()
-        transform.translate(target_rect.x(), target_rect.y())
-        transform.scale(self.zoom, self.zoom)
-        painter.setTransform(transform)
-
-        black_pen = QPen(QColor("black"), 2)
-        black_pen.setCosmetic(True)
-        black_pen.setDashPattern([4, 4])
-        painter.setPen(black_pen)
-        painter.drawPath(self.selection_shape)
-
-        white_pen = QPen(QColor("white"), 2)
-        white_pen.setCosmetic(True)
-        white_pen.setDashPattern([4, 4])
-        white_pen.setDashOffset(4)
-        painter.setPen(white_pen)
-        painter.drawPath(self.selection_shape)
-
-        painter.restore()
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        self.renderer.paint(painter)
 
     def toggle_grid(self):
         self.grid_visible = not self.grid_visible

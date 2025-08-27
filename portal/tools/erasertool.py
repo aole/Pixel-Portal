@@ -15,6 +15,7 @@ class EraserTool(BaseTool):
         if not active_layer:
             return
 
+        self.canvas.temp_image_replaces_active_layer = True
         self.canvas.temp_image = active_layer.image.copy()
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
@@ -46,4 +47,5 @@ class EraserTool(BaseTool):
             active_layer.image = self.canvas.temp_image
             self.canvas.app.add_undo_state()
             self.canvas.temp_image = None
+            self.canvas.temp_image_replaces_active_layer = False
         self.canvas.update()
