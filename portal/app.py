@@ -10,6 +10,7 @@ class App(QObject):
     pen_color_changed = Signal(QColor)
     pen_width_changed = Signal(int)
     undo_stack_changed = Signal()
+    document_changed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -48,6 +49,7 @@ class App(QObject):
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
+        self.document_changed.emit()
 
     def resize_document(self, width, height, interpolation):
         if self.document:
@@ -55,6 +57,7 @@ class App(QObject):
             self.add_undo_state()
             if self.window:
                 self.window.canvas.update()
+            self.document_changed.emit()
 
     def crop_to_selection(self):
         if self.window and self.window.canvas.selection_shape:
@@ -64,6 +67,7 @@ class App(QObject):
             self.add_undo_state()
             if self.window:
                 self.window.canvas.update()
+            self.document_changed.emit()
 
     def paste_as_new_layer(self):
         clipboard = QApplication.clipboard()

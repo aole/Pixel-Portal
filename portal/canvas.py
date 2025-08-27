@@ -36,6 +36,7 @@ class Canvas(QWidget):
         self.selection_shape = None
         self.ctrl_pressed = False
         self.app.tool_changed.connect(self.on_tool_changed)
+        self.app.document_changed.connect(self.update)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -453,6 +454,27 @@ class Canvas(QWidget):
         self.draw_cursor(canvas_painter, target_rect, image_to_draw_on)
         if self.selection_shape:
             self.draw_selection_overlay(canvas_painter, target_rect)
+
+        # Draw document dimensions
+        font = canvas_painter.font()
+        font.setPointSize(8)
+        canvas_painter.setFont(font)
+        canvas_painter.setPen(QColor("black"))
+
+        width_text = f"{self.app.document.width}px"
+        height_text = f"{self.app.document.height}px"
+
+        # Position for width (top-right)
+        width_rect = canvas_painter.fontMetrics().boundingRect(width_text)
+        width_x = target_rect.right() + 5
+        width_y = target_rect.top() + width_rect.height()
+        canvas_painter.drawText(width_x, width_y, width_text)
+
+        # Position for height (bottom-left)
+        height_rect = canvas_painter.fontMetrics().boundingRect(height_text)
+        height_x = target_rect.left() - height_rect.width() - 5
+        height_y = target_rect.bottom()
+        canvas_painter.drawText(height_x, height_y, height_text)
 
     def draw_selection_overlay(self, painter, target_rect):
         painter.save()
