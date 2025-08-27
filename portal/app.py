@@ -2,7 +2,7 @@ from .document import Document
 from .undo import UndoManager
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QFileDialog, QApplication
 
 
 class App(QObject):
@@ -48,6 +48,17 @@ class App(QObject):
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
+
+    def paste_as_new_layer(self):
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+
+        if self.document and not image.isNull():
+            self.document.add_layer_from_clipboard(image)
+            self.add_undo_state()
+            if self.window:
+                self.window.layer_manager_widget.refresh_layers()
+                self.window.canvas.update()
 
     def open_document(self):
         file_path, _ = QFileDialog.getOpenFileName(self.window, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")

@@ -29,10 +29,16 @@ class LayerManager:
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
 
-    def add_layer_with_image(self, image):
+    def add_layer_with_image(self, image, name="Image Layer"):
         q_image = ImageQt(image.convert("RGBA"))
-        new_layer = Layer(self.width, self.height, "AI Generated Layer")
-        new_layer.image = QImage(q_image)
+        q_image = QImage(q_image)
+
+        new_layer = Layer(self.width, self.height, name)
+
+        painter = QPainter(new_layer.image)
+        painter.drawImage(0, 0, q_image)
+        painter.end()
+
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
 

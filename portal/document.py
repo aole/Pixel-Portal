@@ -1,6 +1,6 @@
 from .layer_manager import LayerManager
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtCore import QSize, QBuffer
+from PySide6.QtCore import QSize, QBuffer, Qt
 from PIL import Image
 import io
 
@@ -34,7 +34,19 @@ class Document:
         return pil_image
 
     def add_new_layer_with_image(self, image):
-        self.layer_manager.add_layer_with_image(image)
+        self.layer_manager.add_layer_with_image(image, name="AI Generated Layer")
+
+    def add_layer_from_clipboard(self, q_image):
+        if q_image.width() > self.width or q_image.height() > self.height:
+            q_image = q_image.scaled(self.width, self.height, Qt.KeepAspectRatio, Qt.FastTransformation)
+
+        # Convert QImage to PIL Image
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        q_image.save(buffer, "PNG")
+        pil_image = Image.open(io.BytesIO(buffer.data()))
+
+        self.layer_manager.add_layer_with_image(pil_image, name="Pasted Layer")
 
     def render_except(self, layer_to_exclude) -> QImage:
         """Composites all visible layers into a single image, except for the given layer."""

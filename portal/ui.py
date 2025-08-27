@@ -88,6 +88,13 @@ class MainWindow(QMainWindow):
         self.redo_action.triggered.connect(self.app.redo)
         edit_menu.addAction(self.redo_action)
 
+        edit_menu.addSeparator()
+
+        paste_as_new_layer_action = QAction("Paste as New Layer", self)
+        paste_as_new_layer_action.setShortcut("Ctrl+Shift+V")
+        paste_as_new_layer_action.triggered.connect(self.app.paste_as_new_layer)
+        edit_menu.addAction(paste_as_new_layer_action)
+
         select_menu = menu_bar.addMenu("&Select")
 
         select_all_action = QAction("Select &All", self)
