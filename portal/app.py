@@ -26,7 +26,7 @@ class App(QObject):
         self.pen_width_changed.emit(self.pen_width)
 
     def _prime_undo_stack(self):
-        self.undo_manager.add_undo_state(self.document.layer_manager.clone())
+        self.undo_manager.add_undo_state(self.document.clone())
         self.undo_stack_changed.emit()
 
     def set_window(self, window):
@@ -96,13 +96,13 @@ class App(QObject):
             image.save(file_path)
 
     def add_undo_state(self):
-        self.undo_manager.add_undo_state(self.document.layer_manager.clone())
+        self.undo_manager.add_undo_state(self.document.clone())
         self.undo_stack_changed.emit()
 
     def undo(self):
         state = self.undo_manager.undo()
         if state:
-            self.document.layer_manager = state
+            self.document = state
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
             self.undo_stack_changed.emit()
@@ -110,7 +110,7 @@ class App(QObject):
     def redo(self):
         state = self.undo_manager.redo()
         if state:
-            self.document.layer_manager = state
+            self.document = state
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
             self.undo_stack_changed.emit()

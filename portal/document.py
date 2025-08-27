@@ -11,6 +11,11 @@ class Document:
         self.height = height
         self.layer_manager = LayerManager(width, height)
 
+    def clone(self):
+        new_doc = Document(self.width, self.height)
+        new_doc.layer_manager = self.layer_manager.clone()
+        return new_doc
+
     def render(self) -> QImage:
         """Composites all visible layers into a single image."""
         final_image = QImage(QSize(self.width, self.height), QImage.Format_ARGB32)
