@@ -16,6 +16,7 @@ class Canvas(QWidget):
         self.drawing = False
         self.erasing = False
         self.dragging = False
+        self.moving_content = False
         self.x_offset = 0
         self.y_offset = 0
         self.zoom = 1.0
@@ -30,7 +31,18 @@ class Canvas(QWidget):
         self.grid_visible = False
         self.background_color = self.palette().window().color()
         self.selection_shape = None
+        self.ctrl_pressed = False
         self.app.tool_changed.connect(self.on_tool_changed)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Control:
+            self.ctrl_pressed = True
+            self.setCursor(Qt.ArrowCursor)
+
+    def keyReleaseEvent(self, event):
+        if event.key() == Qt.Key_Control:
+            self.ctrl_pressed = False
+            self.on_tool_changed(self.app.tool)
 
     def on_tool_changed(self, tool):
         self.update()
@@ -87,6 +99,17 @@ class Canvas(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            if self.ctrl_pressed:
+                self.moving_content = True
+                self.start_point = self.get_doc_coords(event.pos())
+                self.last_point = self.start_point
+                active_layer = self.app.document.layer_manager.active_layer
+                if active_layer:
+                    self.original_image = active_layer.image.copy()
+                    self.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
+                    self.temp_image.fill(Qt.transparent)
+                return
+
             if self.app.tool == "Bucket":
                 self.drawing_logic.flood_fill(self.get_doc_coords(event.pos()), self.selection_shape)
                 self.app.add_undo_state()
@@ -148,6 +171,17 @@ class Canvas(QWidget):
         self.cursor_pos_changed.emit(self.cursor_doc_pos)
         self.update()  # Redraw to show cursor updates
 
+        if self.moving_content and (event.buttons() & Qt.LeftButton):
+            current_point = self.get_doc_coords(event.pos())
+            delta = current_point - self.start_point
+
+            self.temp_image.fill(Qt.transparent)
+            painter = QPainter(self.temp_image)
+            painter.drawImage(delta, self.original_image)
+            painter.end()
+            self.update()
+            return
+
         if (event.buttons() & Qt.LeftButton) and self.drawing:
             current_point = self.get_doc_coords(event.pos())
 
@@ -207,6 +241,24 @@ class Canvas(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.moving_content:
+            self.moving_content = False
+            active_layer = self.app.document.layer_manager.active_layer
+            if active_layer:
+                current_point = self.get_doc_coords(event.pos())
+                delta = current_point - self.start_point
+
+                active_layer.image.fill(Qt.transparent)
+                painter = QPainter(active_layer.image)
+                painter.drawImage(delta, self.original_image)
+                painter.end()
+
+                self.app.add_undo_state()
+                self.temp_image = None
+                self.original_image = None
+                self.update()
+            return
+
         if event.button() == Qt.LeftButton and self.drawing:
             self.drawing = False
             active_layer = self.app.document.layer_manager.active_layer
