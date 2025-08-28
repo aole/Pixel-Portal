@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         # Toolbar
         toolbar = QToolBar("Tools")
         self.addToolBar(Qt.LeftToolBarArea, toolbar)
+        toolbar.layout().setAlignment(Qt.AlignLeft)
 
         top_toolbar = QToolBar("Top Toolbar")
         self.addToolBar(Qt.TopToolBarArea, top_toolbar)
@@ -188,15 +189,21 @@ class MainWindow(QMainWindow):
         
         pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
         pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
-        toolbar.addAction(pen_action)
+        pen_button = QToolButton()
+        pen_button.setDefaultAction(pen_action)
+        toolbar.addWidget(pen_button)
 
         bucket_action = QAction(QIcon("icons/toolbucket.png"), "Bucket", self)
         bucket_action.triggered.connect(lambda: self.app.set_tool("Bucket"))
-        toolbar.addAction(bucket_action)
+        bucket_button = QToolButton()
+        bucket_button.setDefaultAction(bucket_action)
+        toolbar.addWidget(bucket_button)
 
         picker_action = QAction(QIcon("icons/toolpicker.png"), "Picker", self)
         picker_action.triggered.connect(lambda: self.app.set_tool("Picker"))
-        toolbar.addAction(picker_action)
+        picker_button = QToolButton()
+        picker_button.setDefaultAction(picker_action)
+        toolbar.addWidget(picker_button)
 
         # Shape Tools
         self.shape_button = QToolButton(self)
@@ -244,7 +251,9 @@ class MainWindow(QMainWindow):
 
         ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
-        toolbar.addAction(ai_action)
+        ai_button = QToolButton()
+        ai_button.setDefaultAction(ai_action)
+        toolbar.addWidget(ai_button)
 
         # Color Swatch Panel
         color_toolbar = QToolBar("Colors")
