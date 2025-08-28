@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainterPath
+from PySide6.QtGui import QMouseEvent, QPainterPath, Qt
 
 from portal.tools.baseselecttool import BaseSelectTool
 
@@ -17,8 +17,18 @@ class SelectCircleTool(BaseSelectTool):
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:
+            end_point = doc_pos
+            if event.modifiers() & Qt.ShiftModifier:
+                dx = end_point.x() - self.start_point.x()
+                dy = end_point.y() - self.start_point.y()
+                size = min(abs(dx), abs(dy))
+                end_point = QPoint(
+                    self.start_point.x() + size * (1 if dx > 0 else -1),
+                    self.start_point.y() + size * (1 if dy > 0 else -1),
+                )
+
             qpp = QPainterPath()
-            qpp.addEllipse(QRect(self.start_point, doc_pos).normalized())
+            qpp.addEllipse(QRect(self.start_point, end_point).normalized())
             self.canvas._update_selection_and_emit_size(qpp)
         super().mouseMoveEvent(event, doc_pos)
 
