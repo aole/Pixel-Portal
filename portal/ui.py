@@ -7,6 +7,7 @@ from .ai.dialog import AiDialog
 from .new_file_dialog import NewFileDialog
 from .resize_dialog import ResizeDialog
 from .background import Background
+from .palette_dialog import PaletteDialog
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -57,6 +58,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Pixel Portal")
         self.resize(1200, 800)
 
+        self.main_palette_buttons = []
         self.saturation_buttons = []
         self.value_buttons = []
 
@@ -83,6 +85,10 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_action)
 
         file_menu.addSeparator()
+
+        load_palette_action = QAction("Load Palette from Image...", self)
+        load_palette_action.triggered.connect(self.open_palette_dialog)
+        file_menu.addAction(load_palette_action)
 
         exit_action = QAction("&Exit", self)
         exit_action.triggered.connect(self.app.exit)
@@ -319,39 +325,28 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(ai_button)
 
         # Color Swatch Panel
-        color_toolbar = QToolBar("Colors")
-        self.addToolBar(Qt.BottomToolBarArea, color_toolbar)
-        color_toolbar.setAllowedAreas(Qt.TopToolBarArea | Qt.BottomToolBarArea)
+        self.color_toolbar = QToolBar("Colors")
+        self.addToolBar(Qt.BottomToolBarArea, self.color_toolbar)
+        self.color_toolbar.setAllowedAreas(Qt.TopToolBarArea | Qt.BottomToolBarArea)
 
-        color_container = QWidget()
-        color_layout = QGridLayout(color_container)
-        color_layout.setSpacing(0)
-        color_layout.setContentsMargins(0, 0, 0, 0)
-
-        colors = self.load_palette()
-        num_default_cols = (len(colors) + 1) // 2
-        for i, color in enumerate(colors):
-            button = ColorButton(color, self.app)
-            row = i % 2
-            col = i // 2
-            color_layout.addWidget(button, row, col)
-
-        # Add an empty column as a separator
-        separator_col_index = num_default_cols
-        color_layout.setColumnMinimumWidth(separator_col_index, 12)
+        self.color_container = QWidget()
+        self.color_layout = QGridLayout(self.color_container)
+        self.color_layout.setSpacing(0)
+        self.color_layout.setContentsMargins(0, 0, 0, 0)
 
         # Add saturation and value swatches
         for i in range(7):
             button = ColorButton("#808080", self.app)
             self.saturation_buttons.append(button)
-            color_layout.addWidget(button, 0, separator_col_index + 1 + i)
 
         for i in range(7):
             button = ColorButton("#808080", self.app)
             self.value_buttons.append(button)
-            color_layout.addWidget(button, 1, separator_col_index + 1 + i)
 
-        color_toolbar.addWidget(color_container)
+        colors = self.load_palette()
+        self.update_palette(colors)
+
+        self.color_toolbar.addWidget(self.color_container)
 
         self.update_dynamic_palette(self.app.pen_color)
 
@@ -378,6 +373,32 @@ class MainWindow(QMainWindow):
                 return [line.strip() for line in f.readlines()]
         except FileNotFoundError:
             return []
+
+    def update_palette(self, colors):
+        # Clear existing main palette buttons
+        for button in self.main_palette_buttons:
+            self.color_layout.removeWidget(button)
+            button.deleteLater()
+        self.main_palette_buttons.clear()
+
+        # Add new color buttons
+        num_default_cols = (len(colors) + 1) // 2
+        for i, color in enumerate(colors):
+            button = ColorButton(color, self.app)
+            self.main_palette_buttons.append(button)
+            row = i % 2
+            col = i // 2
+            self.color_layout.addWidget(button, row, col)
+
+        # Re-add separator and dynamic swatches
+        separator_col_index = (len(self.main_palette_buttons) + 1) // 2
+        self.color_layout.setColumnMinimumWidth(separator_col_index, 12)
+
+        for i, button in enumerate(self.saturation_buttons):
+            self.color_layout.addWidget(button, 0, separator_col_index + 1 + i)
+
+        for i, button in enumerate(self.value_buttons):
+            self.color_layout.addWidget(button, 1, separator_col_index + 1 + i)
 
     def update_dynamic_palette(self, color):
         h, s, v, a = color.getHsv()
@@ -424,6 +445,13 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "initial_zoom_set"):
             self.canvas.set_initial_zoom()
             self.initial_zoom_set = True
+
+    def open_palette_dialog(self):
+        dialog = PaletteDialog(self)
+        if dialog.exec():
+            colors = dialog.get_selected_colors()
+            if colors:
+                self.update_palette(colors)
 
     def open_ai_dialog(self):
         dialog = AiDialog(self.app, self)
