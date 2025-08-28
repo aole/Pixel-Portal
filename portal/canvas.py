@@ -134,6 +134,7 @@ class Canvas(QWidget):
         self._update_selection_and_emit_size(qpp.subtracted(self.selection_shape))
 
     def enterEvent(self, event):
+        self.setFocus()
         self.mouse_over_canvas = True
         self.on_tool_changed(self.app.tool)
         self.update()
