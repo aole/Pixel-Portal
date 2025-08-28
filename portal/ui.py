@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
         brush_icon.setPixmap(pixmap)
         top_toolbar.addWidget(brush_icon)
         
-        self.pen_width_label = QLabel(str(self.app.pen_width))
+        self.pen_width_label = QLabel(f"{self.app.pen_width:02d}")
         top_toolbar.addWidget(self.pen_width_label)
 
         self.pen_width_slider = QSlider(Qt.Horizontal)
@@ -305,7 +305,7 @@ class MainWindow(QMainWindow):
             self.selection_size_label.setText("")
 
     def update_pen_width_label(self, width):
-        self.pen_width_label.setText(str(width))
+        self.pen_width_label.setText(f"{width:02d}")
 
     def update_pen_width_slider(self, width):
         self.pen_width_slider.setValue(width)
