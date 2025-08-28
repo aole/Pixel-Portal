@@ -46,7 +46,7 @@ class Canvas(QWidget):
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
-        self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 0)
+        self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
 
         self.tools = {
             "Pen": PenTool(self),
