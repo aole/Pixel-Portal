@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainterPath
+from PySide6.QtGui import QMouseEvent, QPainterPath, Qt
 
 from portal.tools.baseselecttool import BaseSelectTool
 
