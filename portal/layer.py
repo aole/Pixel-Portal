@@ -27,3 +27,12 @@ class Layer:
         new_layer.opacity = self.opacity
         new_layer.image = self.image.copy()  # Use QImage's copy method
         return new_layer
+
+    @classmethod
+    def from_qimage(cls, qimage, name):
+        """Creates a new layer from a QImage."""
+        width = qimage.width()
+        height = qimage.height()
+        layer = cls(width, height, name)
+        layer.image = qimage
+        return layer

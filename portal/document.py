@@ -1,7 +1,8 @@
 from .layer_manager import LayerManager
+from .layer import Layer
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtCore import QSize, QBuffer, Qt
-from PIL import Image
+from PIL import Image, ImageSequence
 import io
 
 
@@ -29,6 +30,47 @@ class Document:
         painter.end()
 
         return final_image
+
+    @staticmethod
+    def qimage_to_pil(qimage):
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        qimage.save(buffer, "PNG")
+        pil_image = Image.open(io.BytesIO(buffer.data()))
+        return pil_image
+
+    def save_tiff(self, filename):
+        images = []
+        for layer in self.layer_manager.layers:
+            pil_image = self.qimage_to_pil(layer.image)
+            images.append(pil_image)
+
+        if images:
+            images[0].save(
+                filename,
+                save_all=True,
+                append_images=images[1:],
+                format='TIFF',
+                compression='tiff_lzw'
+            )
+
+    @staticmethod
+    def load_tiff(filename):
+        with Image.open(filename) as img:
+            width, height = img.size
+            doc = Document(width, height)
+            doc.layer_manager.layers = []  # Clear default layer
+
+            for i, page in enumerate(ImageSequence.Iterator(img)):
+                # Convert PIL image to QImage
+                pil_page = page.convert("RGBA")
+                data = pil_page.tobytes("raw", "RGBA")
+                qimage = QImage(data, pil_page.width, pil_page.height, QImage.Format_RGBA8888)
+
+                layer = Layer.from_qimage(qimage, f"Layer {i+1}")
+                doc.layer_manager.layers.append(layer)
+        
+        return doc
 
     def flip_horizontal(self):
         for layer in self.layer_manager.layers:

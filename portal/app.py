@@ -93,33 +93,50 @@ class App(QObject):
                 self.window.canvas.update()
 
     def open_document(self):
-        file_path, _ = QFileDialog.getOpenFileName(self.window, "Open Image", self.last_directory, "Image Files (*.png *.jpg *.bmp)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.window, 
+            "Open Image", 
+            self.last_directory, 
+            "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
+        )
         if file_path:
             self.last_directory = os.path.dirname(file_path)
             self.config.set('General', 'last_directory', self.last_directory)
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
 
-            image = QImage(file_path)
-            if not image.isNull():
-                self.document = Document(image.width(), image.height())
-                self.document.layer_manager.layers[0].image = image
-                self.undo_manager.clear()
-                self._prime_undo_stack()
-                if self.window:
-                    self.window.layer_manager_widget.refresh_layers()
-                    self.window.canvas.update()
+            if file_path.lower().endswith(('.tif', '.tiff')):
+                self.document = Document.load_tiff(file_path)
+            else:
+                image = QImage(file_path)
+                if not image.isNull():
+                    self.document = Document(image.width(), image.height())
+                    self.document.layer_manager.layers[0].image = image
+                    
+            self.undo_manager.clear()
+            self._prime_undo_stack()
+            if self.window:
+                self.window.layer_manager_widget.refresh_layers()
+                self.window.canvas.update()
 
     def save_document(self):
-        file_path, _ = QFileDialog.getSaveFileName(self.window, "Save Image", self.last_directory, "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp)")
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self.window, 
+            "Save Image", 
+            self.last_directory, 
+            "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
+        )
         if file_path:
             self.last_directory = os.path.dirname(file_path)
             self.config.set('General', 'last_directory', self.last_directory)
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
 
-            image = self.document.render()
-            image.save(file_path)
+            if "TIFF" in selected_filter:
+                self.document.save_tiff(file_path)
+            else:
+                image = self.document.render()
+                image.save(file_path)
 
     def add_undo_state(self):
         self.undo_manager.add_undo_state(self.document.clone())
