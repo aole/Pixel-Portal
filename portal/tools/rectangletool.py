@@ -33,7 +33,7 @@ class RectangleTool(BaseTool):
         if event.modifiers() & Qt.ShiftModifier:
             dx = end_point.x() - self.start_point.x()
             dy = end_point.y() - self.start_point.y()
-            size = max(abs(dx), abs(dy))
+            size = min(abs(dx), abs(dy))
             end_point = QPoint(
                 self.start_point.x() + size * (1 if dx > 0 else -1),
                 self.start_point.y() + size * (1 if dy > 0 else -1),
@@ -59,7 +59,7 @@ class RectangleTool(BaseTool):
         if event.modifiers() & Qt.ShiftModifier:
             dx = end_point.x() - self.start_point.x()
             dy = end_point.y() - self.start_point.y()
-            size = max(abs(dx), abs(dy))
+            size = min(abs(dx), abs(dy))
             end_point = QPoint(
                 self.start_point.x() + size * (1 if dx > 0 else -1),
                 self.start_point.y() + size * (1 if dy > 0 else -1),
