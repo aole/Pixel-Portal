@@ -110,7 +110,7 @@ class Canvas(QWidget):
         if hasattr(self.current_tool, 'activate'):
             self.current_tool.activate()
         self.update()
-        if tool == "Picker":
+        if tool in ["Picker", "Select Color"]:
             self.setCursor(self.picker_cursor)
         elif tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
