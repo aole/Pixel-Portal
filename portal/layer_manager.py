@@ -1,13 +1,17 @@
 from .layer import Layer
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt
 
 
-class LayerManager:
+class LayerManager(QObject):
     """
     Manages the stack of layers in a document.
     """
+    layer_visibility_changed = Signal(int)
+
     def __init__(self, width: int, height: int, create_background: bool = True):
+        super().__init__()
         self.width = width
         self.height = height
         self.layers = []
@@ -122,6 +126,7 @@ class LayerManager:
         if not (0 <= index < len(self.layers)):
             raise IndexError("Layer index out of range.")
         self.layers[index].visible = not self.layers[index].visible
+        self.layer_visibility_changed.emit(index)
 
     def clone(self):
         """Creates a deep copy of the layer manager."""
