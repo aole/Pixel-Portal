@@ -1,6 +1,18 @@
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class LayerItemWidget(QWidget):
@@ -10,15 +22,18 @@ class LayerItemWidget(QWidget):
         super().__init__()
         self.layer = layer
 
-        self.pixmap_visible = QPixmap("icons/layervisible.png")
-        self.pixmap_invisible = QPixmap("icons/layerinvisible.png")
+        self.pixmap_visible = QPixmap("icons/layervisible.png").scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.pixmap_invisible = QPixmap("icons/layerinvisible.png").scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(5)
         self.setLayout(self.layout)
 
-        self.visibility_icon = QLabel()
+        self.visibility_icon = ClickableLabel()
+        self.visibility_icon.setFixedWidth(16)
+        self.visibility_icon.setFixedHeight(16)
+        self.visibility_icon.clicked.connect(self.on_visibility_clicked)
         self.layout.addWidget(self.visibility_icon)
 
         self.thumbnail = QLabel()
@@ -45,7 +60,5 @@ class LayerItemWidget(QWidget):
         else:
             self.visibility_icon.setPixmap(self.pixmap_invisible)
 
-    def mousePressEvent(self, event):
-        if event.button() == 1:  # Left mouse button
-            if self.visibility_icon.geometry().contains(event.pos()):
-                self.visibility_toggled.emit()
+    def on_visibility_clicked(self):
+        self.visibility_toggled.emit()
