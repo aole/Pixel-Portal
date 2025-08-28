@@ -27,7 +27,6 @@ class LayerManagerWidget(QWidget):
         self.layer_list = QListWidget()
         self.layer_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.layer_list.itemSelectionChanged.connect(self.on_selection_changed)
-        self.layer_list.itemChanged.connect(self.on_visibility_changed)
         self.layer_list.model().rowsMoved.connect(self.on_layers_moved)
         self.layout.addWidget(self.layer_list)
 
@@ -67,11 +66,12 @@ class LayerManagerWidget(QWidget):
         self.layer_list.clear()
         for layer in reversed(self.app.document.layer_manager.layers):
             item = QListWidgetItem()
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if layer.visible else Qt.Unchecked)
             self.layer_list.addItem(item)
 
             item_widget = LayerItemWidget(layer)
+            item_widget.visibility_toggled.connect(
+                lambda widget=item_widget: self.on_visibility_toggled(widget)
+            )
             item.setSizeHint(item_widget.sizeHint())
             self.layer_list.setItemWidget(item, item_widget)
 
@@ -92,15 +92,15 @@ class LayerManagerWidget(QWidget):
         self.app.document.layer_manager.select_layer(actual_index)
         self.layer_changed.emit()
 
-    def on_visibility_changed(self, item: QListWidgetItem):
+    def on_visibility_toggled(self, widget):
         """Handles toggling layer visibility."""
-        index_in_list = self.layer_list.row(item)
-        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
-
-        is_visible = item.checkState() == Qt.Checked
-        if self.app.document.layer_manager.layers[actual_index].visible != is_visible:
-            self.app.document.layer_manager.toggle_visibility(actual_index)
-            self.layer_changed.emit()
+        for i in range(self.layer_list.count()):
+            item = self.layer_list.item(i)
+            if self.layer_list.itemWidget(item) == widget:
+                actual_index = len(self.app.document.layer_manager.layers) - 1 - i
+                self.app.document.layer_manager.toggle_visibility(actual_index)
+                self.layer_changed.emit()
+                return
 
     def on_layers_moved(self, parent, start, end, destination, row):
         """Handles reordering layers via drag-and-drop."""

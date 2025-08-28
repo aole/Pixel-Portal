@@ -6,6 +6,7 @@ class Layer(QObject):
     Represents a single layer in the document.
     """
     on_image_change = Signal()
+    visibility_changed = Signal()
 
     def __init__(self, width: int, height: int, name: str):
         super().__init__()
@@ -13,11 +14,21 @@ class Layer(QObject):
             raise ValueError("Layer name must be a non-empty string.")
 
         self.name = name
-        self.visible = True
+        self._visible = True
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
 
         self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
         self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
+
+    @property
+    def visible(self):
+        return self._visible
+
+    @visible.setter
+    def visible(self, value):
+        if self._visible != value:
+            self._visible = value
+            self.visibility_changed.emit()
 
     def clear(self):
         """Fills the layer with transparent color."""

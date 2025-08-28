@@ -18,6 +18,7 @@ class App(QObject):
         super().__init__()
         self.window = None
         self.document = Document(64, 64)
+        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.tool = "Pen"
         self.previous_tool = "Pen"
         self.pen_color = QColor("black")
@@ -56,12 +57,17 @@ class App(QObject):
 
     def new_document(self, width, height):
         self.document = Document(width, height)
+        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.undo_manager.clear()
         self._prime_undo_stack()
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
         self.document_changed.emit()
+
+    def on_layer_visibility_changed(self, index):
+        if self.window:
+            self.window.canvas.update()
 
     def resize_document(self, width, height, interpolation):
         if self.document:
@@ -112,7 +118,8 @@ class App(QObject):
                 if not image.isNull():
                     self.document = Document(image.width(), image.height())
                     self.document.layer_manager.layers[0].image = image
-                    
+
+            self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
             self.undo_manager.clear()
             self._prime_undo_stack()
             if self.window:
