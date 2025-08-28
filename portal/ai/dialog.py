@@ -91,6 +91,16 @@ class AiDialog(QDialog):
         self.accept_button.clicked.connect(self.accept_image)
         self.cancel_viewer_button.clicked.connect(self.cancel_viewer)
         self.regenerate_button.clicked.connect(self.regenerate_image)
+        self.image_to_image_radio.toggled.connect(self.on_mode_changed)
+
+    def on_mode_changed(self, checked):
+        if checked:
+            image = self.app.get_current_image()
+            if image:
+                pixmap = self.pil_to_pixmap(image)
+                self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
+        else:
+            self.image_viewer.setPixmap(self.alphabg_pixmap)
 
     def start_generation(self):
         prompt = self.prompt_input.text()
