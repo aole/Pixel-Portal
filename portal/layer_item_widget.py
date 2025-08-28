@@ -37,8 +37,8 @@ class LayerItemWidget(QWidget):
         self.layout.addWidget(self.visibility_icon)
 
         self.thumbnail = QLabel()
-        self.thumbnail.setFixedWidth(32)
-        self.thumbnail.setFixedHeight(32)
+        self.thumbnail.setFixedWidth(64)
+        self.thumbnail.setFixedHeight(64)
         self.layout.addWidget(self.thumbnail)
 
         self.label = QLabel(layer.name)
@@ -50,7 +50,7 @@ class LayerItemWidget(QWidget):
         self.layer.visibility_changed.connect(self.update_visibility_icon)
 
     def update_thumbnail(self):
-        scaled_image = self.layer.image.scaled(32, 32)
+        scaled_image = self.layer.image.scaled(64, 64)
         pixmap = QPixmap.fromImage(scaled_image)
         self.thumbnail.setPixmap(pixmap)
 
