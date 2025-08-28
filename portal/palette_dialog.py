@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QFileDialog, QColorDialog, QListWidget, QListWidgetItem, QCheckBox, QWidget, QHBoxLayout, QLabel, QProgressBar
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QFileDialog, QColorDialog, QListWidget, QListWidgetItem, QCheckBox, QWidget, QHBoxLayout, QLabel, QProgressBar, QSplitter
 from PySide6.QtGui import QImage, QColor, QPixmap
 from PySide6.QtCore import Qt, QThread, Signal
 import numpy as np
@@ -41,16 +41,15 @@ class PaletteDialog(QDialog):
         self.open_image_button.clicked.connect(self.open_image)
         self.layout.addWidget(self.open_image_button)
 
-        main_layout = QHBoxLayout()
-        self.layout.addLayout(main_layout)
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.layout.addWidget(self.splitter)
 
         self.image_preview = QLabel()
-        self.image_preview.setFixedSize(200, 200)
         self.image_preview.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(self.image_preview)
+        self.splitter.addWidget(self.image_preview)
 
         self.color_list_widget = QListWidget()
-        main_layout.addWidget(self.color_list_widget)
+        self.splitter.addWidget(self.color_list_widget)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -66,6 +65,7 @@ class PaletteDialog(QDialog):
         self.layout.addLayout(self.button_layout)
 
         self.colors = []
+        self.pixmap = None
 
     def open_image(self):
         self.last_directory = os.path.expanduser("~")
@@ -76,8 +76,8 @@ class PaletteDialog(QDialog):
             "Image Files (*.png *.jpg *.bmp)"
         )
         if file_path:
-            pixmap = QPixmap(file_path)
-            self.image_preview.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.pixmap = QPixmap(file_path)
+            self.update_image_preview()
             self.extract_colors(file_path)
 
     def extract_colors(self, image_path):
@@ -117,27 +117,19 @@ class PaletteDialog(QDialog):
         checkbox.setChecked(True)
         layout.addWidget(checkbox)
 
-        color_button = QPushButton()
-        color_button.setFixedSize(24, 24)
-        pixmap = QPixmap(24, 24)
-        pixmap.fill(color)
-        color_button.setIcon(pixmap)
+        color_button = QPushButton(color.name())
+        color_button.setStyleSheet(f"background-color: {color.name()}; text-align: left; padding-left: 5px;")
         color_button.clicked.connect(lambda: self.change_color(color_button, checkbox))
-        layout.addWidget(color_button)
+        layout.addWidget(color_button, 1)
 
         return widget
 
     def change_color(self, color_button, checkbox):
-        # Extract color from the icon's pixmap
-        pixmap = color_button.icon().pixmap(24, 24)
-        image = pixmap.toImage()
-        current_color = image.pixelColor(0, 0)
-
+        current_color = QColor(color_button.text())
         new_color = QColorDialog.getColor(current_color, self)
         if new_color.isValid():
-            pixmap = QPixmap(24, 24)
-            pixmap.fill(new_color)
-            color_button.setIcon(pixmap)
+            color_button.setText(new_color.name())
+            color_button.setStyleSheet(f"background-color: {new_color.name()}; text-align: left; padding-left: 5px;")
             checkbox.setChecked(True)
 
     def get_selected_colors(self):
@@ -148,6 +140,20 @@ class PaletteDialog(QDialog):
             checkbox = widget.findChild(QCheckBox)
             if checkbox.isChecked():
                 color_button = widget.findChild(QPushButton)
-                color = color_button.icon().pixmap(24, 24).toImage().pixelColor(0, 0)
-                selected_colors.append(color.name())
+                selected_colors.append(color_button.text())
         return selected_colors
+
+    def update_image_preview(self):
+        if self.pixmap:
+            self.image_preview.setPixmap(self.pixmap.scaled(
+                self.image_preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_image_preview()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not event.spontaneous():
+            self.splitter.setSizes([self.width() * 0.75, self.width() * 0.25])
+            self.update_image_preview()
