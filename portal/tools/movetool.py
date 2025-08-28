@@ -17,7 +17,7 @@ class MoveTool(BaseTool):
         if not active_layer:
             return
 
-        self.canvas.temp_image_replaces_active_layer = True
+        self.canvas.temp_image_replaces_active_layer = False
 
         if self.canvas.selection_shape:
             self.moving_selection = True
