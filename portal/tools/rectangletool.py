@@ -28,7 +28,18 @@ class RectangleTool(BaseTool):
             painter.setClipPath(self.canvas.selection_shape)
         pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
         painter.setPen(pen)
-        rect = QRect(self.start_point, doc_pos).normalized()
+
+        end_point = doc_pos
+        if event.modifiers() & Qt.ShiftModifier:
+            dx = end_point.x() - self.start_point.x()
+            dy = end_point.y() - self.start_point.y()
+            size = max(abs(dx), abs(dy))
+            end_point = QPoint(
+                self.start_point.x() + size * (1 if dx > 0 else -1),
+                self.start_point.y() + size * (1 if dy > 0 else -1),
+            )
+
+        rect = QRect(self.start_point, end_point).normalized()
         self.canvas.drawing_logic.draw_rect(painter, rect)
         self.canvas.update()
 
@@ -43,7 +54,18 @@ class RectangleTool(BaseTool):
             painter.setClipPath(self.canvas.selection_shape)
         pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
         painter.setPen(pen)
-        rect = QRect(self.start_point, doc_pos).normalized()
+
+        end_point = doc_pos
+        if event.modifiers() & Qt.ShiftModifier:
+            dx = end_point.x() - self.start_point.x()
+            dy = end_point.y() - self.start_point.y()
+            size = max(abs(dx), abs(dy))
+            end_point = QPoint(
+                self.start_point.x() + size * (1 if dx > 0 else -1),
+                self.start_point.y() + size * (1 if dy > 0 else -1),
+            )
+
+        rect = QRect(self.start_point, end_point).normalized()
         self.canvas.drawing_logic.draw_rect(painter, rect)
 
         active_layer.image = self.canvas.temp_image
