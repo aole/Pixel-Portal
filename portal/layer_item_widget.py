@@ -50,7 +50,7 @@ class LayerItemWidget(QWidget):
         self.layer.visibility_changed.connect(self.update_visibility_icon)
 
     def update_thumbnail(self):
-        scaled_image = self.layer.image.scaled(64, 64)
+        scaled_image = self.layer.image.scaled(64, 64, Qt.KeepAspectRatio)
         pixmap = QPixmap.fromImage(scaled_image)
         self.thumbnail.setPixmap(pixmap)
 
