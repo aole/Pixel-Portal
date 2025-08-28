@@ -149,6 +149,22 @@ class App(QObject):
         if self.window:
             self.window.canvas.select_none()
 
+    def flip_horizontal(self):
+        if self.document:
+            self.document.flip_horizontal()
+            self.add_undo_state()
+            if self.window:
+                self.window.canvas.update()
+            self.document_changed.emit()
+
+    def flip_vertical(self):
+        if self.document:
+            self.document.flip_vertical()
+            self.add_undo_state()
+            if self.window:
+                self.window.canvas.update()
+            self.document_changed.emit()
+
     def invert_selection(self):
         if self.window:
             self.window.canvas.invert_selection()

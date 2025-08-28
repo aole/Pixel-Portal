@@ -124,6 +124,16 @@ class MainWindow(QMainWindow):
         self.crop_action.setEnabled(False)
         image_menu.addAction(self.crop_action)
 
+        image_menu.addSeparator()
+
+        flip_horizontal_action = QAction("Flip Horizontal", self)
+        flip_horizontal_action.triggered.connect(self.app.flip_horizontal)
+        image_menu.addAction(flip_horizontal_action)
+
+        flip_vertical_action = QAction("Flip Vertical", self)
+        flip_vertical_action.triggered.connect(self.app.flip_vertical)
+        image_menu.addAction(flip_vertical_action)
+
         # Status bar
         status_bar = self.statusBar()
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")

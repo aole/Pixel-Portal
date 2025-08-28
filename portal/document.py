@@ -30,6 +30,14 @@ class Document:
 
         return final_image
 
+    def flip_horizontal(self):
+        for layer in self.layer_manager.layers:
+            layer.image = layer.image.mirrored(True, False)
+
+    def flip_vertical(self):
+        for layer in self.layer_manager.layers:
+            layer.image = layer.image.mirrored(False, True)
+
     def resize(self, width, height, interpolation):
         self.width = width
         self.height = height

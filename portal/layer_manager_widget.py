@@ -54,7 +54,7 @@ class LayerManagerWidget(QWidget):
         self.move_up_button.clicked.connect(self.move_layer_up)
         self.toolbar.addWidget(self.move_up_button)
 
-        self.move_down_button = QPushButton(QIcon("icons/mirrory.png"), "") # Placeholder icon
+        self.move_down_button = QPushButton(QIcon("icons/layerdown.png"), "") # Placeholder icon
         self.move_down_button.clicked.connect(self.move_layer_down)
         self.toolbar.addWidget(self.move_down_button)
 
