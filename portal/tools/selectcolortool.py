@@ -21,7 +21,7 @@ class SelectColorTool(BaseTool):
                 if rendered_image.pixelColor(x, y) == target_color:
                     path.addRect(QRect(x, y, 1, 1))
 
-        self.canvas._update_selection_and_emit_size(path)
+        self.canvas._update_selection_and_emit_size(path.simplified())
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         pass
