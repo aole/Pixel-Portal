@@ -1,11 +1,14 @@
 from PySide6.QtGui import QImage, QColor
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QObject, Signal
 
-class Layer:
+class Layer(QObject):
     """
     Represents a single layer in the document.
     """
+    on_image_change = Signal()
+
     def __init__(self, width: int, height: int, name: str):
+        super().__init__()
         if not isinstance(name, str) or not name:
             raise ValueError("Layer name must be a non-empty string.")
 
@@ -19,6 +22,7 @@ class Layer:
     def clear(self):
         """Fills the layer with transparent color."""
         self.image.fill(QColor(0, 0, 0, 0))
+        self.on_image_change.emit()
 
     def clone(self):
         """Creates a deep copy of this layer."""

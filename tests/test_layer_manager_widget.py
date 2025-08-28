@@ -23,14 +23,19 @@ def test_refresh_layers(app_with_widget):
 
     # Initial state
     assert widget.layer_list.count() == 1
-    assert widget.layer_list.item(0).text() == "Background"
+    item_widget = widget.layer_list.itemWidget(widget.layer_list.item(0))
+    assert item_widget.label.text() == "Background"
 
     # Add a layer and refresh
     app.document.layer_manager.add_layer("New Layer")
     widget.refresh_layers()
     assert widget.layer_list.count() == 2
-    assert widget.layer_list.item(0).text() == "New Layer" # List is reversed
-    assert widget.layer_list.item(1).text() == "Background"
+
+    item_widget_0 = widget.layer_list.itemWidget(widget.layer_list.item(0))
+    assert item_widget_0.label.text() == "New Layer" # List is reversed
+
+    item_widget_1 = widget.layer_list.itemWidget(widget.layer_list.item(1))
+    assert item_widget_1.label.text() == "Background"
 
 def test_add_layer_button(app_with_widget):
     """Test the 'Add Layer' button functionality."""
