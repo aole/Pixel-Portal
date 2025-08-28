@@ -274,6 +274,10 @@ class MainWindow(QMainWindow):
         select_lasso_action.triggered.connect(lambda: self.set_selection_tool(select_lasso_action))
         selection_menu.addAction(select_lasso_action)
 
+        select_color_action = QAction(QIcon("icons/toolselectcolor.png"), "Select Color", self)
+        select_color_action.triggered.connect(lambda: self.set_selection_tool(select_color_action))
+        selection_menu.addAction(select_color_action)
+
         toolbar.addWidget(self.selection_button)
 
         ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self)
