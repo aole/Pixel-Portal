@@ -6,3 +6,5 @@ transformers
 accelerate
 Pillow
 huggingface-hub
+scikit-learn
+numpy
