@@ -13,12 +13,18 @@ from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidge
 class ColorButton(QPushButton):
     def __init__(self, color, app):
         super().__init__()
-        self.color = color
         self.app = app
         self.setFixedSize(24, 24)
+        self.clicked.connect(self.on_click)
+        self.set_color(color)
+
+    def set_color(self, color):
+        if isinstance(color, QColor):
+            self.color = color.name()
+        else:
+            self.color = color
         self.setStyleSheet(f"background-color: {self.color}")
         self.setToolTip(self.color)
-        self.clicked.connect(self.on_click)
 
     def on_click(self):
         self.app.set_pen_color(self.color)
@@ -49,6 +55,9 @@ class MainWindow(QMainWindow):
         self.app = app
         self.setWindowTitle("Pixel Portal")
         self.resize(1200, 800)
+
+        self.saturation_buttons = []
+        self.value_buttons = []
 
         self.canvas = Canvas(self.app)
         self.setCentralWidget(self.canvas)
@@ -154,6 +163,7 @@ class MainWindow(QMainWindow):
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
+        self.app.pen_color_changed.connect(self.update_dynamic_palette)
 
         # Toolbar
         toolbar = QToolBar("Tools")
@@ -276,13 +286,31 @@ class MainWindow(QMainWindow):
         color_layout.setContentsMargins(0, 0, 0, 0)
 
         colors = self.load_palette()
+        num_default_cols = (len(colors) + 1) // 2
         for i, color in enumerate(colors):
             button = ColorButton(color, self.app)
             row = i % 2
             col = i // 2
             color_layout.addWidget(button, row, col)
 
+        # Add an empty column as a separator
+        separator_col_index = num_default_cols
+        color_layout.setColumnMinimumWidth(separator_col_index, 12)
+
+        # Add saturation and value swatches
+        for i in range(7):
+            button = ColorButton("#808080", self.app)
+            self.saturation_buttons.append(button)
+            color_layout.addWidget(button, 0, separator_col_index + 1 + i)
+
+        for i in range(7):
+            button = ColorButton("#808080", self.app)
+            self.value_buttons.append(button)
+            color_layout.addWidget(button, 1, separator_col_index + 1 + i)
+
         color_toolbar.addWidget(color_container)
+
+        self.update_dynamic_palette(self.app.pen_color)
 
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app)
@@ -307,6 +335,21 @@ class MainWindow(QMainWindow):
                 return [line.strip() for line in f.readlines()]
         except FileNotFoundError:
             return []
+
+    def update_dynamic_palette(self, color):
+        h, s, v, a = color.getHsv()
+
+        # Update saturation buttons
+        for i, button in enumerate(self.saturation_buttons):
+            new_s = int(i / 6 * 255)
+            new_color = QColor.fromHsv(h, new_s, v, a)
+            button.set_color(new_color)
+
+        # Update value buttons
+        for i, button in enumerate(self.value_buttons):
+            new_v = int(i / 6 * 255)
+            new_color = QColor.fromHsv(h, s, new_v, a)
+            button.set_color(new_color)
 
     def update_cursor_pos_label(self, pos):
         self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
