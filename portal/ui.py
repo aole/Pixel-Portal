@@ -164,9 +164,12 @@ class MainWindow(QMainWindow):
         top_toolbar.addWidget(self.pen_width_label)
 
         self.pen_width_slider = QSlider(Qt.Horizontal)
-        self.pen_width_slider.setRange(1, 100)
+        self.pen_width_slider.setRange(1, 64)
         self.pen_width_slider.setValue(self.app.pen_width)
-        self.pen_width_slider.setMinimumWidth(200)
+        self.pen_width_slider.setMinimumWidth(32)
+        self.pen_width_slider.setMaximumWidth(100)
+        self.pen_width_slider.setSingleStep(1)
+        self.pen_width_slider.setPageStep(1)
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
         
