@@ -158,7 +158,10 @@ class MainWindow(QMainWindow):
         top_toolbar.addSeparator()
 
         # Brush size slider
-        top_toolbar.addWidget(QLabel("Brush Size "))
+        brush_icon = QLabel()
+        pixmap = QPixmap("icons/brush.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        brush_icon.setPixmap(pixmap)
+        top_toolbar.addWidget(brush_icon)
         
         self.pen_width_label = QLabel(str(self.app.pen_width))
         top_toolbar.addWidget(self.pen_width_label)
