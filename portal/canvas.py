@@ -16,6 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 from .renderer import CanvasRenderer
+from .background import Background
 from .tools.pentool import PenTool
 from .tools.buckettool import BucketTool
 from .tools.rectangletool import RectangleTool
@@ -56,6 +57,7 @@ class Canvas(QWidget):
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
+        self.background = Background()
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
@@ -99,6 +101,10 @@ class Canvas(QWidget):
             if hasattr(self.current_tool, 'activate'):
                 self.current_tool.activate()
             self.on_tool_changed(self.app.tool)
+
+    def set_background(self, background: Background):
+        self.background = background
+        self.update()
 
     def on_tool_changed(self, tool):
         if self.ctrl_pressed:

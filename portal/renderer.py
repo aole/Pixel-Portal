@@ -35,12 +35,15 @@ class CanvasRenderer:
         self._draw_document_dimensions(painter, target_rect)
 
     def _draw_background(self, painter, target_rect):
-        brush = QBrush(self.canvas.background_pixmap)
-        transform = QTransform()
-        transform.translate(target_rect.x(), target_rect.y())
-        transform.scale(self.canvas.zoom, self.canvas.zoom)
-        brush.setTransform(transform)
-        painter.fillRect(target_rect, brush)
+        if self.canvas.background.is_checkered:
+            brush = QBrush(self.canvas.background_pixmap)
+            transform = QTransform()
+            transform.translate(target_rect.x(), target_rect.y())
+            transform.scale(self.canvas.zoom, self.canvas.zoom)
+            brush.setTransform(transform)
+            painter.fillRect(target_rect, brush)
+        else:
+            painter.fillRect(target_rect, self.canvas.background.color)
 
     def _draw_document(self, painter, target_rect):
         if self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:

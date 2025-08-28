@@ -6,6 +6,7 @@ from .layer_manager_widget import LayerManagerWidget
 from .ai.dialog import AiDialog
 from .new_file_dialog import NewFileDialog
 from .resize_dialog import ResizeDialog
+from .background import Background
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -149,6 +150,37 @@ class MainWindow(QMainWindow):
         flip_vertical_action = QAction("Flip Vertical", self)
         flip_vertical_action.triggered.connect(self.app.flip_vertical)
         image_menu.addAction(flip_vertical_action)
+
+        view_menu = menu_bar.addMenu("&View")
+        background_menu = view_menu.addMenu("&Background")
+
+        checkered_action = QAction("Checkered Background", self)
+        checkered_action.triggered.connect(lambda: self.canvas.set_background(Background()))
+        background_menu.addAction(checkered_action)
+
+        background_menu.addSeparator()
+
+        white_action = QAction("White", self)
+        white_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("white"))))
+        background_menu.addAction(white_action)
+
+        black_action = QAction("Black", self)
+        black_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("black"))))
+        background_menu.addAction(black_action)
+
+        gray_action = QAction("Gray", self)
+        gray_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("gray"))))
+        background_menu.addAction(gray_action)
+
+        magenta_action = QAction("Magenta", self)
+        magenta_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("magenta"))))
+        background_menu.addAction(magenta_action)
+
+        background_menu.addSeparator()
+
+        custom_color_action = QAction("Custom Color...", self)
+        custom_color_action.triggered.connect(self.open_background_color_dialog)
+        background_menu.addAction(custom_color_action)
 
         # Status bar
         status_bar = self.statusBar()
@@ -407,6 +439,11 @@ class MainWindow(QMainWindow):
             if dialog.exec():
                 values = dialog.get_values()
                 self.app.resize_document(values["width"], values["height"], values["interpolation"])
+
+    def open_background_color_dialog(self):
+        color = QColorDialog.getColor(self.canvas.background_color, self)
+        if color.isValid():
+            self.canvas.set_background(Background(color))
 
     def update_crop_action_state(self, has_selection):
         self.crop_action.setEnabled(has_selection)
