@@ -42,6 +42,22 @@ class LayerManager:
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
 
+    def duplicate_layer(self, index: int):
+        """Duplicates the layer at the given index."""
+        if not (0 <= index < len(self.layers)):
+            raise IndexError("Layer index out of range.")
+
+        original_layer = self.layers[index]
+        new_layer = original_layer.clone()
+        new_layer.name = f"{original_layer.name} copy"
+
+        # Insert the new layer right above the original one
+        insert_at = index + 1
+        self.layers.insert(insert_at, new_layer)
+
+        # Set the new layer as the active one
+        self.active_layer_index = insert_at
+
     def remove_layer(self, index: int):
         """Removes the layer at the given index."""
         if not (0 <= index < len(self.layers)):

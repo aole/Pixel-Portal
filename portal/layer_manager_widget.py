@@ -42,6 +42,10 @@ class LayerManagerWidget(QWidget):
         self.remove_button.clicked.connect(self.remove_layer)
         self.toolbar.addWidget(self.remove_button)
 
+        self.duplicate_button = QPushButton(QIcon("icons/layerduplicate.png"), "")
+        self.duplicate_button.clicked.connect(self.duplicate_layer)
+        self.toolbar.addWidget(self.duplicate_button)
+
         self.clear_button = QPushButton(QIcon("icons/clear.png"), "")
         self.clear_button.clicked.connect(self.clear_layer)
         self.toolbar.addWidget(self.clear_button)
@@ -130,6 +134,18 @@ class LayerManagerWidget(QWidget):
             self.layer_changed.emit()
         except (ValueError, IndexError) as e:
             print(f"Error removing layer: {e}") # Replace with proper logging/statusbar message
+
+    def duplicate_layer(self):
+        """Duplicates the selected layer."""
+        current_row = self.layer_list.currentRow()
+        if current_row == -1:
+            return
+
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
+        self.app.document.layer_manager.duplicate_layer(actual_index)
+        self.app.add_undo_state()
+        self.refresh_layers()
+        self.layer_changed.emit()
 
     def move_layer_up(self):
         current_row = self.layer_list.currentRow()
