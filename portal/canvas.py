@@ -1,6 +1,18 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QBrush, QPainter, QWheelEvent, QImage, QPixmap, QColor, QPen, QPainterPath, QTransform, QCursor
+from PySide6.QtGui import (
+    QBrush,
+    QPainter,
+    QWheelEvent,
+    QImage,
+    QPixmap,
+    QColor,
+    QPen,
+    QPainterPath,
+    QTransform,
+    QCursor,
+    QPalette,
+)
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import DrawingLogic
 from .renderer import CanvasRenderer
@@ -267,8 +279,11 @@ class Canvas(QWidget):
         doc_height = self.app.document.height
 
         # Define colors for grid lines
-        minor_color = QColor(0, 0, 0, 40)
-        major_color = QColor(0, 0, 0, 100)
+        palette = self.palette()
+        minor_color = palette.color(QPalette.ColorRole.Mid)
+        minor_color.setAlpha(100)
+        major_color = palette.color(QPalette.ColorRole.Text)
+        major_color.setAlpha(100)
 
         # Find the range of document coordinates currently visible on the canvas
         doc_top_left = self.get_doc_coords(QPoint(0, 0))

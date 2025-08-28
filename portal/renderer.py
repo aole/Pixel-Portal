@@ -1,7 +1,16 @@
 import math
 
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QTransform
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QImage,
+    QPainter,
+    QPalette,
+    QPen,
+    QPixmap,
+    QTransform,
+)
 
 
 class CanvasRenderer:
@@ -84,7 +93,7 @@ class CanvasRenderer:
             return image_to_draw_on
 
     def _draw_border(self, painter, target_rect):
-        border_color = QColor("black")
+        border_color = self.canvas.palette().color(QPalette.ColorRole.Text)
         border_pen = QPen(border_color, 1)
         border_pen.setCosmetic(True)
         painter.setPen(border_pen)
@@ -98,17 +107,17 @@ class CanvasRenderer:
         transform.scale(self.canvas.zoom, self.canvas.zoom)
         painter.setTransform(transform)
 
-        black_pen = QPen(QColor("black"), 2)
-        black_pen.setCosmetic(True)
-        black_pen.setDashPattern([4, 4])
-        painter.setPen(black_pen)
+        pen1 = QPen(self.canvas.palette().color(QPalette.ColorRole.Highlight), 2)
+        pen1.setCosmetic(True)
+        pen1.setDashPattern([4, 4])
+        painter.setPen(pen1)
         painter.drawPath(self.canvas.selection_shape)
 
-        white_pen = QPen(QColor("white"), 2)
-        white_pen.setCosmetic(True)
-        white_pen.setDashPattern([4, 4])
-        white_pen.setDashOffset(4)
-        painter.setPen(white_pen)
+        pen2 = QPen(self.canvas.palette().color(QPalette.ColorRole.HighlightedText), 2)
+        pen2.setCosmetic(True)
+        pen2.setDashPattern([4, 4])
+        pen2.setDashOffset(4)
+        painter.setPen(pen2)
         painter.drawPath(self.canvas.selection_shape)
 
         painter.restore()
@@ -117,7 +126,7 @@ class CanvasRenderer:
         font = painter.font()
         font.setPointSize(8)
         painter.setFont(font)
-        painter.setPen(QColor("black"))
+        painter.setPen(self.canvas.palette().color(QPalette.ColorRole.Text))
 
         width_text = f"{self.app.document.width}px"
         height_text = f"{self.app.document.height}px"
