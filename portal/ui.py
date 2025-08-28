@@ -47,8 +47,8 @@ class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
         self.app = app
-        self.setWindowTitle("Portal")
-        self.resize(800, 600)
+        self.setWindowTitle("Pixel Portal")
+        self.resize(1200, 800)
 
         self.canvas = Canvas(self.app)
         self.setCentralWidget(self.canvas)
