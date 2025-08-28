@@ -27,6 +27,7 @@ from .tools.selectlassotool import SelectLassoTool
 from .tools.movetool import MoveTool
 from .tools.erasertool import EraserTool
 from .tools.pickertool import PickerTool
+from .tools.selectcolortool import SelectColorTool
 
 
 class Canvas(QWidget):
@@ -69,6 +70,7 @@ class Canvas(QWidget):
             "Select Rectangle": SelectRectangleTool(self),
             "Select Circle": SelectCircleTool(self),
             "Select Lasso": SelectLassoTool(self),
+            "Select Color": SelectColorTool(self),
             "Move": MoveTool(self),
             "Eraser": EraserTool(self),
             "Picker": PickerTool(self),
@@ -108,7 +110,7 @@ class Canvas(QWidget):
         if hasattr(self.current_tool, 'activate'):
             self.current_tool.activate()
         self.update()
-        if tool == "Picker":
+        if tool in ["Picker", "Select Color"]:
             self.setCursor(self.picker_cursor)
         elif tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
             self.setCursor(Qt.CrossCursor)
