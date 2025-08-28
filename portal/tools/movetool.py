@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QTransform, QPainterPath
+from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath
 
 from portal.tools.basetool import BaseTool
 
@@ -51,8 +51,7 @@ class MoveTool(BaseTool):
         painter.end()
 
         if self.moving_selection:
-            transform = QTransform().translate(delta.x(), delta.y())
-            self.canvas.selection_shape = self.original_selection_shape.transformed(transform)
+            self.canvas.selection_shape = self.original_selection_shape.translated(delta.x(), delta.y())
 
         self.canvas.update()
 
