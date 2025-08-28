@@ -1,4 +1,5 @@
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from portal.app import App
 from portal.layer_manager_widget import LayerManagerWidget
@@ -60,3 +61,27 @@ def test_remove_layer_button(app_with_widget):
 
     assert len(app.document.layer_manager.layers) == initial_count - 1
     assert widget.layer_list.count() == initial_count - 1
+
+
+def test_rename_layer(app_with_widget, qtbot):
+    """Test that a layer can be renamed through the UI."""
+    app, widget = app_with_widget
+
+    item_widget = widget.layer_list.itemWidget(widget.layer_list.item(0))
+    editable_label = item_widget.label  # This is the EditableLabel
+
+    # Simulate double-click on the internal NameLabel
+    qtbot.mouseDClick(editable_label.label, Qt.MouseButton.LeftButton)
+
+    # Check that we are in edit mode
+    assert editable_label.stack.currentWidget() == editable_label.edit
+
+    # Change the text
+    editable_label.edit.setText("New Name")
+
+    # Simulate finishing editing
+    editable_label.edit.editingFinished.emit()
+
+    # Check that the layer name is updated
+    assert app.document.layer_manager.layers[0].name == "New Name"
+    assert editable_label.text() == "New Name"

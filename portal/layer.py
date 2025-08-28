@@ -7,18 +7,31 @@ class Layer(QObject):
     """
     on_image_change = Signal()
     visibility_changed = Signal()
+    name_changed = Signal(str)
 
     def __init__(self, width: int, height: int, name: str):
         super().__init__()
         if not isinstance(name, str) or not name:
             raise ValueError("Layer name must be a non-empty string.")
 
-        self.name = name
+        self._name = name
         self._visible = True
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
 
         self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
         self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        if self._name != value:
+            if not isinstance(value, str) or not value:
+                raise ValueError("Layer name must be a non-empty string.")
+            self._name = value
+            self.name_changed.emit(self._name)
 
     @property
     def visible(self):
