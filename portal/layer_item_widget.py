@@ -1,6 +1,55 @@
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget
+
+
+class NameLabel(QLabel):
+    doubleClicked = Signal()
+
+    def __init__(self, text):
+        super().__init__(text)
+
+    def mouseDoubleClickEvent(self, event):
+        self.doubleClicked.emit()
+
+
+class EditableLabel(QWidget):
+    name_changed = Signal(str)
+
+    def __init__(self, text):
+        super().__init__()
+        self.label = NameLabel(text)
+        self.edit = QLineEdit(text)
+
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.label)
+        self.stack.addWidget(self.edit)
+
+        self.layout = QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.addWidget(self.stack)
+        self.setLayout(self.layout)
+
+        self.label.doubleClicked.connect(self.edit_name)
+        self.edit.editingFinished.connect(self.finish_edit)
+
+    def edit_name(self):
+        self.stack.setCurrentWidget(self.edit)
+        self.edit.setFocus()
+        self.edit.selectAll()
+
+    def finish_edit(self):
+        self.stack.setCurrentWidget(self.label)
+        new_name = self.edit.text()
+        self.label.setText(new_name)
+        self.name_changed.emit(new_name)
+
+    def setText(self, text):
+        self.label.setText(text)
+        self.edit.setText(text)
+
+    def text(self):
+        return self.label.text()
 
 
 class ClickableLabel(QLabel):
@@ -41,13 +90,18 @@ class LayerItemWidget(QWidget):
         self.thumbnail.setFixedHeight(64)
         self.layout.addWidget(self.thumbnail)
 
-        self.label = QLabel(layer.name)
+        self.label = EditableLabel(self.layer.name)
+        self.label.name_changed.connect(self.on_name_changed)
         self.layout.addWidget(self.label)
 
         self.update_thumbnail()
         self.update_visibility_icon()
         self.layer.on_image_change.connect(self.update_thumbnail)
         self.layer.visibility_changed.connect(self.update_visibility_icon)
+        self.layer.name_changed.connect(self.label.setText)
+
+    def on_name_changed(self, new_name):
+        self.layer.name = new_name
 
     def update_thumbnail(self):
         scaled_image = self.layer.image.scaled(64, 64, Qt.KeepAspectRatio)
