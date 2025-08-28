@@ -193,6 +193,10 @@ class App(QObject):
         if self.window:
             self.window.canvas.invert_selection()
 
+    def clear_layer(self):
+        if self.window:
+            self.window.layer_manager_widget.clear_layer()
+
     def exit(self):
         if self.window:
             self.window.close()

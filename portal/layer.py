@@ -1,4 +1,4 @@
-from PySide6.QtGui import QImage, QColor
+from PySide6.QtGui import QImage, QColor, QPainter
 from PySide6.QtCore import QSize, QObject, Signal
 
 class Layer(QObject):
@@ -30,9 +30,16 @@ class Layer(QObject):
             self._visible = value
             self.visibility_changed.emit()
 
-    def clear(self):
+    def clear(self, selection=None):
         """Fills the layer with transparent color."""
-        self.image.fill(QColor(0, 0, 0, 0))
+        if selection and not selection.isEmpty():
+            painter = QPainter(self.image)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.fillPath(selection, QColor(0, 0, 0, 0))
+            painter.end()
+        else:
+            self.image.fill(QColor(0, 0, 0, 0))
+            
         self.on_image_change.emit()
 
     def clone(self):

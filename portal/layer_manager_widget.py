@@ -114,7 +114,8 @@ class LayerManagerWidget(QWidget):
         """Clears the active layer."""
         active_layer = self.app.document.layer_manager.active_layer
         if active_layer:
-            active_layer.clear()
+            selection = self.app.window.canvas.selection_shape
+            active_layer.clear(selection)
             self.app.add_undo_state()
             self.layer_changed.emit()
 

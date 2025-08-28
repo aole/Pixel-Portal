@@ -105,6 +105,13 @@ class MainWindow(QMainWindow):
         paste_as_new_layer_action.triggered.connect(self.app.paste_as_new_layer)
         edit_menu.addAction(paste_as_new_layer_action)
 
+        edit_menu.addSeparator()
+
+        clear_action = QAction(QIcon("icons/clear.png"), "Clear", self)
+        clear_action.setShortcut(QKeySequence.Delete)
+        clear_action.triggered.connect(self.app.clear_layer)
+        edit_menu.addAction(clear_action)
+
         select_menu = menu_bar.addMenu("&Select")
 
         select_all_action = QAction("Select &All", self)

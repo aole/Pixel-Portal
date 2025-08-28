@@ -143,7 +143,7 @@ class Canvas(QWidget):
         else:
             self.selection_shape = qpp
         self.update()
-        self._update_selection_and_emit_size(qpp.subtracted(self.selection_shape))
+        self._update_selection_and_emit_size(self.selection_shape)
 
     def enterEvent(self, event):
         self.setFocus()
