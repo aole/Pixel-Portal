@@ -3,6 +3,8 @@ from .undo import UndoManager
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog
+import configparser
+import os
 
 
 class App(QObject):
@@ -20,6 +22,13 @@ class App(QObject):
         self.pen_width = 1
         self.undo_manager = UndoManager()
         self._prime_undo_stack()
+
+        self.config = configparser.ConfigParser()
+        self.config.read('settings.ini')
+        if not self.config.has_section('General'):
+            self.config.add_section('General')
+
+        self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
 
     def set_pen_width(self, width):
         self.pen_width = width
@@ -50,8 +59,13 @@ class App(QObject):
             self.window.canvas.update()
 
     def open_document(self):
-        file_path, _ = QFileDialog.getOpenFileName(self.window, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
+        file_path, _ = QFileDialog.getOpenFileName(self.window, "Open Image", self.last_directory, "Image Files (*.png *.jpg *.bmp)")
         if file_path:
+            self.last_directory = os.path.dirname(file_path)
+            self.config.set('General', 'last_directory', self.last_directory)
+            with open('settings.ini', 'w') as configfile:
+                self.config.write(configfile)
+
             image = QImage(file_path)
             if not image.isNull():
                 self.document = Document(image.width(), image.height())
@@ -63,8 +77,13 @@ class App(QObject):
                     self.window.canvas.update()
 
     def save_document(self):
-        file_path, _ = QFileDialog.getSaveFileName(self.window, "Save Image", "", "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp)")
+        file_path, _ = QFileDialog.getSaveFileName(self.window, "Save Image", self.last_directory, "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp)")
         if file_path:
+            self.last_directory = os.path.dirname(file_path)
+            self.config.set('General', 'last_directory', self.last_directory)
+            with open('settings.ini', 'w') as configfile:
+                self.config.write(configfile)
+
             image = self.document.render()
             image.save(file_path)
 
