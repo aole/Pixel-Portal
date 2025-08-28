@@ -239,7 +239,7 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.selection_button)
 
-        ai_action = QAction(QIcon("icons/NA.png"), "AI Image", self)
+        ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self)
         ai_action.triggered.connect(self.open_ai_dialog)
         toolbar.addAction(ai_action)
 
