@@ -5,6 +5,7 @@ from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipelin
 from PIL import Image
 import os
 from huggingface_hub import hf_hub_download
+from datetime import datetime
 
 def prompt_to_image(
     prompt: str,
@@ -60,8 +61,10 @@ def prompt_to_image(
     ).images[0]
 
     # --- 4. Save the Intermediate Image ---
-    generated_image.save(os.path.join(output_dir, "generated_1024x1024.png"))
-    print(f"Saved 1024x1024 image to {output_dir}")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"generated_{timestamp}.png"
+    generated_image.save(os.path.join(output_dir, filename))
+    print(f"Saved 1024x1024 image to {os.path.join(output_dir, filename)}")
 
     # --- 5. Scale Image to Original Size ---
     print(f"Resizing generated image to original size: {original_size}")
@@ -132,8 +135,10 @@ def image_to_image(
     ).images[0]
 
     # --- 5. Save the Intermediate Image ---
-    generated_image.save(os.path.join(output_dir, "generated_1024x1024.png"))
-    print(f"Saved 1024x1024 image to {output_dir}")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"generated_{timestamp}.png"
+    generated_image.save(os.path.join(output_dir, filename))
+    print(f"Saved 1024x1024 image to {os.path.join(output_dir, filename)}")
 
     # --- 6. Scale Image to Original Size ---
     print(f"Resizing generated image to original size: {original_size}")
