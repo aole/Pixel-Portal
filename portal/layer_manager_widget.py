@@ -46,11 +46,11 @@ class LayerManagerWidget(QWidget):
         self.duplicate_button.clicked.connect(self.duplicate_layer)
         self.toolbar.addWidget(self.duplicate_button)
 
-        self.clear_button = QPushButton(QIcon("icons/clear.png"), "")
+        self.clear_button = QPushButton(QIcon("icons/layerclear.png"), "")
         self.clear_button.clicked.connect(self.clear_layer)
         self.toolbar.addWidget(self.clear_button)
 
-        self.move_up_button = QPushButton(QIcon("icons/mirrorx.png"), "") # Placeholder icon
+        self.move_up_button = QPushButton(QIcon("icons/layerup.png"), "")
         self.move_up_button.clicked.connect(self.move_layer_up)
         self.toolbar.addWidget(self.move_up_button)
 
