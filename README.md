@@ -1,6 +1,6 @@
-# Portal Image Editor
+# Pixel-Portal Image Editor
 
-Portal is a lightweight, cross-platform image editor built with Python and PySide6. It provides a simple yet powerful interface for image manipulation, featuring basic drawing tools, layer management, and cutting-edge AI-powered image generation capabilities.
+Pixel-Portal is a lightweight, cross-platform image editor built with Python and PySide6. It provides a simple yet powerful interface for image manipulation, featuring basic drawing tools, layer management, and cutting-edge AI-powered image generation capabilities.
 
 ## Key Features
 
