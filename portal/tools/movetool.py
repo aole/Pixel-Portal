@@ -17,6 +17,8 @@ class MoveTool(BaseTool):
         if not active_layer:
             return
 
+        self.canvas.temp_image_replaces_active_layer = True
+
         if self.canvas.selection_shape:
             self.moving_selection = True
             self.original_selection_shape = self.canvas.selection_shape
@@ -75,4 +77,5 @@ class MoveTool(BaseTool):
         self.canvas.app.add_undo_state()
         self.canvas.temp_image = None
         self.canvas.original_image = None
+        self.canvas.temp_image_replaces_active_layer = False
         self.canvas.update()

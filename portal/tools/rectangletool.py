@@ -14,6 +14,7 @@ class RectangleTool(BaseTool):
         active_layer = self.canvas.app.document.layer_manager.active_layer
         if not active_layer:
             return
+        self.canvas.temp_image_replaces_active_layer = True
         self.canvas.original_image = active_layer.image.copy()
         self.canvas.temp_image = self.canvas.original_image.copy()
 
@@ -49,4 +50,5 @@ class RectangleTool(BaseTool):
         self.canvas.app.add_undo_state()
         self.canvas.temp_image = None
         self.canvas.original_image = None
+        self.canvas.temp_image_replaces_active_layer = False
         self.canvas.update()
