@@ -45,6 +45,7 @@ class LineTool(BaseTool):
         painter.drawLine(self.start_point, doc_pos)
 
         active_layer.image = self.canvas.temp_image
+        active_layer.on_image_change.emit()
         self.canvas.app.add_undo_state()
         self.canvas.temp_image = None
         self.canvas.original_image = None

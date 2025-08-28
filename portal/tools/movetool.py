@@ -67,12 +67,14 @@ class MoveTool(BaseTool):
             painter = QPainter(active_layer.image)
             painter.drawImage(delta, self.canvas.original_image)
             painter.end()
+            active_layer.on_image_change.emit()
             self.moving_selection = False
             self.original_selection_shape = None
         else:
             painter = QPainter(active_layer.image)
             painter.drawImage(delta, self.canvas.original_image)
             painter.end()
+            active_layer.on_image_change.emit()
 
         self.canvas.app.add_undo_state()
         self.canvas.temp_image = None

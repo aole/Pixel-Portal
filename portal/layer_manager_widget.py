@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
 from .app import App
+from .layer_item_widget import LayerItemWidget
 
 
 class LayerManagerWidget(QWidget):
@@ -65,10 +66,14 @@ class LayerManagerWidget(QWidget):
         self.layer_list.blockSignals(True)
         self.layer_list.clear()
         for layer in reversed(self.app.document.layer_manager.layers):
-            item = QListWidgetItem(layer.name)
+            item = QListWidgetItem()
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if layer.visible else Qt.Unchecked)
             self.layer_list.addItem(item)
+
+            item_widget = LayerItemWidget(layer)
+            item.setSizeHint(item_widget.sizeHint())
+            self.layer_list.setItemWidget(item, item_widget)
 
         if self.app.document.layer_manager.active_layer:
             active_index = len(self.app.document.layer_manager.layers) - 1 - self.app.document.layer_manager.active_layer_index

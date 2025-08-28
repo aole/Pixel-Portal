@@ -75,10 +75,12 @@ class Document:
     def flip_horizontal(self):
         for layer in self.layer_manager.layers:
             layer.image = layer.image.mirrored(True, False)
+            layer.on_image_change.emit()
 
     def flip_vertical(self):
         for layer in self.layer_manager.layers:
             layer.image = layer.image.mirrored(False, True)
+            layer.on_image_change.emit()
 
     def resize(self, width, height, interpolation):
         self.width = width
@@ -91,6 +93,7 @@ class Document:
 
         for layer in self.layer_manager.layers:
             layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
+            layer.on_image_change.emit()
 
     def crop(self, rect):
         self.width = rect.width()
@@ -98,6 +101,7 @@ class Document:
 
         for layer in self.layer_manager.layers:
             layer.image = layer.image.copy(rect)
+            layer.on_image_change.emit()
 
     def get_current_image_for_ai(self):
         q_image = self.render()
