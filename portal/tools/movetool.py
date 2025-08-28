@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt
+from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QTransform, QPainterPath
 
 from portal.tools.basetool import BaseTool
 
@@ -9,6 +9,7 @@ class MoveTool(BaseTool):
         super().__init__(canvas)
         self.start_point = QPoint()
         self.moving_selection = False
+        self.original_selection_shape: QPainterPath | None = None
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
@@ -18,6 +19,8 @@ class MoveTool(BaseTool):
 
         if self.canvas.selection_shape:
             self.moving_selection = True
+            self.original_selection_shape = self.canvas.selection_shape
+
             self.canvas.original_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
             self.canvas.original_image.fill(Qt.transparent)
             painter = QPainter(self.canvas.original_image)
@@ -32,6 +35,7 @@ class MoveTool(BaseTool):
             painter.end()
         else:
             self.canvas.original_image = active_layer.image.copy()
+            active_layer.image.fill(Qt.transparent)
 
         self.canvas.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
         self.canvas.temp_image.fill(Qt.transparent)
@@ -45,6 +49,11 @@ class MoveTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         painter.drawImage(delta, self.canvas.original_image)
         painter.end()
+
+        if self.moving_selection:
+            transform = QTransform().translate(delta.x(), delta.y())
+            self.canvas.selection_shape = self.original_selection_shape.transformed(transform)
+
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -58,8 +67,8 @@ class MoveTool(BaseTool):
             painter.drawImage(delta, self.canvas.original_image)
             painter.end()
             self.moving_selection = False
+            self.original_selection_shape = None
         else:
-            active_layer.image.fill(Qt.transparent)
             painter = QPainter(active_layer.image)
             painter.drawImage(delta, self.canvas.original_image)
             painter.end()
