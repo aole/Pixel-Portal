@@ -63,6 +63,7 @@ class Canvas(QWidget):
         self.selection_shape = None
         self.ctrl_pressed = False
         self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
+        self.is_erasing_preview = False
 
         self.tools = {
             "Pen": PenTool(self),
@@ -446,3 +447,4 @@ class Canvas(QWidget):
         self.zoom = min(zoom_x, zoom_y)
         self.zoom_changed.emit(self.zoom)
         self.update()
+        

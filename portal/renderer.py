@@ -112,6 +112,12 @@ class CanvasRenderer:
 
                 p = QPainter(final_image)
                 p.drawImage(0, 0, composite_image)
+                
+                # If erasing, use DestinationOut mode to "punch a hole" in the composite image
+                is_erasing = self.app.tool == "Eraser" or self.canvas.is_erasing_preview
+                if is_erasing:
+                    p.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+
                 p.drawImage(0, 0, self.canvas.temp_image)
                 p.end()
 
@@ -168,4 +174,3 @@ class CanvasRenderer:
         height_x = target_rect.left() - height_rect.width() - 5
         height_y = target_rect.bottom()
         painter.drawText(height_x, height_y, height_text)
-        

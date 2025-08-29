@@ -50,7 +50,8 @@ class PenTool(BaseTool):
             points=self.points,
             color=self.app.pen_color,
             width=self.app.pen_width,
-            brush_type=self.app.brush_type
+            brush_type=self.app.brush_type,
+            drawing=self.canvas.drawing,
         )
 
         self.app.execute_command(command)
@@ -74,28 +75,16 @@ class PenTool(BaseTool):
         # Handle selection mask
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-
-        pen = QPen()
-        pen.setColor(self.app.pen_color)
-        pen.setWidth(self.app.pen_width)
-
-        if self.app.brush_type == "Circular":
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        else:
-            pen.setCapStyle(Qt.PenCapStyle.SquareCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-
-        painter.setPen(pen)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-
-        # Draw the path from the collected points
+        
+        # Set the pen for the live preview
+        painter.setPen(QPen(self.app.pen_color))
+        
+        # Use the drawing class to handle mirroring and brush styles
         if len(self.points) == 1:
-            painter.drawPoint(self.points[0])
+            self.canvas.drawing.draw_brush(painter, self.points[0])
         else:
-            path = QPainterPath(self.points[0])
-            for i in range(1, len(self.points)):
-                path.lineTo(self.points[i])
-            painter.drawPath(path)
+            for i in range(len(self.points) - 1):
+                self.canvas.drawing.draw_line_with_brush(painter, self.points[i], self.points[i+1], erase=False)
 
         painter.end()
+        

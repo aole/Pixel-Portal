@@ -44,6 +44,7 @@ class LineTool(BaseTool):
             color=self.canvas.app.pen_color,
             width=self.canvas.app.pen_width,
             brush_type=self.canvas.app.brush_type,
+            drawing=self.drawing,
         )
         self.canvas.app.execute_command(command)
 

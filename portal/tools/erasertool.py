@@ -11,6 +11,7 @@ class EraserTool(BaseTool):
         self.points = []
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        self.canvas.is_erasing_preview = True
         active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:
             return
@@ -36,6 +37,7 @@ class EraserTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        self.canvas.is_erasing_preview = False
         if not self.points or not self.app.document.layer_manager.active_layer:
             # Clean up preview and return
             self.points = []
@@ -52,7 +54,8 @@ class EraserTool(BaseTool):
             color=self.app.pen_color, # Color is needed for the pen, but will be ignored by the composition mode
             width=self.app.pen_width,
             brush_type=self.app.brush_type,
-            erase=True
+            erase=True,
+            drawing=self.canvas.drawing,
         )
 
         self.app.execute_command(command)
@@ -77,29 +80,16 @@ class EraserTool(BaseTool):
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
 
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        # The mask can be any opaque color.
+        painter.setPen(QPen(Qt.black))
 
-        pen = QPen()
-        pen.setColor(Qt.black) # Color doesn't matter for clearing
-        pen.setWidth(self.app.pen_width)
-
-        if self.app.brush_type == "Circular":
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        else:
-            pen.setCapStyle(Qt.PenCapStyle.SquareCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-
-        painter.setPen(pen)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-
-        # Draw the path from the collected points
+        # Use the normal drawing function to create an opaque mask on the temp image.
+        # The renderer will then use this mask to "erase" from the main preview.
         if len(self.points) == 1:
-            painter.drawPoint(self.points[0])
+            self.canvas.drawing.draw_brush(painter, self.points[0])
         else:
-            path = QPainterPath(self.points[0])
-            for i in range(1, len(self.points)):
-                path.lineTo(self.points[i])
-            painter.drawPath(path)
+            for i in range(len(self.points) - 1):
+                self.canvas.drawing.draw_line_with_brush(painter, self.points[i], self.points[i+1], erase=False)
 
         painter.end()
+        

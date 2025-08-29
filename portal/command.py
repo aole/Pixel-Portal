@@ -26,13 +26,14 @@ class Command(ABC):
 
 
 class DrawCommand(Command):
-    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, erase: bool = False):
+    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, drawing, erase: bool = False):
         self.layer = layer
         self.points = points
         self.color = color
         self.width = width
         self.brush_type = brush_type
         self.erase = erase
+        self.drawing = drawing
 
         self.bounding_rect = self._calculate_bounding_rect()
         self.before_image = None
@@ -41,13 +42,45 @@ class DrawCommand(Command):
         if not self.points:
             return QRect()
 
-        path = QPainterPath(self.points[0])
+        doc_width = self.drawing.app.document.width
+        doc_height = self.drawing.app.document.height
+        mirror_x = self.drawing.app.mirror_x
+        mirror_y = self.drawing.app.mirror_y
+
+        # Create the original path
+        original_path = QPainterPath(self.points[0])
         for i in range(1, len(self.points)):
-            path.lineTo(self.points[i])
+            original_path.lineTo(self.points[i])
+
+        # Create a combined path including mirrored versions
+        combined_path = QPainterPath()
+        combined_path.addPath(original_path)
+
+        if mirror_x:
+            mirrored_path_x = QPainterPath()
+            mirrored_path_x.moveTo(doc_width - 1 - self.points[0].x(), self.points[0].y())
+            for i in range(1, len(self.points)):
+                mirrored_path_x.lineTo(doc_width - 1 - self.points[i].x(), self.points[i].y())
+            combined_path.addPath(mirrored_path_x)
+
+        if mirror_y:
+            mirrored_path_y = QPainterPath()
+            mirrored_path_y.moveTo(self.points[0].x(), doc_height - 1 - self.points[0].y())
+            for i in range(1, len(self.points)):
+                mirrored_path_y.lineTo(self.points[i].x(), doc_height - 1 - self.points[i].y())
+            combined_path.addPath(mirrored_path_y)
+
+        if mirror_x and mirror_y:
+            mirrored_path_xy = QPainterPath()
+            mirrored_path_xy.moveTo(doc_width - 1 - self.points[0].x(), doc_height - 1 - self.points[0].y())
+            for i in range(1, len(self.points)):
+                mirrored_path_xy.lineTo(doc_width - 1 - self.points[i].x(), doc_height - 1 - self.points[i].y())
+            combined_path.addPath(mirrored_path_xy)
+
 
         stroker = QPainterPathStroker()
         stroker.setWidth(self.width)
-        stroke = stroker.createStroke(path)
+        stroke = stroker.createStroke(combined_path)
         # Add a 1 pixel buffer for safety
         rect = stroke.boundingRect().toRect().adjusted(-1, -1, 1, 1)
 
@@ -63,36 +96,33 @@ class DrawCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy(self.bounding_rect)
 
+        # Temporarily set the app's state to what it was when the command was created.
+        # This is crucial for redo and ensures the drawing methods use the correct parameters.
+        original_width = self.drawing.app.pen_width
+        original_brush = self.drawing.app.brush_type
+        
+        self.drawing.app.set_pen_width(self.width)
+        self.drawing.app.set_brush_type(self.brush_type)
+
         # Perform the drawing
         painter = QPainter(self.layer.image)
-
-        if self.erase:
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
-
-        pen = QPen()
-        pen.setColor(self.color)
-        pen.setWidth(self.width)
-
-        if self.brush_type == "Circular":
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        else:
-            pen.setCapStyle(Qt.PenCapStyle.SquareCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-
-        painter.setPen(pen)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        painter.setPen(QPen(self.color))
 
         if len(self.points) == 1:
-            painter.drawPoint(self.points[0])
+            if self.erase:
+                self.drawing.erase_brush(painter, self.points[0])
+            else:
+                self.drawing.draw_brush(painter, self.points[0])
         else:
-            path = QPainterPath(self.points[0])
-            for i in range(1, len(self.points)):
-                path.lineTo(self.points[i])
-            painter.drawPath(path)
+            for i in range(len(self.points) - 1):
+                self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], erase=self.erase)
 
         painter.end()
         self.layer.on_image_change.emit()
+
+        # Restore the application's state
+        self.drawing.app.set_pen_width(original_width)
+        self.drawing.app.set_brush_type(original_brush)
 
     def undo(self):
         if self.before_image:
@@ -157,28 +187,46 @@ class CropCommand(Command):
             # We need to re-emit signals so the UI updates
             self.document.layer_manager.layer_structure_changed.emit()
 
-class MoveCommand(Command):
-    def __init__(self, layer: Layer, original_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
-        self.layer = layer
-        self.original_image = original_image
-        self.moved_image = moved_image
-        self.delta = delta
-        self.original_selection_shape = original_selection_shape
+
+class AddLayerCommand(Command):
+    def __init__(self, document: Document, image: QImage = None, name: str = None):
+        self.document = document
+        self.image = image
+        self.name = name
+        self.added_layer = None
+        self.insertion_index = None
+        self.old_active_layer = document.layer_manager.active_layer
 
     def execute(self):
-        painter = QPainter(self.layer.image)
-        painter.setCompositionMode(QPainter.CompositionMode_Source)
-        painter.drawImage(self.delta, self.moved_image)
-        painter.end()
-        self.layer.on_image_change.emit()
+        if self.added_layer is None:
+            # First execution: create the layer
+            if self.image:
+                self.document.layer_manager.add_layer_with_image(self.image, self.name)
+            else:
+                self.document.layer_manager.add_layer(self.name)
+            self.added_layer = self.document.layer_manager.active_layer
+            self.insertion_index = self.document.layer_manager.active_layer_index
+        else:
+            # Redo: re-insert the existing layer object
+            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
+            self.document.layer_manager.select_layer(self.insertion_index)
+            self.document.layer_manager.layer_structure_changed.emit()
 
     def undo(self):
-        painter = QPainter(self.layer.image)
-        painter.setCompositionMode(QPainter.CompositionMode_Source)
-        painter.drawImage(0, 0, self.original_image)
-        painter.end()
-        self.layer.on_image_change.emit()
-        
+        if self.added_layer:
+            try:
+                # `remove_layer` needs an index, and it's safer to find it dynamically
+                index = self.document.layer_manager.layers.index(self.added_layer)
+                self.document.layer_manager.remove_layer(index)
+
+                # Restore the previously active layer
+                if self.old_active_layer in self.document.layer_manager.layers:
+                    old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
+                    self.document.layer_manager.select_layer(old_active_index)
+
+            except ValueError:
+                pass
+
 class PasteCommand(Command):
     def __init__(self, document: Document, q_image: QImage):
         self.document = document
@@ -300,45 +348,27 @@ class ShapeCommand(Command):
             painter.drawImage(buffered_rect.topLeft(), self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
-            
-class AddLayerCommand(Command):
-    def __init__(self, document: Document, image: QImage = None, name: str = None):
-        self.document = document
-        self.image = image
-        self.name = name
-        self.added_layer = None
-        self.insertion_index = None
-        self.old_active_layer = document.layer_manager.active_layer
+
+class MoveCommand(Command):
+    def __init__(self, layer: Layer, original_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
+        self.layer = layer
+        self.original_image = original_image
+        self.moved_image = moved_image
+        self.delta = delta
+        self.original_selection_shape = original_selection_shape
 
     def execute(self):
-        if self.added_layer is None:
-            # First execution: create the layer
-            if self.image:
-                self.document.layer_manager.add_layer_with_image(self.image, self.name)
-            else:
-                self.document.layer_manager.add_layer(self.name)
-            self.added_layer = self.document.layer_manager.active_layer
-            self.insertion_index = self.document.layer_manager.active_layer_index
-        else:
-            # Redo: re-insert the existing layer object
-            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
-            self.document.layer_manager.select_layer(self.insertion_index)
-            self.document.layer_manager.layer_structure_changed.emit()
+        painter = QPainter(self.layer.image)
+        painter.drawImage(self.delta, self.moved_image)
+        painter.end()
+        self.layer.on_image_change.emit()
 
     def undo(self):
-        if self.added_layer:
-            try:
-                # `remove_layer` needs an index, and it's safer to find it dynamically
-                index = self.document.layer_manager.layers.index(self.added_layer)
-                self.document.layer_manager.remove_layer(index)
-
-                # Restore the previously active layer
-                if self.old_active_layer in self.document.layer_manager.layers:
-                    old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
-                    self.document.layer_manager.select_layer(old_active_index)
-
-            except ValueError:
-                pass
+        painter = QPainter(self.layer.image)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.drawImage(0, 0, self.original_image)
+        painter.end()
+        self.layer.on_image_change.emit()
 
 class DuplicateLayerCommand(Command):
     def __init__(self, layer_manager, index: int):
