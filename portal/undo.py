@@ -15,9 +15,7 @@ class UndoManager:
         Adds a command to the undo stack.
         This is called after a command has been executed.
         """
-        print(f"[DEBUG] UndoManager.add_command: Before, undo_stack size = {len(self.undo_stack)}")
         self.undo_stack.append(command)
-        print(f"[DEBUG] UndoManager.add_command: After, undo_stack size = {len(self.undo_stack)}")
         self.redo_stack.clear()
 
     def undo(self):
