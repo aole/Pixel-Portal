@@ -258,6 +258,18 @@ class MainWindow(QMainWindow):
         
         top_toolbar.addSeparator()
 
+        mirror_x_action = QAction(QIcon("icons/mirrorx.png"), "Mirror X", self)
+        mirror_x_action.setCheckable(True)
+        mirror_x_action.triggered.connect(self.app.set_mirror_x)
+        top_toolbar.addAction(mirror_x_action)
+
+        mirror_y_action = QAction(QIcon("icons/mirrory.png"), "Mirror Y", self)
+        mirror_y_action.setCheckable(True)
+        mirror_y_action.triggered.connect(self.app.set_mirror_y)
+        top_toolbar.addAction(mirror_y_action)
+
+        top_toolbar.addSeparator()
+
         grid_action = QAction(QIcon("icons/grid.png"), "Toggle Grid", self)
         grid_action.setCheckable(True)
         grid_action.triggered.connect(self.canvas.toggle_grid)
@@ -379,6 +391,9 @@ class MainWindow(QMainWindow):
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
+
+        self.app.mirror_x_changed.connect(self.on_mirror_changed)
+        self.app.mirror_y_changed.connect(self.on_mirror_changed)
 
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())
@@ -502,3 +517,7 @@ class MainWindow(QMainWindow):
     def update_brush_button(self, brush_type):
         self.circular_brush_action.setChecked(brush_type == "Circular")
         self.square_brush_action.setChecked(brush_type == "Square")
+
+    def on_mirror_changed(self):
+        is_mirroring = self.app.mirror_x or self.app.mirror_y
+        

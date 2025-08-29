@@ -14,6 +14,8 @@ class App(QObject):
     brush_type_changed = Signal(str)
     undo_stack_changed = Signal()
     document_changed = Signal()
+    mirror_x_changed = Signal(bool)
+    mirror_y_changed = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -28,12 +30,23 @@ class App(QObject):
         self.undo_manager = UndoManager()
         self._prime_undo_stack()
 
+        self.mirror_x = False
+        self.mirror_y = False
+
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
         if not self.config.has_section('General'):
             self.config.add_section('General')
 
         self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
+
+    def set_mirror_x(self, enabled):
+        self.mirror_x = enabled
+        self.mirror_x_changed.emit(self.mirror_x)
+
+    def set_mirror_y(self, enabled):
+        self.mirror_y = enabled
+        self.mirror_y_changed.emit(self.mirror_y)
 
     def set_pen_width(self, width):
         self.pen_width = width
@@ -219,3 +232,4 @@ class App(QObject):
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
+            

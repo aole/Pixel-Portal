@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import QPoint, QRect
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -27,12 +27,37 @@ class CanvasRenderer:
         self._draw_background(painter, target_rect)
         image_to_draw_on = self._draw_document(painter, target_rect)
         self._draw_border(painter, target_rect)
+        self._draw_mirror_guides(painter, target_rect)
         self.canvas.draw_grid(painter, target_rect)
         self.canvas.draw_cursor(painter, target_rect, image_to_draw_on)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
 
         self._draw_document_dimensions(painter, target_rect)
+
+    def _draw_mirror_guides(self, painter, target_rect):
+        if not self.app.mirror_x and not self.app.mirror_y:
+            return
+
+        painter.save()
+        pen = QPen(QColor(255, 0, 0, 150)) # A semi-transparent red
+        pen.setCosmetic(True)
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+
+        if self.app.mirror_x:
+            center_x = target_rect.x() + (doc_width / 2) * self.canvas.zoom
+            painter.drawLine(int(center_x), 0, int(center_x), self.canvas.height())
+
+        if self.app.mirror_y:
+            center_y = target_rect.y() + (doc_height / 2) * self.canvas.zoom
+            painter.drawLine(0, int(center_y), self.canvas.width(), int(center_y))
+
+        painter.restore()
+
 
     def _draw_background(self, painter, target_rect):
         if self.canvas.background.is_checkered:
@@ -143,3 +168,4 @@ class CanvasRenderer:
         height_x = target_rect.left() - height_rect.width() - 5
         height_y = target_rect.bottom()
         painter.drawText(height_x, height_y, height_text)
+        

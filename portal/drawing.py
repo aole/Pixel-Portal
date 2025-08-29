@@ -1,4 +1,4 @@
-from PySide6.QtGui import QPainter, QColor
+from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtCore import Qt, QPoint
 import math
 
@@ -8,10 +8,43 @@ class Drawing:
         self.app = app
 
     def draw_brush(self, painter, point):
-        if self.app.brush_type == "Circular":
-            self.draw_circular_brush(painter, point)
-        elif self.app.brush_type == "Square":
-            self.draw_square_brush(painter, point)
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+
+        points_to_draw = {point}
+        if self.app.mirror_x:
+            points_to_draw.add(QPoint(doc_width - 1 - point.x(), point.y()))
+        if self.app.mirror_y:
+            points_to_draw.add(QPoint(point.x(), doc_height - 1 - point.y()))
+        if self.app.mirror_x and self.app.mirror_y:
+            points_to_draw.add(QPoint(doc_width - 1 - point.x(), doc_height - 1 - point.y()))
+
+        for p in points_to_draw:
+            if self.app.brush_type == "Circular":
+                self.draw_circular_brush(painter, p)
+            elif self.app.brush_type == "Square":
+                self.draw_square_brush(painter, p)
+
+    def erase_brush(self, painter, point):
+        doc_width = self.app.document.width
+        doc_height = self.app.document.height
+
+        points_to_erase = {point}
+        if self.app.mirror_x:
+            points_to_erase.add(QPoint(doc_width - 1 - point.x(), point.y()))
+        if self.app.mirror_y:
+            points_to_erase.add(QPoint(point.x(), doc_height - 1 - point.y()))
+        if self.app.mirror_x and self.app.mirror_y:
+            points_to_erase.add(QPoint(doc_width - 1 - point.x(), doc_height - 1 - point.y()))
+
+        painter.save()
+        painter.setCompositionMode(QPainter.CompositionMode_Clear)
+        pen = QPen(QColor(0, 0, 0, 0), self.app.pen_width, Qt.SolidLine)
+        painter.setPen(pen)
+
+        for p in points_to_erase:
+            painter.drawPoint(p)
+        painter.restore()
 
     def draw_square_brush(self, painter, point):
         pen_width = self.app.pen_width
@@ -31,12 +64,14 @@ class Drawing:
                 if dist_x * dist_x + dist_y * dist_y <= radius * radius:
                     painter.drawPoint(x, y)
 
-    def draw_line_with_brush(self, painter, p1, p2):
+    def draw_line_with_brush(self, painter, p1, p2, erase=False):
         dx = p2.x() - p1.x()
         dy = p2.y() - p1.y()
 
+        brush_func = self.erase_brush if erase else self.draw_brush
+
         if dx == 0 and dy == 0:
-            self.draw_brush(painter, p1)
+            brush_func(painter, p1)
             return
 
         steps = max(abs(dx), abs(dy))
@@ -50,7 +85,7 @@ class Drawing:
         y = float(p1.y())
 
         for i in range(int(steps) + 1):
-            self.draw_brush(painter, QPoint(round(x), round(y)))
+            brush_func(painter, QPoint(round(x), round(y)))
             x += x_inc
             y += y_inc
 
@@ -122,3 +157,4 @@ class Drawing:
                 stack.append((x - 1, y))
                 stack.append((x, y + 1))
                 stack.append((x, y - 1))
+                
