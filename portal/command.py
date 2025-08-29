@@ -26,12 +26,13 @@ class Command(ABC):
 
 
 class DrawCommand(Command):
-    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str):
+    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, erase: bool = False):
         self.layer = layer
         self.points = points
         self.color = color
         self.width = width
         self.brush_type = brush_type
+        self.erase = erase
 
         self.bounding_rect = self._calculate_bounding_rect()
         self.before_image = None
@@ -64,6 +65,10 @@ class DrawCommand(Command):
 
         # Perform the drawing
         painter = QPainter(self.layer.image)
+
+        if self.erase:
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+
         pen = QPen()
         pen.setColor(self.color)
         pen.setWidth(self.width)
@@ -227,3 +232,89 @@ class PasteCommand(Command):
                     self.document.layer_manager.select_layer(old_active_index)
             except ValueError:
                 pass
+
+
+class FillCommand(Command):
+    def __init__(self, document: Document, layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, drawing, mirror_x: bool, mirror_y: bool):
+        self.document = document
+        self.layer = layer
+        self.fill_pos = fill_pos
+        self.fill_color = fill_color
+        self.selection_shape = selection_shape
+        self.drawing = drawing
+        self.mirror_x = mirror_x
+        self.mirror_y = mirror_y
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+
+        self.drawing.app.pen_color = self.fill_color
+
+        doc_width = self.document.width
+        doc_height = self.document.height
+        processed_points = set()
+        points_to_fill = [self.fill_pos]
+
+        if self.mirror_x:
+            points_to_fill.append(QPoint(doc_width - 1 - self.fill_pos.x(), self.fill_pos.y()))
+        if self.mirror_y:
+            points_to_fill.append(QPoint(self.fill_pos.x(), doc_height - 1 - self.fill_pos.y()))
+        if self.mirror_x and self.mirror_y:
+            points_to_fill.append(QPoint(doc_width - 1 - self.fill_pos.x(), doc_height - 1 - self.fill_pos.y()))
+
+        for point in points_to_fill:
+            if tuple(point.toTuple()) not in processed_points:
+                self.drawing.flood_fill(point, self.selection_shape)
+                processed_points.add(tuple(point.toTuple()))
+
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        if self.before_image:
+            painter = QPainter(self.layer.image)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            painter.drawImage(0, 0, self.before_image)
+            painter.end()
+            self.layer.on_image_change.emit()
+
+
+class ShapeCommand(Command):
+    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, drawing):
+        self.layer = layer
+        self.rect = rect
+        self.shape_type = shape_type
+        self.color = color
+        self.width = width
+        self.drawing = drawing
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            # Add a 1 pixel buffer for safety, especially for shape outlines
+            buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+            self.before_image = self.layer.image.copy(buffered_rect)
+
+        painter = QPainter(self.layer.image)
+        pen = QPen(self.color)
+        pen.setWidth(self.width)
+        painter.setPen(pen)
+
+        if self.shape_type == 'ellipse':
+            self.drawing.draw_ellipse(painter, self.rect)
+        elif self.shape_type == 'rectangle':
+            self.drawing.draw_rect(painter, self.rect)
+
+        painter.end()
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        if self.before_image:
+            painter = QPainter(self.layer.image)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            # Add a 1 pixel buffer for safety
+            buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+            painter.drawImage(buffered_rect.topLeft(), self.before_image)
+            painter.end()
+            self.layer.on_image_change.emit()
