@@ -1,5 +1,5 @@
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Signal, Qt, QRect
+from PySide6.QtGui import QPixmap, QPainter, QColor
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget
 
 
@@ -85,10 +85,16 @@ class LayerItemWidget(QWidget):
         self.visibility_icon.clicked.connect(self.on_visibility_clicked)
         self.layout.addWidget(self.visibility_icon)
 
+        thumbnail_container = QWidget()
+        thumbnail_layout = QHBoxLayout(thumbnail_container)
+        padding = 5
+        thumbnail_layout.setContentsMargins(padding, padding, padding, padding)
+
         self.thumbnail = QLabel()
         self.thumbnail.setFixedWidth(64)
         self.thumbnail.setFixedHeight(64)
-        self.layout.addWidget(self.thumbnail)
+        thumbnail_layout.addWidget(self.thumbnail)
+        self.layout.addWidget(thumbnail_container)
 
         self.label = EditableLabel(self.layer.name)
         self.label.name_changed.connect(self.on_name_changed)
@@ -104,9 +110,52 @@ class LayerItemWidget(QWidget):
         self.layer.name = new_name
 
     def update_thumbnail(self):
-        scaled_image = self.layer.image.scaled(64, 64, Qt.KeepAspectRatio)
-        pixmap = QPixmap.fromImage(scaled_image)
-        self.thumbnail.setPixmap(pixmap)
+        # The size of the thumbnail label
+        label_size = self.thumbnail.size()
+        width = label_size.width()
+        height = label_size.height()
+
+        # Create a new pixmap to draw on
+        bordered_pixmap = QPixmap(label_size)
+        bordered_pixmap.fill(Qt.GlobalColor.transparent)
+
+        # Create a painter
+        painter = QPainter(bordered_pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw black border
+        painter.setPen(QColor("black"))
+        painter.drawRect(0, 0, width - 1, height - 1)
+
+        # Draw white border
+        painter.setPen(QColor("white"))
+        painter.drawRect(1, 1, width - 3, height - 3)
+
+        # The area for the image, inside the borders
+        image_rect = bordered_pixmap.rect().adjusted(2, 2, -2, -2)
+
+        # Scale the layer image to fit inside the image_rect, keeping aspect ratio
+        scaled_image = self.layer.image.scaled(
+            image_rect.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        pixmap_to_draw = QPixmap.fromImage(scaled_image)
+
+        # Center the pixmap in the image_rect
+        draw_rect = QRect(
+            image_rect.left(),
+            image_rect.top(),
+            pixmap_to_draw.width(),
+            pixmap_to_draw.height()
+        )
+        draw_rect.moveCenter(image_rect.center())
+
+        painter.drawPixmap(draw_rect, pixmap_to_draw)
+
+        painter.end()
+
+        self.thumbnail.setPixmap(bordered_pixmap)
 
     def update_visibility_icon(self):
         if self.layer.visible:
