@@ -121,11 +121,10 @@ class LayerManagerWidget(QWidget):
 
     def add_layer(self):
         """Adds a new layer."""
+        from .command import AddLayerCommand
         num_layers = len(self.app.document.layer_manager.layers)
-        self.app.document.layer_manager.add_layer(f"Layer {num_layers + 1}")
-        self.app.add_undo_state()
-        self.refresh_layers()
-        self.layer_changed.emit()
+        command = AddLayerCommand(self.app.document, name=f"Layer {num_layers + 1}")
+        self.app.execute_command(command)
 
     def remove_layer(self):
         """Removes the selected layer."""

@@ -1,28 +1,39 @@
+from .command import Command
+
+
 class UndoManager:
     def __init__(self):
-        self.undo_stack = []
-        self.redo_stack = []
+        self.undo_stack: list[Command] = []
+        self.redo_stack: list[Command] = []
 
     def clear(self):
         self.undo_stack.clear()
         self.redo_stack.clear()
 
-    def add_undo_state(self, state):
-        self.undo_stack.append(state)
+    def add_command(self, command: Command):
+        """
+        Adds a command to the undo stack.
+        This is called after a command has been executed.
+        """
+        self.undo_stack.append(command)
         self.redo_stack.clear()
 
     def undo(self):
-        if not self.undo_stack or len(self.undo_stack) == 1:
-            return None
-        state = self.undo_stack.pop()
-        self.redo_stack.append(state)
-        # Return a clone of the state to prevent modification
-        return self.undo_stack[-1].clone()
+        """
+        Undoes the last command.
+        """
+        if not self.undo_stack:
+            return
+        command = self.undo_stack.pop()
+        command.undo()
+        self.redo_stack.append(command)
 
     def redo(self):
+        """
+        Redoes the last undone command.
+        """
         if not self.redo_stack:
-            return None
-        state = self.redo_stack.pop()
-        self.undo_stack.append(state)
-        # Return a clone of the state to prevent modification
-        return state.clone()
+            return
+        command = self.redo_stack.pop()
+        command.execute()
+        self.undo_stack.append(command)
