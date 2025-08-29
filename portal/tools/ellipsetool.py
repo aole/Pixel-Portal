@@ -69,6 +69,7 @@ class EllipseTool(BaseTool):
             color=self.app.pen_color,
             width=self.app.pen_width,
             drawing=self.canvas.drawing,
+            selection_shape=self.canvas.selection_shape,
         )
         self.app.execute_command(command)
 

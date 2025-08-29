@@ -56,6 +56,7 @@ class EraserTool(BaseTool):
             brush_type=self.app.brush_type,
             erase=True,
             drawing=self.canvas.drawing,
+            selection_shape=self.canvas.selection_shape,
         )
 
         self.app.execute_command(command)
