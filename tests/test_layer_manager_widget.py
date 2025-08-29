@@ -68,6 +68,22 @@ def test_remove_layer_button(app_with_widget):
     assert widget.layer_list.count() == initial_count - 1
 
 
+def test_duplicate_layer_button(app_with_widget, qtbot):
+    """Test the 'Duplicate Layer' button functionality."""
+    app, widget = app_with_widget
+    app.document.layer_manager.layer_structure_changed.connect(widget.refresh_layers)
+
+    initial_count = len(app.document.layer_manager.layers)
+    widget.layer_list.setCurrentRow(0) # Select "Background"
+
+    with qtbot.waitSignal(app.document.layer_manager.layer_structure_changed, timeout=1000):
+        widget.duplicate_button.click()
+
+    assert len(app.document.layer_manager.layers) == initial_count + 1
+    assert widget.layer_list.count() == initial_count + 1
+    assert "copy" in app.document.layer_manager.active_layer.name
+
+
 def test_rename_layer(app_with_widget, qtbot):
     """Test that a layer can be renamed through the UI."""
     app, widget = app_with_widget

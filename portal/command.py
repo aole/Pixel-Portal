@@ -404,11 +404,11 @@ class DuplicateLayerCommand(Command):
         self.added_index = -1
 
     def execute(self):
-        self.document.layer_manager.duplicate_layer(self.index)
-        self.added_index = self.document.layer_manager.active_layer_index
+        self.layer_manager.duplicate_layer(self.index)
+        self.added_index = self.layer_manager.active_layer_index
 
     def undo(self):
-        self.document.layer_manager.remove_layer(self.added_index)
+        self.layer_manager.remove_layer(self.added_index)
         
 class ClearLayerCommand(Command):
     def __init__(self, layer: Layer, selection: QPainterPath | None):
