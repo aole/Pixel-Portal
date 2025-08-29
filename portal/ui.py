@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt
 from .canvas import Canvas
@@ -8,6 +8,7 @@ from .new_file_dialog import NewFileDialog
 from .resize_dialog import ResizeDialog
 from .background import Background
 from .palette_dialog import PaletteDialog
+from .preview_panel import PreviewPanel
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -350,12 +351,21 @@ class MainWindow(QMainWindow):
 
         self.update_dynamic_palette(self.app.pen_color)
 
+        # Preview Panel
+        self.preview_panel = PreviewPanel(self.app)
+        preview_dock_widget = QDockWidget("Preview", self)
+        preview_dock_widget.setWidget(self.preview_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, preview_dock_widget)
+
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
-        dock_widget = QDockWidget("Layers", self)
-        dock_widget.setWidget(self.layer_manager_widget)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+        layer_dock_widget = QDockWidget("Layers", self)
+        layer_dock_widget.setWidget(self.layer_manager_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, layer_dock_widget)
+
+        self.app.document_changed.connect(self.preview_panel.update_preview)
+        self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
 
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())

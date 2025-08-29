@@ -36,6 +36,7 @@ class Canvas(QWidget):
     zoom_changed = Signal(float)
     selection_changed = Signal(bool)
     selection_size_changed = Signal(int, int)
+    canvas_updated = Signal()
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -207,6 +208,7 @@ class Canvas(QWidget):
 
         if event.buttons() & Qt.LeftButton:
             self.current_tool.mouseMoveEvent(event, doc_pos)
+            self.canvas_updated.emit()
         elif event.buttons() & Qt.RightButton:
             self.tools["Eraser"].mouseMoveEvent(event, doc_pos)
         elif (event.buttons() & Qt.MiddleButton) and self.dragging:
