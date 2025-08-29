@@ -421,7 +421,9 @@ class Canvas(QWidget):
                 points=[p1, p2],
                 color=self.app.pen_color,
                 width=self.app.pen_width,
-                brush_type=self.app.brush_type
+                brush_type=self.app.brush_type,
+                drawing=self.drawing,
+                selection_shape=self.selection_shape,
             )
             self.app.execute_command(command)
 

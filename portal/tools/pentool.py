@@ -52,6 +52,7 @@ class PenTool(BaseTool):
             width=self.app.pen_width,
             brush_type=self.app.brush_type,
             drawing=self.canvas.drawing,
+            selection_shape=self.canvas.selection_shape,
         )
 
         self.app.execute_command(command)

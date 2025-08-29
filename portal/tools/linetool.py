@@ -45,6 +45,7 @@ class LineTool(BaseTool):
             width=self.canvas.app.pen_width,
             brush_type=self.canvas.app.brush_type,
             drawing=self.drawing,
+            selection_shape=self.canvas.selection_shape,
         )
         self.canvas.app.execute_command(command)
 
