@@ -87,7 +87,7 @@ class LayerItemWidget(QWidget):
 
         thumbnail_container = QWidget()
         thumbnail_layout = QHBoxLayout(thumbnail_container)
-        padding = int(64 * 0.05)
+        padding = 5
         thumbnail_layout.setContentsMargins(padding, padding, padding, padding)
 
         self.thumbnail = QLabel()
