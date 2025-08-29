@@ -71,17 +71,17 @@ class LayerItemWidget(QWidget):
         super().__init__()
         self.layer = layer
 
-        self.pixmap_visible = QPixmap("icons/layervisible.png").scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.pixmap_invisible = QPixmap("icons/layerinvisible.png").scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.pixmap_visible = QPixmap("icons/layervisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.pixmap_invisible = QPixmap("icons/layerinvisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
         self.layout = QHBoxLayout()
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setContentsMargins(5, 5, 5, 5)
         self.layout.setSpacing(5)
         self.setLayout(self.layout)
 
         self.visibility_icon = ClickableLabel()
-        self.visibility_icon.setFixedWidth(16)
-        self.visibility_icon.setFixedHeight(16)
+        self.visibility_icon.setFixedWidth(24)
+        self.visibility_icon.setFixedHeight(24)
         self.visibility_icon.clicked.connect(self.on_visibility_clicked)
         self.layout.addWidget(self.visibility_icon)
 
