@@ -136,3 +136,33 @@ def test_flip_undo_redo(app_and_window):
     empty_image = QImage(32, 32, QImage.Format_ARGB32)
     empty_image.fill(Qt.transparent)
     assert app.document.render().constBits() == empty_image.constBits()
+
+
+def test_open_document_and_duplicate_layer(app_and_window, monkeypatch, tmp_path):
+    """
+    Tests that after opening a document, UI updates like duplicating a layer work correctly.
+    This specifically tests that the `layer_structure_changed` signal is connected.
+    """
+    app, window, canvas = app_and_window
+
+    # 1. Create a dummy image file to "open"
+    dummy_file = tmp_path / "test.png"
+    dummy_image = QImage(16, 16, QImage.Format_RGB32)
+    dummy_image.fill(Qt.green)
+    dummy_image.save(str(dummy_file))
+
+    # 2. Mock the file dialog to return the path to our dummy file
+    monkeypatch.setattr("PySide6.QtWidgets.QFileDialog.getOpenFileName", lambda *args, **kwargs: (str(dummy_file), "PNG (*.png)"))
+
+    # 3. Call open_document
+    app.open_document()
+
+    # 4. Check that the document has been loaded
+    assert app.document.width == 16
+    assert app.document.height == 16
+    assert window.layer_manager_widget.layer_list.count() == 1 # The new document's single layer
+
+    # 5. Duplicate the layer and check if the UI updates
+    initial_layer_count = window.layer_manager_widget.layer_list.count()
+    window.layer_manager_widget.duplicate_button.click()
+    assert window.layer_manager_widget.layer_list.count() == initial_layer_count + 1

@@ -140,6 +140,7 @@ class App(QObject):
                     self.document.layer_manager.layers[0].image = image
 
             self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+            self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
             self.undo_manager.clear()
             self.undo_stack_changed.emit()
             if self.window:
