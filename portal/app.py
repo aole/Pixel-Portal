@@ -72,7 +72,9 @@ class App(QObject):
         self.pen_color_changed.emit(self.pen_color)
 
     def execute_command(self, command):
+        print("[DEBUG] App.execute_command: Entered")
         command.execute()
+        print("[DEBUG] App.execute_command: Command executed, adding to UndoManager")
         self.undo_manager.add_command(command)
         self.undo_stack_changed.emit()
         self.document_changed.emit()

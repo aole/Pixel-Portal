@@ -45,6 +45,7 @@ class PenTool(BaseTool):
             return
 
         # Create the command with all the points
+        print("[DEBUG] PenTool.mouseReleaseEvent: Creating DrawCommand")
         command = DrawCommand(
             layer=self.app.document.layer_manager.active_layer,
             points=self.points,
@@ -53,6 +54,7 @@ class PenTool(BaseTool):
             brush_type=self.app.brush_type
         )
 
+        print("[DEBUG] PenTool.mouseReleaseEvent: Calling app.execute_command")
         self.app.execute_command(command)
 
         # Clean up preview

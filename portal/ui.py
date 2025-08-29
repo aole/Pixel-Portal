@@ -475,7 +475,8 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.setValue(width)
 
     def update_undo_redo_actions(self):
-        self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 1)
+        print(f"[DEBUG] MainWindow.update_undo_redo_actions: undo_stack size = {len(self.app.undo_manager.undo_stack)}")
+        self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 0)
         self.redo_action.setEnabled(len(self.app.undo_manager.redo_stack) > 0)
 
     def showEvent(self, event):
