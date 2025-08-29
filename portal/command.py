@@ -58,8 +58,9 @@ class DrawCommand(Command):
         if not self.bounding_rect.isValid():
             return
 
-        # Store the 'before' state from the calculated bounding box
-        self.before_image = self.layer.image.copy(self.bounding_rect)
+        # Store the 'before' state only on the first execution
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy(self.bounding_rect)
 
         # Perform the drawing
         painter = QPainter(self.layer.image)
@@ -158,18 +159,28 @@ class AddLayerCommand(Command):
         self.image = image
         self.name = name
         self.added_layer = None
+        self.insertion_index = None
         self.old_active_layer = document.layer_manager.active_layer
 
     def execute(self):
-        if self.image:
-            self.document.layer_manager.add_layer_with_image(self.image, self.name)
+        if self.added_layer is None:
+            # First execution: create the layer
+            if self.image:
+                self.document.layer_manager.add_layer_with_image(self.image, self.name)
+            else:
+                self.document.layer_manager.add_layer(self.name)
+            self.added_layer = self.document.layer_manager.active_layer
+            self.insertion_index = self.document.layer_manager.active_layer_index
         else:
-            self.document.layer_manager.add_layer(self.name)
-        self.added_layer = self.document.layer_manager.active_layer
+            # Redo: re-insert the existing layer object
+            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
+            self.document.layer_manager.select_layer(self.insertion_index)
+            self.document.layer_manager.layer_structure_changed.emit()
 
     def undo(self):
         if self.added_layer:
             try:
+                # `remove_layer` needs an index, and it's safer to find it dynamically
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
 
@@ -179,7 +190,6 @@ class AddLayerCommand(Command):
                     self.document.layer_manager.select_layer(old_active_index)
 
             except ValueError:
-                # Layer was not found, maybe it was removed by another action
                 pass
 
 class PasteCommand(Command):
@@ -187,17 +197,25 @@ class PasteCommand(Command):
         self.document = document
         self.q_image = q_image
         self.added_layer = None
+        self.insertion_index = None
         self.old_active_layer = document.layer_manager.active_layer
 
     def execute(self):
-        # Logic from app.paste_as_new_layer
-        if self.q_image.width() > self.document.width or self.q_image.height() > self.document.height:
-            scaled_image = self.q_image.scaled(self.document.width, self.document.height, Qt.KeepAspectRatio, Qt.FastTransformation)
-        else:
-            scaled_image = self.q_image
+        if self.added_layer is None:
+            # First execution
+            if self.q_image.width() > self.document.width or self.q_image.height() > self.document.height:
+                scaled_image = self.q_image.scaled(self.document.width, self.document.height, Qt.KeepAspectRatio, Qt.FastTransformation)
+            else:
+                scaled_image = self.q_image
 
-        self.document.layer_manager.add_layer_with_image(scaled_image, name="Pasted Layer")
-        self.added_layer = self.document.layer_manager.active_layer
+            self.document.layer_manager.add_layer_with_image(scaled_image, name="Pasted Layer")
+            self.added_layer = self.document.layer_manager.active_layer
+            self.insertion_index = self.document.layer_manager.active_layer_index
+        else:
+            # Redo
+            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
+            self.document.layer_manager.select_layer(self.insertion_index)
+            self.document.layer_manager.layer_structure_changed.emit()
 
     def undo(self):
         if self.added_layer:
