@@ -148,6 +148,7 @@ class App(QObject):
     def add_undo_state(self):
         self.undo_manager.add_undo_state(self.document.clone())
         self.undo_stack_changed.emit()
+        self.document_changed.emit()
 
     def undo(self):
         state = self.undo_manager.undo()
@@ -156,6 +157,7 @@ class App(QObject):
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
             self.undo_stack_changed.emit()
+            self.document_changed.emit()
 
     def redo(self):
         state = self.undo_manager.redo()
@@ -164,6 +166,7 @@ class App(QObject):
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
             self.undo_stack_changed.emit()
+            self.document_changed.emit()
 
     def select_all(self):
         if self.window:
