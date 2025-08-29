@@ -176,7 +176,7 @@ class AddLayerCommand(Command):
                 # Restore the previously active layer
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
-                    self.document.layer_manager.set_active_layer(old_active_index)
+                    self.document.layer_manager.select_layer(old_active_index)
 
             except ValueError:
                 # Layer was not found, maybe it was removed by another action
@@ -206,6 +206,6 @@ class PasteCommand(Command):
                 self.document.layer_manager.remove_layer(index)
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
-                    self.document.layer_manager.set_active_layer(old_active_index)
+                    self.document.layer_manager.select_layer(old_active_index)
             except ValueError:
                 pass
