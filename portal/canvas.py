@@ -412,11 +412,17 @@ class Canvas(QWidget):
         pass
 
     def draw_line_for_test(self, p1, p2):
+        from .command import DrawCommand
         active_layer = self.app.document.layer_manager.active_layer
         if active_layer:
-            painter = QPainter(active_layer.image)
-            painter.setPen(self.app.pen_color)
-            self.drawing.draw_line_with_brush(painter, p1, p2)
+            command = DrawCommand(
+                layer=active_layer,
+                points=[p1, p2],
+                color=self.app.pen_color,
+                width=self.app.pen_width,
+                brush_type=self.app.brush_type
+            )
+            self.app.execute_command(command)
 
     def erase_line_for_test(self, p1, p2):
         active_layer = self.app.document.layer_manager.active_layer

@@ -3,6 +3,7 @@ from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
 
 from portal.tools.basetool import BaseTool
 from ..drawing import Drawing
+from ..command import ShapeCommand
 
 
 class EllipseTool(BaseTool):
@@ -49,12 +50,6 @@ class EllipseTool(BaseTool):
         if not active_layer or not self.canvas.temp_image:
             return
 
-        self.canvas.temp_image = self.canvas.original_image.copy()
-        painter = QPainter(self.canvas.temp_image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.app.pen_color))
-
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
             dx = end_point.x() - self.start_point.x()
@@ -66,11 +61,17 @@ class EllipseTool(BaseTool):
             )
 
         rect = QRect(self.start_point, end_point).normalized()
-        self.drawing.draw_ellipse(painter, rect)
 
-        active_layer.image = self.canvas.temp_image
-        active_layer.on_image_change.emit()
-        self.canvas.app.add_undo_state()
+        command = ShapeCommand(
+            layer=active_layer,
+            rect=rect,
+            shape_type='ellipse',
+            color=self.app.pen_color,
+            width=self.app.pen_width,
+            drawing=self.canvas.drawing,
+        )
+        self.app.execute_command(command)
+
         self.canvas.temp_image = None
         self.canvas.original_image = None
         self.canvas.temp_image_replaces_active_layer = False

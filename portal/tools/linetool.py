@@ -3,6 +3,7 @@ from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
 
 from portal.tools.basetool import BaseTool
 from ..drawing import Drawing
+from ..command import DrawCommand
 
 
 class LineTool(BaseTool):
@@ -37,16 +38,15 @@ class LineTool(BaseTool):
         if not active_layer or not self.canvas.temp_image:
             return
 
-        self.canvas.temp_image = self.canvas.original_image.copy()
-        painter = QPainter(self.canvas.temp_image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.app.pen_color))
-        self.drawing.draw_line_with_brush(painter, self.start_point, doc_pos)
+        command = DrawCommand(
+            layer=active_layer,
+            points=[self.start_point, doc_pos],
+            color=self.canvas.app.pen_color,
+            width=self.canvas.app.pen_width,
+            brush_type=self.canvas.app.brush_type,
+        )
+        self.canvas.app.execute_command(command)
 
-        active_layer.image = self.canvas.temp_image
-        active_layer.on_image_change.emit()
-        self.canvas.app.add_undo_state()
         self.canvas.temp_image = None
         self.canvas.original_image = None
         self.canvas.temp_image_replaces_active_layer = False

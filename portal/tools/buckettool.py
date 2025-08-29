@@ -2,6 +2,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent
 
 from portal.tools.basetool import BaseTool
+from ..command import FillCommand
 
 
 class BucketTool(BaseTool):
@@ -10,27 +11,16 @@ class BucketTool(BaseTool):
         if not active_layer:
             return
 
-        doc_width = self.app.document.width
-        doc_height = self.app.document.height
-
-        # A set to keep track of points we've already started a fill from
-        # to avoid redundant operations, e.g., on the mirror axis itself.
-        processed_points = set()
-
-        points_to_fill = [doc_pos]
-        if self.app.mirror_x:
-            points_to_fill.append(QPoint(doc_width - 1 - doc_pos.x(), doc_pos.y()))
-        if self.app.mirror_y:
-            points_to_fill.append(QPoint(doc_pos.x(), doc_height - 1 - doc_pos.y()))
-        if self.app.mirror_x and self.app.mirror_y:
-            points_to_fill.append(QPoint(doc_width - 1 - doc_pos.x(), doc_height - 1 - doc_pos.y()))
-
-        for point in points_to_fill:
-            if tuple(point.toTuple()) not in processed_points:
-                self.canvas.drawing.flood_fill(point, self.canvas.selection_shape)
-                processed_points.add(tuple(point.toTuple()))
-
-        active_layer.on_image_change.emit()
-        self.canvas.app.add_undo_state()
+        command = FillCommand(
+            document=self.app.document,
+            layer=active_layer,
+            fill_pos=doc_pos,
+            fill_color=self.app.pen_color,
+            selection_shape=self.canvas.selection_shape,
+            drawing=self.canvas.drawing,
+            mirror_x=self.app.mirror_x,
+            mirror_y=self.app.mirror_y,
+        )
+        self.app.execute_command(command)
         self.canvas.update()
         

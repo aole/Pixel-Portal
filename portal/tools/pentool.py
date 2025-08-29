@@ -1,53 +1,101 @@
-from PySide6.QtCore import QPoint
-from PySide6.QtGui import QPainter, QMouseEvent, QPen, Qt
-
-from portal.tools.basetool import BaseTool
-from ..drawing import Drawing
+from .basetool import BaseTool
+from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent
+from PySide6.QtCore import QPoint, Qt
+from ..command import DrawCommand
 
 
 class PenTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.last_point = QPoint()
-        self.drawing = Drawing(self.canvas.app)
+        self.points = []
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        self.last_point = doc_pos
-        active_layer = self.canvas.app.document.layer_manager.active_layer
+        active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:
             return
 
-        self.canvas.temp_image_replaces_active_layer = True
-        self.canvas.original_image = active_layer.image.copy()
-        self.canvas.temp_image = self.canvas.original_image.copy()
+        self.points = [doc_pos]
 
-        painter = QPainter(self.canvas.temp_image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.app.pen_color))
-        self.drawing.draw_brush(painter, self.last_point)
-        painter.end()
+        # Use a transparent temp image for the preview overlay
+        self.canvas.temp_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
+        self.canvas.temp_image.fill(Qt.transparent)
+
+        # This flag tells the renderer to draw our temp_image ON TOP of the document, not instead of it.
+        self.canvas.temp_image_replaces_active_layer = False
+
+        self.draw_path_on_temp_image()
         self.canvas.update()
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if not self.canvas.temp_image:
+        if not self.points:
             return
 
-        painter = QPainter(self.canvas.temp_image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.app.pen_color))
-        self.drawing.draw_line_with_brush(painter, self.last_point, doc_pos)
-        self.last_point = doc_pos
+        self.points.append(doc_pos)
+        self.draw_path_on_temp_image()
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        active_layer = self.canvas.app.document.layer_manager.active_layer
-        if active_layer and self.canvas.temp_image:
-            active_layer.image = self.canvas.temp_image
-            active_layer.on_image_change.emit()
-            self.canvas.app.add_undo_state()
+        if not self.points or not self.app.document.layer_manager.active_layer:
+            # Clean up preview and return
+            self.points = []
             self.canvas.temp_image = None
             self.canvas.original_image = None
             self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.update()
+            return
+
+        # Create the command with all the points
+        command = DrawCommand(
+            layer=self.app.document.layer_manager.active_layer,
+            points=self.points,
+            color=self.app.pen_color,
+            width=self.app.pen_width,
+            brush_type=self.app.brush_type
+        )
+
+        self.app.execute_command(command)
+
+        # Clean up preview
+        self.points = []
+        self.canvas.temp_image = None
+        self.canvas.original_image = None
+        self.canvas.temp_image_replaces_active_layer = False
         self.canvas.update()
+
+    def draw_path_on_temp_image(self):
+        if not self.points or self.canvas.temp_image is None:
+            return
+
+        # Clear the temp image before redrawing the path
+        self.canvas.temp_image.fill(Qt.transparent)
+
+        painter = QPainter(self.canvas.temp_image)
+
+        # Handle selection mask
+        if self.canvas.selection_shape:
+            painter.setClipPath(self.canvas.selection_shape)
+
+        pen = QPen()
+        pen.setColor(self.app.pen_color)
+        pen.setWidth(self.app.pen_width)
+
+        if self.app.brush_type == "Circular":
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        else:
+            pen.setCapStyle(Qt.PenCapStyle.SquareCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+
+        painter.setPen(pen)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+
+        # Draw the path from the collected points
+        if len(self.points) == 1:
+            painter.drawPoint(self.points[0])
+        else:
+            path = QPainterPath(self.points[0])
+            for i in range(1, len(self.points)):
+                path.lineTo(self.points[i])
+            painter.drawPath(path)
+
+        painter.end()

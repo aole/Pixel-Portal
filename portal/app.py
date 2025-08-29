@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
+from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand
 
 
 class App(QObject):
@@ -22,13 +23,13 @@ class App(QObject):
         self.window = None
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
         self.tool = "Pen"
         self.previous_tool = "Pen"
         self.pen_color = QColor("black")
         self.pen_width = 1
         self.brush_type = "Circular"
         self.undo_manager = UndoManager()
-        self._prime_undo_stack()
 
         self.mirror_x = False
         self.mirror_y = False
@@ -56,10 +57,6 @@ class App(QObject):
         self.brush_type = brush_type
         self.brush_type_changed.emit(self.brush_type)
 
-    def _prime_undo_stack(self):
-        self.undo_manager.add_undo_state(self.document.clone())
-        self.undo_stack_changed.emit()
-
     def set_window(self, window):
         self.window = window
         self.undo_stack_changed.emit()
@@ -74,11 +71,18 @@ class App(QObject):
         self.pen_color = QColor(color_hex)
         self.pen_color_changed.emit(self.pen_color)
 
+    def execute_command(self, command):
+        command.execute()
+        self.undo_manager.add_command(command)
+        self.undo_stack_changed.emit()
+        self.document_changed.emit()
+
     def new_document(self, width, height):
         self.document = Document(width, height)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
         self.undo_manager.clear()
-        self._prime_undo_stack()
+        self.undo_stack_changed.emit()
         if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
@@ -88,34 +92,31 @@ class App(QObject):
         if self.window:
             self.window.canvas.update()
 
+    def on_layer_structure_changed(self):
+        if self.window:
+            self.window.layer_manager_widget.refresh_layers()
+            self.window.canvas.update()
+        self.document_changed.emit()
+
     def resize_document(self, width, height, interpolation):
         if self.document:
-            self.document.resize(width, height, interpolation)
-            self.add_undo_state()
-            if self.window:
-                self.window.canvas.update()
-            self.document_changed.emit()
+            command = ResizeCommand(self.document, width, height, interpolation)
+            self.execute_command(command)
 
     def crop_to_selection(self):
         if self.window and self.window.canvas.selection_shape:
             selection_rect = self.window.canvas.selection_shape.boundingRect().toRect()
-            self.document.crop(selection_rect)
+            command = CropCommand(self.document, selection_rect)
+            self.execute_command(command)
             self.window.canvas.select_none()
-            self.add_undo_state()
-            if self.window:
-                self.window.canvas.update()
-            self.document_changed.emit()
 
     def paste_as_new_layer(self):
         clipboard = QApplication.clipboard()
         image = clipboard.image()
 
         if self.document and not image.isNull():
-            self.document.add_layer_from_clipboard(image)
-            self.add_undo_state()
-            if self.window:
-                self.window.layer_manager_widget.refresh_layers()
-                self.window.canvas.update()
+            command = PasteCommand(self.document, image)
+            self.execute_command(command)
 
     def open_document(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -140,10 +141,11 @@ class App(QObject):
 
             self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
             self.undo_manager.clear()
-            self._prime_undo_stack()
+            self.undo_stack_changed.emit()
             if self.window:
                 self.window.layer_manager_widget.refresh_layers()
                 self.window.canvas.update()
+            self.document_changed.emit()
 
     def save_document(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
@@ -164,28 +166,21 @@ class App(QObject):
                 image = self.document.render()
                 image.save(file_path)
 
-    def add_undo_state(self):
-        self.undo_manager.add_undo_state(self.document.clone())
+    def undo(self):
+        self.undo_manager.undo()
         self.undo_stack_changed.emit()
         self.document_changed.emit()
-
-    def undo(self):
-        state = self.undo_manager.undo()
-        if state:
-            self.document = state
+        if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
-            self.undo_stack_changed.emit()
-            self.document_changed.emit()
 
     def redo(self):
-        state = self.undo_manager.redo()
-        if state:
-            self.document = state
+        self.undo_manager.redo()
+        self.undo_stack_changed.emit()
+        self.document_changed.emit()
+        if self.window:
             self.window.layer_manager_widget.refresh_layers()
             self.window.canvas.update()
-            self.undo_stack_changed.emit()
-            self.document_changed.emit()
 
     def select_all(self):
         if self.window:
@@ -197,19 +192,13 @@ class App(QObject):
 
     def flip_horizontal(self):
         if self.document:
-            self.document.flip_horizontal()
-            self.add_undo_state()
-            if self.window:
-                self.window.canvas.update()
-            self.document_changed.emit()
+            command = FlipCommand(self.document, 'horizontal')
+            self.execute_command(command)
 
     def flip_vertical(self):
         if self.document:
-            self.document.flip_vertical()
-            self.add_undo_state()
-            if self.window:
-                self.window.canvas.update()
-            self.document_changed.emit()
+            command = FlipCommand(self.document, 'vertical')
+            self.execute_command(command)
 
     def invert_selection(self):
         if self.window:
@@ -227,9 +216,6 @@ class App(QObject):
         return self.document.get_current_image_for_ai()
 
     def add_new_layer_with_image(self, image):
-        self.document.add_new_layer_with_image(image)
-        self.add_undo_state()
-        if self.window:
-            self.window.layer_manager_widget.refresh_layers()
-            self.window.canvas.update()
+        command = AddLayerCommand(self.document, image, "AI Generated Layer")
+        self.execute_command(command)
             

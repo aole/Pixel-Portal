@@ -69,7 +69,6 @@ def test_undo_redo_integration(app_and_window):
 
     # Simulate a mouse press, move, and release to draw
     canvas.draw_line_for_test(start_pos, end_pos)
-    app.add_undo_state()
 
     drawn_rendered_image = app.document.render()
 
@@ -101,3 +100,39 @@ def test_erase_and_test(app_and_window):
     # 3. Check that the pixels on the erased line are transparent
     pixel_color = app.document.layer_manager.active_layer.image.pixelColor(15, 15)
     assert pixel_color.alpha() == 0
+
+
+def test_flip_undo_redo(app_and_window):
+    app, window, canvas = app_and_window
+    app.new_document(32, 32)
+
+    # Draw something asymmetric to see the flip
+    canvas.draw_line_for_test(QPoint(5, 10), QPoint(15, 10))
+
+    initial_image = app.document.render()
+
+    # Flip horizontal
+    app.flip_horizontal()
+    flipped_image = app.document.render()
+    assert initial_image.constBits() != flipped_image.constBits()
+
+    # Undo flip
+    app.undo()
+    undone_image = app.document.render()
+    assert initial_image.constBits() == undone_image.constBits()
+
+    # Redo flip
+    app.redo()
+    redone_image = app.document.render()
+    assert flipped_image.constBits() == redone_image.constBits()
+
+    # Undo flip again
+    app.undo()
+
+    # Undo draw
+    app.undo()
+
+    # Now we should be at the initial empty state
+    empty_image = QImage(32, 32, QImage.Format_ARGB32)
+    empty_image.fill(Qt.transparent)
+    assert app.document.render().constBits() == empty_image.constBits()

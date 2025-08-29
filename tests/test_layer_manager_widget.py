@@ -38,12 +38,17 @@ def test_refresh_layers(app_with_widget):
     item_widget_1 = widget.layer_list.itemWidget(widget.layer_list.item(1))
     assert item_widget_1.label.text() == "Background"
 
-def test_add_layer_button(app_with_widget):
+def test_add_layer_button(app_with_widget, qtbot):
     """Test the 'Add Layer' button functionality."""
     app, widget = app_with_widget
     initial_count = len(app.document.layer_manager.layers)
 
-    widget.add_button.click()
+    # In the test setup, there's no MainWindow, so the app.window is not set.
+    # We need to manually connect the signal to the refresh method for this test.
+    app.document.layer_manager.layer_structure_changed.connect(widget.refresh_layers)
+
+    with qtbot.waitSignal(app.document.layer_manager.layer_structure_changed, timeout=1000):
+        widget.add_button.click()
 
     assert len(app.document.layer_manager.layers) == initial_count + 1
     assert widget.layer_list.count() == initial_count + 1

@@ -9,6 +9,7 @@ class LayerManager(QObject):
     Manages the stack of layers in a document.
     """
     layer_visibility_changed = Signal(int)
+    layer_structure_changed = Signal()
 
     def __init__(self, width: int, height: int, create_background: bool = True):
         super().__init__()
@@ -32,10 +33,14 @@ class LayerManager(QObject):
         new_layer = Layer(self.width, self.height, name)
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
+        self.layer_structure_changed.emit()
 
     def add_layer_with_image(self, image, name="Image Layer"):
-        q_image = ImageQt(image.convert("RGBA"))
-        q_image = QImage(q_image)
+        if not isinstance(image, QImage):
+            q_image = ImageQt(image.convert("RGBA"))
+            q_image = QImage(q_image)
+        else:
+            q_image = image
 
         new_layer = Layer(self.width, self.height, name)
 
@@ -45,6 +50,7 @@ class LayerManager(QObject):
 
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
+        self.layer_structure_changed.emit()
 
     def duplicate_layer(self, index: int):
         """Duplicates the layer at the given index."""
@@ -61,6 +67,7 @@ class LayerManager(QObject):
 
         # Set the new layer as the active one
         self.active_layer_index = insert_at
+        self.layer_structure_changed.emit()
 
     def remove_layer(self, index: int):
         """Removes the layer at the given index."""
@@ -73,6 +80,7 @@ class LayerManager(QObject):
 
         if self.active_layer_index >= index:
             self.active_layer_index = max(0, self.active_layer_index - 1)
+        self.layer_structure_changed.emit()
 
     def select_layer(self, index: int):
         """Selects the layer at the given index as the active one."""
@@ -92,6 +100,7 @@ class LayerManager(QObject):
             self.active_layer_index += 1
         elif self.active_layer_index == index + 1:
             self.active_layer_index -= 1
+        self.layer_structure_changed.emit()
 
     def move_layer_down(self, index: int):
         """Moves the layer at the given index down one step in the stack."""
@@ -105,6 +114,7 @@ class LayerManager(QObject):
             self.active_layer_index -= 1
         elif self.active_layer_index == index - 1:
             self.active_layer_index += 1
+        self.layer_structure_changed.emit()
 
     def merge_layer_down(self, index: int):
         """Merges the layer at the given index with the layer below it."""
