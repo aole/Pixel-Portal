@@ -97,7 +97,7 @@ class DrawCommand(Command):
 
         # Store the 'before' state only on the first execution
         if self.before_image is None:
-            self.before_image = self.layer.image.copy(self.bounding_rect)
+            self.before_image = self.layer.image.copy()
 
         # Temporarily set the app's state to what it was when the command was created.
         # This is crucial for redo and ensures the drawing methods use the correct parameters.
@@ -142,7 +142,7 @@ class DrawCommand(Command):
             painter = QPainter(self.layer.image)
             # Use CompositionMode_Source to replace pixels, ignoring alpha
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            painter.drawImage(self.bounding_rect.topLeft(), self.before_image)
+            painter.drawImage(0, 0, self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
 
@@ -401,14 +401,32 @@ class DuplicateLayerCommand(Command):
     def __init__(self, layer_manager, index: int):
         self.layer_manager = layer_manager
         self.index = index
+        self.duplicated_layer = None
         self.added_index = -1
+        self.old_active_layer_index = layer_manager.active_layer_index
 
     def execute(self):
-        self.document.layer_manager.duplicate_layer(self.index)
-        self.added_index = self.document.layer_manager.active_layer_index
+        if self.duplicated_layer is None:
+            # First execution
+            original_layer = self.layer_manager.layers[self.index]
+            self.duplicated_layer = original_layer.clone()
+            self.duplicated_layer.name = f"{original_layer.name} copy"
+            self.added_index = self.index + 1
+
+        self.layer_manager.layers.insert(self.added_index, self.duplicated_layer)
+        self.layer_manager.select_layer(self.added_index)
+        self.layer_manager.layer_structure_changed.emit()
 
     def undo(self):
-        self.document.layer_manager.remove_layer(self.added_index)
+        if self.duplicated_layer:
+            try:
+                # We need to find the layer's current index before removing
+                current_index = self.layer_manager.layers.index(self.duplicated_layer)
+                self.layer_manager.remove_layer(current_index) # remove_layer handles signals and active layer adjustment
+                self.layer_manager.select_layer(self.old_active_layer_index) # Explicitly set active layer back
+            except ValueError:
+                # Layer not found, maybe already removed.
+                pass
         
 class ClearLayerCommand(Command):
     def __init__(self, layer: Layer, selection: QPainterPath | None):

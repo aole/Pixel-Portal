@@ -98,29 +98,43 @@ class CanvasRenderer:
             painter.drawImage(target_rect, final_image)
             return final_image
         else:
-            # This path is for tools like the Pen, Shapes, and Move tool. These tools create a
-            # sparse `temp_image` that is drawn as an overlay on top of the existing document.
-            # For the MoveTool specifically, it works because the tool itself clears the selected
-            # area from the active layer *before* `render()` is called, so the `composite_image`
-            # already has the "hole". We then just draw the `temp_image` (the selection) on top.
+            # This path is for tools that create a temporary overlay or preview.
             composite_image = self.app.document.render()
             image_to_draw_on = composite_image
 
             if self.canvas.temp_image:
+                # Create a new final image to compose our preview onto.
                 final_image = QImage(composite_image.size(), QImage.Format_ARGB32)
-                final_image.fill(QColor("transparent"))
-
+                final_image.fill(Qt.transparent)
                 p = QPainter(final_image)
-                p.drawImage(0, 0, composite_image)
-                
-                # If erasing, use DestinationOut mode to "punch a hole" in the composite image
-                is_erasing = self.app.tool == "Eraser" or self.canvas.is_erasing_preview
-                if is_erasing:
-                    p.setCompositionMode(QPainter.CompositionMode_DestinationOut)
 
-                p.drawImage(0, 0, self.canvas.temp_image)
+                # Special case for the eraser preview
+                if self.canvas.is_erasing_preview:
+                    active_layer = self.app.document.layer_manager.active_layer
+                    if active_layer:
+                        # 1. Render all layers *except* the active one as the base
+                        background = self.app.document.render_except(active_layer)
+                        p.drawImage(0, 0, background)
+
+                        # 2. Punch a hole in a copy of the active layer
+                        erased_active_layer = active_layer.image.copy()
+                        p_temp = QPainter(erased_active_layer)
+                        p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                        p_temp.drawImage(0, 0, self.canvas.temp_image) # temp_image is the erase mask
+                        p_temp.end()
+
+                        # 3. Draw the modified active layer on top of the background
+                        p.setOpacity(active_layer.opacity)
+                        p.drawImage(0, 0, erased_active_layer)
+
+                # Case for other tools (Pen, Shapes, etc.)
+                else:
+                    # Draw the current document state first
+                    p.drawImage(0, 0, composite_image)
+                    # Then draw the temporary tool preview (e.g., a brush stroke) on top
+                    p.drawImage(0, 0, self.canvas.temp_image)
+
                 p.end()
-
                 image_to_draw_on = final_image
 
             painter.drawImage(target_rect, image_to_draw_on)
