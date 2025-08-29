@@ -114,10 +114,10 @@ class LayerManagerWidget(QWidget):
         """Clears the active layer."""
         active_layer = self.app.document.layer_manager.active_layer
         if active_layer:
+            from .command import ClearLayerCommand
             selection = self.app.window.canvas.selection_shape
-            active_layer.clear(selection)
-            self.app.add_undo_state()
-            self.layer_changed.emit()
+            command = ClearLayerCommand(active_layer, selection)
+            self.app.execute_command(command)
 
     def add_layer(self):
         """Adds a new layer."""
@@ -131,41 +131,37 @@ class LayerManagerWidget(QWidget):
         current_row = self.layer_list.currentRow()
         if current_row == -1:
             return
-
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
-        try:
-            self.app.document.layer_manager.remove_layer(actual_index)
-            self.refresh_layers()
-            self.layer_changed.emit()
-        except (ValueError, IndexError) as e:
-            print(f"Error removing layer: {e}") # Replace with proper logging/statusbar message
+        
+        from .command import RemoveLayerCommand
+        command = RemoveLayerCommand(self.app.document.layer_manager, actual_index)
+        self.app.execute_command(command)
 
     def duplicate_layer(self):
         """Duplicates the selected layer."""
         current_row = self.layer_list.currentRow()
         if current_row == -1:
             return
-
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
-        self.app.document.layer_manager.duplicate_layer(actual_index)
-        self.app.add_undo_state()
-        self.refresh_layers()
-        self.layer_changed.emit()
+        
+        from .command import DuplicateLayerCommand
+        command = DuplicateLayerCommand(self.app.document.layer_manager, actual_index)
+        self.app.execute_command(command)
 
     def move_layer_up(self):
         current_row = self.layer_list.currentRow()
         if current_row == -1: return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
-        if actual_index < len(self.app.document.layer_manager.layers) - 1:
-            self.app.document.layer_manager.move_layer_up(actual_index)
-            self.refresh_layers()
-            self.layer_changed.emit()
+        
+        from .command import MoveLayerCommand
+        command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index + 1)
+        self.app.execute_command(command)
 
     def move_layer_down(self):
         current_row = self.layer_list.currentRow()
         if current_row == -1: return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
-        if actual_index > 0:
-            self.app.document.layer_manager.move_layer_down(actual_index)
-            self.refresh_layers()
-            self.layer_changed.emit()
+        
+        from .command import MoveLayerCommand
+        command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index - 1)
+        self.app.execute_command(command)

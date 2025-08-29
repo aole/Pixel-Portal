@@ -2,6 +2,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath
 
 from portal.tools.basetool import BaseTool
+from ..command import MoveCommand
 
 
 class MoveTool(BaseTool):
@@ -10,6 +11,7 @@ class MoveTool(BaseTool):
         self.start_point = QPoint()
         self.moving_selection = False
         self.original_selection_shape: QPainterPath | None = None
+        self.before_image = None
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
@@ -17,6 +19,7 @@ class MoveTool(BaseTool):
         if not active_layer:
             return
 
+        self.before_image = active_layer.image.copy()
         self.canvas.temp_image_replaces_active_layer = False
 
         if self.canvas.selection_shape:
@@ -63,21 +66,23 @@ class MoveTool(BaseTool):
             return
 
         delta = doc_pos - self.start_point
+        
+        command = MoveCommand(
+            layer=active_layer,
+            original_image=self.before_image,
+            moved_image=self.canvas.original_image,
+            delta=delta,
+            original_selection_shape=self.original_selection_shape,
+        )
+        self.app.execute_command(command)
+
         if self.moving_selection:
-            painter = QPainter(active_layer.image)
-            painter.drawImage(delta, self.canvas.original_image)
-            painter.end()
-            active_layer.on_image_change.emit()
             self.moving_selection = False
             self.original_selection_shape = None
-        else:
-            painter = QPainter(active_layer.image)
-            painter.drawImage(delta, self.canvas.original_image)
-            painter.end()
-            active_layer.on_image_change.emit()
 
-        self.canvas.app.add_undo_state()
         self.canvas.temp_image = None
         self.canvas.original_image = None
+        self.before_image = None
         self.canvas.temp_image_replaces_active_layer = False
         self.canvas.update()
+        

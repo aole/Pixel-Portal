@@ -157,46 +157,28 @@ class CropCommand(Command):
             # We need to re-emit signals so the UI updates
             self.document.layer_manager.layer_structure_changed.emit()
 
-
-class AddLayerCommand(Command):
-    def __init__(self, document: Document, image: QImage = None, name: str = None):
-        self.document = document
-        self.image = image
-        self.name = name
-        self.added_layer = None
-        self.insertion_index = None
-        self.old_active_layer = document.layer_manager.active_layer
+class MoveCommand(Command):
+    def __init__(self, layer: Layer, original_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
+        self.layer = layer
+        self.original_image = original_image
+        self.moved_image = moved_image
+        self.delta = delta
+        self.original_selection_shape = original_selection_shape
 
     def execute(self):
-        if self.added_layer is None:
-            # First execution: create the layer
-            if self.image:
-                self.document.layer_manager.add_layer_with_image(self.image, self.name)
-            else:
-                self.document.layer_manager.add_layer(self.name)
-            self.added_layer = self.document.layer_manager.active_layer
-            self.insertion_index = self.document.layer_manager.active_layer_index
-        else:
-            # Redo: re-insert the existing layer object
-            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
-            self.document.layer_manager.select_layer(self.insertion_index)
-            self.document.layer_manager.layer_structure_changed.emit()
+        painter = QPainter(self.layer.image)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.drawImage(self.delta, self.moved_image)
+        painter.end()
+        self.layer.on_image_change.emit()
 
     def undo(self):
-        if self.added_layer:
-            try:
-                # `remove_layer` needs an index, and it's safer to find it dynamically
-                index = self.document.layer_manager.layers.index(self.added_layer)
-                self.document.layer_manager.remove_layer(index)
-
-                # Restore the previously active layer
-                if self.old_active_layer in self.document.layer_manager.layers:
-                    old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
-                    self.document.layer_manager.select_layer(old_active_index)
-
-            except ValueError:
-                pass
-
+        painter = QPainter(self.layer.image)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.drawImage(0, 0, self.original_image)
+        painter.end()
+        self.layer.on_image_change.emit()
+        
 class PasteCommand(Command):
     def __init__(self, document: Document, q_image: QImage):
         self.document = document
@@ -318,3 +300,113 @@ class ShapeCommand(Command):
             painter.drawImage(buffered_rect.topLeft(), self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
+            
+class AddLayerCommand(Command):
+    def __init__(self, document: Document, image: QImage = None, name: str = None):
+        self.document = document
+        self.image = image
+        self.name = name
+        self.added_layer = None
+        self.insertion_index = None
+        self.old_active_layer = document.layer_manager.active_layer
+
+    def execute(self):
+        if self.added_layer is None:
+            # First execution: create the layer
+            if self.image:
+                self.document.layer_manager.add_layer_with_image(self.image, self.name)
+            else:
+                self.document.layer_manager.add_layer(self.name)
+            self.added_layer = self.document.layer_manager.active_layer
+            self.insertion_index = self.document.layer_manager.active_layer_index
+        else:
+            # Redo: re-insert the existing layer object
+            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
+            self.document.layer_manager.select_layer(self.insertion_index)
+            self.document.layer_manager.layer_structure_changed.emit()
+
+    def undo(self):
+        if self.added_layer:
+            try:
+                # `remove_layer` needs an index, and it's safer to find it dynamically
+                index = self.document.layer_manager.layers.index(self.added_layer)
+                self.document.layer_manager.remove_layer(index)
+
+                # Restore the previously active layer
+                if self.old_active_layer in self.document.layer_manager.layers:
+                    old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
+                    self.document.layer_manager.select_layer(old_active_index)
+
+            except ValueError:
+                pass
+
+class DuplicateLayerCommand(Command):
+    def __init__(self, layer_manager, index: int):
+        self.layer_manager = layer_manager
+        self.index = index
+        self.added_index = -1
+
+    def execute(self):
+        self.document.layer_manager.duplicate_layer(self.index)
+        self.added_index = self.document.layer_manager.active_layer_index
+
+    def undo(self):
+        self.document.layer_manager.remove_layer(self.added_index)
+        
+class ClearLayerCommand(Command):
+    def __init__(self, layer: Layer, selection: QPainterPath | None):
+        self.layer = layer
+        self.selection = selection
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+        self.layer.clear(self.selection)
+
+    def undo(self):
+        if self.before_image:
+            painter = QPainter(self.layer.image)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            painter.drawImage(0, 0, self.before_image)
+            painter.end()
+            self.layer.on_image_change.emit()
+            
+class RemoveLayerCommand(Command):
+    def __init__(self, layer_manager, index: int):
+        self.layer_manager = layer_manager
+        self.index = index
+        self.removed_layer = None
+        self.old_active_layer_index = layer_manager.active_layer_index
+
+    def execute(self):
+        self.removed_layer = self.layer_manager.layers[self.index]
+        self.layer_manager.remove_layer(self.index)
+
+    def undo(self):
+        if self.removed_layer:
+            self.layer_manager.layers.insert(self.index, self.removed_layer)
+            self.layer_manager.select_layer(self.old_active_layer_index)
+            self.layer_manager.layer_structure_changed.emit()
+
+class MoveLayerCommand(Command):
+    def __init__(self, layer_manager, from_index: int, to_index: int):
+        self.layer_manager = layer_manager
+        self.from_index = from_index
+        self.to_index = to_index
+
+    def execute(self):
+        layer = self.layer_manager.layers.pop(self.from_index)
+        self.layer_manager.layers.insert(self.to_index, layer)
+        # Adjust active layer index
+        if self.layer_manager.active_layer_index == self.from_index:
+            self.layer_manager.active_layer_index = self.to_index
+        self.layer_manager.layer_structure_changed.emit()
+
+    def undo(self):
+        layer = self.layer_manager.layers.pop(self.to_index)
+        self.layer_manager.layers.insert(self.from_index, layer)
+        # Adjust active layer index
+        if self.layer_manager.active_layer_index == self.to_index:
+            self.layer_manager.active_layer_index = self.from_index
+        self.layer_manager.layer_structure_changed.emit()
