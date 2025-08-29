@@ -23,3 +23,4 @@ class PreviewPanel(QGroupBox):
             image = self.app.document.render()
             pixmap = QPixmap.fromImage(image)
             self.preview_label.setPixmap(pixmap)
+            self.preview_label.setFixedSize(pixmap.size())
