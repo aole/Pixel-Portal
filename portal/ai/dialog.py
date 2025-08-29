@@ -3,14 +3,16 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from .image_generator import image_to_image, prompt_to_image
+from .image_generator import image_to_image, prompt_to_image, get_pipeline
+import torch
 
 class GenerationThread(QThread):
-    generation_complete = Signal(Image.Image)
+    generation_complete = Signal(object)
     generation_failed = Signal(str)
 
-    def __init__(self, mode, image, prompt, original_size):
+    def __init__(self, pipe, mode, image, prompt, original_size):
         super().__init__()
+        self.pipe = pipe
         self.mode = mode
         self.image = image
         self.prompt = prompt
@@ -19,15 +21,16 @@ class GenerationThread(QThread):
     def run(self):
         try:
             if self.mode == "Image to Image":
-                generated_image = image_to_image(self.image, self.prompt)
+                generated_image = image_to_image(self.pipe, self.image, self.prompt)
             else:
-                generated_image = prompt_to_image(self.prompt, original_size=self.original_size)
+                generated_image = prompt_to_image(self.pipe, self.prompt, original_size=self.original_size)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
 
 class AiDialog(QDialog):
     last_prompt = "Chibi warrior, fighting stance, plain background"
+    pipe = None # Class variable to hold the loaded pipeline
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -92,7 +95,7 @@ class AiDialog(QDialog):
         self.cancel_viewer_button.clicked.connect(self.cancel_viewer)
         self.regenerate_button.clicked.connect(self.regenerate_image)
         self.image_to_image_radio.toggled.connect(self.on_mode_changed)
-
+    
     def on_mode_changed(self, checked):
         if checked:
             image = self.app.get_current_image()
@@ -119,15 +122,25 @@ class AiDialog(QDialog):
         self.generate_buttons_widget.setEnabled(False)
         self.viewer_buttons_widget.setVisible(False)
 
-        self.thread = GenerationThread(mode, input_image, prompt, original_size)
+        # Load the pipeline if it's not already loaded
+        if AiDialog.pipe is None:
+            is_img2img = (mode == "Image to Image")
+            try:
+                AiDialog.pipe = get_pipeline(is_img2img)
+            except Exception as e:
+                self.on_generation_failed(f"Failed to load AI model: {e}")
+                return
+
+        self.thread = GenerationThread(AiDialog.pipe, mode, input_image, prompt, original_size)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.start()
 
-    def on_generation_complete(self, image):
-        self.generated_image = image
-        pixmap = self.pil_to_pixmap(image)
-        self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
+    def on_generation_complete(self, result):
+        if isinstance(result, Image.Image):
+            self.generated_image = result
+            pixmap = self.pil_to_pixmap(result)
+            self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
         
         self.progress_bar.setVisible(False)
         self.generate_buttons_widget.setVisible(False)
@@ -155,6 +168,25 @@ class AiDialog(QDialog):
         self.generate_buttons_widget.setVisible(True)
         self.start_generation()
 
+    def _cleanup_gpu_memory(self):
+        """Deletes the model and clears the GPU cache."""
+        if AiDialog.pipe is not None:
+            del AiDialog.pipe
+            AiDialog.pipe = None
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print("AI pipeline and GPU cache cleared.")
+
+    def accept(self):
+        """Override accept to clean up GPU memory before closing."""
+        self._cleanup_gpu_memory()
+        super().accept()
+
+    def reject(self):
+        """Override reject to clean up GPU memory before closing."""
+        self._cleanup_gpu_memory()
+        super().reject()
+
     @staticmethod
     def pil_to_pixmap(pil_image):
         image_qt = ImageQt(pil_image)
@@ -165,3 +197,4 @@ class AiDialog(QDialog):
             "prompt": self.prompt_input.text(),
             "mode": "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
         }
+        
