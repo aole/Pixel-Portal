@@ -351,24 +351,21 @@ class MainWindow(QMainWindow):
 
         self.update_dynamic_palette(self.app.pen_color)
 
-        # Right Panel
-        right_panel_container = QWidget()
-        right_panel_layout = QVBoxLayout()
-        right_panel_layout.setContentsMargins(0, 0, 0, 0)
-        right_panel_container.setLayout(right_panel_layout)
-
+        # Preview Panel
         self.preview_panel = PreviewPanel(self.app)
-        right_panel_layout.addWidget(self.preview_panel)
+        preview_dock_widget = QDockWidget("Preview", self)
+        preview_dock_widget.setWidget(self.preview_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, preview_dock_widget)
 
+        # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app)
-        right_panel_layout.addWidget(self.layer_manager_widget)
+        self.layer_manager_widget.layer_changed.connect(self.canvas.update)
+        layer_dock_widget = QDockWidget("Layers", self)
+        layer_dock_widget.setWidget(self.layer_manager_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, layer_dock_widget)
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
-        self.layer_manager_widget.layer_changed.connect(self.canvas.update)
-
-        right_dock_widget = QDockWidget("Panels", self)
-        right_dock_widget.setWidget(right_panel_container)
-        self.addDockWidget(Qt.RightDockWidgetArea, right_dock_widget)
+        self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
 
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())

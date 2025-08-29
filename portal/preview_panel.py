@@ -17,17 +17,8 @@ class PreviewPanel(QGroupBox):
 
         self.update_preview()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update_preview()
-
     def update_preview(self):
-        if self.app.document and self.preview_label.width() > 0:
+        if self.app.document:
             image = self.app.document.render()
             pixmap = QPixmap.fromImage(image)
-            self.preview_label.setPixmap(pixmap.scaled(
-                self.preview_label.width(),
-                self.preview_label.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.SmoothTransformation
-            ))
+            self.preview_label.setPixmap(pixmap)
