@@ -17,7 +17,7 @@ class Drawing:
         pen_width = self.app.pen_width
         offset = pen_width // 2
         top_left = QPoint(point.x() - offset, point.y() - offset)
-        painter.drawRect(top_left.x(), top_left.y(), pen_width, pen_width)
+        painter.fillRect(top_left.x(), top_left.y(), pen_width, pen_width, painter.pen().color())
 
     def draw_circular_brush(self, painter, point):
         pen_width = self.app.pen_width

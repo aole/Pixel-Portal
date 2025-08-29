@@ -244,22 +244,17 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
 
-        self.brush_button = QToolButton(self)
-        self.brush_button.setIcon(QIcon("icons/brush_cirular.png"))
-        self.brush_button.setPopupMode(QToolButton.MenuButtonPopup)
-        brush_menu = QMenu(self.brush_button)
-        self.brush_button.setMenu(brush_menu)
+        self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self)
+        self.circular_brush_action.setCheckable(True)
+        self.circular_brush_action.setChecked(self.app.brush_type == "Circular")
+        self.circular_brush_action.triggered.connect(lambda: self.app.set_brush_type("Circular"))
+        top_toolbar.addAction(self.circular_brush_action)
 
-        circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self)
-        circular_brush_action.triggered.connect(lambda: self.set_brush_tool(circular_brush_action))
-        brush_menu.addAction(circular_brush_action)
-        self.brush_button.setDefaultAction(circular_brush_action)
-
-        square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self)
-        square_brush_action.triggered.connect(lambda: self.set_brush_tool(square_brush_action))
-        brush_menu.addAction(square_brush_action)
-
-        top_toolbar.addWidget(self.brush_button)
+        self.square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self)
+        self.square_brush_action.setCheckable(True)
+        self.square_brush_action.setChecked(self.app.brush_type == "Square")
+        self.square_brush_action.triggered.connect(lambda: self.app.set_brush_type("Square"))
+        top_toolbar.addAction(self.square_brush_action)
         
         top_toolbar.addSeparator()
 
@@ -385,11 +380,6 @@ class MainWindow(QMainWindow):
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
 
-    def set_brush_tool(self, action):
-        self.app.set_brush_type(action.text())
-        self.brush_button.setIcon(action.icon())
-        self.brush_button.setDefaultAction(action)
-
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())
         self.shape_button.setIcon(action.icon())
@@ -510,7 +500,5 @@ class MainWindow(QMainWindow):
         self.crop_action.setEnabled(has_selection)
 
     def update_brush_button(self, brush_type):
-        if brush_type == "Circular":
-            self.brush_button.setIcon(QIcon("icons/brush_cirular.png"))
-        elif brush_type == "Square":
-            self.brush_button.setIcon(QIcon("icons/brush_square.png"))
+        self.circular_brush_action.setChecked(brush_type == "Circular")
+        self.square_brush_action.setChecked(brush_type == "Square")

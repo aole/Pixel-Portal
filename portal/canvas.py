@@ -390,13 +390,21 @@ class Canvas(QWidget):
 
         # Fill the cursor rectangle with the brush color
         painter.setBrush(self.app.pen_color)
-        painter.setPen(Qt.NoPen) # No outline for the fill
-        painter.drawRect(cursor_screen_rect)
+        painter.setPen(Qt.NoPen)  # No outline for the fill
+
+        if self.app.brush_type == "Circular":
+            painter.drawEllipse(cursor_screen_rect)
+        else:
+            painter.drawRect(cursor_screen_rect)
 
         # Draw the inverted outline on top
         painter.setPen(inverted_color)
         painter.setBrush(Qt.NoBrush)
-        painter.drawRect(cursor_screen_rect)
+
+        if self.app.brush_type == "Circular":
+            painter.drawEllipse(cursor_screen_rect)
+        else:
+            painter.drawRect(cursor_screen_rect)
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
