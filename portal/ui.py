@@ -210,6 +210,7 @@ class MainWindow(QMainWindow):
         self.app.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
         self.app.pen_color_changed.connect(self.update_dynamic_palette)
+        self.app.brush_type_changed.connect(self.update_brush_button)
 
         # Toolbar
         toolbar = QToolBar("Tools")
@@ -242,6 +243,18 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.setPageStep(1)
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
+
+        self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self)
+        self.circular_brush_action.setCheckable(True)
+        self.circular_brush_action.setChecked(self.app.brush_type == "Circular")
+        self.circular_brush_action.triggered.connect(lambda: self.app.set_brush_type("Circular"))
+        top_toolbar.addAction(self.circular_brush_action)
+
+        self.square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self)
+        self.square_brush_action.setCheckable(True)
+        self.square_brush_action.setChecked(self.app.brush_type == "Square")
+        self.square_brush_action.triggered.connect(lambda: self.app.set_brush_type("Square"))
+        top_toolbar.addAction(self.square_brush_action)
         
         top_toolbar.addSeparator()
 
@@ -485,3 +498,7 @@ class MainWindow(QMainWindow):
 
     def update_crop_action_state(self, has_selection):
         self.crop_action.setEnabled(has_selection)
+
+    def update_brush_button(self, brush_type):
+        self.circular_brush_action.setChecked(brush_type == "Circular")
+        self.square_brush_action.setChecked(brush_type == "Square")

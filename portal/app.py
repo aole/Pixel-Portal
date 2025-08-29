@@ -11,6 +11,7 @@ class App(QObject):
     tool_changed = Signal(str)
     pen_color_changed = Signal(QColor)
     pen_width_changed = Signal(int)
+    brush_type_changed = Signal(str)
     undo_stack_changed = Signal()
     document_changed = Signal()
 
@@ -23,6 +24,7 @@ class App(QObject):
         self.previous_tool = "Pen"
         self.pen_color = QColor("black")
         self.pen_width = 1
+        self.brush_type = "Circular"
         self.undo_manager = UndoManager()
         self._prime_undo_stack()
 
@@ -36,6 +38,10 @@ class App(QObject):
     def set_pen_width(self, width):
         self.pen_width = width
         self.pen_width_changed.emit(self.pen_width)
+
+    def set_brush_type(self, brush_type):
+        self.brush_type = brush_type
+        self.brush_type_changed.emit(self.brush_type)
 
     def _prime_undo_stack(self):
         self.undo_manager.add_undo_state(self.document.clone())

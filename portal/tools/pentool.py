@@ -2,12 +2,14 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QPainter, QMouseEvent, QPen, Qt
 
 from portal.tools.basetool import BaseTool
+from ..drawing import Drawing
 
 
 class PenTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.last_point = QPoint()
+        self.drawing = Drawing(self.canvas.app)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.last_point = doc_pos
@@ -22,9 +24,8 @@ class PenTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
-        painter.setPen(pen)
-        painter.drawPoint(self.last_point)
+        painter.setPen(QPen(self.canvas.app.pen_color))
+        self.drawing.draw_brush(painter, self.last_point)
         painter.end()
         self.canvas.update()
 
@@ -35,9 +36,8 @@ class PenTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
-        painter.setPen(pen)
-        painter.drawLine(self.last_point, doc_pos)
+        painter.setPen(QPen(self.canvas.app.pen_color))
+        self.drawing.draw_line_with_brush(painter, self.last_point, doc_pos)
         self.last_point = doc_pos
         self.canvas.update()
 

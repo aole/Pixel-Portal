@@ -2,12 +2,14 @@ from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
 
 from portal.tools.basetool import BaseTool
+from ..drawing import Drawing
 
 
 class EllipseTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
+        self.drawing = Drawing(self.canvas.app)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
@@ -26,8 +28,7 @@ class EllipseTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
-        painter.setPen(pen)
+        painter.setPen(QPen(self.canvas.app.pen_color))
 
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
@@ -40,7 +41,7 @@ class EllipseTool(BaseTool):
             )
 
         rect = QRect(self.start_point, end_point).normalized()
-        self.canvas.drawing_logic.draw_ellipse(painter, rect)
+        self.drawing.draw_ellipse(painter, rect)
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -52,8 +53,7 @@ class EllipseTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        pen = QPen(self.canvas.app.pen_color, self.canvas.app.pen_width, Qt.SolidLine)
-        painter.setPen(pen)
+        painter.setPen(QPen(self.canvas.app.pen_color))
 
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
@@ -66,7 +66,7 @@ class EllipseTool(BaseTool):
             )
 
         rect = QRect(self.start_point, end_point).normalized()
-        self.canvas.drawing_logic.draw_ellipse(painter, rect)
+        self.drawing.draw_ellipse(painter, rect)
 
         active_layer.image = self.canvas.temp_image
         active_layer.on_image_change.emit()
