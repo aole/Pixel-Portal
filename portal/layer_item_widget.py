@@ -1,5 +1,5 @@
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Signal, Qt, QRect
+from PySide6.QtGui import QPixmap, QPainter, QColor
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget
 
 
@@ -104,9 +104,56 @@ class LayerItemWidget(QWidget):
         self.layer.name = new_name
 
     def update_thumbnail(self):
-        scaled_image = self.layer.image.scaled(64, 64, Qt.KeepAspectRatio)
-        pixmap = QPixmap.fromImage(scaled_image)
-        self.thumbnail.setPixmap(pixmap)
+        # The size of the thumbnail label
+        label_size = self.thumbnail.size()
+        width = label_size.width()
+        height = label_size.height()
+
+        # Create a new pixmap to draw on
+        bordered_pixmap = QPixmap(label_size)
+        bordered_pixmap.fill(Qt.GlobalColor.transparent)
+
+        # Create a painter
+        painter = QPainter(bordered_pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw white border
+        painter.setPen(QColor("white"))
+        painter.drawRect(0, 0, width - 1, height - 1)
+
+        # Draw black border
+        painter.setPen(QColor("black"))
+        painter.drawRect(1, 1, width - 3, height - 3)
+
+        # Calculate padding
+        padding_x = int(width * 0.05)
+        padding_y = int(height * 0.05)
+
+        # The area for the image, inside the borders and padding
+        image_rect = bordered_pixmap.rect().adjusted(2 + padding_x, 2 + padding_y, -2 - padding_x, -2 - padding_y)
+
+        # Scale the layer image to fit inside the image_rect, keeping aspect ratio
+        scaled_image = self.layer.image.scaled(
+            image_rect.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        pixmap_to_draw = QPixmap.fromImage(scaled_image)
+
+        # Center the pixmap in the image_rect
+        draw_rect = QRect(
+            image_rect.left(),
+            image_rect.top(),
+            pixmap_to_draw.width(),
+            pixmap_to_draw.height()
+        )
+        draw_rect.moveCenter(image_rect.center())
+
+        painter.drawPixmap(draw_rect, pixmap_to_draw)
+
+        painter.end()
+
+        self.thumbnail.setPixmap(bordered_pixmap)
 
     def update_visibility_icon(self):
         if self.layer.visible:
