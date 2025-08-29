@@ -2,9 +2,9 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
-class PreviewPanel(QGroupBox):
+class PreviewPanel(QWidget):
     def __init__(self, app):
-        super().__init__("Preview")
+        super().__init__()
         self.app = app
 
         self.layout = QVBoxLayout(self)
