@@ -106,3 +106,63 @@ def test_rename_layer(app_with_widget, qtbot):
     # Check that the layer name is updated
     assert app.document.layer_manager.layers[0].name == "New Name"
     assert editable_label.text() == "New Name"
+
+
+def test_undo_redo_on_duplicated_layer(app_with_widget, qtbot):
+    """
+    Tests a specific bug where undo/redo of a drawing action on a
+    duplicated layer would fail.
+    """
+    app, widget = app_with_widget
+    # This test requires a window with a canvas, which is not ideal for a unit test.
+    # We will simulate the necessary parts.
+    from portal.main import MainWindow
+    from portal.command import DrawCommand
+    from PySide6.QtGui import QColor, QPainterPath
+    from PySide6.QtCore import QPoint
+
+    # Create a mock window and canvas if they don't exist
+    if app.window is None:
+        app.set_window(MainWindow(app))
+
+    app.document.layer_manager.layer_structure_changed.connect(widget.refresh_layers)
+
+    # 1. Duplicate the initial layer
+    widget.layer_list.setCurrentRow(0)
+    with qtbot.waitSignal(app.document.layer_manager.layer_structure_changed, timeout=1000):
+        widget.duplicate_button.click()
+
+    assert len(app.document.layer_manager.layers) == 2
+    assert "copy" in app.document.layer_manager.active_layer.name
+
+    # 2. Draw something on the new layer
+    active_layer = app.document.layer_manager.active_layer
+    # The canvas has a 'drawing' object that handles drawing logic.
+    # We need to ensure it exists.
+    drawing_logic = app.window.canvas.drawing
+
+    draw_command = DrawCommand(
+        layer=active_layer,
+        points=[QPoint(10, 10)],
+        color=QColor("red"),
+        width=5,
+        brush_type="Circular",
+        drawing=drawing_logic,
+        selection_shape=None,
+        erase=False
+    )
+    app.execute_command(draw_command)
+
+    # Get the color of the pixel we drew on
+    pixel_color_after_draw = active_layer.image.pixelColor(10, 10)
+    assert pixel_color_after_draw.name() == "#ff0000"
+
+    # 3. Undo the drawing
+    app.undo()
+    pixel_color_after_undo = active_layer.image.pixelColor(10, 10)
+    assert pixel_color_after_undo.name() != "#ff0000"
+
+    # 4. Redo the drawing
+    app.redo()
+    pixel_color_after_redo = active_layer.image.pixelColor(10, 10)
+    assert pixel_color_after_redo.name() == "#ff0000"

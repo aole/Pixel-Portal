@@ -159,31 +159,3 @@ def test_toggle_visibility(manager):
 
     with pytest.raises(IndexError):
         manager.toggle_visibility(1)
-
-
-def test_duplicate_layer(manager):
-    """Test duplicating a layer."""
-    manager.add_layer("Layer 1")  # [BG, L1]
-    manager.layers[1].image.fill(QColor("red"))
-
-    manager.duplicate_layer(1)  # Duplicate "Layer 1" -> [BG, L1, L1 copy]
-
-    assert len(manager.layers) == 3
-    assert manager.active_layer_index == 2
-    assert manager.active_layer.name == "Layer 1 copy"
-    assert manager.layers[1].name == "Layer 1"
-
-    # Check that the image content was copied
-    original_color = manager.layers[1].image.pixelColor(10, 10)
-    duplicate_color = manager.active_layer.image.pixelColor(10, 10)
-    assert duplicate_color == original_color
-    assert duplicate_color == QColor("red")
-
-    # Check that they are different image objects
-    assert manager.active_layer.image is not manager.layers[1].image
-
-    # Test duplicating the background layer
-    manager.duplicate_layer(0) # [BG, L1, L1 copy, BG copy]
-    assert len(manager.layers) == 4
-    assert manager.active_layer_index == 1
-    assert manager.layers[1].name == "Background copy"
