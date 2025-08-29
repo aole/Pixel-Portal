@@ -114,13 +114,29 @@ class CanvasRenderer:
                 p.drawImage(0, 0, composite_image)
                 
                 # If erasing, use DestinationOut mode to "punch a hole" in the composite image
-                is_erasing = self.app.tool == "Eraser" or self.canvas.is_erasing_preview
-                if is_erasing:
-                    p.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                # Special handling for eraser preview to avoid flattening the image first
+                if self.canvas.is_erasing_preview:
+                    active_layer = self.app.document.layer_manager.active_layer
+                    if active_layer:
+                        # 1. Render all layers except the active one
+                        background_image = self.app.document.render_except(active_layer)
 
-                p.drawImage(0, 0, self.canvas.temp_image)
+                        # 2. Create a temporary image of the active layer with the hole punched out
+                        temp_active_layer = active_layer.image.copy()
+                        p_temp = QPainter(temp_active_layer)
+                        p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                        p_temp.drawImage(0, 0, self.canvas.temp_image)
+                        p_temp.end()
+
+                        # 3. Composite the background and the temp active layer
+                        p.drawImage(0, 0, background_image)
+                        p.setOpacity(active_layer.opacity)
+                        p.drawImage(0, 0, temp_active_layer)
+
+                else: # Regular tool preview (pen, shapes, etc.)
+                    p.drawImage(0, 0, self.canvas.temp_image)
+
                 p.end()
-
                 image_to_draw_on = final_image
 
             painter.drawImage(target_rect, image_to_draw_on)
