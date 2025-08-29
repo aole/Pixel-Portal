@@ -85,10 +85,16 @@ class LayerItemWidget(QWidget):
         self.visibility_icon.clicked.connect(self.on_visibility_clicked)
         self.layout.addWidget(self.visibility_icon)
 
+        thumbnail_container = QWidget()
+        thumbnail_layout = QHBoxLayout(thumbnail_container)
+        padding = int(64 * 0.05)
+        thumbnail_layout.setContentsMargins(padding, padding, padding, padding)
+
         self.thumbnail = QLabel()
         self.thumbnail.setFixedWidth(64)
         self.thumbnail.setFixedHeight(64)
-        self.layout.addWidget(self.thumbnail)
+        thumbnail_layout.addWidget(self.thumbnail)
+        self.layout.addWidget(thumbnail_container)
 
         self.label = EditableLabel(self.layer.name)
         self.label.name_changed.connect(self.on_name_changed)
@@ -117,20 +123,16 @@ class LayerItemWidget(QWidget):
         painter = QPainter(bordered_pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Draw white border
-        painter.setPen(QColor("white"))
-        painter.drawRect(0, 0, width - 1, height - 1)
-
         # Draw black border
         painter.setPen(QColor("black"))
+        painter.drawRect(0, 0, width - 1, height - 1)
+
+        # Draw white border
+        painter.setPen(QColor("white"))
         painter.drawRect(1, 1, width - 3, height - 3)
 
-        # Calculate padding
-        padding_x = int(width * 0.05)
-        padding_y = int(height * 0.05)
-
-        # The area for the image, inside the borders and padding
-        image_rect = bordered_pixmap.rect().adjusted(2 + padding_x, 2 + padding_y, -2 - padding_x, -2 - padding_y)
+        # The area for the image, inside the borders
+        image_rect = bordered_pixmap.rect().adjusted(2, 2, -2, -2)
 
         # Scale the layer image to fit inside the image_rect, keeping aspect ratio
         scaled_image = self.layer.image.scaled(
