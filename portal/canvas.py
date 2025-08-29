@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QPalette,
 )
 from PySide6.QtCore import Qt, QPoint, QRect, Signal
-from .drawing import DrawingLogic
+from .drawing import Drawing
 from .renderer import CanvasRenderer
 from .background import Background
 from .tools.pentool import PenTool
@@ -42,7 +42,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.app = app
         self.renderer = CanvasRenderer(self)
-        self.drawing_logic = DrawingLogic(self.app)
+        self.drawing = Drawing(self.app)
         self.dragging = False
         self.x_offset = 0
         self.y_offset = 0
@@ -404,7 +404,11 @@ class Canvas(QWidget):
         pass
 
     def draw_line_for_test(self, p1, p2):
-        self.drawing_logic.draw_line(p1, p2)
+        active_layer = self.app.document.layer_manager.active_layer
+        if active_layer:
+            painter = QPainter(active_layer.image)
+            painter.setPen(self.app.pen_color)
+            self.drawing.draw_line_with_brush(painter, p1, p2)
 
     def erase_line_for_test(self, p1, p2):
         active_layer = self.app.document.layer_manager.active_layer
