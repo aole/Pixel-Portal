@@ -14,7 +14,7 @@ class PreviewPanel(QGroupBox):
         self.preview_label = QLabel()
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_label.setStyleSheet("border: 1px solid gray;")
-        self.layout.addWidget(self.preview_label)
+        self.layout.addWidget(self.preview_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.update_preview()
 
