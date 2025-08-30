@@ -1,22 +1,18 @@
 from .document import Document
 from .undo import UndoManager
+from .drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand
+from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
+from PySide6.QtCore import QPoint
 
 
 class App(QObject):
-    tool_changed = Signal(str)
-    pen_color_changed = Signal(QColor)
-    pen_width_changed = Signal(int)
-    brush_type_changed = Signal(str)
     undo_stack_changed = Signal()
     document_changed = Signal()
-    mirror_x_changed = Signal(bool)
-    mirror_y_changed = Signal(bool)
     select_all_triggered = Signal()
     select_none_triggered = Signal()
     invert_selection_triggered = Signal()
@@ -29,15 +25,8 @@ class App(QObject):
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.tool = "Pen"
-        self.previous_tool = "Pen"
-        self.pen_color = QColor("black")
-        self.pen_width = 1
-        self.brush_type = "Circular"
+        self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
-
-        self.mirror_x = False
-        self.mirror_y = False
 
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
@@ -45,38 +34,6 @@ class App(QObject):
             self.config.add_section('General')
 
         self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
-
-    @Slot(bool)
-    def set_mirror_x(self, enabled):
-        self.mirror_x = enabled
-        self.mirror_x_changed.emit(self.mirror_x)
-
-    @Slot(bool)
-    def set_mirror_y(self, enabled):
-        self.mirror_y = enabled
-        self.mirror_y_changed.emit(self.mirror_y)
-
-    @Slot(int)
-    def set_pen_width(self, width):
-        self.pen_width = width
-        self.pen_width_changed.emit(self.pen_width)
-
-    @Slot(str)
-    def set_brush_type(self, brush_type):
-        self.brush_type = brush_type
-        self.brush_type_changed.emit(self.brush_type)
-
-    @Slot(str)
-    def set_tool(self, tool):
-        if self.tool != "Picker":
-            self.previous_tool = self.tool
-        self.tool = tool
-        self.tool_changed.emit(self.tool)
-
-    @Slot(str)
-    def set_pen_color(self, color_hex):
-        self.pen_color = QColor(color_hex)
-        self.pen_color_changed.emit(self.pen_color)
 
     def execute_command(self, command):
         command.execute()
@@ -214,10 +171,26 @@ class App(QObject):
     def exit(self):
         self.exit_triggered.emit()
 
+    @Slot(bool)
+    def set_mirror_x(self, enabled):
+        self.drawing_context.set_mirror_x(enabled)
+
+    @Slot(bool)
+    def set_mirror_y(self, enabled):
+        self.drawing_context.set_mirror_y(enabled)
+
     def get_current_image(self):
         return self.document.get_current_image_for_ai()
 
     def add_new_layer_with_image(self, image):
         command = AddLayerCommand(self.document, image, "AI Generated Layer")
         self.execute_command(command)
-            
+
+    @Slot(object)
+    def handle_command(self, command):
+        if isinstance(command, tuple):
+            print(f"Ignoring tuple-based command in App.handle_command: {command}")
+            return
+
+        if command:
+            self.execute_command(command)

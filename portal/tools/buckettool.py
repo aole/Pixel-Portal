@@ -11,20 +11,19 @@ class BucketTool(BaseTool):
     shortcut = "b"
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        active_layer = self.canvas.app.document.layer_manager.active_layer
+        active_layer = self.canvas.document.layer_manager.active_layer
         if not active_layer:
             return
 
         command = FillCommand(
-            document=self.app.document,
+            document=self.canvas.document,
             layer=active_layer,
             fill_pos=doc_pos,
-            fill_color=self.app.pen_color,
+            fill_color=self.canvas._pen_color,
             selection_shape=self.canvas.selection_shape,
-            drawing=self.canvas.drawing,
-            mirror_x=self.app.mirror_x,
-            mirror_y=self.app.mirror_y,
+            mirror_x=self.canvas._mirror_x,
+            mirror_y=self.canvas._mirror_y,
         )
-        self.app.execute_command(command)
+        self.command_generated.emit(command)
         self.canvas.update()
         

@@ -1,12 +1,5 @@
-from PySide6.QtGui import QAction, QIcon, QKeySequence
-
-class ActionManager:
-    def __init__(self, main_window):
-        self.main_window = main_window
-        self.app = main_window.app
-
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from .background import Background
-from PySide6.QtGui import QColor
 
 class ActionManager:
     def __init__(self, main_window):

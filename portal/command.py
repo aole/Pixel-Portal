@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
-from PySide6.QtCore import QRect, QPoint, Qt
+from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from .layer import Layer
 from .document import Document
+from .drawing import Drawing
 
 
 class Command(ABC):
@@ -26,17 +27,18 @@ class Command(ABC):
 
 
 class DrawCommand(Command):
-    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, drawing, selection_shape: QPainterPath | None, erase: bool = False):
+    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document, selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
         self.layer = layer
         self.points = points
         self.color = color
         self.width = width
         self.brush_type = brush_type
         self.erase = erase
-        self.drawing = drawing
-        self.mirror_x = drawing.app.mirror_x
-        self.mirror_y = drawing.app.mirror_y
+        self.document = document
+        self.mirror_x = mirror_x
+        self.mirror_y = mirror_y
         self.selection_shape = selection_shape
+        self.drawing = Drawing()
 
         self.bounding_rect = self._calculate_bounding_rect()
         self.before_image = None
@@ -45,10 +47,10 @@ class DrawCommand(Command):
         if not self.points:
             return QRect()
 
-        doc_width = self.drawing.app.document.width
-        doc_height = self.drawing.app.document.height
-        mirror_x = self.drawing.app.mirror_x
-        mirror_y = self.drawing.app.mirror_y
+        doc_width = self.document.width
+        doc_height = self.document.height
+        mirror_x = self.mirror_x
+        mirror_y = self.mirror_y
 
         # Create the original path
         original_path = QPainterPath(self.points[0])
@@ -99,17 +101,11 @@ class DrawCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy()
 
-        # Temporarily set the app's state to what it was when the command was created.
-        # This is crucial for redo and ensures the drawing methods use the correct parameters.
-        original_width = self.drawing.app.pen_width
-        original_brush = self.drawing.app.brush_type
-        original_mirror_x = self.drawing.app.mirror_x
-        original_mirror_y = self.drawing.app.mirror_y
-        
-        self.drawing.app.set_pen_width(self.width)
-        self.drawing.app.set_brush_type(self.brush_type)
-        self.drawing.app.mirror_x = self.mirror_x
-        self.drawing.app.mirror_y = self.mirror_y
+        # Configure the drawing utility
+        self.drawing.set_pen_width(self.width)
+        self.drawing.set_brush_type(self.brush_type)
+        self.drawing.set_mirror_x(self.mirror_x)
+        self.drawing.set_mirror_y(self.mirror_y)
 
         # Perform the drawing
         painter = QPainter(self.layer.image)
@@ -119,23 +115,19 @@ class DrawCommand(Command):
 
             painter.setPen(QPen(self.color))
 
+            doc_size = QSize(self.document.width, self.document.height)
+
             if len(self.points) == 1:
                 if self.erase:
-                    self.drawing.erase_brush(painter, self.points[0])
+                    self.drawing.erase_brush(painter, self.points[0], doc_size)
                 else:
-                    self.drawing.draw_brush(painter, self.points[0])
+                    self.drawing.draw_brush(painter, self.points[0], doc_size)
             else:
                 for i in range(len(self.points) - 1):
-                    self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], erase=self.erase)
+                    self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], doc_size, erase=self.erase)
         finally:
             painter.end()
             self.layer.on_image_change.emit()
-
-            # Restore the application's state
-            self.drawing.app.set_pen_width(original_width)
-            self.drawing.app.set_brush_type(original_brush)
-            self.drawing.app.mirror_x = original_mirror_x
-            self.drawing.app.mirror_y = original_mirror_y
 
     def undo(self):
         if self.before_image:
@@ -278,13 +270,13 @@ class PasteCommand(Command):
 
 
 class FillCommand(Command):
-    def __init__(self, document: Document, layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, drawing, mirror_x: bool, mirror_y: bool):
+    def __init__(self, document: Document, layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, mirror_x: bool, mirror_y: bool):
         self.document = document
         self.layer = layer
         self.fill_pos = fill_pos
         self.fill_color = fill_color
         self.selection_shape = selection_shape
-        self.drawing = drawing
+        self.drawing = Drawing()
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
         self.before_image = None
@@ -293,7 +285,7 @@ class FillCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy()
 
-        self.drawing.app.pen_color = self.fill_color
+        self.drawing.set_pen_color(self.fill_color)
 
         doc_width = self.document.width
         doc_height = self.document.height
@@ -309,7 +301,7 @@ class FillCommand(Command):
 
         for point in points_to_fill:
             if tuple(point.toTuple()) not in processed_points:
-                self.drawing.flood_fill(point, self.selection_shape)
+                self.drawing.flood_fill(self.layer, point, self.fill_color, self.selection_shape)
                 processed_points.add(tuple(point.toTuple()))
 
         self.layer.on_image_change.emit()
@@ -324,17 +316,18 @@ class FillCommand(Command):
 
 
 class ShapeCommand(Command):
-    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, drawing, selection_shape: QPainterPath | None):
+    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, document, selection_shape: QPainterPath | None, mirror_x: bool = False, mirror_y: bool = False):
         self.layer = layer
         self.rect = rect
         self.shape_type = shape_type
         self.color = color
         self.width = width
-        self.drawing = drawing
-        self.before_image = None
-        self.mirror_x = drawing.app.mirror_x
-        self.mirror_y = drawing.app.mirror_y
+        self.document = document
         self.selection_shape = selection_shape
+        self.mirror_x = mirror_x
+        self.mirror_y = mirror_y
+        self.drawing = Drawing()
+        self.before_image = None
 
     def execute(self):
         if self.before_image is None:
@@ -342,10 +335,8 @@ class ShapeCommand(Command):
             buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
             self.before_image = self.layer.image.copy(buffered_rect)
 
-        original_mirror_x = self.drawing.app.mirror_x
-        original_mirror_y = self.drawing.app.mirror_y
-        self.drawing.app.mirror_x = self.mirror_x
-        self.drawing.app.mirror_y = self.mirror_y
+        self.drawing.set_mirror_x(self.mirror_x)
+        self.drawing.set_mirror_y(self.mirror_y)
 
         painter = QPainter(self.layer.image)
         try:
@@ -356,15 +347,14 @@ class ShapeCommand(Command):
             pen.setWidth(self.width)
             painter.setPen(pen)
 
+            doc_size = QSize(self.document.width, self.document.height)
             if self.shape_type == 'ellipse':
-                self.drawing.draw_ellipse(painter, self.rect)
+                self.drawing.draw_ellipse(painter, self.rect, doc_size)
             elif self.shape_type == 'rectangle':
-                self.drawing.draw_rect(painter, self.rect)
+                self.drawing.draw_rect(painter, self.rect, doc_size)
         finally:
             painter.end()
             self.layer.on_image_change.emit()
-            self.drawing.app.mirror_x = original_mirror_x
-            self.drawing.app.mirror_y = original_mirror_y
 
     def undo(self):
         if self.before_image:
