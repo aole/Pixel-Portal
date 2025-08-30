@@ -7,6 +7,10 @@ from ..command import DrawCommand
 
 
 class LineTool(BaseTool):
+    name = "Line"
+    icon = "icons/toolline.png"
+    shortcut = "l"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()

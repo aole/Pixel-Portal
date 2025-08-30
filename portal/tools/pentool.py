@@ -1,10 +1,14 @@
 from .basetool import BaseTool
-from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent
+from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent, QKeySequence
 from PySide6.QtCore import QPoint, Qt
 from ..command import DrawCommand
 
 
 class PenTool(BaseTool):
+    name = "Pen"
+    icon = "icons/toolpen.png"
+    shortcut = "p"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.points = []

@@ -1,3 +1,4 @@
+import functools
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt, Slot
@@ -205,6 +206,7 @@ class MainWindow(QMainWindow):
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.tool_changed.connect(self.update_selected_tool_label)
+        self.app.tool_changed.connect(self.update_tool_buttons)
         self.canvas.selection_size_changed.connect(self.update_selection_size_label)
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.pen_width_changed.connect(self.update_pen_width_label)
@@ -278,23 +280,17 @@ class MainWindow(QMainWindow):
         active_color_button = ActiveColorButton(self.app)
         toolbar.addWidget(active_color_button)
         
-        pen_action = QAction(QIcon("icons/toolpen.png"), "Pen", self)
-        pen_action.triggered.connect(lambda: self.app.set_tool("Pen"))
-        pen_button = QToolButton()
-        pen_button.setDefaultAction(pen_action)
-        toolbar.addWidget(pen_button)
+        from .tools import get_tools
+        tools = get_tools()
+        for tool in tools:
+            if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
+                continue
 
-        bucket_action = QAction(QIcon("icons/toolbucket.png"), "Bucket", self)
-        bucket_action.triggered.connect(lambda: self.app.set_tool("Bucket"))
-        bucket_button = QToolButton()
-        bucket_button.setDefaultAction(bucket_action)
-        toolbar.addWidget(bucket_button)
-
-        picker_action = QAction(QIcon("icons/toolpicker.png"), "Picker", self)
-        picker_action.triggered.connect(lambda: self.app.set_tool("Picker"))
-        picker_button = QToolButton()
-        picker_button.setDefaultAction(picker_action)
-        toolbar.addWidget(picker_button)
+            action = QAction(QIcon(tool.icon), tool.name, self)
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            button = QToolButton()
+            button.setDefaultAction(action)
+            toolbar.addWidget(button)
 
         # Shape Tools
         self.shape_button = QToolButton(self)
@@ -303,18 +299,13 @@ class MainWindow(QMainWindow):
         shape_menu = QMenu(self.shape_button)
         self.shape_button.setMenu(shape_menu)
 
-        line_action = QAction(QIcon("icons/toolline.png"), "Line", self)
-        line_action.triggered.connect(lambda: self.set_shape_tool(line_action))
-        shape_menu.addAction(line_action)
-        self.shape_button.setDefaultAction(line_action)
-
-        rect_action = QAction(QIcon("icons/toolrect.png"), "Rectangle", self)
-        rect_action.triggered.connect(lambda: self.set_shape_tool(rect_action))
-        shape_menu.addAction(rect_action)
-
-        ellipse_action = QAction(QIcon("icons/toolellipse.png"), "Ellipse", self)
-        ellipse_action.triggered.connect(lambda: self.set_shape_tool(ellipse_action))
-        shape_menu.addAction(ellipse_action)
+        shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
+        for tool in shape_tools:
+            action = QAction(QIcon(tool.icon), tool.name, self)
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            shape_menu.addAction(action)
+            if tool.name == "Line":
+                self.shape_button.setDefaultAction(action)
 
         toolbar.addWidget(self.shape_button)
 
@@ -325,22 +316,13 @@ class MainWindow(QMainWindow):
         selection_menu = QMenu(self.selection_button)
         self.selection_button.setMenu(selection_menu)
 
-        select_rect_action = QAction(QIcon("icons/toolselectrect.png"), "Select Rectangle", self)
-        select_rect_action.triggered.connect(lambda: self.set_selection_tool(select_rect_action))
-        selection_menu.addAction(select_rect_action)
-        self.selection_button.setDefaultAction(select_rect_action)
-
-        select_circle_action = QAction(QIcon("icons/toolselectcircle.png"), "Select Circle", self)
-        select_circle_action.triggered.connect(lambda: self.set_selection_tool(select_circle_action))
-        selection_menu.addAction(select_circle_action)
-
-        select_lasso_action = QAction(QIcon("icons/toolselectlasso.png"), "Select Lasso", self)
-        select_lasso_action.triggered.connect(lambda: self.set_selection_tool(select_lasso_action))
-        selection_menu.addAction(select_lasso_action)
-
-        select_color_action = QAction(QIcon("icons/toolselectcolor.png"), "Select Color", self)
-        select_color_action.triggered.connect(lambda: self.set_selection_tool(select_color_action))
-        selection_menu.addAction(select_color_action)
+        selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
+        for tool in selection_tools:
+            action = QAction(QIcon(tool.icon), tool.name, self)
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            selection_menu.addAction(action)
+            if tool.name == "Select Rectangle":
+                self.selection_button.setDefaultAction(action)
 
         toolbar.addWidget(self.selection_button)
 
@@ -415,15 +397,16 @@ class MainWindow(QMainWindow):
             self.app.perform_crop(selection_rect)
             self.canvas.select_none()
 
-    def set_shape_tool(self, action):
-        self.app.set_tool(action.text())
-        self.shape_button.setIcon(action.icon())
-        self.shape_button.setDefaultAction(action)
+    def update_tool_buttons(self, tool_name):
+        for action in self.shape_button.menu().actions():
+            if action.text() == tool_name:
+                self.shape_button.setDefaultAction(action)
+                return
 
-    def set_selection_tool(self, action):
-        self.app.set_tool(action.text())
-        self.selection_button.setIcon(action.icon())
-        self.selection_button.setDefaultAction(action)
+        for action in self.selection_button.menu().actions():
+            if action.text() == tool_name:
+                self.selection_button.setDefaultAction(action)
+                return
 
     def load_palette(self):
         try:

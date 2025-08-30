@@ -17,18 +17,10 @@ from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from .drawing import Drawing
 from .renderer import CanvasRenderer
 from .background import Background
-from .tools.pentool import PenTool
-from .tools.buckettool import BucketTool
-from .tools.rectangletool import RectangleTool
-from .tools.ellipsetool import EllipseTool
-from .tools.linetool import LineTool
-from .tools.selectrectangletool import SelectRectangleTool
-from .tools.selectcircletool import SelectCircleTool
-from .tools.selectlassotool import SelectLassoTool
-from .tools.movetool import MoveTool
-from .tools.erasertool import EraserTool
-from .tools.pickertool import PickerTool
-from .tools.selectcolortool import SelectColorTool
+from .drawing import Drawing
+from .renderer import CanvasRenderer
+from .background import Background
+from .tools import get_tools
 
 
 class Canvas(QWidget):
@@ -65,20 +57,7 @@ class Canvas(QWidget):
         self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
         self.is_erasing_preview = False
 
-        self.tools = {
-            "Pen": PenTool(self),
-            "Bucket": BucketTool(self),
-            "Rectangle": RectangleTool(self),
-            "Ellipse": EllipseTool(self),
-            "Line": LineTool(self),
-            "Select Rectangle": SelectRectangleTool(self),
-            "Select Circle": SelectCircleTool(self),
-            "Select Lasso": SelectLassoTool(self),
-            "Select Color": SelectColorTool(self),
-            "Move": MoveTool(self),
-            "Eraser": EraserTool(self),
-            "Picker": PickerTool(self),
-        }
+        self.tools = {tool.name: tool(self) for tool in get_tools()}
         self.current_tool = self.tools["Pen"]
 
         self.app.tool_changed.connect(self.on_tool_changed)
@@ -118,12 +97,7 @@ class Canvas(QWidget):
         if hasattr(self.current_tool, 'activate'):
             self.current_tool.activate()
         self.update()
-        if tool in ["Picker", "Select Color"]:
-            self.setCursor(self.picker_cursor)
-        elif tool in ["Bucket", "Rectangle", "Ellipse", "Line", "Select Rectangle", "Select Circle", "Select Lasso"]:
-            self.setCursor(Qt.CrossCursor)
-        else:
-            self.setCursor(Qt.BlankCursor)
+        self.setCursor(self.current_tool.cursor)
 
     def _update_selection_and_emit_size(self, shape):
         self.selection_shape = shape

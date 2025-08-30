@@ -1,10 +1,15 @@
 from .basetool import BaseTool
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QCursor, QPixmap
 
 
 class PickerTool(BaseTool):
+    name = "Picker"
+    icon = "icons/toolpicker.png"
+    shortcut = "i"
+
     def __init__(self, canvas):
         super().__init__(canvas)
+        self.cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
 
     def mousePressEvent(self, event, doc_pos):
         self.pick_color(doc_pos)

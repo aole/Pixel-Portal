@@ -6,6 +6,10 @@ from ..command import FillCommand
 
 
 class BucketTool(BaseTool):
+    name = "Bucket"
+    icon = "icons/toolbucket.png"
+    shortcut = "b"
+
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         active_layer = self.canvas.app.document.layer_manager.active_layer
         if not active_layer:

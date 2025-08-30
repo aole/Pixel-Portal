@@ -5,6 +5,10 @@ from portal.tools.baseselecttool import BaseSelectTool
 
 
 class SelectRectangleTool(BaseSelectTool):
+    name = "Select Rectangle"
+    icon = "icons/toolselectrect.png"
+    shortcut = "s"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
