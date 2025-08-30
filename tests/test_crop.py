@@ -8,7 +8,6 @@ def test_crop_to_selection(qtbot):
     """Test the crop to selection functionality."""
     app = App()
     window = MainWindow(app)
-    app.set_window(window)
 
     # Original document size
     assert app.document.width == 64
@@ -21,7 +20,7 @@ def test_crop_to_selection(qtbot):
     window.canvas.selection_shape = selection_path
 
     # Crop to selection
-    app.crop_to_selection()
+    window.on_crop_to_selection()
 
     # Check that the document has been cropped
     assert app.document.width == 20
@@ -35,7 +34,6 @@ def test_crop_to_selection_undo_redo(qtbot):
     """Test undoing and redoing the crop to selection functionality."""
     app = App()
     window = MainWindow(app)
-    app.set_window(window)
 
     # Original document size
     original_width = app.document.width
@@ -48,7 +46,7 @@ def test_crop_to_selection_undo_redo(qtbot):
     window.canvas.selection_shape = selection_path
 
     # Crop to selection
-    app.crop_to_selection()
+    window.on_crop_to_selection()
 
     # Check that the document has been cropped
     assert app.document.width == 20

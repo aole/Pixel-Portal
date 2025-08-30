@@ -54,15 +54,18 @@ def test_add_layer_button(app_with_widget, qtbot):
     assert widget.layer_list.count() == initial_count + 1
     assert app.document.layer_manager.active_layer.name.startswith("Layer")
 
-def test_remove_layer_button(app_with_widget):
+def test_remove_layer_button(app_with_widget, qtbot):
     """Test the 'Remove Layer' button functionality."""
     app, widget = app_with_widget
     app.document.layer_manager.add_layer("To Be Removed")
     widget.refresh_layers()
+    app.document.layer_manager.layer_structure_changed.connect(widget.refresh_layers)
 
     initial_count = len(app.document.layer_manager.layers)
     widget.layer_list.setCurrentRow(0) # Select "To Be Removed"
-    widget.remove_button.click()
+
+    with qtbot.waitSignal(app.document.layer_manager.layer_structure_changed, timeout=1000):
+        widget.remove_button.click()
 
     assert len(app.document.layer_manager.layers) == initial_count - 1
     assert widget.layer_list.count() == initial_count - 1
@@ -122,8 +125,7 @@ def test_undo_redo_on_duplicated_layer(app_with_widget, qtbot):
     from PySide6.QtCore import QPoint
 
     # Create a mock window and canvas if they don't exist
-    if app.window is None:
-        app.set_window(MainWindow(app))
+    window = MainWindow(app)
 
     app.document.layer_manager.layer_structure_changed.connect(widget.refresh_layers)
 
@@ -139,7 +141,7 @@ def test_undo_redo_on_duplicated_layer(app_with_widget, qtbot):
     active_layer = app.document.layer_manager.active_layer
     # The canvas has a 'drawing' object that handles drawing logic.
     # We need to ensure it exists.
-    drawing_logic = app.window.canvas.drawing
+    drawing_logic = window.canvas.drawing
 
     draw_command = DrawCommand(
         layer=active_layer,

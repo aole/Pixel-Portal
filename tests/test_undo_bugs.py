@@ -12,7 +12,6 @@ def app_and_window(qtbot):
     """Pytest fixture to create an App and a MainWindow."""
     app = App()
     window = MainWindow(app)
-    app.set_window(window)
     qtbot.addWidget(window)
     # Start with a document
     app.new_document(100, 100)

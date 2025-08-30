@@ -1,6 +1,6 @@
 from .document import Document
 from .undo import UndoManager
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
@@ -17,10 +17,15 @@ class App(QObject):
     document_changed = Signal()
     mirror_x_changed = Signal(bool)
     mirror_y_changed = Signal(bool)
+    select_all_triggered = Signal()
+    select_none_triggered = Signal()
+    invert_selection_triggered = Signal()
+    crop_to_selection_triggered = Signal()
+    clear_layer_triggered = Signal()
+    exit_triggered = Signal()
 
     def __init__(self):
         super().__init__()
-        self.window = None
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
@@ -41,32 +46,34 @@ class App(QObject):
 
         self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
 
+    @Slot(bool)
     def set_mirror_x(self, enabled):
         self.mirror_x = enabled
         self.mirror_x_changed.emit(self.mirror_x)
 
+    @Slot(bool)
     def set_mirror_y(self, enabled):
         self.mirror_y = enabled
         self.mirror_y_changed.emit(self.mirror_y)
 
+    @Slot(int)
     def set_pen_width(self, width):
         self.pen_width = width
         self.pen_width_changed.emit(self.pen_width)
 
+    @Slot(str)
     def set_brush_type(self, brush_type):
         self.brush_type = brush_type
         self.brush_type_changed.emit(self.brush_type)
 
-    def set_window(self, window):
-        self.window = window
-        self.undo_stack_changed.emit()
-
+    @Slot(str)
     def set_tool(self, tool):
         if self.tool != "Picker":
             self.previous_tool = self.tool
         self.tool = tool
         self.tool_changed.emit(self.tool)
 
+    @Slot(str)
     def set_pen_color(self, color_hex):
         self.pen_color = QColor(color_hex)
         self.pen_color_changed.emit(self.pen_color)
@@ -77,39 +84,36 @@ class App(QObject):
         self.undo_stack_changed.emit()
         self.document_changed.emit()
 
+    @Slot(int, int)
     def new_document(self, width, height):
         self.document = Document(width, height)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
         self.undo_manager.clear()
         self.undo_stack_changed.emit()
-        if self.window:
-            self.window.layer_manager_widget.refresh_layers()
-            self.window.canvas.update()
         self.document_changed.emit()
 
     def on_layer_visibility_changed(self, index):
-        if self.window:
-            self.window.canvas.update()
-
-    def on_layer_structure_changed(self):
-        if self.window:
-            self.window.layer_manager_widget.refresh_layers()
-            self.window.canvas.update()
         self.document_changed.emit()
 
+    def on_layer_structure_changed(self):
+        self.document_changed.emit()
+
+    @Slot(int, int, object)
     def resize_document(self, width, height, interpolation):
         if self.document:
             command = ResizeCommand(self.document, width, height, interpolation)
             self.execute_command(command)
 
+    @Slot()
     def crop_to_selection(self):
-        if self.window and self.window.canvas.selection_shape:
-            selection_rect = self.window.canvas.selection_shape.boundingRect().toRect()
-            command = CropCommand(self.document, selection_rect)
-            self.execute_command(command)
-            self.window.canvas.select_none()
+        self.crop_to_selection_triggered.emit()
 
+    def perform_crop(self, selection_rect):
+        command = CropCommand(self.document, selection_rect)
+        self.execute_command(command)
+
+    @Slot()
     def paste_as_new_layer(self):
         clipboard = QApplication.clipboard()
         image = clipboard.image()
@@ -118,9 +122,10 @@ class App(QObject):
             command = PasteCommand(self.document, image)
             self.execute_command(command)
 
+    @Slot()
     def open_document(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self.window, 
+            None,
             "Open Image", 
             self.last_directory, 
             "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
@@ -143,14 +148,12 @@ class App(QObject):
             self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
             self.undo_manager.clear()
             self.undo_stack_changed.emit()
-            if self.window:
-                self.window.layer_manager_widget.refresh_layers()
-                self.window.canvas.update()
             self.document_changed.emit()
 
+    @Slot()
     def save_document(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            self.window, 
+            None,
             "Save Image", 
             self.last_directory, 
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
@@ -167,51 +170,49 @@ class App(QObject):
                 image = self.document.render()
                 image.save(file_path)
 
+    @Slot()
     def undo(self):
         self.undo_manager.undo()
         self.undo_stack_changed.emit()
         self.document_changed.emit()
-        if self.window:
-            self.window.layer_manager_widget.refresh_layers()
-            self.window.canvas.update()
 
+    @Slot()
     def redo(self):
         self.undo_manager.redo()
         self.undo_stack_changed.emit()
         self.document_changed.emit()
-        if self.window:
-            self.window.layer_manager_widget.refresh_layers()
-            self.window.canvas.update()
 
+    @Slot()
     def select_all(self):
-        if self.window:
-            self.window.canvas.select_all()
+        self.select_all_triggered.emit()
 
+    @Slot()
     def select_none(self):
-        if self.window:
-            self.window.canvas.select_none()
+        self.select_none_triggered.emit()
 
+    @Slot()
     def flip_horizontal(self):
         if self.document:
             command = FlipCommand(self.document, 'horizontal')
             self.execute_command(command)
 
+    @Slot()
     def flip_vertical(self):
         if self.document:
             command = FlipCommand(self.document, 'vertical')
             self.execute_command(command)
 
+    @Slot()
     def invert_selection(self):
-        if self.window:
-            self.window.canvas.invert_selection()
+        self.invert_selection_triggered.emit()
 
+    @Slot()
     def clear_layer(self):
-        if self.window:
-            self.window.layer_manager_widget.clear_layer()
+        self.clear_layer_triggered.emit()
 
+    @Slot()
     def exit(self):
-        if self.window:
-            self.window.close()
+        self.exit_triggered.emit()
 
     def get_current_image(self):
         return self.document.get_current_image_for_ai()
