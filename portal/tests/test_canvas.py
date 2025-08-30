@@ -47,21 +47,20 @@ class TestCanvas(unittest.TestCase):
         # Assert that the signal was called exactly once
         spy.assert_called_once()
 
-        # Get the arguments the spy was called with
-        args = spy.call_args[0][0]  # call_args is a tuple ((args,), kwargs)
-        command_type, data = args
+        # Get the command object
+        command = spy.call_args[0][0]
+        from portal.command import DrawCommand
+        self.assertIsInstance(command, DrawCommand)
 
         # Assert the command data is correct
-        self.assertEqual(command_type, "draw")
-        self.assertIn("points", data)
-        self.assertEqual(len(data["points"]), 2)
-        self.assertEqual(data["points"][0], self.canvas.get_doc_coords(QPoint(10, 10)))
-        self.assertEqual(data["points"][1], self.canvas.get_doc_coords(QPoint(20, 20)))
-        self.assertEqual(data["color"], QColor("red"))
-        self.assertEqual(data["width"], 5)
-        self.assertEqual(data["brush_type"], "Square")
-        self.assertEqual(data.get("erase", False), False)
-        self.assertIsNone(data["selection_shape"])
+        self.assertEqual(len(command.points), 2)
+        self.assertEqual(command.points[0], self.canvas.get_doc_coords(QPoint(10, 10)))
+        self.assertEqual(command.points[1], self.canvas.get_doc_coords(QPoint(20, 20)))
+        self.assertEqual(command.color, QColor("red"))
+        self.assertEqual(command.width, 5)
+        self.assertEqual(command.brush_type, "Square")
+        self.assertEqual(command.erase, False)
+        self.assertIsNone(command.selection_shape)
 
     def test_set_background(self):
         """Test that the background is updated correctly."""

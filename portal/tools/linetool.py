@@ -35,14 +35,23 @@ class LineTool(BaseTool):
         if self.canvas.original_image is None:
             return
 
-        draw_data = {
-            "points": [self.start_point, doc_pos],
-            "color": self.canvas._pen_color,
-            "width": self.canvas._pen_width,
-            "brush_type": self.canvas._brush_type,
-            "selection_shape": self.canvas.selection_shape,
-        }
-        self.command_generated.emit(("draw", draw_data))
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer:
+            return
+
+        command = DrawCommand(
+            layer=active_layer,
+            points=[self.start_point, doc_pos],
+            color=self.canvas._pen_color,
+            width=self.canvas._pen_width,
+            brush_type=self.canvas._brush_type,
+            document=self.canvas.document,
+            selection_shape=self.canvas.selection_shape,
+            erase=False,
+            mirror_x=self.canvas._mirror_x,
+            mirror_y=self.canvas._mirror_y,
+        )
+        self.command_generated.emit(command)
 
         self.canvas.temp_image = None
         self.canvas.original_image = None

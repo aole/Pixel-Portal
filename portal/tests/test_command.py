@@ -37,18 +37,6 @@ def test_resize_command(document):
 
 def test_draw_command(layer, document):
     """Test that the DrawCommand correctly draws on the layer and that undo restores the previous state."""
-    # Create a mock app and a real drawing object
-    mock_app = Mock()
-    mock_app.mirror_x = False
-    mock_app.mirror_y = False
-    mock_app.document = document
-    mock_app.pen_width = 5
-    mock_app.brush_type = "Circular"
-
-    drawing = Drawing()
-    drawing.app = mock_app
-
-
     # Get the original image data
     original_image_data = layer.image.constBits().tobytes()
 
@@ -57,7 +45,18 @@ def test_draw_command(layer, document):
     width = 5
     brush_type = "Circular"
 
-    command = DrawCommand(layer, points, color, width, brush_type, drawing, None)
+    command = DrawCommand(
+        layer=layer,
+        points=points,
+        color=color,
+        width=width,
+        brush_type=brush_type,
+        document=document,
+        selection_shape=None,
+        erase=False,
+        mirror_x=False,
+        mirror_y=False
+    )
     command.execute()
 
     # Check that the image has been modified
@@ -72,11 +71,6 @@ def test_draw_command(layer, document):
 
 def test_shape_command(document, layer):
     """Test that the ShapeCommand correctly draws a shape and that undo restores the previous state."""
-    # Create a mock drawing object
-    mock_drawing = Mock()
-    mock_drawing.app.mirror_x = False
-    mock_drawing.app.mirror_y = False
-
     # Get the original image data
     original_image_data = layer.image.constBits().tobytes()
 
@@ -85,7 +79,17 @@ def test_shape_command(document, layer):
     width = 3
     shape_type = "rectangle"
 
-    command = ShapeCommand(layer, rect, shape_type, color, width, mock_drawing, None)
+    command = ShapeCommand(
+        layer=layer,
+        rect=rect,
+        shape_type=shape_type,
+        color=color,
+        width=width,
+        document=document,
+        selection_shape=None,
+        mirror_x=False,
+        mirror_y=False
+    )
     command.execute()
 
     # Check that the image has been modified
@@ -148,17 +152,15 @@ def test_fill_command(document, layer):
     # Get the original image data
     original_image_data = layer.image.constBits().tobytes()
 
-    # Create a mock drawing object
-    mock_drawing = Mock()
-    mock_drawing.app.pen_color = QColor("red")
-
-    # The flood_fill method is on the drawing object, so we need to mock it
-    # and have it call the real flood_fill method.
-    real_drawing = Drawing()
-    mock_drawing.flood_fill.side_effect = lambda pos, selection: real_drawing.flood_fill(layer, pos, QColor("red"), selection)
-
-
-    command = FillCommand(document, layer, QPoint(15, 15), QColor("red"), None, mock_drawing, False, False)
+    command = FillCommand(
+        document=document,
+        layer=layer,
+        fill_pos=QPoint(15, 15),
+        fill_color=QColor("red"),
+        selection_shape=None,
+        mirror_x=False,
+        mirror_y=False,
+    )
     command.execute()
 
     # Check that the image has been modified

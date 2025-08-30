@@ -15,10 +15,16 @@ class MoveTool(BaseTool):
         self.start_point = QPoint()
         self.moving_selection = False
         self.original_selection_shape: QPainterPath | None = None
+        self.before_image = None
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
         self.canvas.temp_image_replaces_active_layer = False
+
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer:
+            return
+        self.before_image = active_layer.image.copy()
 
         if self.canvas.selection_shape:
             self.moving_selection = True
@@ -43,22 +49,29 @@ class MoveTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self.canvas.original_image is None:
+        if self.canvas.original_image is None or self.before_image is None:
             return
 
         delta = doc_pos - self.start_point
 
-        move_data = {
-            "moved_image": self.canvas.original_image,
-            "delta": delta,
-            "original_selection_shape": self.original_selection_shape,
-        }
-        self.command_generated.emit(("move", move_data))
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer:
+            return
+
+        command = MoveCommand(
+            layer=active_layer,
+            original_image=self.before_image,
+            moved_image=self.canvas.original_image,
+            delta=delta,
+            original_selection_shape=self.original_selection_shape,
+        )
+        self.command_generated.emit(command)
 
         if self.moving_selection:
             self.moving_selection = False
             self.original_selection_shape = None
 
+        self.before_image = None
         self.canvas.temp_image = None
         self.canvas.original_image = None
         self.canvas.temp_image_replaces_active_layer = False

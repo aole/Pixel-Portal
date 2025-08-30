@@ -47,17 +47,29 @@ class EraserTool(BaseTool):
             self.canvas.update()
             return
 
-        # Create the command with all the points
-        draw_data = {
-            "points": self.points,
-            "color": self.canvas._pen_color,
-            "width": self.canvas._pen_width,
-            "brush_type": self.canvas._brush_type,
-            "erase": True,
-            "selection_shape": self.canvas.selection_shape,
-        }
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer:
+            # Clean up preview and return
+            self.points = []
+            self.canvas.temp_image = None
+            self.canvas.original_image = None
+            self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.update()
+            return
 
-        self.command_generated.emit(("draw", draw_data))
+        command = DrawCommand(
+            layer=active_layer,
+            points=self.points,
+            color=self.canvas._pen_color,
+            width=self.canvas._pen_width,
+            brush_type=self.canvas._brush_type,
+            document=self.canvas.document,
+            selection_shape=self.canvas.selection_shape,
+            erase=True,
+            mirror_x=self.canvas._mirror_x,
+            mirror_y=self.canvas._mirror_y,
+        )
+        self.command_generated.emit(command)
 
         # Clean up preview
         self.points = []

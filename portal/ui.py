@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
         self.app.drawing_context.mirror_y_changed.connect(self.canvas.set_mirror_y)
 
         # Connect Canvas signal to App and UI slots
-        self.canvas.command_generated.connect(self.app.handle_command_data)
+        self.canvas.command_generated.connect(self.app.handle_command)
         self.canvas.command_generated.connect(self.handle_canvas_message)
 
         self.action_manager.setup_actions(self.canvas)
@@ -307,9 +307,12 @@ class MainWindow(QMainWindow):
         self.app.exit_triggered.connect(self.close)
 
     @Slot(object)
-    def handle_canvas_message(self, command_data):
+    def handle_canvas_message(self, data):
+        if not isinstance(data, tuple):
+            return  # This is a Command object, ignore it
+
         from PySide6.QtGui import QImage, QPainter, Qt
-        command_type, data = command_data
+        command_type, command_data = data
         active_layer = self.app.document.layer_manager.active_layer
         if not active_layer:
             if command_type == "get_active_layer_image":
@@ -318,7 +321,7 @@ class MainWindow(QMainWindow):
 
         if command_type == "get_active_layer_image":
             self.canvas.original_image = active_layer.image.copy()
-            if data == "line_tool_start" or data == "ellipse_tool_start" or data == "rectangle_tool_start":
+            if command_data == "line_tool_start" or command_data == "ellipse_tool_start" or command_data == "rectangle_tool_start":
                 self.canvas.temp_image = self.canvas.original_image.copy()
 
         elif command_type == "cut_selection":
