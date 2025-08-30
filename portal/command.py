@@ -126,7 +126,7 @@ class DrawCommand(Command):
                     self.drawing.draw_brush(painter, self.points[0])
             else:
                 for i in range(len(self.points) - 1):
-                    self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], erase=self.erase)
+                    self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], self.drawing.app.document, erase=self.erase)
         finally:
             painter.end()
             self.layer.on_image_change.emit()

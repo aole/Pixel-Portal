@@ -208,3 +208,18 @@ class TestCanvas(unittest.TestCase):
         self.canvas.wheelEvent(event_out)
 
         self.assertAlmostEqual(self.canvas.zoom, initial_zoom)
+
+    def test_toggle_grid(self):
+        """Test that the grid visibility is toggled and the canvas is updated."""
+        from unittest.mock import patch
+
+        self.assertFalse(self.canvas.grid_visible)
+        with patch.object(self.canvas, 'update') as mock_update:
+            self.canvas.toggle_grid()
+            self.assertTrue(self.canvas.grid_visible)
+            mock_update.assert_called_once()
+
+        with patch.object(self.canvas, 'update') as mock_update:
+            self.canvas.toggle_grid()
+            self.assertFalse(self.canvas.grid_visible)
+            mock_update.assert_called_once()
