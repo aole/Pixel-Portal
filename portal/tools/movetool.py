@@ -6,6 +6,10 @@ from ..command import MoveCommand
 
 
 class MoveTool(BaseTool):
+    name = "Move"
+    icon = "icons/toolmove.png"
+    shortcut = "m"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()

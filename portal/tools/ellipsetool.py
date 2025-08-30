@@ -7,6 +7,10 @@ from ..command import ShapeCommand
 
 
 class EllipseTool(BaseTool):
+    name = "Ellipse"
+    icon = "icons/toolellipse.png"
+    shortcut = "c"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()

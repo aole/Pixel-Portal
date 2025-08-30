@@ -7,6 +7,10 @@ from ..command import ShapeCommand
 
 
 class RectangleTool(BaseTool):
+    name = "Rectangle"
+    icon = "icons/toolrect.png"
+    shortcut = "r"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()

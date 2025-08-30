@@ -5,6 +5,10 @@ from portal.tools.baseselecttool import BaseSelectTool
 
 
 class SelectLassoTool(BaseSelectTool):
+    name = "Select Lasso"
+    icon = "icons/toolselectlasso.png"
+    shortcut = "f"
+
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.is_on_selection_border(doc_pos):
             self.canvas._update_selection_and_emit_size(QPainterPath(doc_pos))

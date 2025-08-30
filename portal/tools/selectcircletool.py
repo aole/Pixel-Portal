@@ -5,6 +5,10 @@ from portal.tools.baseselecttool import BaseSelectTool
 
 
 class SelectCircleTool(BaseSelectTool):
+    name = "Select Circle"
+    icon = "icons/toolselectcircle.png"
+    shortcut = "a"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()

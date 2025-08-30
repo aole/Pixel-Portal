@@ -4,6 +4,9 @@ from PySide6.QtCore import QPoint, QRect
 
 
 class SelectColorTool(BaseTool):
+    name = "Select Color"
+    icon = "icons/toolselectcolor.png"
+    shortcut = "w"
 
     def __init__(self, canvas):
         super().__init__(canvas)
