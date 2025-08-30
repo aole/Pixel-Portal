@@ -28,8 +28,8 @@ class Drawing:
         self._mirror_y = enabled
 
     def draw_brush(self, painter, point, document_size):
-        doc_width = document_size.width
-        doc_height = document_size.height
+        doc_width = document_size.width()
+        doc_height = document_size.height()
 
         points_to_draw = {point}
         if self._mirror_x:
