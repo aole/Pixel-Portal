@@ -170,6 +170,14 @@ class App(QObject):
     def exit(self):
         self.exit_triggered.emit()
 
+    @Slot(bool)
+    def set_mirror_x(self, enabled):
+        self.drawing_context.set_mirror_x(enabled)
+
+    @Slot(bool)
+    def set_mirror_y(self, enabled):
+        self.drawing_context.set_mirror_y(enabled)
+
     def get_current_image(self):
         return self.document.get_current_image_for_ai()
 
