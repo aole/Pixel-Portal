@@ -1,3 +1,4 @@
+import functools
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt, Slot
@@ -286,7 +287,7 @@ class MainWindow(QMainWindow):
                 continue
 
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(lambda tool_name=tool.name: self.app.set_tool(tool_name))
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
             button = QToolButton()
             button.setDefaultAction(action)
             toolbar.addWidget(button)
@@ -301,7 +302,7 @@ class MainWindow(QMainWindow):
         shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
         for tool in shape_tools:
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(lambda checked=False, a=action: self.set_shape_tool(a))
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
             shape_menu.addAction(action)
             if tool.name == "Line":
                 self.shape_button.setDefaultAction(action)
@@ -318,7 +319,7 @@ class MainWindow(QMainWindow):
         selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
         for tool in selection_tools:
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(lambda checked=False, a=action: self.set_selection_tool(a))
+            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
             selection_menu.addAction(action)
             if tool.name == "Select Rectangle":
                 self.selection_button.setDefaultAction(action)
@@ -396,22 +397,14 @@ class MainWindow(QMainWindow):
             self.app.perform_crop(selection_rect)
             self.canvas.select_none()
 
-    def set_shape_tool(self, action):
-        self.app.set_tool(action.text())
-
-    def set_selection_tool(self, action):
-        self.app.set_tool(action.text())
-
     def update_tool_buttons(self, tool_name):
         for action in self.shape_button.menu().actions():
             if action.text() == tool_name:
-                self.shape_button.setIcon(action.icon())
                 self.shape_button.setDefaultAction(action)
                 return
 
         for action in self.selection_button.menu().actions():
             if action.text() == tool_name:
-                self.selection_button.setIcon(action.icon())
                 self.selection_button.setDefaultAction(action)
                 return
 
