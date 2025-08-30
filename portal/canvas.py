@@ -13,7 +13,7 @@ from PySide6.QtGui import (
     QCursor,
     QPalette,
 )
-from PySide6.QtCore import Qt, QPoint, QRect, Signal
+from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
 from .drawing import Drawing
 from .renderer import CanvasRenderer
 from .background import Background
@@ -29,12 +29,14 @@ class Canvas(QWidget):
     selection_changed = Signal(bool)
     selection_size_changed = Signal(int, int)
     canvas_updated = Signal()
+    command_generated = Signal(object)
 
-    def __init__(self, app, parent=None):
+    def __init__(self, drawing_context, parent=None):
         super().__init__(parent)
-        self.app = app
-        self.renderer = CanvasRenderer(self)
-        self.drawing = Drawing(self.app)
+        self.drawing_context = drawing_context
+        self.renderer = CanvasRenderer(self, self.drawing_context)
+        self.document = None
+        self.drawing = Drawing()
         self.dragging = False
         self.x_offset = 0
         self.y_offset = 0
@@ -57,11 +59,51 @@ class Canvas(QWidget):
         self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
         self.is_erasing_preview = False
 
+        # Properties that were previously in App
+        self._document_size = QSize(64, 64)
+        self._pen_color = QColor("black")
+        self._pen_width = 1
+        self._brush_type = "Circular"
+        self._current_tool_name = "Pen"
+        self._mirror_x = False
+        self._mirror_y = False
+
         self.tools = {tool.name: tool(self) for tool in get_tools()}
+        for tool in self.tools.values():
+            if hasattr(tool, 'command_generated'):
+                tool.command_generated.connect(self.command_generated)
         self.current_tool = self.tools["Pen"]
 
-        self.app.tool_changed.connect(self.on_tool_changed)
-        self.app.document_changed.connect(self.update)
+    @Slot(QSize)
+    def set_document_size(self, size):
+        self._document_size = size
+        self.set_initial_zoom()
+        self.update()
+
+    @Slot(QColor)
+    def set_pen_color(self, color):
+        self._pen_color = color
+        self.drawing.set_pen_color(color)
+
+    @Slot(int)
+    def set_pen_width(self, width):
+        self._pen_width = width
+        self.drawing.set_pen_width(width)
+
+    @Slot(str)
+    def set_brush_type(self, brush_type):
+        self._brush_type = brush_type
+        self.drawing.set_brush_type(brush_type)
+
+    @Slot(bool)
+    def set_mirror_x(self, enabled):
+        self._mirror_x = enabled
+        self.drawing.set_mirror_x(enabled)
+
+    @Slot(bool)
+    def set_mirror_y(self, enabled):
+        self._mirror_y = enabled
+        self.drawing.set_mirror_y(enabled)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -78,19 +120,21 @@ class Canvas(QWidget):
             self.ctrl_pressed = False
             if hasattr(self.current_tool, 'deactivate'):
                 self.current_tool.deactivate()
-            self.current_tool = self.tools[self.app.tool]
+            self.current_tool = self.tools[self._current_tool_name]
             if hasattr(self.current_tool, 'activate'):
                 self.current_tool.activate()
-            self.on_tool_changed(self.app.tool)
+            self.on_tool_changed(self._current_tool_name)
 
     def set_background(self, background: Background):
         self.background = background
         self.update()
 
+    @Slot(str)
     def on_tool_changed(self, tool):
         if self.ctrl_pressed:
             return
 
+        self._current_tool_name = tool
         if hasattr(self.current_tool, 'deactivate'):
             self.current_tool.deactivate()
         self.current_tool = self.tools[tool]
@@ -111,7 +155,7 @@ class Canvas(QWidget):
 
     def select_all(self):
         qpp = QPainterPath()
-        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
+        qpp.addRect(QRect(0, 0, self._document_size.width(), self._document_size.height()).normalized())
         self._update_selection_and_emit_size(qpp)
 
     def select_none(self):
@@ -121,7 +165,7 @@ class Canvas(QWidget):
         if self.selection_shape is None:
             return
         qpp = QPainterPath()
-        qpp.addRect(QRect(0, 0, self.app.document.width, self.app.document.height).normalized())
+        qpp.addRect(QRect(0, 0, self._document_size.width(), self._document_size.height()).normalized())
         if self.selection_shape:
             self.selection_shape = qpp.subtracted(self.selection_shape)
         else:
@@ -132,7 +176,7 @@ class Canvas(QWidget):
     def enterEvent(self, event):
         self.setFocus()
         self.mouse_over_canvas = True
-        self.on_tool_changed(self.app.tool)
+        self.on_tool_changed(self._current_tool_name)
         self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
@@ -144,8 +188,8 @@ class Canvas(QWidget):
         self.update()
 
     def get_doc_coords(self, canvas_pos):
-        doc_width_scaled = self.app.document.width * self.zoom
-        doc_height_scaled = self.app.document.height * self.zoom
+        doc_width_scaled = self._document_size.width() * self.zoom
+        doc_height_scaled = self._document_size.height() * self.zoom
         canvas_width = self.width()
         canvas_height = self.height()
 
@@ -161,8 +205,8 @@ class Canvas(QWidget):
         )
 
     def get_canvas_coords(self, doc_pos):
-        doc_width_scaled = self.app.document.width * self.zoom
-        doc_height_scaled = self.app.document.height * self.zoom
+        doc_width_scaled = self._document_size.width() * self.zoom
+        doc_height_scaled = self._document_size.height() * self.zoom
         canvas_width = self.width()
         canvas_height = self.height()
 
@@ -231,8 +275,8 @@ class Canvas(QWidget):
         self.zoom = max(1, min(self.zoom, 20.0))
 
         # Adjust pan to keep doc_pos_before_zoom at the same mouse_pos
-        doc_width_scaled = self.app.document.width * self.zoom
-        doc_height_scaled = self.app.document.height * self.zoom
+        doc_width_scaled = self._document_size.width() * self.zoom
+        doc_height_scaled = self._document_size.height() * self.zoom
 
         # This is the top-left of the document in canvas coordinates *without* the old self.x_offset
         base_x_offset = (self.width() - doc_width_scaled) / 2
@@ -250,8 +294,8 @@ class Canvas(QWidget):
         self.zoom_changed.emit(self.zoom)
 
     def get_target_rect(self):
-        doc_width = self.app.document.width
-        doc_height = self.app.document.height
+        doc_width = self._document_size.width()
+        doc_height = self._document_size.height()
         canvas_width = self.width()
         canvas_height = self.height()
 
@@ -262,9 +306,14 @@ class Canvas(QWidget):
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
         return QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
 
+    def set_document(self, document):
+        self.document = document
+        self.set_document_size(QSize(document.width, document.height))
+        self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
-        self.renderer.paint(painter)
+        self.renderer.paint(painter, self.document)
 
     def toggle_grid(self):
         self.grid_visible = not self.grid_visible
@@ -274,8 +323,8 @@ class Canvas(QWidget):
         if self.zoom < 2 or not self.grid_visible:
             return
 
-        doc_width = self.app.document.width
-        doc_height = self.app.document.height
+        doc_width = self._document_size.width()
+        doc_height = self._document_size.height()
 
         # Define colors for grid lines
         palette = self.palette()
@@ -314,14 +363,14 @@ class Canvas(QWidget):
     def draw_cursor(self, painter, target_rect, doc_image):
         if (
             not self.mouse_over_canvas
-            or self.app.tool in ["Bucket", "Picker"]
-            or self.app.tool.startswith("Select")
+            or self._current_tool_name in ["Bucket", "Picker"]
+            or self._current_tool_name.startswith("Select")
             or self.ctrl_pressed
         ):
             return
 
         # Use the application's brush size
-        brush_size = self.app.pen_width
+        brush_size = self._pen_width
 
         # Center the brush cursor around the mouse position
         doc_pos = self.cursor_doc_pos
@@ -378,10 +427,10 @@ class Canvas(QWidget):
             inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
 
         # Fill the cursor rectangle with the brush color
-        painter.setBrush(self.app.pen_color)
+        painter.setBrush(self._pen_color)
         painter.setPen(Qt.NoPen)  # No outline for the fill
 
-        if self.app.brush_type == "Circular":
+        if self._brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
@@ -390,7 +439,7 @@ class Canvas(QWidget):
         painter.setPen(inverted_color)
         painter.setBrush(Qt.NoBrush)
 
-        if self.app.brush_type == "Circular":
+        if self._brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
@@ -403,8 +452,8 @@ class Canvas(QWidget):
     def set_initial_zoom(self):
         canvas_width = self.width()
         canvas_height = self.height()
-        doc_width = self.app.document.width
-        doc_height = self.app.document.height
+        doc_width = self._document_size.width()
+        doc_height = self._document_size.height()
 
         if doc_width == 0 or doc_height == 0:
             return

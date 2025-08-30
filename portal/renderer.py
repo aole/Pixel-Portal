@@ -14,29 +14,32 @@ from PySide6.QtGui import (
 
 
 class CanvasRenderer:
-    def __init__(self, canvas):
+    def __init__(self, canvas, drawing_context):
         self.canvas = canvas
-        self.app = canvas.app
+        self.drawing_context = drawing_context
 
-    def paint(self, painter):
+    def paint(self, painter, document):
+        if not document:
+            return
+
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
         painter.fillRect(self.canvas.rect(), self.canvas.palette().window())
 
         target_rect = self.canvas.get_target_rect()
 
         self._draw_background(painter, target_rect)
-        image_to_draw_on = self._draw_document(painter, target_rect)
+        image_to_draw_on = self._draw_document(painter, target_rect, document)
         self._draw_border(painter, target_rect)
-        self._draw_mirror_guides(painter, target_rect)
+        self._draw_mirror_guides(painter, target_rect, document)
         self.canvas.draw_grid(painter, target_rect)
         self.canvas.draw_cursor(painter, target_rect, image_to_draw_on)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
 
-        self._draw_document_dimensions(painter, target_rect)
+        self._draw_document_dimensions(painter, target_rect, document)
 
-    def _draw_mirror_guides(self, painter, target_rect):
-        if not self.app.mirror_x and not self.app.mirror_y:
+    def _draw_mirror_guides(self, painter, target_rect, document):
+        if not self.drawing_context.mirror_x and not self.drawing_context.mirror_y:
             return
 
         painter.save()
@@ -45,14 +48,14 @@ class CanvasRenderer:
         pen.setStyle(Qt.DashLine)
         painter.setPen(pen)
 
-        doc_width = self.app.document.width
-        doc_height = self.app.document.height
+        doc_width = document.width
+        doc_height = document.height
 
-        if self.app.mirror_x:
+        if self.drawing_context.mirror_x:
             center_x = target_rect.x() + (doc_width / 2) * self.canvas.zoom
             painter.drawLine(int(center_x), 0, int(center_x), self.canvas.height())
 
-        if self.app.mirror_y:
+        if self.drawing_context.mirror_y:
             center_y = target_rect.y() + (doc_height / 2) * self.canvas.zoom
             painter.drawLine(0, int(center_y), self.canvas.width(), int(center_y))
 
@@ -70,22 +73,22 @@ class CanvasRenderer:
         else:
             painter.fillRect(target_rect, self.canvas.background.color)
 
-    def _draw_document(self, painter, target_rect):
+    def _draw_document(self, painter, target_rect, document):
         if self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:
             # This path is for tools like the Eraser, which operate on a copy of the active layer.
             # The `temp_image` is a full replacement for the active layer's image.
             # We need to reconstruct the entire document image, substituting the original active
             # layer with the temporary one.
             final_image = QImage(
-                self.app.document.width,
-                self.app.document.height,
+                document.width,
+                document.height,
                 QImage.Format_ARGB32,
             )
             final_image.fill(QColor("transparent"))
             image_painter = QPainter(final_image)
 
-            active_layer = self.app.document.layer_manager.active_layer
-            for layer in self.app.document.layer_manager.layers:
+            active_layer = document.layer_manager.active_layer
+            for layer in document.layer_manager.layers:
                 if layer.visible:
                     image_to_draw = layer.image
                     if layer is active_layer:
@@ -99,7 +102,7 @@ class CanvasRenderer:
             return final_image
         else:
             # This path is for tools that create a temporary overlay or preview.
-            composite_image = self.app.document.render()
+            composite_image = document.render()
             image_to_draw_on = composite_image
 
             if self.canvas.temp_image:
@@ -110,10 +113,10 @@ class CanvasRenderer:
 
                 # Special case for the eraser preview
                 if self.canvas.is_erasing_preview:
-                    active_layer = self.app.document.layer_manager.active_layer
+                    active_layer = document.layer_manager.active_layer
                     if active_layer:
                         # 1. Render all layers *except* the active one as the base
-                        background = self.app.document.render_except(active_layer)
+                        background = document.render_except(active_layer)
                         p.drawImage(0, 0, background)
 
                         # 2. Punch a hole in a copy of the active layer
@@ -170,14 +173,14 @@ class CanvasRenderer:
 
         painter.restore()
 
-    def _draw_document_dimensions(self, painter, target_rect):
+    def _draw_document_dimensions(self, painter, target_rect, document):
         font = painter.font()
         font.setPointSize(8)
         painter.setFont(font)
         painter.setPen(self.canvas.palette().color(QPalette.ColorRole.Text))
 
-        width_text = f"{self.app.document.width}px"
-        height_text = f"{self.app.document.height}px"
+        width_text = f"{document.width}px"
+        height_text = f"{document.height}px"
 
         width_rect = painter.fontMetrics().boundingRect(width_text)
         width_x = target_rect.right() + 5

@@ -16,9 +16,9 @@ from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidge
 
 
 class ColorButton(QPushButton):
-    def __init__(self, color, app):
+    def __init__(self, color, drawing_context):
         super().__init__()
-        self.app = app
+        self.drawing_context = drawing_context
         self.setFixedSize(24, 24)
         self.clicked.connect(self.on_click)
         self.set_color(color)
@@ -32,22 +32,22 @@ class ColorButton(QPushButton):
         self.setToolTip(self.color)
 
     def on_click(self):
-        self.app.set_pen_color(self.color)
+        self.drawing_context.set_pen_color(self.color)
 
 
 class ActiveColorButton(QPushButton):
-    def __init__(self, app):
+    def __init__(self, drawing_context):
         super().__init__()
-        self.app = app
+        self.drawing_context = drawing_context
         self.setFixedSize(24, 24)
         self.clicked.connect(self.on_click)
-        self.update_color(self.app.pen_color)
-        self.app.pen_color_changed.connect(self.update_color)
+        self.update_color(self.drawing_context.pen_color)
+        self.drawing_context.pen_color_changed.connect(self.update_color)
 
     def on_click(self):
-        color = QColorDialog.getColor(self.app.pen_color, self)
+        color = QColorDialog.getColor(self.drawing_context.pen_color, self)
         if color.isValid():
-            self.app.set_pen_color(color.name())
+            self.drawing_context.set_pen_color(color)
 
     def update_color(self, color):
         self.setStyleSheet(f"background-color: {color.name()}")
@@ -67,8 +67,21 @@ class MainWindow(QMainWindow):
         self.saturation_buttons = []
         self.value_buttons = []
 
-        self.canvas = Canvas(self.app)
+        self.canvas = Canvas(self.app.drawing_context)
         self.setCentralWidget(self.canvas)
+        self.canvas.set_document(self.app.document)
+
+        # Connect DrawingContext signals to Canvas slots
+        self.app.drawing_context.pen_width_changed.connect(self.canvas.set_pen_width)
+        self.app.drawing_context.pen_color_changed.connect(self.canvas.set_pen_color)
+        self.app.drawing_context.brush_type_changed.connect(self.canvas.set_brush_type)
+        self.app.drawing_context.tool_changed.connect(self.canvas.on_tool_changed)
+        self.app.drawing_context.mirror_x_changed.connect(self.canvas.set_mirror_x)
+        self.app.drawing_context.mirror_y_changed.connect(self.canvas.set_mirror_y)
+
+        # Connect Canvas signal to App and UI slots
+        self.canvas.command_generated.connect(self.app.handle_command_data)
+        self.canvas.command_generated.connect(self.handle_canvas_message)
 
         self.action_manager.setup_actions(self.canvas)
 
@@ -128,14 +141,14 @@ class MainWindow(QMainWindow):
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_changed.connect(self.update_crop_action_state)
-        self.app.tool_changed.connect(self.update_selected_tool_label)
-        self.app.tool_changed.connect(self.update_tool_buttons)
+        self.app.drawing_context.tool_changed.connect(self.update_selected_tool_label)
+        self.app.drawing_context.tool_changed.connect(self.update_tool_buttons)
         self.canvas.selection_size_changed.connect(self.update_selection_size_label)
-        self.app.pen_width_changed.connect(self.update_pen_width_slider)
-        self.app.pen_width_changed.connect(self.update_pen_width_label)
+        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
+        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
-        self.app.pen_color_changed.connect(self.update_dynamic_palette)
-        self.app.brush_type_changed.connect(self.update_brush_button)
+        self.app.drawing_context.pen_color_changed.connect(self.update_dynamic_palette)
+        self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
 
         # Toolbar
         toolbar = QToolBar("Tools")
@@ -156,25 +169,25 @@ class MainWindow(QMainWindow):
         brush_icon.setPixmap(pixmap)
         top_toolbar.addWidget(brush_icon)
         
-        self.pen_width_label = QLabel(f"{self.app.pen_width:02d}")
+        self.pen_width_label = QLabel(f"{self.app.drawing_context.pen_width:02d}")
         top_toolbar.addWidget(self.pen_width_label)
 
         self.pen_width_slider = QSlider(Qt.Horizontal)
         self.pen_width_slider.setRange(1, 64)
-        self.pen_width_slider.setValue(self.app.pen_width)
+        self.pen_width_slider.setValue(self.app.drawing_context.pen_width)
         self.pen_width_slider.setMinimumWidth(32)
         self.pen_width_slider.setMaximumWidth(100)
         self.pen_width_slider.setSingleStep(1)
         self.pen_width_slider.setPageStep(1)
-        self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
+        self.pen_width_slider.valueChanged.connect(self.app.drawing_context.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
 
-        self.action_manager.circular_brush_action.setChecked(self.app.brush_type == "Circular")
-        self.action_manager.circular_brush_action.triggered.connect(lambda: self.app.set_brush_type("Circular"))
+        self.action_manager.circular_brush_action.setChecked(self.app.drawing_context.brush_type == "Circular")
+        self.action_manager.circular_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Circular"))
         top_toolbar.addAction(self.action_manager.circular_brush_action)
 
-        self.action_manager.square_brush_action.setChecked(self.app.brush_type == "Square")
-        self.action_manager.square_brush_action.triggered.connect(lambda: self.app.set_brush_type("Square"))
+        self.action_manager.square_brush_action.setChecked(self.app.drawing_context.brush_type == "Square")
+        self.action_manager.square_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Square"))
         top_toolbar.addAction(self.action_manager.square_brush_action)
         
         top_toolbar.addSeparator()
@@ -187,7 +200,7 @@ class MainWindow(QMainWindow):
         self.action_manager.grid_action.triggered.connect(self.canvas.toggle_grid)
         top_toolbar.addAction(self.action_manager.grid_action)
         
-        active_color_button = ActiveColorButton(self.app)
+        active_color_button = ActiveColorButton(self.app.drawing_context)
         toolbar.addWidget(active_color_button)
         
         from .tools import get_tools
@@ -197,7 +210,7 @@ class MainWindow(QMainWindow):
                 continue
 
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             button = QToolButton()
             button.setDefaultAction(action)
             toolbar.addWidget(button)
@@ -212,7 +225,7 @@ class MainWindow(QMainWindow):
         shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
         for tool in shape_tools:
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             shape_menu.addAction(action)
             if tool.name == "Line":
                 self.shape_button.setDefaultAction(action)
@@ -229,7 +242,7 @@ class MainWindow(QMainWindow):
         selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
         for tool in selection_tools:
             action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.set_tool, tool.name))
+            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             selection_menu.addAction(action)
             if tool.name == "Select Rectangle":
                 self.selection_button.setDefaultAction(action)
@@ -252,11 +265,11 @@ class MainWindow(QMainWindow):
 
         # Add saturation and value swatches
         for i in range(7):
-            button = ColorButton("#808080", self.app)
+            button = ColorButton("#808080", self.app.drawing_context)
             self.saturation_buttons.append(button)
 
         for i in range(7):
-            button = ColorButton("#808080", self.app)
+            button = ColorButton("#808080", self.app.drawing_context)
             self.value_buttons.append(button)
 
         colors = self.load_palette()
@@ -264,7 +277,7 @@ class MainWindow(QMainWindow):
 
         self.color_toolbar.addWidget(self.color_container)
 
-        self.update_dynamic_palette(self.app.pen_color)
+        self.update_dynamic_palette(self.app.drawing_context.pen_color)
 
         # Preview Panel
         self.preview_panel = PreviewPanel(self.app)
@@ -282,8 +295,8 @@ class MainWindow(QMainWindow):
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
 
-        self.app.mirror_x_changed.connect(self.on_mirror_changed)
-        self.app.mirror_y_changed.connect(self.on_mirror_changed)
+        self.app.drawing_context.mirror_x_changed.connect(self.on_mirror_changed)
+        self.app.drawing_context.mirror_y_changed.connect(self.on_mirror_changed)
 
         self.app.document_changed.connect(self.on_document_changed)
         self.app.select_all_triggered.connect(self.canvas.select_all)
@@ -293,9 +306,47 @@ class MainWindow(QMainWindow):
         self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
         self.app.exit_triggered.connect(self.close)
 
+    @Slot(object)
+    def handle_canvas_message(self, command_data):
+        from PySide6.QtGui import QImage, QPainter, Qt
+        command_type, data = command_data
+        active_layer = self.app.document.layer_manager.active_layer
+        if not active_layer:
+            if command_type == "get_active_layer_image":
+                self.canvas.original_image = None
+            return
+
+        if command_type == "get_active_layer_image":
+            self.canvas.original_image = active_layer.image.copy()
+            if data == "line_tool_start" or data == "ellipse_tool_start" or data == "rectangle_tool_start":
+                self.canvas.temp_image = self.canvas.original_image.copy()
+
+        elif command_type == "cut_selection":
+            if self.canvas.selection_shape:
+                self.canvas.original_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
+                self.canvas.original_image.fill(Qt.transparent)
+                painter = QPainter(self.canvas.original_image)
+                painter.setClipPath(self.canvas.selection_shape)
+                painter.drawImage(0, 0, active_layer.image)
+                painter.end()
+
+                painter = QPainter(active_layer.image)
+                painter.setClipPath(self.canvas.selection_shape)
+                painter.setCompositionMode(QPainter.CompositionMode_Clear)
+                painter.fillRect(active_layer.image.rect(), Qt.transparent)
+                painter.end()
+            else:
+                self.canvas.original_image = active_layer.image.copy()
+                active_layer.image.fill(Qt.transparent)
+
+            self.canvas.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
+            self.canvas.temp_image.fill(Qt.transparent)
+
+
     @Slot()
     def on_document_changed(self):
         self.layer_manager_widget.refresh_layers()
+        self.canvas.set_document(self.app.document)
         self.canvas.update()
 
     @Slot()
@@ -333,7 +384,7 @@ class MainWindow(QMainWindow):
         # Add new color buttons
         num_default_cols = (len(colors) + 1) // 2
         for i, color in enumerate(colors):
-            button = ColorButton(color, self.app)
+            button = ColorButton(color, self.app.drawing_context)
             self.main_palette_buttons.append(button)
             row = i % 2
             col = i // 2
@@ -430,5 +481,5 @@ class MainWindow(QMainWindow):
         self.action_manager.square_brush_action.setChecked(brush_type == "Square")
 
     def on_mirror_changed(self):
-        is_mirroring = self.app.mirror_x or self.app.mirror_y
+        is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y
         

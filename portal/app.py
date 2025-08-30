@@ -1,22 +1,17 @@
 from .document import Document
 from .undo import UndoManager
+from .drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand
+from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
 
 
 class App(QObject):
-    tool_changed = Signal(str)
-    pen_color_changed = Signal(QColor)
-    pen_width_changed = Signal(int)
-    brush_type_changed = Signal(str)
     undo_stack_changed = Signal()
     document_changed = Signal()
-    mirror_x_changed = Signal(bool)
-    mirror_y_changed = Signal(bool)
     select_all_triggered = Signal()
     select_none_triggered = Signal()
     invert_selection_triggered = Signal()
@@ -29,15 +24,8 @@ class App(QObject):
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.tool = "Pen"
-        self.previous_tool = "Pen"
-        self.pen_color = QColor("black")
-        self.pen_width = 1
-        self.brush_type = "Circular"
+        self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
-
-        self.mirror_x = False
-        self.mirror_y = False
 
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
@@ -45,38 +33,6 @@ class App(QObject):
             self.config.add_section('General')
 
         self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
-
-    @Slot(bool)
-    def set_mirror_x(self, enabled):
-        self.mirror_x = enabled
-        self.mirror_x_changed.emit(self.mirror_x)
-
-    @Slot(bool)
-    def set_mirror_y(self, enabled):
-        self.mirror_y = enabled
-        self.mirror_y_changed.emit(self.mirror_y)
-
-    @Slot(int)
-    def set_pen_width(self, width):
-        self.pen_width = width
-        self.pen_width_changed.emit(self.pen_width)
-
-    @Slot(str)
-    def set_brush_type(self, brush_type):
-        self.brush_type = brush_type
-        self.brush_type_changed.emit(self.brush_type)
-
-    @Slot(str)
-    def set_tool(self, tool):
-        if self.tool != "Picker":
-            self.previous_tool = self.tool
-        self.tool = tool
-        self.tool_changed.emit(self.tool)
-
-    @Slot(str)
-    def set_pen_color(self, color_hex):
-        self.pen_color = QColor(color_hex)
-        self.pen_color_changed.emit(self.pen_color)
 
     def execute_command(self, command):
         command.execute()
@@ -220,4 +176,73 @@ class App(QObject):
     def add_new_layer_with_image(self, image):
         command = AddLayerCommand(self.document, image, "AI Generated Layer")
         self.execute_command(command)
-            
+
+    @Slot(object)
+    def handle_command_data(self, command_data):
+        command_type, data = command_data
+        active_layer = self.document.layer_manager.active_layer
+        if not active_layer:
+            # Handle messages that don't need an active layer
+            if command_type == "get_active_layer_image":
+                # A tool has requested the active layer image, but there is no layer.
+                # Set canvas.original_image to None to signal this.
+                # This requires a reference to the canvas, which the App doesn't have.
+                # This is a design issue. The UI should have this reference.
+                # For now, I'll assume the UI will handle this.
+                pass
+            return
+
+        if command_type == "draw":
+            command = DrawCommand(
+                layer=active_layer,
+                points=data["points"],
+                color=data["color"],
+                width=data["width"],
+                brush_type=data["brush_type"],
+                erase=data.get("erase", False),
+                selection_shape=data["selection_shape"],
+            )
+            self.execute_command(command)
+
+        elif command_type == "fill":
+            command = FillCommand(
+                document=self.document,
+                layer=active_layer,
+                fill_pos=data["fill_pos"],
+                fill_color=data["fill_color"],
+                selection_shape=data["selection_shape"],
+                mirror_x=data["mirror_x"],
+                mirror_y=data["mirror_y"],
+            )
+            self.execute_command(command)
+
+        elif command_type == "shape":
+            command = ShapeCommand(
+                layer=active_layer,
+                rect=data["rect"],
+                shape_type=data["shape_type"],
+                color=data["color"],
+                width=data["width"],
+                selection_shape=data["selection_shape"],
+            )
+            self.execute_command(command)
+
+        elif command_type == "move":
+            command = MoveCommand(
+                layer=active_layer,
+                moved_image=data["moved_image"],
+                delta=data["delta"],
+                original_selection_shape=data["original_selection_shape"],
+            )
+            self.execute_command(command)
+
+        elif command_type == "get_active_layer_image":
+            # This is a special command for tools that need a copy of the layer before proceeding.
+            # The UI should connect this to a method that can access the canvas.
+            # This is a flaw in the current design. I will need to address this in the UI step.
+            # For now, I will emit a signal that the UI can catch.
+            self.document_changed.emit() # This is not ideal, but it will trigger a repaint.
+
+        elif command_type == "cut_selection":
+            # Similar to above, this needs to be handled by something with access to the canvas and the document.
+            self.document_changed.emit()

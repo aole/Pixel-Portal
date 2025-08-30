@@ -1,0 +1,57 @@
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtGui import QColor
+
+
+class DrawingContext(QObject):
+    tool_changed = Signal(str)
+    pen_color_changed = Signal(QColor)
+    pen_width_changed = Signal(int)
+    brush_type_changed = Signal(str)
+    mirror_x_changed = Signal(bool)
+    mirror_y_changed = Signal(bool)
+
+    def __init__(self):
+        super().__init__()
+        self.tool = "Pen"
+        self.previous_tool = "Pen"
+        self.pen_color = QColor("black")
+        self.pen_width = 1
+        self.brush_type = "Circular"
+        self.mirror_x = False
+        self.mirror_y = False
+
+    @Slot(bool)
+    def set_mirror_x(self, enabled):
+        self.mirror_x = enabled
+        self.mirror_x_changed.emit(self.mirror_x)
+
+    @Slot(bool)
+    def set_mirror_y(self, enabled):
+        self.mirror_y = enabled
+        self.mirror_y_changed.emit(self.mirror_y)
+
+    @Slot(int)
+    def set_pen_width(self, width):
+        self.pen_width = width
+        self.pen_width_changed.emit(self.pen_width)
+
+    @Slot(str)
+    def set_brush_type(self, brush_type):
+        self.brush_type = brush_type
+        self.brush_type_changed.emit(self.brush_type)
+
+    @Slot(str)
+    def set_tool(self, tool):
+        if self.tool != "Picker":
+            self.previous_tool = self.tool
+        self.tool = tool
+        self.tool_changed.emit(self.tool)
+
+    @Slot(QColor)
+    def set_pen_color(self, color):
+        # This slot can accept a string or a QColor
+        if isinstance(color, str):
+            self.pen_color = QColor(color)
+        else:
+            self.pen_color = color
+        self.pen_color_changed.emit(self.pen_color)

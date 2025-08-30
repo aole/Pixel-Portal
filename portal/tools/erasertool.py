@@ -16,14 +16,10 @@ class EraserTool(BaseTool):
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.canvas.is_erasing_preview = True
-        active_layer = self.app.document.layer_manager.active_layer
-        if not active_layer:
-            return
-
         self.points = [doc_pos]
 
         # Use a transparent temp image for the preview overlay
-        self.canvas.temp_image = QImage(self.app.document.width, self.app.document.height, QImage.Format_ARGB32)
+        self.canvas.temp_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
         self.canvas.temp_image.fill(Qt.transparent)
 
         # This flag tells the renderer to draw our temp_image ON TOP of the document, not instead of it.
@@ -42,7 +38,7 @@ class EraserTool(BaseTool):
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.canvas.is_erasing_preview = False
-        if not self.points or not self.app.document.layer_manager.active_layer:
+        if not self.points:
             # Clean up preview and return
             self.points = []
             self.canvas.temp_image = None
@@ -52,18 +48,16 @@ class EraserTool(BaseTool):
             return
 
         # Create the command with all the points
-        command = DrawCommand(
-            layer=self.app.document.layer_manager.active_layer,
-            points=self.points,
-            color=self.app.pen_color, # Color is needed for the pen, but will be ignored by the composition mode
-            width=self.app.pen_width,
-            brush_type=self.app.brush_type,
-            erase=True,
-            drawing=self.canvas.drawing,
-            selection_shape=self.canvas.selection_shape,
-        )
+        draw_data = {
+            "points": self.points,
+            "color": self.canvas._pen_color,
+            "width": self.canvas._pen_width,
+            "brush_type": self.canvas._brush_type,
+            "erase": True,
+            "selection_shape": self.canvas.selection_shape,
+        }
 
-        self.app.execute_command(command)
+        self.command_generated.emit(("draw", draw_data))
 
         # Clean up preview
         self.points = []
@@ -91,10 +85,10 @@ class EraserTool(BaseTool):
         # Use the normal drawing function to create an opaque mask on the temp image.
         # The renderer will then use this mask to "erase" from the main preview.
         if len(self.points) == 1:
-            self.canvas.drawing.draw_brush(painter, self.points[0])
+            self.canvas.drawing.draw_brush(painter, self.points[0], self.canvas._document_size)
         else:
             for i in range(len(self.points) - 1):
-                self.canvas.drawing.draw_line_with_brush(painter, self.points[i], self.points[i+1], erase=False)
+                self.canvas.drawing.draw_line_with_brush(painter, self.points[i], self.points[i+1], self.canvas._document_size, erase=False)
 
         painter.end()
         
