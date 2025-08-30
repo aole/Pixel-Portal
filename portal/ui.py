@@ -205,6 +205,7 @@ class MainWindow(QMainWindow):
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.tool_changed.connect(self.update_selected_tool_label)
+        self.app.tool_changed.connect(self.update_tool_buttons)
         self.canvas.selection_size_changed.connect(self.update_selection_size_label)
         self.app.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.pen_width_changed.connect(self.update_pen_width_label)
@@ -397,13 +398,22 @@ class MainWindow(QMainWindow):
 
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())
-        self.shape_button.setIcon(action.icon())
-        self.shape_button.setDefaultAction(action)
 
     def set_selection_tool(self, action):
         self.app.set_tool(action.text())
-        self.selection_button.setIcon(action.icon())
-        self.selection_button.setDefaultAction(action)
+
+    def update_tool_buttons(self, tool_name):
+        for action in self.shape_button.menu().actions():
+            if action.text() == tool_name:
+                self.shape_button.setIcon(action.icon())
+                self.shape_button.setDefaultAction(action)
+                return
+
+        for action in self.selection_button.menu().actions():
+            if action.text() == tool_name:
+                self.selection_button.setIcon(action.icon())
+                self.selection_button.setDefaultAction(action)
+                return
 
     def load_palette(self):
         try:
