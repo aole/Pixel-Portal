@@ -16,31 +16,36 @@ def app_and_window(qtbot):
     qtbot.addWidget(window)
     return app, window, window.canvas
 
-def test_draw_and_test(app_and_window):
+def test_draw_and_test(app_and_window, qtbot):
     app, window, canvas = app_and_window
 
     # 1. Start with a fresh document
     app.new_document(32, 32)
 
     # 2. Draw a line
-    start_pos = QPoint(10, 10)
-    end_pos = QPoint(20, 20)
-    canvas.draw_line_for_test(start_pos, end_pos)
+    start_pos = canvas.get_canvas_coords(QPoint(10, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(20, 20))
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
+
 
     # 3. Check that the image has changed
     pixel_color = app.document.layer_manager.active_layer.image.pixelColor(15, 15)
     assert pixel_color == QColor(Qt.black)
 
-def test_draw_zoom_and_test(app_and_window):
+def test_draw_zoom_and_test(app_and_window, qtbot):
     app, window, canvas = app_and_window
 
     # 1. Start with a fresh document
     app.new_document(32, 32)
 
     # 2. Draw a line
-    start_pos = QPoint(10, 10)
-    end_pos = QPoint(20, 20)
-    canvas.draw_line_for_test(start_pos, end_pos)
+    start_pos = canvas.get_canvas_coords(QPoint(10, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(20, 20))
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
 
     # 3. Zoom in
     initial_zoom = canvas.zoom
@@ -55,7 +60,7 @@ def test_draw_zoom_and_test(app_and_window):
     # 4. Check that the zoom level has changed
     assert canvas.zoom > initial_zoom
 
-def test_undo_redo_integration(app_and_window):
+def test_undo_redo_integration(app_and_window, qtbot):
     app, window, canvas = app_and_window
 
     # 1. Start with a fresh document and get the initial state
@@ -63,11 +68,13 @@ def test_undo_redo_integration(app_and_window):
     initial_rendered_image = app.document.render()
 
     # 2. Draw a line
-    start_pos = QPoint(10, 10)
-    end_pos = QPoint(20, 20)
+    start_pos = canvas.get_canvas_coords(QPoint(10, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(20, 20))
 
     # Simulate a mouse press, move, and release to draw
-    canvas.draw_line_for_test(start_pos, end_pos)
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
 
     drawn_rendered_image = app.document.render()
 
@@ -79,12 +86,12 @@ def test_undo_redo_integration(app_and_window):
     undone_rendered_image = app.document.render()
     assert undone_rendered_image.constBits() == initial_rendered_image.constBits()
 
-    # 5. Redo the drawing
+    # 5. Redo the. drawing
     app.redo()
     redone_rendered_image = app.document.render()
     assert redone_rendered_image.constBits() == drawn_rendered_image.constBits()
 
-def test_erase_and_test(app_and_window):
+def test_erase_and_test(app_and_window, qtbot):
     app, window, canvas = app_and_window
 
     # 1. Start with a fresh document and fill it with a color
@@ -92,21 +99,28 @@ def test_erase_and_test(app_and_window):
     app.document.layer_manager.active_layer.image.fill(QColor(Qt.blue))
 
     # 2. Erase a line
-    start_pos = QPoint(10, 10)
-    end_pos = QPoint(20, 20)
-    canvas.erase_line_for_test(start_pos, end_pos)
+    start_pos = canvas.get_canvas_coords(QPoint(10, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(20, 20))
+    qtbot.mousePress(canvas, Qt.RightButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.RightButton, Qt.NoModifier, end_pos)
+
 
     # 3. Check that the pixels on the erased line are transparent
     pixel_color = app.document.layer_manager.active_layer.image.pixelColor(15, 15)
     assert pixel_color.alpha() == 0
 
 
-def test_flip_undo_redo(app_and_window):
+def test_flip_undo_redo(app_and_window, qtbot):
     app, window, canvas = app_and_window
     app.new_document(32, 32)
 
     # Draw something asymmetric to see the flip
-    canvas.draw_line_for_test(QPoint(5, 10), QPoint(15, 10))
+    start_pos = canvas.get_canvas_coords(QPoint(5, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(15, 10))
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
 
     initial_image = app.document.render()
 

@@ -160,6 +160,20 @@ class Canvas(QWidget):
             (canvas_pos.y() - y_offset) / self.zoom,
         )
 
+    def get_canvas_coords(self, doc_pos):
+        doc_width_scaled = self.app.document.width * self.zoom
+        doc_height_scaled = self.app.document.height * self.zoom
+        canvas_width = self.width()
+        canvas_height = self.height()
+
+        x_offset = (canvas_width - doc_width_scaled) / 2 + self.x_offset
+        y_offset = (canvas_height - doc_height_scaled) / 2 + self.y_offset
+
+        return QPoint(
+            doc_pos.x() * self.zoom + x_offset,
+            doc_pos.y() * self.zoom + y_offset,
+        )
+
     def mousePressEvent(self, event):
         doc_pos = self.get_doc_coords(event.pos())
         if event.button() == Qt.LeftButton:
@@ -385,29 +399,6 @@ class Canvas(QWidget):
         # The canvas widget has been resized.
         # The document size does not change.
         pass
-
-    def draw_line_for_test(self, p1, p2):
-        from .command import DrawCommand
-        active_layer = self.app.document.layer_manager.active_layer
-        if active_layer:
-            command = DrawCommand(
-                layer=active_layer,
-                points=[p1, p2],
-                color=self.app.pen_color,
-                width=self.app.pen_width,
-                brush_type=self.app.brush_type,
-                drawing=self.drawing,
-                selection_shape=self.selection_shape,
-            )
-            self.app.execute_command(command)
-
-    def erase_line_for_test(self, p1, p2):
-        active_layer = self.app.document.layer_manager.active_layer
-        if active_layer:
-            painter = QPainter(active_layer.image)
-            painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.setPen(QColor(0, 0, 0, 0))
-            painter.drawLine(p1, p2)
 
     def set_initial_zoom(self):
         canvas_width = self.width()

@@ -17,7 +17,10 @@ def app_and_window(qtbot):
     app.new_document(100, 100)
     return app, window, window.canvas
 
-def test_undo_redo_mirror_bug(app_and_window):
+from PySide6.QtTest import QTest
+
+
+def test_undo_redo_mirror_bug(app_and_window, qtbot):
     """
     Tests that redoing a command uses the mirror settings from when the command
     was created, not the current mirror settings.
@@ -27,7 +30,11 @@ def test_undo_redo_mirror_bug(app_and_window):
     # 1. Ensure mirror is off and draw a line
     app.set_mirror_x(False)
     app.set_mirror_y(False)
-    canvas.draw_line_for_test(QPoint(10, 10), QPoint(20, 20))
+    start_pos = canvas.get_canvas_coords(QPoint(10, 10))
+    end_pos = canvas.get_canvas_coords(QPoint(20, 20))
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
 
     # 2. Get the rendered image
     drawn_image = app.document.render()
@@ -47,7 +54,7 @@ def test_undo_redo_mirror_bug(app_and_window):
     assert redone_image.pixelColor(15, 15) != QColor(Qt.transparent)
     assert redone_image.pixelColor(85, 15) == QColor(Qt.transparent) # Mirrored pixel should NOT be drawn
 
-def test_undo_redo_selection_bug(app_and_window):
+def test_undo_redo_selection_bug(app_and_window, qtbot):
     """
     Tests that a drawing command is correctly clipped to the selection,
     both on initial execution and on redo.
@@ -60,7 +67,11 @@ def test_undo_redo_selection_bug(app_and_window):
     canvas.selection_shape = selection_path
 
     # 2. Draw a line that goes through the selection
-    canvas.draw_line_for_test(QPoint(10, 50), QPoint(90, 50))
+    start_pos = canvas.get_canvas_coords(QPoint(10, 50))
+    end_pos = canvas.get_canvas_coords(QPoint(90, 50))
+    qtbot.mousePress(canvas, Qt.LeftButton, Qt.NoModifier, start_pos)
+    qtbot.mouseMove(canvas, end_pos)
+    qtbot.mouseRelease(canvas, Qt.LeftButton, Qt.NoModifier, end_pos)
 
     # 3. Check that the line is clipped
     drawn_image = app.document.render()
