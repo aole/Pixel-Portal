@@ -10,6 +10,7 @@ from .resize_dialog import ResizeDialog
 from .background import Background
 from .palette_dialog import PaletteDialog
 from .preview_panel import PreviewPanel
+from .action_manager import ActionManager
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
 
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Pixel Portal")
         self.resize(1200, 800)
 
+        self.action_manager = ActionManager(self)
+
         self.main_palette_buttons = []
         self.saturation_buttons = []
         self.value_buttons = []
@@ -67,128 +70,48 @@ class MainWindow(QMainWindow):
         self.canvas = Canvas(self.app)
         self.setCentralWidget(self.canvas)
 
+        self.action_manager.setup_actions(self.canvas)
+
         # Menu bar
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
-
-        new_action = QAction(QIcon("icons/new.png"), "&New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.open_new_file_dialog)
-        file_menu.addAction(new_action)
-
-        open_action = QAction(QIcon("icons/load.png"), "&Open", self)
-        open_action.setShortcut("Ctrl+O")
-        open_action.triggered.connect(self.app.open_document)
-        file_menu.addAction(open_action)
-
-        save_action = QAction(QIcon("icons/save.png"), "&Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.app.save_document)
-        file_menu.addAction(save_action)
-
+        file_menu.addAction(self.action_manager.new_action)
+        file_menu.addAction(self.action_manager.open_action)
+        file_menu.addAction(self.action_manager.save_action)
         file_menu.addSeparator()
-
-        load_palette_action = QAction("Load Palette from Image...", self)
-        load_palette_action.triggered.connect(self.open_palette_dialog)
-        file_menu.addAction(load_palette_action)
-
-        exit_action = QAction("&Exit", self)
-        exit_action.triggered.connect(self.app.exit)
-        file_menu.addAction(exit_action)
+        file_menu.addAction(self.action_manager.load_palette_action)
+        file_menu.addAction(self.action_manager.exit_action)
 
         edit_menu = menu_bar.addMenu("&Edit")
-        self.undo_action = QAction("&Undo", self)
-        self.undo_action.setShortcut(QKeySequence.Undo)
-        self.undo_action.triggered.connect(self.app.undo)
-        edit_menu.addAction(self.undo_action)
-
-        self.redo_action = QAction("&Redo", self)
-        self.redo_action.setShortcut("Ctrl+Shift+Z")
-        self.redo_action.triggered.connect(self.app.redo)
-        edit_menu.addAction(self.redo_action)
-
+        edit_menu.addAction(self.action_manager.undo_action)
+        edit_menu.addAction(self.action_manager.redo_action)
         edit_menu.addSeparator()
-
-        paste_as_new_layer_action = QAction("Paste as New Layer", self)
-        paste_as_new_layer_action.setShortcut("Ctrl+Shift+V")
-        paste_as_new_layer_action.triggered.connect(self.app.paste_as_new_layer)
-        edit_menu.addAction(paste_as_new_layer_action)
-
+        edit_menu.addAction(self.action_manager.paste_as_new_layer_action)
         edit_menu.addSeparator()
-
-        clear_action = QAction(QIcon("icons/clear.png"), "Clear", self)
-        clear_action.setShortcut(QKeySequence.Delete)
-        clear_action.triggered.connect(self.app.clear_layer)
-        edit_menu.addAction(clear_action)
+        edit_menu.addAction(self.action_manager.clear_action)
 
         select_menu = menu_bar.addMenu("&Select")
-
-        select_all_action = QAction("Select &All", self)
-        select_all_action.setShortcut("Ctrl+A")
-        select_all_action.triggered.connect(self.app.select_all)
-        select_menu.addAction(select_all_action)
-
-        select_none_action = QAction("Select &None", self)
-        select_none_action.setShortcut("Ctrl+D")
-        select_none_action.triggered.connect(self.app.select_none)
-        select_menu.addAction(select_none_action)
-
-        invert_selection_action = QAction("&Invert Selection", self)
-        invert_selection_action.setShortcut("Ctrl+I")
-        invert_selection_action.triggered.connect(self.app.invert_selection)
-        select_menu.addAction(invert_selection_action)
+        select_menu.addAction(self.action_manager.select_all_action)
+        select_menu.addAction(self.action_manager.select_none_action)
+        select_menu.addAction(self.action_manager.invert_selection_action)
 
         image_menu = menu_bar.addMenu("&Image")
-        resize_action = QAction(QIcon("icons/resize.png"), "&Resize", self)
-        resize_action.setShortcut("Ctrl+R")
-        resize_action.triggered.connect(self.open_resize_dialog)
-        image_menu.addAction(resize_action)
-
-        self.crop_action = QAction("Crop to Selection", self)
-        self.crop_action.triggered.connect(self.app.crop_to_selection)
-        self.crop_action.setEnabled(False)
-        image_menu.addAction(self.crop_action)
-
+        image_menu.addAction(self.action_manager.resize_action)
+        image_menu.addAction(self.action_manager.crop_action)
         image_menu.addSeparator()
-
-        flip_horizontal_action = QAction("Flip Horizontal", self)
-        flip_horizontal_action.triggered.connect(self.app.flip_horizontal)
-        image_menu.addAction(flip_horizontal_action)
-
-        flip_vertical_action = QAction("Flip Vertical", self)
-        flip_vertical_action.triggered.connect(self.app.flip_vertical)
-        image_menu.addAction(flip_vertical_action)
+        image_menu.addAction(self.action_manager.flip_horizontal_action)
+        image_menu.addAction(self.action_manager.flip_vertical_action)
 
         view_menu = menu_bar.addMenu("&View")
         background_menu = view_menu.addMenu("&Background")
-
-        checkered_action = QAction("Checkered Background", self)
-        checkered_action.triggered.connect(lambda: self.canvas.set_background(Background()))
-        background_menu.addAction(checkered_action)
-
+        background_menu.addAction(self.action_manager.checkered_action)
         background_menu.addSeparator()
-
-        white_action = QAction("White", self)
-        white_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("white"))))
-        background_menu.addAction(white_action)
-
-        black_action = QAction("Black", self)
-        black_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("black"))))
-        background_menu.addAction(black_action)
-
-        gray_action = QAction("Gray", self)
-        gray_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("gray"))))
-        background_menu.addAction(gray_action)
-
-        magenta_action = QAction("Magenta", self)
-        magenta_action.triggered.connect(lambda: self.canvas.set_background(Background(QColor("magenta"))))
-        background_menu.addAction(magenta_action)
-
+        background_menu.addAction(self.action_manager.white_action)
+        background_menu.addAction(self.action_manager.black_action)
+        background_menu.addAction(self.action_manager.gray_action)
+        background_menu.addAction(self.action_manager.magenta_action)
         background_menu.addSeparator()
-
-        custom_color_action = QAction("Custom Color...", self)
-        custom_color_action.triggered.connect(self.open_background_color_dialog)
-        background_menu.addAction(custom_color_action)
+        background_menu.addAction(self.action_manager.custom_color_action)
 
         # Status bar
         status_bar = self.statusBar()
@@ -222,9 +145,9 @@ class MainWindow(QMainWindow):
         top_toolbar = QToolBar("Top Toolbar")
         self.addToolBar(Qt.TopToolBarArea, top_toolbar)
 
-        top_toolbar.addAction(new_action)
-        top_toolbar.addAction(open_action)
-        top_toolbar.addAction(save_action)
+        top_toolbar.addAction(self.action_manager.new_action)
+        top_toolbar.addAction(self.action_manager.open_action)
+        top_toolbar.addAction(self.action_manager.save_action)
         top_toolbar.addSeparator()
 
         # Brush size slider
@@ -246,36 +169,23 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.valueChanged.connect(self.app.set_pen_width)
         top_toolbar.addWidget(self.pen_width_slider)
 
-        self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self)
-        self.circular_brush_action.setCheckable(True)
-        self.circular_brush_action.setChecked(self.app.brush_type == "Circular")
-        self.circular_brush_action.triggered.connect(lambda: self.app.set_brush_type("Circular"))
-        top_toolbar.addAction(self.circular_brush_action)
+        self.action_manager.circular_brush_action.setChecked(self.app.brush_type == "Circular")
+        self.action_manager.circular_brush_action.triggered.connect(lambda: self.app.set_brush_type("Circular"))
+        top_toolbar.addAction(self.action_manager.circular_brush_action)
 
-        self.square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self)
-        self.square_brush_action.setCheckable(True)
-        self.square_brush_action.setChecked(self.app.brush_type == "Square")
-        self.square_brush_action.triggered.connect(lambda: self.app.set_brush_type("Square"))
-        top_toolbar.addAction(self.square_brush_action)
+        self.action_manager.square_brush_action.setChecked(self.app.brush_type == "Square")
+        self.action_manager.square_brush_action.triggered.connect(lambda: self.app.set_brush_type("Square"))
+        top_toolbar.addAction(self.action_manager.square_brush_action)
         
         top_toolbar.addSeparator()
 
-        mirror_x_action = QAction(QIcon("icons/mirrorx.png"), "Mirror X", self)
-        mirror_x_action.setCheckable(True)
-        mirror_x_action.triggered.connect(self.app.set_mirror_x)
-        top_toolbar.addAction(mirror_x_action)
-
-        mirror_y_action = QAction(QIcon("icons/mirrory.png"), "Mirror Y", self)
-        mirror_y_action.setCheckable(True)
-        mirror_y_action.triggered.connect(self.app.set_mirror_y)
-        top_toolbar.addAction(mirror_y_action)
+        top_toolbar.addAction(self.action_manager.mirror_x_action)
+        top_toolbar.addAction(self.action_manager.mirror_y_action)
 
         top_toolbar.addSeparator()
 
-        grid_action = QAction(QIcon("icons/grid.png"), "Toggle Grid", self)
-        grid_action.setCheckable(True)
-        grid_action.triggered.connect(self.canvas.toggle_grid)
-        top_toolbar.addAction(grid_action)
+        self.action_manager.grid_action.triggered.connect(self.canvas.toggle_grid)
+        top_toolbar.addAction(self.action_manager.grid_action)
         
         active_color_button = ActiveColorButton(self.app)
         toolbar.addWidget(active_color_button)
@@ -326,10 +236,8 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.selection_button)
 
-        ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self)
-        ai_action.triggered.connect(self.open_ai_dialog)
         ai_button = QToolButton()
-        ai_button.setDefaultAction(ai_action)
+        ai_button.setDefaultAction(self.action_manager.ai_action)
         toolbar.addWidget(ai_button)
 
         # Color Swatch Panel
@@ -478,8 +386,8 @@ class MainWindow(QMainWindow):
         self.pen_width_slider.setValue(width)
 
     def update_undo_redo_actions(self):
-        self.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 0)
-        self.redo_action.setEnabled(len(self.app.undo_manager.redo_stack) > 0)
+        self.action_manager.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 0)
+        self.action_manager.redo_action.setEnabled(len(self.app.undo_manager.redo_stack) > 0)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -515,11 +423,11 @@ class MainWindow(QMainWindow):
             self.canvas.set_background(Background(color))
 
     def update_crop_action_state(self, has_selection):
-        self.crop_action.setEnabled(has_selection)
+        self.action_manager.crop_action.setEnabled(has_selection)
 
     def update_brush_button(self, brush_type):
-        self.circular_brush_action.setChecked(brush_type == "Circular")
-        self.square_brush_action.setChecked(brush_type == "Square")
+        self.action_manager.circular_brush_action.setChecked(brush_type == "Circular")
+        self.action_manager.square_brush_action.setChecked(brush_type == "Square")
 
     def on_mirror_changed(self):
         is_mirroring = self.app.mirror_x or self.app.mirror_y
