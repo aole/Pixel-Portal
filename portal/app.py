@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
 from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
+from PySide6.QtCore import QPoint
 
 
 class App(QObject):
@@ -187,5 +188,9 @@ class App(QObject):
 
     @Slot(object)
     def handle_command(self, command):
+        if isinstance(command, tuple):
+            print(f"Ignoring tuple-based command in App.handle_command: {command}")
+            return
+
         if command:
             self.execute_command(command)
