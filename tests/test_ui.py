@@ -11,7 +11,6 @@ def app(qtbot):
 
     app_instance = App()
     window = MainWindow(app_instance)
-    app_instance.set_window(window)
     qtbot.addWidget(window)
     window.show()
     return window

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
 from .ai.dialog import AiDialog
@@ -394,6 +394,26 @@ class MainWindow(QMainWindow):
 
         self.app.mirror_x_changed.connect(self.on_mirror_changed)
         self.app.mirror_y_changed.connect(self.on_mirror_changed)
+
+        self.app.document_changed.connect(self.on_document_changed)
+        self.app.select_all_triggered.connect(self.canvas.select_all)
+        self.app.select_none_triggered.connect(self.canvas.select_none)
+        self.app.invert_selection_triggered.connect(self.canvas.invert_selection)
+        self.app.crop_to_selection_triggered.connect(self.on_crop_to_selection)
+        self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
+        self.app.exit_triggered.connect(self.close)
+
+    @Slot()
+    def on_document_changed(self):
+        self.layer_manager_widget.refresh_layers()
+        self.canvas.update()
+
+    @Slot()
+    def on_crop_to_selection(self):
+        if self.canvas.selection_shape:
+            selection_rect = self.canvas.selection_shape.boundingRect().toRect()
+            self.app.perform_crop(selection_rect)
+            self.canvas.select_none()
 
     def set_shape_tool(self, action):
         self.app.set_tool(action.text())
