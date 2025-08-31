@@ -236,14 +236,14 @@ class CanvasRenderer:
     def draw_cursor(self, painter, target_rect, doc_image):
         if (
             not self.canvas.mouse_over_canvas
-            or self.canvas._current_tool_name in ["Bucket", "Picker"]
-            or self.canvas._current_tool_name.startswith("Select")
+            or self.canvas.drawing_context.tool in ["Bucket", "Picker"]
+            or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed
         ):
             return
 
         # Use the application's brush size
-        brush_size = self.canvas._pen_width
+        brush_size = self.canvas.drawing_context.pen_width
 
         # Center the brush cursor around the mouse position
         doc_pos = self.canvas.cursor_doc_pos
@@ -300,10 +300,10 @@ class CanvasRenderer:
             inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
 
         # Fill the cursor rectangle with the brush color
-        painter.setBrush(self.canvas._pen_color)
+        painter.setBrush(self.canvas.drawing_context.pen_color)
         painter.setPen(Qt.NoPen)  # No outline for the fill
 
-        if self.canvas._brush_type == "Circular":
+        if self.canvas.drawing_context.brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
@@ -313,7 +313,7 @@ class CanvasRenderer:
         painter.setPen(inverted_color)
         painter.setBrush(Qt.NoBrush)
 
-        if self.canvas._brush_type == "Circular":
+        if self.canvas.drawing_context.brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
