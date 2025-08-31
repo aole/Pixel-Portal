@@ -35,11 +35,10 @@ def test_eraser_preview_layer_order(qtbot):
     canvas = Canvas(drawing_context)
     qtbot.addWidget(canvas)
     drawing_context.setParent(canvas)
-    document = Document(64, 64, parent=canvas)
+    document = Document(64, 64)
     canvas.resize(64, 64)
     canvas.set_document(document)
     canvas.zoom = 1.0
-    canvas.background.is_checkered = False
     canvas.background.color = QColor("white")
 
     # Layer 1 (bottom): Red

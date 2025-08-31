@@ -27,7 +27,7 @@ def test_active_color_button(mock_get_color, qtbot):
     mock_get_color.assert_called_once()
     mock_drawing_context.set_pen_color.assert_called_once_with(QColor("green"))
 
-def test_update_dynamic_palette(qtbot):
+def test_update_dynamic_palette(qtbot, qapp):
     """Test that the saturation and value buttons are updated correctly when the pen color changes."""
     mock_app = MagicMock()
     mock_app.drawing_context.pen_color = QColor("red")
@@ -41,7 +41,6 @@ def test_update_dynamic_palette(qtbot):
     # Mock methods that would otherwise cause issues in a test environment
     with patch.object(MainWindow, 'load_palette', return_value=[]), \
          patch.object(MainWindow, 'update_palette'), \
-         patch.object(MainWindow, 'update_tool_buttons'), \
          patch.object(MainWindow, 'update_brush_button'):
         window = MainWindow(mock_app)
         qtbot.addWidget(window)
