@@ -49,6 +49,7 @@ class RectangleTool(BaseTool):
             self.canvas.drawing_context.mirror_x,
             self.canvas.drawing_context.mirror_y,
         )
+        painter.end()
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
