@@ -63,6 +63,14 @@ class Layer(QObject):
         new_layer.image = self.image.copy()  # Use QImage's copy method
         return new_layer
 
+    def get_properties(self):
+        """Returns a dictionary of layer properties."""
+        return {
+            "name": self.name,
+            "visible": self.visible,
+            "opacity": self.opacity,
+        }
+
     @classmethod
     def from_qimage(cls, qimage, name):
         """Creates a new layer from a QImage."""

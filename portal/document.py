@@ -2,8 +2,9 @@ from .layer_manager import LayerManager
 from .layer import Layer
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtCore import QSize, QBuffer, Qt
-from PIL import Image, ImageSequence
+from PIL import Image, ImageSequence, ImageQt
 import io
+import json
 
 
 class Document:
@@ -33,25 +34,33 @@ class Document:
 
     @staticmethod
     def qimage_to_pil(qimage):
-        buffer = QBuffer()
-        buffer.open(QBuffer.ReadWrite)
-        qimage.save(buffer, "PNG")
-        pil_image = Image.open(io.BytesIO(buffer.data()))
-        return pil_image
+        return ImageQt.fromqimage(qimage)
 
     def save_tiff(self, filename):
         images = []
         for layer in self.layer_manager.layers:
             pil_image = self.qimage_to_pil(layer.image)
+            # Store metadata in the 'info' dictionary
+            pil_image.info["layer_name"] = layer.name
+            pil_image.info["layer_visible"] = str(layer.visible)
+            pil_image.info["layer_opacity"] = str(layer.opacity)
             images.append(pil_image)
 
         if images:
+            # The 'info' dictionary is only saved for the first image
+            # when using save_all. We need to save each image individually
+            # if we want to preserve metadata for each layer.
+            # A better approach is to use a different format that supports layers
+            # like PSD, but for TIFF, we can store it in the description tag.
+            # For now, let's just fix the loading of names.
+            layer_properties = [layer.get_properties() for layer in self.layer_manager.layers]
             images[0].save(
                 filename,
                 save_all=True,
                 append_images=images[1:],
                 format='TIFF',
-                compression='tiff_lzw'
+                compression='tiff_lzw',
+                description=json.dumps(layer_properties)
             )
 
     @staticmethod
@@ -61,13 +70,22 @@ class Document:
             doc = Document(width, height)
             doc.layer_manager.layers = []  # Clear default layer
 
+            try:
+                layer_properties = json.loads(img.tag_v2[270])
+            except (KeyError, json.JSONDecodeError):
+                layer_properties = None
+
             for i, page in enumerate(ImageSequence.Iterator(img)):
                 # Convert PIL image to QImage
-                pil_page = page.convert("RGBA")
-                data = pil_page.tobytes("raw", "RGBA")
-                qimage = QImage(data, pil_page.width, pil_page.height, QImage.Format_RGBA8888)
+                qimage = ImageQt.toqimage(page.convert("RGBA"))
 
-                layer = Layer.from_qimage(qimage, f"Layer {i+1}")
+                if layer_properties and i < len(layer_properties):
+                    props = layer_properties[i]
+                    layer = Layer.from_qimage(qimage, props.get("name", f"Layer {i+1}"))
+                    layer.visible = props.get("visible", True)
+                    layer.opacity = props.get("opacity", 1.0)
+                else:
+                    layer = Layer.from_qimage(qimage, f"Layer {i+1}")
                 doc.layer_manager.layers.append(layer)
         
         return doc

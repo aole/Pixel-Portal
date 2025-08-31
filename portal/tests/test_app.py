@@ -8,11 +8,7 @@ from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
 
 @pytest.fixture
-def app(qtbot):
-    # We need to create a QApplication instance before any QObjects
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-
+def app(qapp):
     # Create an App instance and return it
     app_instance = App()
 
