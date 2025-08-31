@@ -18,6 +18,7 @@ from .drawing import Drawing
 from .renderer import CanvasRenderer
 from .background import Background
 from .tools import get_tools
+from .canvas_input_handler import CanvasInputHandler
 
 
 class Canvas(QWidget):
@@ -32,6 +33,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.drawing_context = drawing_context
         self.renderer = CanvasRenderer(self, self.drawing_context)
+        self.input_handler = CanvasInputHandler(self)
         self.document = None
         self.drawing = Drawing()
         self.dragging = False
@@ -72,24 +74,10 @@ class Canvas(QWidget):
         self.update()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Control:
-            self.ctrl_pressed = True
-            if hasattr(self.current_tool, 'deactivate'):
-                self.current_tool.deactivate()
-            self.current_tool = self.tools["Move"]
-            if hasattr(self.current_tool, 'activate'):
-                self.current_tool.activate()
-            self.setCursor(Qt.ArrowCursor)
+        self.input_handler.keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
-        if event.key() == Qt.Key_Control:
-            self.ctrl_pressed = False
-            if hasattr(self.current_tool, 'deactivate'):
-                self.current_tool.deactivate()
-            self.current_tool = self.tools[self.drawing_context.tool]
-            if hasattr(self.current_tool, 'activate'):
-                self.current_tool.activate()
-            self.on_tool_changed(self.drawing_context.tool)
+        self.input_handler.keyReleaseEvent(event)
 
     def set_background(self, background: Background):
         self.background = background
@@ -184,79 +172,16 @@ class Canvas(QWidget):
         )
 
     def mousePressEvent(self, event):
-        doc_pos = self.get_doc_coords(event.pos())
-        if event.button() == Qt.LeftButton:
-            self.current_tool.mousePressEvent(event, doc_pos)
-        elif event.button() == Qt.RightButton:
-            self.tools["Eraser"].mousePressEvent(event, doc_pos)
-        elif event.button() == Qt.MiddleButton:
-            self.dragging = True
-            self.last_point = event.pos()
+        self.input_handler.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        self.cursor_doc_pos = self.get_doc_coords(event.pos())
-        self.cursor_pos_changed.emit(self.cursor_doc_pos)
-        self.update()
-
-        doc_pos = self.get_doc_coords(event.pos())
-
-        if not (event.buttons() & Qt.LeftButton):
-            if hasattr(self.current_tool, "mouseHoverEvent"):
-                self.current_tool.mouseHoverEvent(event, doc_pos)
-
-        if event.buttons() & Qt.LeftButton:
-            self.current_tool.mouseMoveEvent(event, doc_pos)
-            self.canvas_updated.emit()
-        elif event.buttons() & Qt.RightButton:
-            self.tools["Eraser"].mouseMoveEvent(event, doc_pos)
-        elif (event.buttons() & Qt.MiddleButton) and self.dragging:
-            delta = event.pos() - self.last_point
-            self.x_offset += delta.x()
-            self.y_offset += delta.y()
-            self.last_point = event.pos()
-            self.update()
+        self.input_handler.mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        doc_pos = self.get_doc_coords(event.pos())
-        if event.button() == Qt.LeftButton:
-            self.current_tool.mouseReleaseEvent(event, doc_pos)
-        elif event.button() == Qt.RightButton:
-            self.tools["Eraser"].mouseReleaseEvent(event, doc_pos)
-        elif event.button() == Qt.MiddleButton:
-            self.dragging = False
+        self.input_handler.mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent):
-        mouse_pos = event.position().toPoint()
-        doc_pos_before_zoom = self.get_doc_coords(mouse_pos)
-
-        # Zoom
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self.zoom *= 1.25
-        else:
-            self.zoom /= 1.25
-
-        # Clamp zoom level
-        self.zoom = max(1, min(self.zoom, 20.0))
-
-        # Adjust pan to keep doc_pos_before_zoom at the same mouse_pos
-        doc_width_scaled = self._document_size.width() * self.zoom
-        doc_height_scaled = self._document_size.height() * self.zoom
-
-        # This is the top-left of the document in canvas coordinates *without* the old self.x_offset
-        base_x_offset = (self.width() - doc_width_scaled) / 2
-        base_y_offset = (self.height() - doc_height_scaled) / 2
-
-        # This is where the doc_pos would be with the new zoom but without any panning
-        canvas_x_after_zoom_no_pan = base_x_offset + doc_pos_before_zoom.x() * self.zoom
-        canvas_y_after_zoom_no_pan = base_y_offset + doc_pos_before_zoom.y() * self.zoom
-
-        # We want this point to be at mouse_pos. The difference is the required pan offset.
-        self.x_offset = mouse_pos.x() - canvas_x_after_zoom_no_pan
-        self.y_offset = mouse_pos.y() - canvas_y_after_zoom_no_pan
-
-        self.update()
-        self.zoom_changed.emit(self.zoom)
+        self.input_handler.wheelEvent(event)
 
     def get_target_rect(self):
         doc_width = self._document_size.width()
