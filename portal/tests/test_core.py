@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
 
+
 @pytest.fixture
 def app(qapp):
     # Create an App instance and return it

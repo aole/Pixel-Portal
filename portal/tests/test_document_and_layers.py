@@ -475,9 +475,9 @@ def test_pen_tool_emits_command(canvas):
     spy = Mock()
     canvas.command_generated.connect(spy)
 
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
 
     canvas.mousePressEvent(press_event)
     canvas.mouseMoveEvent(move_event)
@@ -555,7 +555,7 @@ def test_mouse_press_event(canvas):
     """Test that the correct tool's mousePressEvent is called."""
     mock_tool = Mock()
     canvas.current_tool = mock_tool
-    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     canvas.mousePressEvent(event)
     mock_tool.mousePressEvent.assert_called_once()
 
@@ -563,7 +563,7 @@ def test_mouse_move_event(canvas):
     """Test that the correct tool's mouseMoveEvent is called and cursor position is updated."""
     mock_tool = Mock()
     canvas.current_tool = mock_tool
-    event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     canvas.mouseMoveEvent(event)
     mock_tool.mouseMoveEvent.assert_called_once()
     assert canvas.cursor_doc_pos != QPoint(0, 0)
@@ -572,7 +572,7 @@ def test_mouse_release_event(canvas):
     """Test that the correct tool's mouseReleaseEvent is called."""
     mock_tool = Mock()
     canvas.current_tool = mock_tool
-    event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     canvas.mouseReleaseEvent(event)
     mock_tool.mouseReleaseEvent.assert_called_once()
 

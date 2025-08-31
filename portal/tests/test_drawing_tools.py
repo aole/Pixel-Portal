@@ -43,18 +43,18 @@ def test_pen_mouse_events(pen_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
     assert tool.points == [QPoint(10, 10)]
     assert canvas.temp_image is not None
 
     # Mouse Move
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(20, 20))
     assert tool.points == [QPoint(10, 10), QPoint(20, 20)]
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(20, 20))
 
@@ -98,19 +98,19 @@ def test_eraser_mouse_events(eraser_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
     assert canvas.is_erasing_preview is True
     assert tool.points == [QPoint(10, 10)]
     assert canvas.temp_image is not None
 
     # Mouse Move
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(20, 20))
     assert tool.points == [QPoint(10, 10), QPoint(20, 20)]
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(20, 20))
 
@@ -153,7 +153,7 @@ def test_line_mouse_events(line_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
@@ -163,13 +163,13 @@ def test_line_mouse_events(line_tool, qtbot):
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_line_with_brush") as mock_draw_line:
-        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         tool.mouseMoveEvent(move_event, QPoint(20, 20))
         assert canvas.temp_image is not None
         mock_draw_line.assert_called_once()
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(20, 20))
 
@@ -240,20 +240,20 @@ def test_move_mouse_events_no_selection(move_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
     assert blocker.args == [("get_active_layer_image", "move_tool_start_no_selection")]
 
     # Mouse Move
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 30), QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with patch.object(QPainter, "drawImage") as mock_draw_image:
         tool.mouseMoveEvent(move_event, QPoint(20, 30))
         mock_draw_image.assert_called_with(QPoint(10, 20), canvas.original_image)
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 30), QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(20, 30))
     assert blocker.signal_triggered
@@ -274,20 +274,20 @@ def test_move_mouse_events_with_selection(move_tool, qtbot):
     tool.original_selection_shape = selection_path
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
     assert blocker.args == [("cut_selection", "move_tool_start")]
 
     # Mouse Move
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 30), QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(20, 30))
     expected_path = selection_path.translated(10, 20)
     assert canvas.selection_shape == expected_path
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 30), QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(20, 30))
     assert blocker.signal_triggered
@@ -314,7 +314,7 @@ def test_bucket_mouse_press_event(bucket_tool, qtbot):
     This test should verify that the FillCommand is executed when the mouse is pressed.
     """
     tool = bucket_tool
-    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     doc_pos = QPoint(10, 10)
 
     with qtbot.waitSignal(tool.command_generated) as blocker:
@@ -349,7 +349,7 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
@@ -359,14 +359,14 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_ellipse") as mock_draw_ellipse:
-        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         tool.mouseMoveEvent(move_event, QPoint(30, 40))
         assert canvas.temp_image is not None
         mock_draw_ellipse.assert_called_once()
         # We can do more detailed checks on the arguments if needed
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(30, 40))
 
@@ -380,21 +380,28 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert canvas.temp_image_replaces_active_layer is False
 
 
+from portal.canvas import Canvas
+from portal.drawing_context import DrawingContext
+from portal.document import Document
+
 @pytest.fixture
 def rectangle_tool(qtbot):
-    mock_canvas = Mock()
-    mock_canvas.document.layer_manager.active_layer = Mock()
-    mock_canvas.drawing_context.pen_color = QColor("red")
-    mock_canvas.drawing_context.pen_width = 1
-    mock_canvas.drawing_context.brush_type = "SolidPattern"
-    mock_canvas.drawing_context.mirror_x = False
-    mock_canvas.drawing_context.mirror_y = False
-    mock_canvas.selection_shape = None
-    mock_canvas._document_size = (256, 256)
-    mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
-    mock_canvas.temp_image = None
-    mock_canvas.temp_image_replaces_active_layer = False
-    tool = RectangleTool(mock_canvas)
+    drawing_context = DrawingContext()
+    canvas = Canvas(drawing_context)
+    qtbot.addWidget(canvas)
+    drawing_context.setParent(canvas)
+    document = Document(256, 256)
+    canvas.set_document(document)
+    drawing_context.pen_color = QColor("red")
+    drawing_context.pen_width = 1
+    drawing_context.brush_type = "SolidPattern"
+    drawing_context.mirror_x = False
+    drawing_context.mirror_y = False
+    canvas.selection_shape = None
+    canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
+    canvas.temp_image = None
+    canvas.temp_image_replaces_active_layer = False
+    tool = RectangleTool(canvas)
     return tool
 
 def test_rectangle_mouse_events(rectangle_tool, qtbot):
@@ -405,7 +412,7 @@ def test_rectangle_mouse_events(rectangle_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
@@ -415,13 +422,13 @@ def test_rectangle_mouse_events(rectangle_tool, qtbot):
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_rect") as mock_draw_rect:
-        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         tool.mouseMoveEvent(move_event, QPoint(30, 40))
         assert canvas.temp_image is not None
         mock_draw_rect.assert_called_once()
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mouseReleaseEvent(release_event, QPoint(30, 40))
 

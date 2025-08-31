@@ -56,14 +56,14 @@ def test_select_circle_mouse_events(select_circle_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
     canvas._update_selection_and_emit_size.assert_called()
     assert tool.start_point == QPoint(10, 10)
 
     # Mouse Move
     canvas._update_selection_and_emit_size.reset_mock()
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(30, 40))
     canvas._update_selection_and_emit_size.assert_called()
     path = canvas._update_selection_and_emit_size.call_args[0][0]
@@ -74,7 +74,7 @@ def test_select_circle_mouse_events(select_circle_tool, qtbot):
 
     # Mouse Release
     canvas.selection_shape = canvas._update_selection_and_emit_size.call_args[0][0]
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseReleaseEvent(release_event, QPoint(30, 40))
     canvas.selection_changed.emit.assert_called_with(True)
 
@@ -102,7 +102,7 @@ def test_select_color_mouse_press_event(select_color_tool):
     canvas = tool.canvas
 
     # Press on a red pixel
-    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(2, 2), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(2, 2), QPoint(2, 2), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(event, QPoint(2, 2))
 
     canvas._update_selection_and_emit_size.assert_called_once()
@@ -132,7 +132,7 @@ def test_select_lasso_mouse_events(select_lasso_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
     canvas._update_selection_and_emit_size.assert_called()
     path = canvas._update_selection_and_emit_size.call_args[0][0]
@@ -142,14 +142,14 @@ def test_select_lasso_mouse_events(select_lasso_tool, qtbot):
     # Mouse Move
     canvas.selection_shape = path
     canvas._update_selection_and_emit_size.reset_mock()
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(20, 20))
     canvas._update_selection_and_emit_size.assert_called_with(path)
     assert path.currentPosition() == QPoint(20, 20)
 
 
     # Mouse Release
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     with patch.object(path, "closeSubpath") as mock_close_subpath:
         tool.mouseReleaseEvent(release_event, QPoint(20, 20))
         mock_close_subpath.assert_called_once()
@@ -172,14 +172,14 @@ def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     canvas = tool.canvas
 
     # Mouse Press
-    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
     canvas._update_selection_and_emit_size.assert_called()
     assert tool.start_point == QPoint(10, 10)
 
     # Mouse Move
     canvas._update_selection_and_emit_size.reset_mock()
-    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(30, 40))
     canvas._update_selection_and_emit_size.assert_called()
     path = canvas._update_selection_and_emit_size.call_args[0][0]
@@ -189,6 +189,6 @@ def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
 
     # Mouse Release
     canvas.selection_shape = canvas._update_selection_and_emit_size.call_args[0][0]
-    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseReleaseEvent(release_event, QPoint(30, 40))
     canvas.selection_changed.emit.assert_called_with(True)
