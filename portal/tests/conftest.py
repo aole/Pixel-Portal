@@ -13,7 +13,9 @@ def qapp():
     Creates a new QApplication for each test function, ensuring a clean environment.
     """
     # Use sys.argv to avoid issues on some platforms.
-    app = QApplication(sys.argv)
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
     yield app
-    # The QApplication will be properly torn down after each test.
+    app.quit()
     

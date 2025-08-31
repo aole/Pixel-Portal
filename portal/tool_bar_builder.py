@@ -70,15 +70,19 @@ class ToolBarBuilder:
 
         from .tools import get_tools
         tools = get_tools()
+        self.tool_actions = {}
+
         for tool in tools:
             if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
                 continue
 
             action = QAction(QIcon(tool.icon), tool.name, self.main_window)
+            action.setCheckable(True)
             action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             button = QToolButton()
             button.setDefaultAction(action)
             toolbar.addWidget(button)
+            self.tool_actions[tool.name] = action
 
         # Shape Tools
         self.main_window.shape_button = QToolButton(self.main_window)
@@ -90,10 +94,13 @@ class ToolBarBuilder:
         shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
         for tool in shape_tools:
             action = QAction(QIcon(tool.icon), tool.name, self.main_window)
+            action.setCheckable(True)
             action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             shape_menu.addAction(action)
+            self.tool_actions[tool.name] = action
             if tool.name == "Line":
                 self.main_window.shape_button.setDefaultAction(action)
+                action.setChecked(True)
 
         toolbar.addWidget(self.main_window.shape_button)
 
@@ -107,9 +114,25 @@ class ToolBarBuilder:
         selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
         for tool in selection_tools:
             action = QAction(QIcon(tool.icon), tool.name, self.main_window)
+            action.setCheckable(True)
             action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             selection_menu.addAction(action)
+            self.tool_actions[tool.name] = action
             if tool.name == "Select Rectangle":
                 self.main_window.selection_button.setDefaultAction(action)
 
         toolbar.addWidget(self.main_window.selection_button)
+
+    def update_tool_buttons(self, tool_name):
+        if tool_name in self.tool_actions:
+            self.tool_actions[tool_name].setChecked(True)
+
+        for action in self.main_window.shape_button.menu().actions():
+            if action.text() == tool_name:
+                self.main_window.shape_button.setDefaultAction(action)
+                return
+
+        for action in self.main_window.selection_button.menu().actions():
+            if action.text() == tool_name:
+                self.main_window.selection_button.setDefaultAction(action)
+                return

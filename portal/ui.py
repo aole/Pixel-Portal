@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
 
         # Connect signals
         self.canvas.selection_changed.connect(self.update_crop_action_state)
-        self.app.drawing_context.tool_changed.connect(self.update_tool_buttons)
+        self.app.drawing_context.tool_changed.connect(toolbar_builder.update_tool_buttons)
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
@@ -180,17 +180,6 @@ class MainWindow(QMainWindow):
             selection_rect = self.canvas.selection_shape.boundingRect().toRect()
             self.app.perform_crop(selection_rect)
             self.canvas.select_none()
-
-    def update_tool_buttons(self, tool_name):
-        for action in self.shape_button.menu().actions():
-            if action.text() == tool_name:
-                self.shape_button.setDefaultAction(action)
-                return
-
-        for action in self.selection_button.menu().actions():
-            if action.text() == tool_name:
-                self.selection_button.setDefaultAction(action)
-                return
 
     def load_palette(self):
         try:
