@@ -188,8 +188,8 @@ def test_open_document(mock_get_open_file_name, app, qtbot):
          qtbot.waitSignal(app.undo_stack_changed, raising=True) as undo_blocker:
         app.open_document()
 
-    assert app.document.width == 1
-    assert app.document.height == 1
+    assert app.document.width == 32
+    assert app.document.height == 32
     assert document_blocker
     assert undo_blocker
 
