@@ -11,47 +11,13 @@ from .background import Background
 from .palette_dialog import PaletteDialog
 from .preview_panel import PreviewPanel
 from .action_manager import ActionManager
+from .menu_bar_builder import MenuBarBuilder
+from .tool_bar_builder import ToolBarBuilder
+from .status_bar_manager import StatusBarManager
+
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
-
-
-class ColorButton(QPushButton):
-    def __init__(self, color, drawing_context):
-        super().__init__()
-        self.drawing_context = drawing_context
-        self.setFixedSize(24, 24)
-        self.clicked.connect(self.on_click)
-        self.set_color(color)
-
-    def set_color(self, color):
-        if isinstance(color, QColor):
-            self.color = color.name()
-        else:
-            self.color = color
-        self.setStyleSheet(f"background-color: {self.color}")
-        self.setToolTip(self.color)
-
-    def on_click(self):
-        self.drawing_context.set_pen_color(self.color)
-
-
-class ActiveColorButton(QPushButton):
-    def __init__(self, drawing_context):
-        super().__init__()
-        self.drawing_context = drawing_context
-        self.setFixedSize(24, 24)
-        self.clicked.connect(self.on_click)
-        self.update_color(self.drawing_context.pen_color)
-        self.drawing_context.pen_color_changed.connect(self.update_color)
-
-    def on_click(self):
-        color = QColorDialog.getColor(self.drawing_context.pen_color, self)
-        if color.isValid():
-            self.drawing_context.set_pen_color(color)
-
-    def update_color(self, color):
-        self.setStyleSheet(f"background-color: {color.name()}")
-        self.setToolTip(color.name())
+from .color_button import ColorButton, ActiveColorButton
 
 
 class MainWindow(QMainWindow):
@@ -81,171 +47,24 @@ class MainWindow(QMainWindow):
         self.action_manager.setup_actions(self.canvas)
 
         # Menu bar
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("&File")
-        file_menu.addAction(self.action_manager.new_action)
-        file_menu.addAction(self.action_manager.open_action)
-        file_menu.addAction(self.action_manager.save_action)
-        file_menu.addSeparator()
-        file_menu.addAction(self.action_manager.load_palette_action)
-        file_menu.addAction(self.action_manager.exit_action)
+        menu_bar_builder = MenuBarBuilder(self, self.action_manager)
+        menu_bar_builder.setup_menus()
 
-        edit_menu = menu_bar.addMenu("&Edit")
-        edit_menu.addAction(self.action_manager.undo_action)
-        edit_menu.addAction(self.action_manager.redo_action)
-        edit_menu.addSeparator()
-        edit_menu.addAction(self.action_manager.paste_as_new_layer_action)
-        edit_menu.addSeparator()
-        edit_menu.addAction(self.action_manager.clear_action)
-
-        select_menu = menu_bar.addMenu("&Select")
-        select_menu.addAction(self.action_manager.select_all_action)
-        select_menu.addAction(self.action_manager.select_none_action)
-        select_menu.addAction(self.action_manager.invert_selection_action)
-
-        image_menu = menu_bar.addMenu("&Image")
-        image_menu.addAction(self.action_manager.resize_action)
-        image_menu.addAction(self.action_manager.crop_action)
-        image_menu.addSeparator()
-        image_menu.addAction(self.action_manager.flip_horizontal_action)
-        image_menu.addAction(self.action_manager.flip_vertical_action)
-
-        view_menu = menu_bar.addMenu("&View")
-        background_menu = view_menu.addMenu("&Background")
-        background_menu.addAction(self.action_manager.checkered_action)
-        background_menu.addSeparator()
-        background_menu.addAction(self.action_manager.white_action)
-        background_menu.addAction(self.action_manager.black_action)
-        background_menu.addAction(self.action_manager.gray_action)
-        background_menu.addAction(self.action_manager.magenta_action)
-        background_menu.addSeparator()
-        background_menu.addAction(self.action_manager.custom_color_action)
-
-        view_menu.addSeparator()
-        view_menu.addAction(self.action_manager.ai_action)
+        # Toolbar
+        toolbar_builder = ToolBarBuilder(self, self.app)
+        toolbar_builder.setup_toolbars()
 
         # Status bar
-        status_bar = self.statusBar()
-        self.cursor_pos_label = QLabel("Cursor: (0, 0)")
-        self.selected_tool_label = QLabel("Tool: Pen")
-        self.zoom_level_label = QLabel("Zoom: 100%")
-        self.selection_size_label = QLabel("")
-        status_bar.addWidget(self.cursor_pos_label)
-        status_bar.addWidget(self.selected_tool_label)
-        status_bar.addWidget(self.zoom_level_label)
-        status_bar.addWidget(self.selection_size_label)
+        self.status_bar_manager = StatusBarManager(self)
 
         # Connect signals
-        self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
-        self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_changed.connect(self.update_crop_action_state)
-        self.app.drawing_context.tool_changed.connect(self.update_selected_tool_label)
         self.app.drawing_context.tool_changed.connect(self.update_tool_buttons)
-        self.canvas.selection_size_changed.connect(self.update_selection_size_label)
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
         self.app.drawing_context.pen_color_changed.connect(self.update_dynamic_palette)
         self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
-
-        # Toolbar
-        toolbar = QToolBar("Tools")
-        self.addToolBar(Qt.LeftToolBarArea, toolbar)
-        toolbar.layout().setAlignment(Qt.AlignLeft)
-
-        top_toolbar = QToolBar("Top Toolbar")
-        self.addToolBar(Qt.TopToolBarArea, top_toolbar)
-
-        top_toolbar.addAction(self.action_manager.new_action)
-        top_toolbar.addAction(self.action_manager.open_action)
-        top_toolbar.addAction(self.action_manager.save_action)
-        top_toolbar.addSeparator()
-
-        # Brush size slider
-        brush_icon = QLabel()
-        pixmap = QPixmap("icons/brush.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        brush_icon.setPixmap(pixmap)
-        top_toolbar.addWidget(brush_icon)
-        
-        self.pen_width_label = QLabel(f"{self.app.drawing_context.pen_width:02d}")
-        top_toolbar.addWidget(self.pen_width_label)
-
-        self.pen_width_slider = QSlider(Qt.Horizontal)
-        self.pen_width_slider.setRange(1, 64)
-        self.pen_width_slider.setValue(self.app.drawing_context.pen_width)
-        self.pen_width_slider.setMinimumWidth(32)
-        self.pen_width_slider.setMaximumWidth(100)
-        self.pen_width_slider.setSingleStep(1)
-        self.pen_width_slider.setPageStep(1)
-        self.pen_width_slider.valueChanged.connect(self.app.drawing_context.set_pen_width)
-        top_toolbar.addWidget(self.pen_width_slider)
-
-        self.action_manager.circular_brush_action.setChecked(self.app.drawing_context.brush_type == "Circular")
-        self.action_manager.circular_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Circular"))
-        top_toolbar.addAction(self.action_manager.circular_brush_action)
-
-        self.action_manager.square_brush_action.setChecked(self.app.drawing_context.brush_type == "Square")
-        self.action_manager.square_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Square"))
-        top_toolbar.addAction(self.action_manager.square_brush_action)
-        
-        top_toolbar.addSeparator()
-
-        top_toolbar.addAction(self.action_manager.mirror_x_action)
-        top_toolbar.addAction(self.action_manager.mirror_y_action)
-
-        top_toolbar.addSeparator()
-
-        self.action_manager.grid_action.triggered.connect(self.canvas.toggle_grid)
-        top_toolbar.addAction(self.action_manager.grid_action)
-        
-        active_color_button = ActiveColorButton(self.app.drawing_context)
-        toolbar.addWidget(active_color_button)
-        
-        from .tools import get_tools
-        tools = get_tools()
-        for tool in tools:
-            if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
-                continue
-
-            action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
-            button = QToolButton()
-            button.setDefaultAction(action)
-            toolbar.addWidget(button)
-
-        # Shape Tools
-        self.shape_button = QToolButton(self)
-        self.shape_button.setIcon(QIcon("icons/toolline.png"))
-        self.shape_button.setPopupMode(QToolButton.MenuButtonPopup)
-        shape_menu = QMenu(self.shape_button)
-        self.shape_button.setMenu(shape_menu)
-
-        shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
-        for tool in shape_tools:
-            action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
-            shape_menu.addAction(action)
-            if tool.name == "Line":
-                self.shape_button.setDefaultAction(action)
-
-        toolbar.addWidget(self.shape_button)
-
-        # Selection Tools
-        self.selection_button = QToolButton(self)
-        self.selection_button.setIcon(QIcon("icons/toolselectrect.png"))
-        self.selection_button.setPopupMode(QToolButton.MenuButtonPopup)
-        selection_menu = QMenu(self.selection_button)
-        self.selection_button.setMenu(selection_menu)
-
-        selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
-        for tool in selection_tools:
-            action = QAction(QIcon(tool.icon), tool.name, self)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
-            selection_menu.addAction(action)
-            if tool.name == "Select Rectangle":
-                self.selection_button.setDefaultAction(action)
-
-        toolbar.addWidget(self.selection_button)
 
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
@@ -420,21 +239,6 @@ class MainWindow(QMainWindow):
             new_v = int(i / 6 * 255)
             new_color = QColor.fromHsv(h, s, new_v, a)
             button.set_color(new_color)
-
-    def update_cursor_pos_label(self, pos):
-        self.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
-
-    def update_zoom_level_label(self, zoom):
-        self.zoom_level_label.setText(f"Zoom: {int(zoom * 100)}%")
-
-    def update_selected_tool_label(self, tool):
-        self.selected_tool_label.setText(f"Tool: {tool}")
-
-    def update_selection_size_label(self, width, height):
-        if width > 0 and height > 0:
-            self.selection_size_label.setText(f"Selection: {width}x{height}")
-        else:
-            self.selection_size_label.setText("")
 
     def update_pen_width_label(self, width):
         self.pen_width_label.setText(f"{width:02d}")
