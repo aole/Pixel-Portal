@@ -102,4 +102,4 @@ class ActionManager:
         self.grid_action.setCheckable(True)
 
         self.ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self.main_window)
-        self.ai_action.triggered.connect(self.main_window.open_ai_dialog)
+        self.ai_action.triggered.connect(self.main_window.toggle_ai_panel)
