@@ -11,7 +11,7 @@ def mock_main_window(qapp):
     window.open_palette_dialog = MagicMock()
     window.open_resize_dialog = MagicMock()
     window.open_background_color_dialog = MagicMock()
-    window.open_ai_dialog = MagicMock()
+    window.toggle_ai_panel = MagicMock()
     return window
 
 def test_setup_actions(mock_main_window):
@@ -114,4 +114,4 @@ def test_setup_actions(mock_main_window):
     mock_main_window.app.set_mirror_y.assert_called_once()
 
     action_manager.ai_action.trigger()
-    mock_main_window.open_ai_dialog.assert_called_once()
+    mock_main_window.toggle_ai_panel.assert_called_once()

@@ -4,7 +4,7 @@ from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt, Slot
 from .canvas import Canvas
 from .layer_manager_widget import LayerManagerWidget
-from .ai.dialog import AiDialog
+from .ai_panel import AIPanel
 from .new_file_dialog import NewFileDialog
 from .resize_dialog import ResizeDialog
 from .background import Background
@@ -120,6 +120,9 @@ class MainWindow(QMainWindow):
         background_menu.addAction(self.action_manager.magenta_action)
         background_menu.addSeparator()
         background_menu.addAction(self.action_manager.custom_color_action)
+
+        view_menu.addSeparator()
+        view_menu.addAction(self.action_manager.ai_action)
 
         # Status bar
         status_bar = self.statusBar()
@@ -244,10 +247,6 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.selection_button)
 
-        ai_button = QToolButton()
-        ai_button.setDefaultAction(self.action_manager.ai_action)
-        toolbar.addWidget(ai_button)
-
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
         self.addToolBar(Qt.BottomToolBarArea, self.color_toolbar)
@@ -286,6 +285,15 @@ class MainWindow(QMainWindow):
         layer_dock_widget = QDockWidget("Layers", self)
         layer_dock_widget.setWidget(self.layer_manager_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, layer_dock_widget)
+
+        # AI Panel
+        self.ai_panel = AIPanel(self.app)
+        self.ai_panel.image_generated.connect(self.app.add_new_layer_with_image)
+        self.ai_dock_widget = QDockWidget("AI", self)
+        self.ai_dock_widget.setWidget(self.ai_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.ai_dock_widget)
+        self.ai_dock_widget.setFloating(True)
+        self.ai_dock_widget.hide()
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
@@ -451,9 +459,11 @@ class MainWindow(QMainWindow):
             if colors:
                 self.update_palette(colors)
 
-    def open_ai_dialog(self):
-        dialog = AiDialog(self.app, self)
-        dialog.exec()
+    def toggle_ai_panel(self):
+        if self.ai_dock_widget.isVisible():
+            self.ai_dock_widget.hide()
+        else:
+            self.ai_dock_widget.show()
 
     def open_new_file_dialog(self):
         dialog = NewFileDialog(self.app, self)
