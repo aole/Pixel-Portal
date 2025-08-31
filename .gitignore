@@ -134,6 +134,3 @@ dmypy.json
 
 # model output
 /output/*
-
-# settings
-settings.ini
