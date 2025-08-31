@@ -28,7 +28,7 @@ class EllipseTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas._pen_color))
+        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
 
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
@@ -41,7 +41,15 @@ class EllipseTool(BaseTool):
             )
 
         rect = QRect(self.start_point, end_point).normalized()
-        self.canvas.drawing.draw_ellipse(painter, rect, self.canvas._document_size)
+        self.canvas.drawing.draw_ellipse(
+            painter,
+            rect,
+            self.canvas._document_size,
+            self.canvas.drawing_context.brush_type,
+            self.canvas.drawing_context.pen_width,
+            self.canvas.drawing_context.mirror_x,
+            self.canvas.drawing_context.mirror_y,
+        )
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -68,12 +76,12 @@ class EllipseTool(BaseTool):
             layer=active_layer,
             rect=rect,
             shape_type='ellipse',
-            color=self.canvas._pen_color,
-            width=self.canvas._pen_width,
+            color=self.canvas.drawing_context.pen_color,
+            width=self.canvas.drawing_context.pen_width,
             document=self.canvas.document,
             selection_shape=self.canvas.selection_shape,
-            mirror_x=self.canvas._mirror_x,
-            mirror_y=self.canvas._mirror_y,
+            mirror_x=self.canvas.drawing_context.mirror_x,
+            mirror_y=self.canvas.drawing_context.mirror_y,
         )
         self.command_generated.emit(command)
 

@@ -72,12 +72,7 @@ class MainWindow(QMainWindow):
         self.canvas.set_document(self.app.document)
 
         # Connect DrawingContext signals to Canvas slots
-        self.app.drawing_context.pen_width_changed.connect(self.canvas.set_pen_width)
-        self.app.drawing_context.pen_color_changed.connect(self.canvas.set_pen_color)
-        self.app.drawing_context.brush_type_changed.connect(self.canvas.set_brush_type)
         self.app.drawing_context.tool_changed.connect(self.canvas.on_tool_changed)
-        self.app.drawing_context.mirror_x_changed.connect(self.canvas.set_mirror_x)
-        self.app.drawing_context.mirror_y_changed.connect(self.canvas.set_mirror_y)
 
         # Connect Canvas signal to App and UI slots
         self.canvas.command_generated.connect(self.app.handle_command)
