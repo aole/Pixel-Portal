@@ -17,9 +17,6 @@ from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
 from .drawing import Drawing
 from .renderer import CanvasRenderer
 from .background import Background
-from .drawing import Drawing
-from .renderer import CanvasRenderer
-from .background import Background
 from .tools import get_tools
 
 
@@ -61,12 +58,6 @@ class Canvas(QWidget):
 
         # Properties that were previously in App
         self._document_size = QSize(64, 64)
-        self._pen_color = QColor("black")
-        self._pen_width = 1
-        self._brush_type = "Circular"
-        self._current_tool_name = "Pen"
-        self._mirror_x = False
-        self._mirror_y = False
 
         self.tools = {tool.name: tool(self) for tool in get_tools()}
         for tool in self.tools.values():
@@ -79,31 +70,6 @@ class Canvas(QWidget):
         self._document_size = size
         self.set_initial_zoom()
         self.update()
-
-    @Slot(QColor)
-    def set_pen_color(self, color):
-        self._pen_color = color
-        self.drawing.set_pen_color(color)
-
-    @Slot(int)
-    def set_pen_width(self, width):
-        self._pen_width = width
-        self.drawing.set_pen_width(width)
-
-    @Slot(str)
-    def set_brush_type(self, brush_type):
-        self._brush_type = brush_type
-        self.drawing.set_brush_type(brush_type)
-
-    @Slot(bool)
-    def set_mirror_x(self, enabled):
-        self._mirror_x = enabled
-        self.drawing.set_mirror_x(enabled)
-
-    @Slot(bool)
-    def set_mirror_y(self, enabled):
-        self._mirror_y = enabled
-        self.drawing.set_mirror_y(enabled)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -120,10 +86,10 @@ class Canvas(QWidget):
             self.ctrl_pressed = False
             if hasattr(self.current_tool, 'deactivate'):
                 self.current_tool.deactivate()
-            self.current_tool = self.tools[self._current_tool_name]
+            self.current_tool = self.tools[self.drawing_context.tool]
             if hasattr(self.current_tool, 'activate'):
                 self.current_tool.activate()
-            self.on_tool_changed(self._current_tool_name)
+            self.on_tool_changed(self.drawing_context.tool)
 
     def set_background(self, background: Background):
         self.background = background
@@ -134,7 +100,6 @@ class Canvas(QWidget):
         if self.ctrl_pressed:
             return
 
-        self._current_tool_name = tool
         if hasattr(self.current_tool, 'deactivate'):
             self.current_tool.deactivate()
         self.current_tool = self.tools[tool]
@@ -176,7 +141,7 @@ class Canvas(QWidget):
     def enterEvent(self, event):
         self.setFocus()
         self.mouse_over_canvas = True
-        self.on_tool_changed(self._current_tool_name)
+        self.on_tool_changed(self.drawing_context.tool)
         self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
@@ -319,131 +284,6 @@ class Canvas(QWidget):
         self.grid_visible = not self.grid_visible
         self.update()
 
-    def draw_grid(self, painter, target_rect):
-        if self.zoom < 2 or not self.grid_visible:
-            return
-
-        doc_width = self._document_size.width()
-        doc_height = self._document_size.height()
-
-        # Define colors for grid lines
-        palette = self.palette()
-        minor_color = palette.color(QPalette.ColorRole.Mid)
-        minor_color.setAlpha(100)
-        major_color = palette.color(QPalette.ColorRole.Text)
-        major_color.setAlpha(100)
-
-        # Find the range of document coordinates currently visible on the canvas
-        doc_top_left = self.get_doc_coords(QPoint(0, 0))
-        doc_bottom_right = self.get_doc_coords(QPoint(self.width(), self.height()))
-
-        start_x = max(0, math.floor(doc_top_left.x()))
-        end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
-        start_y = max(0, math.floor(doc_top_left.y()))
-        end_y = min(doc_height, math.ceil(doc_bottom_right.y()))
-
-        # Draw vertical lines
-        for dx in range(start_x, end_x + 1):
-            canvas_x = target_rect.x() + dx * self.zoom
-            if dx % 8 == 0:
-                painter.setPen(major_color)
-            else:
-                painter.setPen(minor_color)
-            painter.drawLine(round(canvas_x), target_rect.top(), round(canvas_x), target_rect.bottom())
-
-        # Draw horizontal lines
-        for dy in range(start_y, end_y + 1):
-            canvas_y = target_rect.y() + dy * self.zoom
-            if dy % 8 == 0:
-                painter.setPen(major_color)
-            else:
-                painter.setPen(minor_color)
-            painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
-
-    def draw_cursor(self, painter, target_rect, doc_image):
-        if (
-            not self.mouse_over_canvas
-            or self._current_tool_name in ["Bucket", "Picker"]
-            or self._current_tool_name.startswith("Select")
-            or self.ctrl_pressed
-        ):
-            return
-
-        # Use the application's brush size
-        brush_size = self._pen_width
-
-        # Center the brush cursor around the mouse position
-        doc_pos = self.cursor_doc_pos
-        offset = brush_size / 2
-        doc_rect = QRect(
-            doc_pos.x() - int(math.floor(offset)),
-            doc_pos.y() - int(math.floor(offset)),
-            brush_size,
-            brush_size
-        )
-
-        # Convert document rectangle to screen coordinates for drawing
-        screen_x = target_rect.x() + doc_rect.x() * self.zoom
-        screen_y = target_rect.y() + doc_rect.y() * self.zoom
-        screen_width = doc_rect.width() * self.zoom
-        screen_height = doc_rect.height() * self.zoom
-
-        cursor_screen_rect = QRect(
-            int(screen_x),
-            int(screen_y),
-            max(1, int(screen_width)),
-            max(1, int(screen_height))
-        )
-
-        # Sample the color from the document image instead of grabbing the screen
-        total_r, total_g, total_b = 0, 0, 0
-        pixel_count = 0
-
-        # Clamp the doc_rect to the image boundaries
-        clamped_doc_rect = doc_rect.intersected(doc_image.rect())
-
-        if not clamped_doc_rect.isEmpty():
-            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right() + 1):
-                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom() + 1):
-                    # Clamp coordinates to be within the image bounds
-                    if 0 <= x < doc_image.width() and 0 <= y < doc_image.height():
-                        color = doc_image.pixelColor(x, y)
-                        # Only consider visible pixels for the average
-                        if color.alpha() > 0:
-                            total_r += color.red()
-                            total_g += color.green()
-                            total_b += color.blue()
-                            pixel_count += 1
-
-        if pixel_count > 0:
-            avg_r = total_r / pixel_count
-            avg_g = total_g / pixel_count
-            avg_b = total_b / pixel_count
-            # Invert the average color
-            inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
-        else:
-            # Fallback for transparent areas or if off-canvas: use the cached background color
-            bg_color = self.background_color
-            inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
-
-        # Fill the cursor rectangle with the brush color
-        painter.setBrush(self._pen_color)
-        painter.setPen(Qt.NoPen)  # No outline for the fill
-
-        if self._brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
-
-        # Draw the inverted outline on top
-        painter.setPen(inverted_color)
-        painter.setBrush(Qt.NoBrush)
-
-        if self._brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
-
     def resizeEvent(self, event):
         # The canvas widget has been resized.
         # The document size does not change.
@@ -463,4 +303,5 @@ class Canvas(QWidget):
         self.zoom = min(zoom_x, zoom_y)
         self.zoom_changed.emit(self.zoom)
         self.update()
+
         

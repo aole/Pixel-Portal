@@ -19,12 +19,12 @@ class PickerTool(BaseTool):
             self.pick_color(doc_pos)
 
     def mouseReleaseEvent(self, event, doc_pos):
-        if self.app.previous_tool:
-            self.app.set_tool(self.app.previous_tool)
+        if self.canvas.drawing_context.previous_tool:
+            self.canvas.drawing_context.set_tool(self.canvas.drawing_context.previous_tool)
 
     def pick_color(self, doc_pos):
-        rendered_image = self.app.document.render()
+        rendered_image = self.canvas.document.render()
         if rendered_image.rect().contains(doc_pos):
             color = rendered_image.pixelColor(doc_pos)
             if color.alpha() > 0:  # Only pick visible colors
-                self.app.set_pen_color(color.name())
+                self.canvas.drawing_context.set_pen_color(color.name())

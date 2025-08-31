@@ -31,8 +31,8 @@ class CanvasRenderer:
         image_to_draw_on = self._draw_document(painter, target_rect, document)
         self._draw_border(painter, target_rect)
         self._draw_mirror_guides(painter, target_rect, document)
-        self.canvas.draw_grid(painter, target_rect)
-        self.canvas.draw_cursor(painter, target_rect, image_to_draw_on)
+        self.draw_grid(painter, target_rect)
+        self.draw_cursor(painter, target_rect, image_to_draw_on)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
 
@@ -191,3 +191,129 @@ class CanvasRenderer:
         height_x = target_rect.left() - height_rect.width() - 5
         height_y = target_rect.bottom()
         painter.drawText(height_x, height_y, height_text)
+
+    def draw_grid(self, painter, target_rect):
+        if self.canvas.zoom < 2 or not self.canvas.grid_visible:
+            return
+
+        doc_width = self.canvas._document_size.width()
+        doc_height = self.canvas._document_size.height()
+
+        # Define colors for grid lines
+        palette = self.canvas.palette()
+        minor_color = palette.color(QPalette.ColorRole.Mid)
+        minor_color.setAlpha(100)
+        major_color = palette.color(QPalette.ColorRole.Text)
+        major_color.setAlpha(100)
+
+        # Find the range of document coordinates currently visible on the canvas
+        doc_top_left = self.canvas.get_doc_coords(QPoint(0, 0))
+        doc_bottom_right = self.canvas.get_doc_coords(QPoint(self.canvas.width(), self.canvas.height()))
+
+        start_x = max(0, math.floor(doc_top_left.x()))
+        end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
+        start_y = max(0, math.floor(doc_top_left.y()))
+        end_y = min(doc_height, math.ceil(doc_bottom_right.y()))
+
+        # Draw vertical lines
+        for dx in range(start_x, end_x + 1):
+            canvas_x = target_rect.x() + dx * self.canvas.zoom
+            if dx % 8 == 0:
+                painter.setPen(major_color)
+            else:
+                painter.setPen(minor_color)
+            painter.drawLine(round(canvas_x), target_rect.top(), round(canvas_x), target_rect.bottom())
+
+        # Draw horizontal lines
+        for dy in range(start_y, end_y + 1):
+            canvas_y = target_rect.y() + dy * self.canvas.zoom
+            if dy % 8 == 0:
+                painter.setPen(major_color)
+            else:
+                painter.setPen(minor_color)
+            painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
+
+    def draw_cursor(self, painter, target_rect, doc_image):
+        if (
+            not self.canvas.mouse_over_canvas
+            or self.canvas.drawing_context.tool in ["Bucket", "Picker"]
+            or self.canvas.drawing_context.tool.startswith("Select")
+            or self.canvas.ctrl_pressed
+        ):
+            return
+
+        # Use the application's brush size
+        brush_size = self.canvas.drawing_context.pen_width
+
+        # Center the brush cursor around the mouse position
+        doc_pos = self.canvas.cursor_doc_pos
+        offset = brush_size / 2
+        doc_rect = QRect(
+            doc_pos.x() - int(math.floor(offset)),
+            doc_pos.y() - int(math.floor(offset)),
+            brush_size,
+            brush_size
+        )
+
+        # Convert document rectangle to screen coordinates for drawing
+        screen_x = target_rect.x() + doc_rect.x() * self.canvas.zoom
+        screen_y = target_rect.y() + doc_rect.y() * self.canvas.zoom
+        screen_width = doc_rect.width() * self.canvas.zoom
+        screen_height = doc_rect.height() * self.canvas.zoom
+
+        cursor_screen_rect = QRect(
+            int(screen_x),
+            int(screen_y),
+            max(1, int(screen_width)),
+            max(1, int(screen_height))
+        )
+
+        # Sample the color from the document image instead of grabbing the screen
+        total_r, total_g, total_b = 0, 0, 0
+        pixel_count = 0
+
+        # Clamp the doc_rect to the image boundaries
+        clamped_doc_rect = doc_rect.intersected(doc_image.rect())
+
+        if not clamped_doc_rect.isEmpty():
+            for x in range(clamped_doc_rect.left(), clamped_doc_rect.right() + 1):
+                for y in range(clamped_doc_rect.top(), clamped_doc_rect.bottom() + 1):
+                    # Clamp coordinates to be within the image bounds
+                    if 0 <= x < doc_image.width() and 0 <= y < doc_image.height():
+                        color = doc_image.pixelColor(x, y)
+                        # Only consider visible pixels for the average
+                        if color.alpha() > 0:
+                            total_r += color.red()
+                            total_g += color.green()
+                            total_b += color.blue()
+                            pixel_count += 1
+
+        if pixel_count > 0:
+            avg_r = total_r / pixel_count
+            avg_g = total_g / pixel_count
+            avg_b = total_b / pixel_count
+            # Invert the average color
+            inverted_color = QColor(255 - avg_r, 255 - avg_g, 255 - avg_b)
+        else:
+            # Fallback for transparent areas or if off-canvas: use the cached background color
+            bg_color = self.canvas.background_color
+            inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
+
+        # Fill the cursor rectangle with the brush color
+        painter.setBrush(self.canvas.drawing_context.pen_color)
+        painter.setPen(Qt.NoPen)  # No outline for the fill
+
+        if self.canvas.drawing_context.brush_type == "Circular":
+            painter.drawEllipse(cursor_screen_rect)
+        else:
+            painter.drawRect(cursor_screen_rect)
+
+
+        # Draw the inverted outline on top
+        painter.setPen(inverted_color)
+        painter.setBrush(Qt.NoBrush)
+
+        if self.canvas.drawing_context.brush_type == "Circular":
+            painter.drawEllipse(cursor_screen_rect)
+        else:
+            painter.drawRect(cursor_screen_rect)

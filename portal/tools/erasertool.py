@@ -60,14 +60,14 @@ class EraserTool(BaseTool):
         command = DrawCommand(
             layer=active_layer,
             points=self.points,
-            color=self.canvas._pen_color,
-            width=self.canvas._pen_width,
-            brush_type=self.canvas._brush_type,
+            color=self.canvas.drawing_context.pen_color,
+            width=self.canvas.drawing_context.pen_width,
+            brush_type=self.canvas.drawing_context.brush_type,
             document=self.canvas.document,
             selection_shape=self.canvas.selection_shape,
             erase=True,
-            mirror_x=self.canvas._mirror_x,
-            mirror_y=self.canvas._mirror_y,
+            mirror_x=self.canvas.drawing_context.mirror_x,
+            mirror_y=self.canvas.drawing_context.mirror_y,
         )
         self.command_generated.emit(command)
 
@@ -97,10 +97,28 @@ class EraserTool(BaseTool):
         # Use the normal drawing function to create an opaque mask on the temp image.
         # The renderer will then use this mask to "erase" from the main preview.
         if len(self.points) == 1:
-            self.canvas.drawing.draw_brush(painter, self.points[0], self.canvas._document_size)
+            self.canvas.drawing.draw_brush(
+                painter,
+                self.points[0],
+                self.canvas._document_size,
+                self.canvas.drawing_context.brush_type,
+                self.canvas.drawing_context.pen_width,
+                self.canvas.drawing_context.mirror_x,
+                self.canvas.drawing_context.mirror_y,
+            )
         else:
             for i in range(len(self.points) - 1):
-                self.canvas.drawing.draw_line_with_brush(painter, self.points[i], self.points[i+1], self.canvas._document_size, erase=False)
+                self.canvas.drawing.draw_line_with_brush(
+                    painter,
+                    self.points[i],
+                    self.points[i+1],
+                    self.canvas._document_size,
+                    self.canvas.drawing_context.brush_type,
+                    self.canvas.drawing_context.pen_width,
+                    self.canvas.drawing_context.mirror_x,
+                    self.canvas.drawing_context.mirror_y,
+                    erase=False
+                )
 
         painter.end()
         

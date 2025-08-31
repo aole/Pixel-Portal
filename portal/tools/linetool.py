@@ -27,8 +27,17 @@ class LineTool(BaseTool):
         painter = QPainter(self.canvas.temp_image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas._pen_color))
-        self.canvas.drawing.draw_line_with_brush(painter, self.start_point, doc_pos, self.canvas._document_size)
+        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+        self.canvas.drawing.draw_line_with_brush(
+            painter,
+            self.start_point,
+            doc_pos,
+            self.canvas._document_size,
+            self.canvas.drawing_context.brush_type,
+            self.canvas.drawing_context.pen_width,
+            self.canvas.drawing_context.mirror_x,
+            self.canvas.drawing_context.mirror_y,
+        )
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -42,14 +51,14 @@ class LineTool(BaseTool):
         command = DrawCommand(
             layer=active_layer,
             points=[self.start_point, doc_pos],
-            color=self.canvas._pen_color,
-            width=self.canvas._pen_width,
-            brush_type=self.canvas._brush_type,
+            color=self.canvas.drawing_context.pen_color,
+            width=self.canvas.drawing_context.pen_width,
+            brush_type=self.canvas.drawing_context.brush_type,
             document=self.canvas.document,
             selection_shape=self.canvas.selection_shape,
             erase=False,
-            mirror_x=self.canvas._mirror_x,
-            mirror_y=self.canvas._mirror_y,
+            mirror_x=self.canvas.drawing_context.mirror_x,
+            mirror_y=self.canvas.drawing_context.mirror_y,
         )
         self.command_generated.emit(command)
 

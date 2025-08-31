@@ -101,12 +101,6 @@ class DrawCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy()
 
-        # Configure the drawing utility
-        self.drawing.set_pen_width(self.width)
-        self.drawing.set_brush_type(self.brush_type)
-        self.drawing.set_mirror_x(self.mirror_x)
-        self.drawing.set_mirror_y(self.mirror_y)
-
         # Perform the drawing
         painter = QPainter(self.layer.image)
         try:
@@ -119,12 +113,22 @@ class DrawCommand(Command):
 
             if len(self.points) == 1:
                 if self.erase:
-                    self.drawing.erase_brush(painter, self.points[0], doc_size)
+                    self.drawing.erase_brush(painter, self.points[0], doc_size, self.width, self.mirror_x, self.mirror_y)
                 else:
-                    self.drawing.draw_brush(painter, self.points[0], doc_size)
+                    self.drawing.draw_brush(painter, self.points[0], doc_size, self.brush_type, self.width, self.mirror_x, self.mirror_y)
             else:
                 for i in range(len(self.points) - 1):
-                    self.drawing.draw_line_with_brush(painter, self.points[i], self.points[i + 1], doc_size, erase=self.erase)
+                    self.drawing.draw_line_with_brush(
+                        painter,
+                        self.points[i],
+                        self.points[i + 1],
+                        doc_size,
+                        self.brush_type,
+                        self.width,
+                        self.mirror_x,
+                        self.mirror_y,
+                        erase=self.erase
+                    )
         finally:
             painter.end()
             self.layer.on_image_change.emit()
@@ -285,8 +289,6 @@ class FillCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy()
 
-        self.drawing.set_pen_color(self.fill_color)
-
         doc_width = self.document.width
         doc_height = self.document.height
         processed_points = set()
@@ -335,9 +337,6 @@ class ShapeCommand(Command):
             buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
             self.before_image = self.layer.image.copy(buffered_rect)
 
-        self.drawing.set_mirror_x(self.mirror_x)
-        self.drawing.set_mirror_y(self.mirror_y)
-
         painter = QPainter(self.layer.image)
         try:
             if self.selection_shape:
@@ -348,10 +347,13 @@ class ShapeCommand(Command):
             painter.setPen(pen)
 
             doc_size = QSize(self.document.width, self.document.height)
+            # The brush type for shapes is always 'Circular' for now
+            # This could be a parameter in the future
+            brush_type = "Circular"
             if self.shape_type == 'ellipse':
-                self.drawing.draw_ellipse(painter, self.rect, doc_size)
+                self.drawing.draw_ellipse(painter, self.rect, doc_size, brush_type, self.width, self.mirror_x, self.mirror_y)
             elif self.shape_type == 'rectangle':
-                self.drawing.draw_rect(painter, self.rect, doc_size)
+                self.drawing.draw_rect(painter, self.rect, doc_size, brush_type, self.width, self.mirror_x, self.mirror_y)
         finally:
             painter.end()
             self.layer.on_image_change.emit()

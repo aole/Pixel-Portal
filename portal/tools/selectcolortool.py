@@ -12,7 +12,7 @@ class SelectColorTool(BaseTool):
         super().__init__(canvas)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        rendered_image = self.app.document.render()
+        rendered_image = self.canvas.document.render()
         if not rendered_image.rect().contains(doc_pos):
             return
 
