@@ -220,7 +220,7 @@ def test_move_layer_command(document):
 
     command.undo()
 
-    assert layer_manager.layers[from_index] == original_layers[from_index]
+    assert layer_manager.layers == original_layers
 
 def test_fill_command(document, layer):
     """Test that the FillCommand correctly fills an area and that undo restores the previous state."""

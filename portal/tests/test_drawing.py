@@ -15,35 +15,39 @@ def image():
     return QImage(100, 100, QImage.Format_ARGB32)
 
 def test_draw_brush(drawing, image):
-    """Test that the correct brush is drawn at the specified point."""
+    """Test that the correct brush is drawn at the specified point, including mirrored points."""
     painter = QPainter(image)
-    point = QPoint(50, 50)
+    point = QPoint(25, 25)
     doc_size = QSize(100, 100)
     brush_type = "Circular"
     width = 10
     painter.setPen(QColor("red"))
 
-    drawing.draw_brush(painter, point, doc_size, brush_type, width, False, False)
+    drawing.draw_brush(painter, point, doc_size, brush_type, width, True, True)
     painter.end()
 
-    # Check that a pixel in the center of the brush is colored
-    assert image.pixelColor(50, 50) == QColor("red")
+    # Check original and mirrored points
+    assert image.pixelColor(25, 25) == QColor("red")
+    assert image.pixelColor(74, 25) == QColor("red")
+    assert image.pixelColor(25, 74) == QColor("red")
+    assert image.pixelColor(74, 74) == QColor("red")
 
 def test_erase_brush(drawing, image):
-    """Test that the correct brush is used to erase at the specified point."""
-    # Fill the image with red first
+    """Test that the correct brush is used to erase at the specified point, including mirrored points."""
     image.fill(QColor("red"))
-
     painter = QPainter(image)
-    point = QPoint(50, 50)
+    point = QPoint(25, 25)
     doc_size = QSize(100, 100)
     width = 10
 
-    drawing.erase_brush(painter, point, doc_size, width, False, False)
+    drawing.erase_brush(painter, point, doc_size, width, True, True)
     painter.end()
 
-    # Check that a pixel in the center of the erased area is transparent
-    assert image.pixelColor(50, 50) == QColor(0, 0, 0, 0)
+    # Check original and mirrored points
+    assert image.pixelColor(25, 25) == QColor(0, 0, 0, 0)
+    assert image.pixelColor(74, 25) == QColor(0, 0, 0, 0)
+    assert image.pixelColor(25, 74) == QColor(0, 0, 0, 0)
+    assert image.pixelColor(74, 74) == QColor(0, 0, 0, 0)
 
 def test_draw_line_with_brush(drawing, image):
     """Test that a line is drawn correctly using the selected brush."""

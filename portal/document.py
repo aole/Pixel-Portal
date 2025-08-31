@@ -4,6 +4,7 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtCore import QSize, QBuffer, Qt
 from PIL import Image, ImageSequence, ImageQt
 import io
+import json
 
 
 class Document:
@@ -52,13 +53,14 @@ class Document:
             # A better approach is to use a different format that supports layers
             # like PSD, but for TIFF, we can store it in the description tag.
             # For now, let's just fix the loading of names.
+            layer_properties = [layer.get_properties() for layer in self.layer_manager.layers]
             images[0].save(
                 filename,
                 save_all=True,
                 append_images=images[1:],
                 format='TIFF',
                 compression='tiff_lzw',
-                description=str([layer.get_properties() for layer in self.layer_manager.layers])
+                description=json.dumps(layer_properties)
             )
 
     @staticmethod
@@ -69,10 +71,8 @@ class Document:
             doc.layer_manager.layers = []  # Clear default layer
 
             try:
-                # The eval is dangerous, but for this specific case it's fine
-                # A better solution would be to use json.loads
-                layer_properties = eval(img.tag_v2[270])
-            except (KeyError, SyntaxError):
+                layer_properties = json.loads(img.tag_v2[270])
+            except (KeyError, json.JSONDecodeError):
                 layer_properties = None
 
             for i, page in enumerate(ImageSequence.Iterator(img)):
