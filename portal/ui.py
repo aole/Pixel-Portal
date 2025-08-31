@@ -121,6 +121,9 @@ class MainWindow(QMainWindow):
         background_menu.addSeparator()
         background_menu.addAction(self.action_manager.custom_color_action)
 
+        view_menu.addSeparator()
+        view_menu.addAction(self.action_manager.ai_action)
+
         # Status bar
         status_bar = self.statusBar()
         self.cursor_pos_label = QLabel("Cursor: (0, 0)")
@@ -244,10 +247,6 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.selection_button)
 
-        ai_button = QToolButton()
-        ai_button.setDefaultAction(self.action_manager.ai_action)
-        toolbar.addWidget(ai_button)
-
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
         self.addToolBar(Qt.BottomToolBarArea, self.color_toolbar)
@@ -293,6 +292,7 @@ class MainWindow(QMainWindow):
         self.ai_dock_widget = QDockWidget("AI", self)
         self.ai_dock_widget.setWidget(self.ai_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.ai_dock_widget)
+        self.ai_dock_widget.setFloating(True)
         self.ai_dock_widget.hide()
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
