@@ -1,19 +1,16 @@
 import pytest
 from PySide6.QtWidgets import QApplication
-import sys
 import threading
 
-# It's good practice to keep this, as it can help with stack-related issues.
+# Try to fix segfaults in the test suite by increasing the stack size
 threading.stack_size(134217728)
 
-
-@pytest.fixture
+@pytest.fixture(scope="session")
 def qapp():
-    """
-    Creates a new QApplication for each test function, ensuring a clean environment.
-    """
-    # Use sys.argv to avoid issues on some platforms.
-    app = QApplication(sys.argv)
+    """Session-wide QApplication instance."""
+    print("Creating QApplication")
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
     yield app
-    # The QApplication will be properly torn down after each test.
-    
+    print("Destroying QApplication")
