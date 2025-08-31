@@ -19,10 +19,10 @@ class BucketTool(BaseTool):
             document=self.canvas.document,
             layer=active_layer,
             fill_pos=doc_pos,
-            fill_color=self.canvas._pen_color,
+            fill_color=self.canvas.drawing_context.pen_color,
             selection_shape=self.canvas.selection_shape,
-            mirror_x=self.canvas._mirror_x,
-            mirror_y=self.canvas._mirror_y,
+            mirror_x=self.canvas.drawing_context.mirror_x,
+            mirror_y=self.canvas.drawing_context.mirror_y,
         )
         self.command_generated.emit(command)
         self.canvas.update()
