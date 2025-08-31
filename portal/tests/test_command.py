@@ -2,7 +2,11 @@ import pytest
 from PySide6.QtGui import QImage, QColor
 from portal.document import Document
 from portal.layer import Layer
-from portal.command import ResizeCommand, FlipCommand, AddLayerCommand, PasteCommand, CropCommand, DrawCommand, FillCommand, ShapeCommand
+from portal.command import (
+    ResizeCommand, FlipCommand, AddLayerCommand, PasteCommand, CropCommand,
+    DrawCommand, FillCommand, ShapeCommand, DuplicateLayerCommand,
+    ClearLayerCommand, RemoveLayerCommand, MoveLayerCommand
+)
 from PySide6.QtCore import QRect, QPoint
 from unittest.mock import Mock
 from portal.drawing import Drawing
@@ -141,6 +145,82 @@ def test_add_layer_command(document):
     command.undo()
 
     assert len(document.layer_manager.layers) == initial_layer_count
+
+
+def test_duplicate_layer_command(document):
+    """Test that the DuplicateLayerCommand duplicates the layer and that undo removes it."""
+    layer_manager = document.layer_manager
+    initial_layer_count = len(layer_manager.layers)
+    layer_to_duplicate_index = layer_manager.active_layer_index
+
+    command = DuplicateLayerCommand(layer_manager, layer_to_duplicate_index)
+    command.execute()
+
+    assert len(layer_manager.layers) == initial_layer_count + 1
+    original_layer = layer_manager.layers[layer_to_duplicate_index]
+    duplicated_layer = layer_manager.layers[layer_to_duplicate_index + 1]
+    assert duplicated_layer.name == f"{original_layer.name} copy"
+    assert duplicated_layer.image.constBits() == original_layer.image.constBits()
+
+    command.undo()
+
+    assert len(layer_manager.layers) == initial_layer_count
+
+
+def test_clear_layer_command(layer):
+    """Test that the ClearLayerCommand clears the layer and that undo restores the content."""
+    layer.image.fill(QColor("red"))
+    original_image_data = layer.image.constBits().tobytes()
+
+    command = ClearLayerCommand(layer, None)
+    command.execute()
+
+    # Check that the layer is cleared (i.e., all pixels are transparent)
+    for x in range(layer.image.width()):
+        for y in range(layer.image.height()):
+            assert layer.image.pixelColor(x, y) == QColor(0, 0, 0, 0)
+
+    command.undo()
+
+    assert layer.image.constBits().tobytes() == original_image_data
+
+
+def test_remove_layer_command(document):
+    """Test that the RemoveLayerCommand removes the layer and that undo restores it."""
+    layer_manager = document.layer_manager
+    layer_manager.add_layer("Layer 2")
+    initial_layer_count = len(layer_manager.layers)
+    layer_to_remove_index = 1
+
+    command = RemoveLayerCommand(layer_manager, layer_to_remove_index)
+    command.execute()
+
+    assert len(layer_manager.layers) == initial_layer_count - 1
+
+    command.undo()
+
+    assert len(layer_manager.layers) == initial_layer_count
+    assert layer_manager.layers[layer_to_remove_index].name == "Layer 2"
+
+
+def test_move_layer_command(document):
+    """Test that the MoveLayerCommand moves the layer and that undo moves it back."""
+    layer_manager = document.layer_manager
+    layer_manager.add_layer("Layer 2")
+    layer_manager.add_layer("Layer 3")
+
+    original_layers = list(layer_manager.layers)
+    from_index = 0
+    to_index = 2
+
+    command = MoveLayerCommand(layer_manager, from_index, to_index)
+    command.execute()
+
+    assert layer_manager.layers[to_index] == original_layers[from_index]
+
+    command.undo()
+
+    assert layer_manager.layers[from_index] == original_layers[from_index]
 
 def test_fill_command(document, layer):
     """Test that the FillCommand correctly fills an area and that undo restores the previous state."""
