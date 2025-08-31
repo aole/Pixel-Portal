@@ -28,21 +28,21 @@ class CanvasInputHandler:
             self.canvas.on_tool_changed(self.drawing_context.tool)
 
     def mousePressEvent(self, event):
-        doc_pos = self.canvas.get_doc_coords(event.pos())
+        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mousePressEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:
             self.canvas.tools["Eraser"].mousePressEvent(event, doc_pos)
         elif event.button() == Qt.MiddleButton:
             self.canvas.dragging = True
-            self.canvas.last_point = event.pos()
+            self.canvas.last_point = event.position().toPoint()
 
     def mouseMoveEvent(self, event):
-        self.canvas.cursor_doc_pos = self.canvas.get_doc_coords(event.pos())
+        self.canvas.cursor_doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
         self.canvas.cursor_pos_changed.emit(self.canvas.cursor_doc_pos)
         self.canvas.update()
 
-        doc_pos = self.canvas.get_doc_coords(event.pos())
+        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
 
         if not (event.buttons() & Qt.LeftButton):
             if hasattr(self.canvas.current_tool, "mouseHoverEvent"):
@@ -54,14 +54,14 @@ class CanvasInputHandler:
         elif event.buttons() & Qt.RightButton:
             self.canvas.tools["Eraser"].mouseMoveEvent(event, doc_pos)
         elif (event.buttons() & Qt.MiddleButton) and self.canvas.dragging:
-            delta = event.pos() - self.canvas.last_point
+            delta = event.position().toPoint() - self.canvas.last_point
             self.canvas.x_offset += delta.x()
             self.canvas.y_offset += delta.y()
-            self.canvas.last_point = event.pos()
+            self.canvas.last_point = event.position().toPoint()
             self.canvas.update()
 
     def mouseReleaseEvent(self, event):
-        doc_pos = self.canvas.get_doc_coords(event.pos())
+        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:

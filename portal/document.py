@@ -1,6 +1,6 @@
 from .layer_manager import LayerManager
 from .layer import Layer
-from PySide6.QtGui import QImage, QPainter
+from PySide6.QtGui import QImage, QPainter, QTransform
 from PySide6.QtCore import QSize, QBuffer, Qt
 from PIL import Image, ImageSequence, ImageQt
 import io
@@ -92,12 +92,12 @@ class Document:
 
     def flip_horizontal(self):
         for layer in self.layer_manager.layers:
-            layer.image = layer.image.mirrored(True, False)
+            layer.image = layer.image.transformed(QTransform().scale(-1, 1))
             layer.on_image_change.emit()
 
     def flip_vertical(self):
         for layer in self.layer_manager.layers:
-            layer.image = layer.image.mirrored(False, True)
+            layer.image = layer.image.transformed(QTransform().scale(1, -1))
             layer.on_image_change.emit()
 
     def resize(self, width, height, interpolation):
