@@ -64,9 +64,9 @@ class Drawing:
         dy = p2.y() - p1.y()
 
         if erase:
-            brush_func = lambda p: self.erase_brush(p, document_size, pen_width, mirror_x, mirror_y)
+            brush_func = lambda p: self.erase_brush(painter, p, document_size, pen_width, mirror_x, mirror_y)
         else:
-            brush_func = lambda p: self.draw_brush(p, document_size, brush_type, pen_width, mirror_x, mirror_y)
+            brush_func = lambda p: self.draw_brush(painter, p, document_size, brush_type, pen_width, mirror_x, mirror_y)
 
         if dx == 0 and dy == 0:
             brush_func(p1)
