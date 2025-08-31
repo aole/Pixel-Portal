@@ -1,6 +1,6 @@
 import functools
 from PySide6.QtWidgets import QToolBar, QLabel, QSlider, QToolButton, QMenu
-from PySide6.QtGui import QPixmap, QIcon, QAction
+from PySide6.QtGui import QPixmap, QIcon, QAction, QActionGroup
 from PySide6.QtCore import Qt
 from .color_button import ActiveColorButton
 
@@ -71,6 +71,7 @@ class ToolBarBuilder:
         from .tools import get_tools
         tools = get_tools()
         self.tool_actions = {}
+        self.tool_action_group = QActionGroup(self.main_window)
 
         for tool in tools:
             if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
@@ -83,6 +84,9 @@ class ToolBarBuilder:
             button.setDefaultAction(action)
             toolbar.addWidget(button)
             self.tool_actions[tool.name] = action
+            self.tool_action_group.addAction(action)
+            if tool.name == "Pen":
+                action.setChecked(True)
 
         # Shape Tools
         self.main_window.shape_button = QToolButton(self.main_window)
@@ -98,9 +102,9 @@ class ToolBarBuilder:
             action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             shape_menu.addAction(action)
             self.tool_actions[tool.name] = action
+            self.tool_action_group.addAction(action)
             if tool.name == "Line":
                 self.main_window.shape_button.setDefaultAction(action)
-                action.setChecked(True)
 
         toolbar.addWidget(self.main_window.shape_button)
 
@@ -118,6 +122,7 @@ class ToolBarBuilder:
             action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
             selection_menu.addAction(action)
             self.tool_actions[tool.name] = action
+            self.tool_action_group.addAction(action)
             if tool.name == "Select Rectangle":
                 self.main_window.selection_button.setDefaultAction(action)
 
