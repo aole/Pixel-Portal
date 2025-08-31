@@ -67,9 +67,7 @@ class AIPanel(QWidget):
         generate_buttons_layout = QHBoxLayout(self.generate_buttons_widget)
         generate_buttons_layout.setContentsMargins(0,0,0,0)
         self.generate_button = QPushButton("Generate")
-        self.cancel_button = QPushButton("Close")
         generate_buttons_layout.addWidget(self.generate_button)
-        generate_buttons_layout.addWidget(self.cancel_button)
         self.layout.addWidget(self.generate_buttons_widget)
 
         self.viewer_buttons_widget = QWidget()
@@ -91,7 +89,6 @@ class AIPanel(QWidget):
 
         # --- Connections ---
         self.generate_button.clicked.connect(self.start_generation)
-        self.cancel_button.clicked.connect(self.parentWidget().hide)
         self.accept_button.clicked.connect(self.accept_image)
         self.cancel_viewer_button.clicked.connect(self.cancel_viewer)
         self.regenerate_button.clicked.connect(self.regenerate_image)
