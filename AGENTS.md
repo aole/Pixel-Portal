@@ -8,3 +8,7 @@ Example:
 ```bash
 QT_QPA_PLATFORM=offscreen python -m pytest
 ```
+
+## Committing Changes
+
+When committing changes, please do not commit changes to `settings.ini` if the only change is to the `last_directory` setting. This is a user-specific setting and should not be part of the repository's history.

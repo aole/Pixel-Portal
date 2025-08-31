@@ -111,24 +111,56 @@ class DrawCommand(Command):
 
             doc_size = QSize(self.document.width, self.document.height)
 
-            if len(self.points) == 1:
-                if self.erase:
-                    self.drawing.erase_brush(painter, self.points[0], doc_size, self.width, self.mirror_x, self.mirror_y)
+            if self.erase:
+                # Create a mask image, same size as the layer, and fill it with transparency
+                mask_image = QImage(self.layer.image.size(), QImage.Format_ARGB32)
+                mask_image.fill(Qt.transparent)
+
+                # Create a painter for the mask
+                mask_painter = QPainter(mask_image)
+                mask_painter.setPen(QPen(Qt.black)) # The color of the mask doesn't matter, just the alpha
+
+                # Draw the path onto the mask
+                doc_size = QSize(self.document.width, self.document.height)
+                if len(self.points) == 1:
+                    self.drawing.draw_brush(mask_painter, self.points[0], doc_size, self.brush_type, self.width, self.mirror_x, self.mirror_y)
                 else:
+                    for i in range(len(self.points) - 1):
+                        self.drawing.draw_line_with_brush(
+                            mask_painter,
+                            self.points[i],
+                            self.points[i + 1],
+                            doc_size,
+                            self.brush_type,
+                            self.width,
+                            self.mirror_x,
+                            self.mirror_y,
+                            erase=False  # We are drawing the mask, not erasing
+                        )
+                mask_painter.end()
+
+                # Now, apply the mask to the layer's image
+                painter.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                painter.drawImage(0, 0, mask_image)
+
+            else: # Regular drawing
+                painter.setPen(QPen(self.color))
+                doc_size = QSize(self.document.width, self.document.height)
+                if len(self.points) == 1:
                     self.drawing.draw_brush(painter, self.points[0], doc_size, self.brush_type, self.width, self.mirror_x, self.mirror_y)
-            else:
-                for i in range(len(self.points) - 1):
-                    self.drawing.draw_line_with_brush(
-                        painter,
-                        self.points[i],
-                        self.points[i + 1],
-                        doc_size,
-                        self.brush_type,
-                        self.width,
-                        self.mirror_x,
-                        self.mirror_y,
-                        erase=self.erase
-                    )
+                else:
+                    for i in range(len(self.points) - 1):
+                        self.drawing.draw_line_with_brush(
+                            painter,
+                            self.points[i],
+                            self.points[i + 1],
+                            doc_size,
+                            self.brush_type,
+                            self.width,
+                            self.mirror_x,
+                            self.mirror_y,
+                            erase=False
+                        )
         finally:
             painter.end()
             self.layer.on_image_change.emit()

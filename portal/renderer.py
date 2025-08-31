@@ -115,20 +115,24 @@ class CanvasRenderer:
                 if self.canvas.is_erasing_preview:
                     active_layer = document.layer_manager.active_layer
                     if active_layer:
-                        # 1. Render all layers *except* the active one as the base
-                        background = document.render_except(active_layer)
-                        p.drawImage(0, 0, background)
+                        # Iterate through all layers and draw them in order,
+                        # applying the eraser mask to the active layer.
+                        for layer in document.layer_manager.layers:
+                            if not layer.visible:
+                                continue
 
-                        # 2. Punch a hole in a copy of the active layer
-                        erased_active_layer = active_layer.image.copy()
-                        p_temp = QPainter(erased_active_layer)
-                        p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
-                        p_temp.drawImage(0, 0, self.canvas.temp_image) # temp_image is the erase mask
-                        p_temp.end()
+                            p.setOpacity(layer.opacity)
 
-                        # 3. Draw the modified active layer on top of the background
-                        p.setOpacity(active_layer.opacity)
-                        p.drawImage(0, 0, erased_active_layer)
+                            if layer is active_layer:
+                                # Punch a hole in a copy of the active layer
+                                erased_active_layer = active_layer.image.copy()
+                                p_temp = QPainter(erased_active_layer)
+                                p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                                p_temp.drawImage(0, 0, self.canvas.temp_image)  # temp_image is the erase mask
+                                p_temp.end()
+                                p.drawImage(0, 0, erased_active_layer)
+                            else:
+                                p.drawImage(0, 0, layer.image)
 
                 # Case for other tools (Pen, Shapes, etc.)
                 else:
