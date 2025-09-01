@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
-from .layer import Layer
-from .document import Document
-from .drawing import Drawing
+from portal.core.layer import Layer
+from portal.core.document import Document
+from portal.core.drawing import Drawing
 
 
 class Command(ABC):

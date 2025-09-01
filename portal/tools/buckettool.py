@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent
 
 from portal.tools.basetool import BaseTool
-from ..command import FillCommand
+from portal.core.command import FillCommand
 
 
 class BucketTool(BaseTool):

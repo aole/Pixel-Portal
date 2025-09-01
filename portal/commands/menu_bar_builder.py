@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow
-from .action_manager import ActionManager
+from portal.commands.action_manager import ActionManager
 
 
 class MenuBarBuilder:

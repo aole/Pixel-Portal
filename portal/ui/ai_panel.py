@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from .ai.image_generator import image_to_image, prompt_to_image, get_pipeline
+from portal.ai.image_generator import image_to_image, prompt_to_image, get_pipeline
 import torch
 
 class GenerationThread(QThread):

@@ -1,7 +1,7 @@
-from .basetool import BaseTool
+from portal.tools.basetool import BaseTool
 from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent, QKeySequence
 from PySide6.QtCore import QPoint, Qt
-from ..command import DrawCommand
+from portal.core.command import DrawCommand
 
 
 class PenTool(BaseTool):

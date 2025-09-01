@@ -1,4 +1,4 @@
-from .basetool import BaseTool
+from portal.tools.basetool import BaseTool
 from PySide6.QtGui import QColor, QCursor, QPixmap
 
 

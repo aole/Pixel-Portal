@@ -1,5 +1,5 @@
-from .layer_manager import LayerManager
-from .layer import Layer
+from portal.commands.layer_manager import LayerManager
+from portal.core.layer import Layer
 from PySide6.QtGui import QImage, QPainter, QTransform
 from PySide6.QtCore import QSize, QBuffer, Qt
 from PIL import Image, ImageSequence, ImageQt

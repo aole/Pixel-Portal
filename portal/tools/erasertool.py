@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QImage, QPainterPath
 
 from portal.tools.basetool import BaseTool
-from ..command import DrawCommand
+from portal.core.command import DrawCommand
 
 
 class EraserTool(BaseTool):

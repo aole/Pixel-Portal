@@ -1,5 +1,5 @@
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
-from .background import Background
+from portal.ui.background import Background
 
 class ActionManager:
     def __init__(self, main_window):

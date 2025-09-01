@@ -1,12 +1,12 @@
-from .document import Document
-from .undo import UndoManager
-from .drawing_context import DrawingContext
+from portal.core.document import Document
+from portal.core.undo import UndoManager
+from portal.core.drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from .command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
+from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
 from PySide6.QtCore import QPoint
 
 
