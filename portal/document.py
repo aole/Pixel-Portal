@@ -90,16 +90,6 @@ class Document:
         
         return doc
 
-    def flip_horizontal(self):
-        for layer in self.layer_manager.layers:
-            layer.image = layer.image.transformed(QTransform().scale(-1, 1))
-            layer.on_image_change.emit()
-
-    def flip_vertical(self):
-        for layer in self.layer_manager.layers:
-            layer.image = layer.image.transformed(QTransform().scale(1, -1))
-            layer.on_image_change.emit()
-
     def resize(self, width, height, interpolation):
         self.width = width
         self.height = height

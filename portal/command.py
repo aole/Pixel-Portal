@@ -176,19 +176,46 @@ class DrawCommand(Command):
 
 
 class FlipCommand(Command):
-    def __init__(self, document: Document, axis: str):
+    def __init__(self, document: Document, horizontal: bool, vertical: bool, all_layers: bool):
         self.document = document
-        self.axis = axis  # 'horizontal' or 'vertical'
+        self.horizontal = horizontal
+        self.vertical = vertical
+        self.all_layers = all_layers
+        self.before_images = {}
 
     def execute(self):
-        if self.axis == 'horizontal':
-            self.document.flip_horizontal()
+        if not self.before_images:
+            if self.all_layers:
+                for i, layer in enumerate(self.document.layer_manager.layers):
+                    self.before_images[i] = layer.image.copy()
+            else:
+                active_layer = self.document.layer_manager.active_layer
+                active_layer_index = self.document.layer_manager.active_layer_index
+                if active_layer:
+                    self.before_images[active_layer_index] = active_layer.image.copy()
+
+        if self.all_layers:
+            for layer in self.document.layer_manager.layers:
+                if self.horizontal:
+                    layer.flip_horizontal()
+                if self.vertical:
+                    layer.flip_vertical()
         else:
-            self.document.flip_vertical()
+            active_layer = self.document.layer_manager.active_layer
+            if active_layer:
+                if self.horizontal:
+                    active_layer.flip_horizontal()
+                if self.vertical:
+                    active_layer.flip_vertical()
 
     def undo(self):
-        # Flipping the same axis twice restores the original state
-        self.execute()
+        for index, before_image in self.before_images.items():
+            layer = self.document.layer_manager.layers[index]
+            painter = QPainter(layer.image)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            painter.drawImage(0, 0, before_image)
+            painter.end()
+            layer.on_image_change.emit()
 
 
 class ResizeCommand(Command):

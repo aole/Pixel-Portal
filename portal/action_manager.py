@@ -65,11 +65,8 @@ class ActionManager:
         self.crop_action.triggered.connect(self.app.crop_to_selection)
         self.crop_action.setEnabled(False)
 
-        self.flip_horizontal_action = QAction("Flip Horizontal", self.main_window)
-        self.flip_horizontal_action.triggered.connect(self.app.flip_horizontal)
-
-        self.flip_vertical_action = QAction("Flip Vertical", self.main_window)
-        self.flip_vertical_action.triggered.connect(self.app.flip_vertical)
+        self.flip_action = QAction("Flip...", self.main_window)
+        self.flip_action.triggered.connect(self.main_window.open_flip_dialog)
 
         # View actions
         self.checkered_action = QAction("Checkered Background", self.main_window)

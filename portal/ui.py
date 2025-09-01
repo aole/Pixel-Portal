@@ -14,6 +14,7 @@ from .action_manager import ActionManager
 from .menu_bar_builder import MenuBarBuilder
 from .tool_bar_builder import ToolBarBuilder
 from .status_bar_manager import StatusBarManager
+from .flip_dialog import FlipDialog
 
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
@@ -99,7 +100,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, preview_dock_widget)
 
         # Layer Manager Panel
-        self.layer_manager_widget = LayerManagerWidget(self.app)
+        self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
         layer_dock_widget = QDockWidget("Layers", self)
         layer_dock_widget.setWidget(self.layer_manager_widget)
@@ -283,4 +284,11 @@ class MainWindow(QMainWindow):
 
     def on_mirror_changed(self):
         is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y
+
+    def open_flip_dialog(self):
+        if self.app.document:
+            dialog = FlipDialog(self)
+            if dialog.exec():
+                values = dialog.get_values()
+                self.app.flip(values["horizontal"], values["vertical"], values["all_layers"])
         

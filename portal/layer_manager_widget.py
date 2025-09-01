@@ -14,9 +14,10 @@ class LayerManagerWidget(QWidget):
     """
     layer_changed = Signal()  # Emitted when the layer structure changes
 
-    def __init__(self, app: App):
+    def __init__(self, app: App, canvas):
         super().__init__()
         self.app = app
+        self.canvas = canvas
 
         self.setWindowTitle("Layers")
         self.layout = QVBoxLayout(self)
@@ -115,7 +116,7 @@ class LayerManagerWidget(QWidget):
         active_layer = self.app.document.layer_manager.active_layer
         if active_layer:
             from .command import ClearLayerCommand
-            selection = self.app.window.canvas.selection_shape
+            selection = self.canvas.selection_shape
             command = ClearLayerCommand(active_layer, selection)
             self.app.execute_command(command)
 
