@@ -26,14 +26,12 @@ class ColorButton(QPushButton):
     def on_click(self):
         self.drawing_context.set_pen_color(QColor(self.color))
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.RightButton:
-            self.rightClicked.emit(QColor(self.color))
-        else:
-            super().mousePressEvent(event)
+    def contextMenuEvent(self, event):
+        self.rightClicked.emit(QColor(self.color))
+        event.accept()
 
     def update_active_state(self, active_color):
-        if active_color.name() == self.color:
+        if QColor(self.color) == active_color:
             color = QColor(self.color)
             brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
             border_color = "#000000" if brightness > 128 else "#FFFFFF"
