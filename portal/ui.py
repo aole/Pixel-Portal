@@ -100,7 +100,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, preview_dock_widget)
 
         # Layer Manager Panel
-        self.layer_manager_widget = LayerManagerWidget(self.app)
+        self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
         layer_dock_widget = QDockWidget("Layers", self)
         layer_dock_widget.setWidget(self.layer_manager_widget)

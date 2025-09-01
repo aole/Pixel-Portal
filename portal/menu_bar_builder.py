@@ -24,6 +24,8 @@ class MenuBarBuilder:
         edit_menu.addAction(self.action_manager.paste_as_new_layer_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.action_manager.clear_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.action_manager.flip_action)
 
         select_menu = menu_bar.addMenu("&Select")
         select_menu.addAction(self.action_manager.select_all_action)
@@ -33,8 +35,6 @@ class MenuBarBuilder:
         image_menu = menu_bar.addMenu("&Image")
         image_menu.addAction(self.action_manager.resize_action)
         image_menu.addAction(self.action_manager.crop_action)
-        image_menu.addSeparator()
-        image_menu.addAction(self.action_manager.flip_action)
 
         view_menu = menu_bar.addMenu("&View")
         background_menu = view_menu.addMenu("&Background")
