@@ -21,7 +21,7 @@ class ActionManager:
         self.save_action.triggered.connect(self.app.save_document)
 
         self.load_palette_action = QAction("Load Palette from Image...", self.main_window)
-        self.load_palette_action.triggered.connect(self.main_window.open_palette_dialog)
+        self.load_palette_action.triggered.connect(self.main_window.load_palette_from_image)
 
         self.exit_action = QAction("&Exit", self.main_window)
         self.exit_action.triggered.connect(self.app.exit)
@@ -67,6 +67,10 @@ class ActionManager:
 
         self.flip_action = QAction("Flip...", self.main_window)
         self.flip_action.triggered.connect(self.main_window.open_flip_dialog)
+
+        # Layer actions
+        self.conform_to_palette_action = QAction("Conform to Palette", self.main_window)
+        self.conform_to_palette_action.triggered.connect(self.app.conform_to_palette)
 
         # View actions
         self.checkered_action = QAction("Checkered Background", self.main_window)

@@ -1,6 +1,7 @@
 import functools
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
-from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
+import os
+from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout, QFileDialog
+from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
 from PySide6.QtCore import Qt, Slot
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
@@ -8,7 +9,6 @@ from portal.ui.ai_panel import AIPanel
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
-from portal.ui.palette_dialog import PaletteDialog
 from portal.ui.preview_panel import PreviewPanel
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
@@ -31,8 +31,6 @@ class MainWindow(QMainWindow):
         self.action_manager = ActionManager(self)
 
         self.main_palette_buttons = []
-        self.saturation_buttons = []
-        self.value_buttons = []
 
         self.canvas = Canvas(self.app.drawing_context)
         self.setCentralWidget(self.canvas)
@@ -65,7 +63,6 @@ class MainWindow(QMainWindow):
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
-        self.app.drawing_context.pen_color_changed.connect(self.update_dynamic_palette)
         self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
 
         # Color Swatch Panel
@@ -78,21 +75,10 @@ class MainWindow(QMainWindow):
         self.color_layout.setSpacing(0)
         self.color_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Add saturation and value swatches
-        for i in range(7):
-            button = ColorButton("#808080", self.app.drawing_context)
-            self.saturation_buttons.append(button)
-
-        for i in range(7):
-            button = ColorButton("#808080", self.app.drawing_context)
-            self.value_buttons.append(button)
-
         colors = self.load_palette()
         self.update_palette(colors)
 
         self.color_toolbar.addWidget(self.color_container)
-
-        self.update_dynamic_palette(self.app.drawing_context.pen_color)
 
         # Preview Panel
         self.preview_panel = PreviewPanel(self.app)
@@ -206,30 +192,7 @@ class MainWindow(QMainWindow):
             col = i // 2
             self.color_layout.addWidget(button, row, col)
 
-        # Re-add separator and dynamic swatches
-        separator_col_index = (len(self.main_palette_buttons) + 1) // 2
-        self.color_layout.setColumnMinimumWidth(separator_col_index, 12)
-
-        for i, button in enumerate(self.saturation_buttons):
-            self.color_layout.addWidget(button, 0, separator_col_index + 1 + i)
-
-        for i, button in enumerate(self.value_buttons):
-            self.color_layout.addWidget(button, 1, separator_col_index + 1 + i)
-
-    def update_dynamic_palette(self, color):
-        h, s, v, a = color.getHsv()
-
-        # Update saturation buttons
-        for i, button in enumerate(self.saturation_buttons):
-            new_s = int(i / 6 * 255)
-            new_color = QColor.fromHsv(h, new_s, v, a)
-            button.set_color(new_color)
-
-        # Update value buttons
-        for i, button in enumerate(self.value_buttons):
-            new_v = int(i / 6 * 255)
-            new_color = QColor.fromHsv(h, s, new_v, a)
-            button.set_color(new_color)
+        pass
 
     def update_pen_width_label(self, width):
         self.pen_width_label.setText(f"{width:02d}")
@@ -247,12 +210,33 @@ class MainWindow(QMainWindow):
             self.canvas.set_initial_zoom()
             self.initial_zoom_set = True
 
-    def open_palette_dialog(self):
-        dialog = PaletteDialog(self)
-        if dialog.exec():
-            colors = dialog.get_selected_colors()
+    def load_palette_from_image(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open Image for Palette",
+            os.path.expanduser("~"),
+            "Image Files (*.png *.jpg *.bmp)"
+        )
+        if file_path:
+            colors = self.extract_unique_colors(file_path)
             if colors:
                 self.update_palette(colors)
+
+    def extract_unique_colors(self, image_path):
+        image = QImage(image_path)
+        if image.isNull():
+            return []
+
+        unique_colors = set()
+        for y in range(image.height()):
+            for x in range(image.width()):
+                if len(unique_colors) >= 256:
+                    break
+                pixel_color = image.pixelColor(x, y)
+                unique_colors.add(pixel_color.name())
+            if len(unique_colors) >= 256:
+                break
+        return list(unique_colors)
 
     def toggle_ai_panel(self):
         if self.ai_dock_widget.isVisible():
@@ -292,4 +276,7 @@ class MainWindow(QMainWindow):
             if dialog.exec():
                 values = dialog.get_values()
                 self.app.flip(values["horizontal"], values["vertical"], values["all_layers"])
+
+    def get_palette(self):
+        return [button.color for button in self.main_palette_buttons]
         

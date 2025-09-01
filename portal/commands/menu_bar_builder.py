@@ -34,6 +34,9 @@ class MenuBarBuilder:
         image_menu.addAction(self.action_manager.resize_action)
         image_menu.addAction(self.action_manager.crop_action)
 
+        layer_menu = menu_bar.addMenu("&Layer")
+        layer_menu.addAction(self.action_manager.conform_to_palette_action)
+
         view_menu = menu_bar.addMenu("&View")
         background_menu = view_menu.addMenu("&Background")
         background_menu.addAction(self.action_manager.checkered_action)

@@ -8,6 +8,7 @@ import configparser
 import os
 from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
 from PySide6.QtCore import QPoint
+from portal.core.color_utils import find_closest_color
 
 
 class App(QObject):
@@ -22,6 +23,7 @@ class App(QObject):
 
     def __init__(self):
         super().__init__()
+        self.main_window = None
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
@@ -187,3 +189,24 @@ class App(QObject):
 
         if command:
             self.execute_command(command)
+
+    def conform_to_palette(self):
+        if not self.document or not self.main_window:
+            return
+
+        palette_hex = self.main_window.get_palette()
+        if not palette_hex:
+            return
+
+        palette_rgb = [QColor(color).getRgb() for color in palette_hex]
+
+        source_image = self.document.render()
+        new_image = QImage(source_image.size(), QImage.Format_ARGB32)
+
+        for y in range(source_image.height()):
+            for x in range(source_image.width()):
+                pixel_color = source_image.pixelColor(x, y).getRgb()
+                closest_color_rgb = find_closest_color(pixel_color, palette_rgb)
+                new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
+
+        self.add_new_layer_with_image(new_image)
