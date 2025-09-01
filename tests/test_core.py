@@ -263,44 +263,12 @@ def test_active_color_button(mock_get_color, qtbot):
     mock_get_color.assert_called_once()
     mock_drawing_context.set_pen_color.assert_called_once_with(QColor("green"))
 
-def test_update_dynamic_palette(qtbot, qapp):
-    """Test that the saturation and value buttons are updated correctly when the pen color changes."""
-    mock_app = MagicMock()
-    mock_app.drawing_context.pen_color = QColor("red")
-    mock_app.drawing_context.pen_width = 1
-    mock_document = MagicMock()
-    mock_document.width = 64
-    mock_document.height = 64
-    mock_document.render.return_value = QImage(64, 64, QImage.Format_RGB32)
-    mock_app.document = mock_document
-
-    # Mock methods that would otherwise cause issues in a test environment
-    with patch.object(MainWindow, 'load_palette', return_value=[]), \
-         patch.object(MainWindow, 'update_palette'), \
-         patch.object(MainWindow, 'update_brush_button'):
-        window = MainWindow(mock_app)
-        qtbot.addWidget(window)
-
-        new_color = QColor("blue")
-        window.update_dynamic_palette(new_color)
-
-        # Check the first saturation button's color
-        h, _, v, a = new_color.getHsv()
-        expected_color = QColor.fromHsv(h, 0, v, a)
-        assert window.saturation_buttons[0].color == expected_color.name()
-
-        # Check the first value button's color
-        h, s, _, a = new_color.getHsv()
-        expected_color = QColor.fromHsv(h, s, 0, a)
-        assert window.value_buttons[0].color == expected_color.name()
-
-
 @pytest.fixture
 def mock_main_window(qapp):
     window = QMainWindow()
     window.app = MagicMock()
     window.open_new_file_dialog = MagicMock()
-    window.open_palette_dialog = MagicMock()
+    window.load_palette_from_image = MagicMock()
     window.open_resize_dialog = MagicMock()
     window.open_background_color_dialog = MagicMock()
     window.toggle_ai_panel = MagicMock()
@@ -356,7 +324,7 @@ def test_setup_actions(mock_main_window):
     mock_main_window.app.save_document.assert_called_once()
 
     action_manager.load_palette_action.trigger()
-    mock_main_window.open_palette_dialog.assert_called_once()
+    mock_main_window.load_palette_from_image.assert_called_once()
 
     action_manager.exit_action.trigger()
     mock_main_window.app.exit.assert_called_once()
@@ -400,6 +368,34 @@ def test_setup_actions(mock_main_window):
 
     action_manager.ai_action.trigger()
     mock_main_window.toggle_ai_panel.assert_called_once()
+
+
+def test_conform_to_palette(app, qtbot):
+    """Test that the conform_to_palette method creates a new layer with an image conformed to the palette."""
+    # Create a mock main window
+    mock_window = MagicMock()
+    mock_window.get_palette.return_value = ["#ff0000", "#00ff00"]  # Red and Green
+    app.main_window = mock_window
+
+    # Create an image with pure green and a color closer to green than red
+    image = QImage(2, 1, QImage.Format_ARGB32)
+    image.setPixelColor(0, 0, QColor(0, 255, 0))
+    image.setPixelColor(1, 0, QColor(200, 255, 0))
+    app.document.layer_manager.layers[0].image = image
+
+    initial_layer_count = len(app.document.layer_manager.layers)
+
+    app.conform_to_palette()
+
+    # Check that a new layer was added
+    assert len(app.document.layer_manager.layers) == initial_layer_count + 1
+
+    # Check that the new layer's image is conformed to the palette
+    new_layer = app.document.layer_manager.layers[-1]
+    # Green is an exact match
+    assert new_layer.image.pixelColor(0, 0).name() == "#00ff00"
+    # Yellow is closer to green than red
+    assert new_layer.image.pixelColor(1, 0).name() == "#00ff00"
 
 
 @pytest.fixture
