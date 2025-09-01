@@ -3,11 +3,11 @@ import os
 from unittest.mock import MagicMock, patch
 from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton
 from PySide6.QtCore import Qt
-from portal.palette_dialog import PaletteDialog
-from portal.new_file_dialog import NewFileDialog
-from portal.resize_dialog import ResizeDialog
+from portal.ui.palette_dialog import PaletteDialog
+from portal.ui.new_file_dialog import NewFileDialog
+from portal.ui.resize_dialog import ResizeDialog
 from PySide6.QtGui import QImage, QPixmap
-from portal.preview_panel import PreviewPanel
+from portal.ui.preview_panel import PreviewPanel
 
 def test_new_file_dialog(qtbot):
     """Test that the dialog is created and that the new_document method is called on the app when the dialog is accepted."""

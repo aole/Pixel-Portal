@@ -4,8 +4,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
-from .app import App
-from .layer_item_widget import LayerItemWidget
+from portal.core.app import App
+from portal.ui.layer_item_widget import LayerItemWidget
 
 
 class LayerManagerWidget(QWidget):
@@ -115,14 +115,14 @@ class LayerManagerWidget(QWidget):
         """Clears the active layer."""
         active_layer = self.app.document.layer_manager.active_layer
         if active_layer:
-            from .command import ClearLayerCommand
+            from portal.core.command import ClearLayerCommand
             selection = self.canvas.selection_shape
             command = ClearLayerCommand(active_layer, selection)
             self.app.execute_command(command)
 
     def add_layer(self):
         """Adds a new layer."""
-        from .command import AddLayerCommand
+        from portal.core.command import AddLayerCommand
         num_layers = len(self.app.document.layer_manager.layers)
         command = AddLayerCommand(self.app.document, name=f"Layer {num_layers + 1}")
         self.app.execute_command(command)
@@ -134,7 +134,7 @@ class LayerManagerWidget(QWidget):
             return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
-        from .command import RemoveLayerCommand
+        from portal.core.command import RemoveLayerCommand
         command = RemoveLayerCommand(self.app.document.layer_manager, actual_index)
         self.app.execute_command(command)
 
@@ -145,7 +145,7 @@ class LayerManagerWidget(QWidget):
             return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
-        from .command import DuplicateLayerCommand
+        from portal.core.command import DuplicateLayerCommand
         command = DuplicateLayerCommand(self.app.document.layer_manager, actual_index)
         self.app.execute_command(command)
 
@@ -154,7 +154,7 @@ class LayerManagerWidget(QWidget):
         if current_row == -1: return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
-        from .command import MoveLayerCommand
+        from portal.core.command import MoveLayerCommand
         command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index + 1)
         self.app.execute_command(command)
 
@@ -163,6 +163,6 @@ class LayerManagerWidget(QWidget):
         if current_row == -1: return
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
-        from .command import MoveLayerCommand
+        from portal.core.command import MoveLayerCommand
         command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index - 1)
         self.app.execute_command(command)

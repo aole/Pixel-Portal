@@ -2,23 +2,23 @@ import functools
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence
 from PySide6.QtCore import Qt, Slot
-from .canvas import Canvas
-from .layer_manager_widget import LayerManagerWidget
-from .ai_panel import AIPanel
-from .new_file_dialog import NewFileDialog
-from .resize_dialog import ResizeDialog
-from .background import Background
-from .palette_dialog import PaletteDialog
-from .preview_panel import PreviewPanel
-from .action_manager import ActionManager
-from .menu_bar_builder import MenuBarBuilder
-from .tool_bar_builder import ToolBarBuilder
-from .status_bar_manager import StatusBarManager
-from .flip_dialog import FlipDialog
+from portal.ui.canvas import Canvas
+from portal.ui.layer_manager_widget import LayerManagerWidget
+from portal.ui.ai_panel import AIPanel
+from portal.ui.new_file_dialog import NewFileDialog
+from portal.ui.resize_dialog import ResizeDialog
+from portal.ui.background import Background
+from portal.ui.palette_dialog import PaletteDialog
+from portal.ui.preview_panel import PreviewPanel
+from portal.commands.action_manager import ActionManager
+from portal.commands.menu_bar_builder import MenuBarBuilder
+from portal.commands.tool_bar_builder import ToolBarBuilder
+from portal.commands.status_bar_manager import StatusBarManager
+from portal.ui.flip_dialog import FlipDialog
 
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
-from .color_button import ColorButton, ActiveColorButton
+from portal.ui.color_button import ColorButton, ActiveColorButton
 
 
 class MainWindow(QMainWindow):

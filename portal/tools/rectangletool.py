@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
 
 from portal.tools.basetool import BaseTool
-from ..command import ShapeCommand
+from portal.core.command import ShapeCommand
 
 
 class RectangleTool(BaseTool):

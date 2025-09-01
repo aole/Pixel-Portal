@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 from PySide6.QtCore import QPoint, Qt, QRect, QSize
 from PySide6.QtGui import QMouseEvent, QColor, QImage
-from portal.command import DrawCommand, ShapeCommand, FillCommand, MoveCommand
+from portal.core.command import DrawCommand, ShapeCommand, FillCommand, MoveCommand
 from portal.tools.pentool import PenTool
 from portal.tools.linetool import LineTool
 from portal.tools.rectangletool import RectangleTool
@@ -380,9 +380,9 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert canvas.temp_image_replaces_active_layer is False
 
 
-from portal.canvas import Canvas
-from portal.drawing_context import DrawingContext
-from portal.document import Document
+from portal.ui.canvas import Canvas
+from portal.core.drawing_context import DrawingContext
+from portal.core.document import Document
 
 @pytest.fixture
 def rectangle_tool(qtbot):

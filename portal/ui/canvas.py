@@ -14,11 +14,11 @@ from PySide6.QtGui import (
     QPalette,
 )
 from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
-from .drawing import Drawing
-from .renderer import CanvasRenderer
-from .background import Background
-from .tools import get_tools
-from .canvas_input_handler import CanvasInputHandler
+from portal.core.drawing import Drawing
+from portal.core.renderer import CanvasRenderer
+from portal.ui.background import Background
+from portal.tools import get_tools
+from portal.commands.canvas_input_handler import CanvasInputHandler
 
 
 class Canvas(QWidget):

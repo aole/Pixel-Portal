@@ -1,15 +1,15 @@
 import pytest
 from PySide6.QtGui import QImage, QColor
 from PySide6.QtCore import QRect
-from portal.document import Document
-from portal.layer import Layer
-from portal.layer_manager import LayerManager
-from portal.drawing import Drawing
+from portal.core.document import Document
+from portal.core.layer import Layer
+from portal.commands.layer_manager import LayerManager
+from portal.core.drawing import Drawing
 from PySide6.QtCore import QPoint, QSize
-from portal.renderer import CanvasRenderer
-from portal.canvas import Canvas
-from portal.drawing_context import DrawingContext
-from portal.background import Background
+from portal.core.renderer import CanvasRenderer
+from portal.ui.canvas import Canvas
+from portal.core.drawing_context import DrawingContext
+from portal.ui.background import Background
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QMouseEvent
 from unittest.mock import MagicMock, patch, Mock
@@ -487,7 +487,7 @@ def test_pen_tool_emits_command(canvas):
 
     spy.assert_called_once()
     command = spy.call_args[0][0]
-    from portal.command import DrawCommand
+    from portal.core.command import DrawCommand
     assert isinstance(command, DrawCommand)
     assert len(command.points) == 2
     assert command.points[0] == canvas.get_doc_coords(QPoint(10, 10))
@@ -500,7 +500,7 @@ def test_pen_tool_emits_command(canvas):
 
 def test_set_background(canvas):
     """Test that the background is updated correctly."""
-    from portal.background import Background
+    from portal.ui.background import Background
     background = Background(QColor("blue"))
     canvas.set_background(background)
     assert canvas.background == background

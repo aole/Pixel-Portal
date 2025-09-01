@@ -1,6 +1,6 @@
 import os
 import importlib
-from .basetool import BaseTool
+from portal.tools.basetool import BaseTool
 
 def get_tools():
     """
