@@ -192,7 +192,18 @@ class MainWindow(QMainWindow):
             col = i // 2
             self.color_layout.addWidget(button, row, col)
 
-        pass
+    def add_color_to_palette(self, color):
+        colors = self.get_palette()
+        # Case-insensitive check
+        if color.name().lower() not in [c.lower() for c in colors]:
+            colors.append(color.name())
+            self.update_palette(colors)
+            self.save_palette(colors)
+
+    def save_palette(self, colors):
+        with open("palettes/default.colors", "w") as f:
+            for color in colors:
+                f.write(f"{color}\n")
 
     def update_pen_width_label(self, width):
         self.pen_width_label.setText(f"{width:02d}")

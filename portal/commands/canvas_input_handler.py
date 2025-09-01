@@ -8,24 +8,12 @@ class CanvasInputHandler:
         self.drawing_context = canvas.drawing_context
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Control:
-            self.canvas.ctrl_pressed = True
-            if hasattr(self.canvas.current_tool, 'deactivate'):
-                self.canvas.current_tool.deactivate()
-            self.canvas.current_tool = self.canvas.tools["Move"]
-            if hasattr(self.canvas.current_tool, 'activate'):
-                self.canvas.current_tool.activate()
-            self.canvas.setCursor(Qt.ArrowCursor)
+        if event.key() == Qt.Key_Alt:
+            self.drawing_context.set_tool("Picker")
 
     def keyReleaseEvent(self, event):
-        if event.key() == Qt.Key_Control:
-            self.canvas.ctrl_pressed = False
-            if hasattr(self.canvas.current_tool, 'deactivate'):
-                self.canvas.current_tool.deactivate()
-            self.canvas.current_tool = self.canvas.tools[self.drawing_context.tool]
-            if hasattr(self.canvas.current_tool, 'activate'):
-                self.canvas.current_tool.activate()
-            self.canvas.on_tool_changed(self.drawing_context.tool)
+        if event.key() == Qt.Key_Alt:
+            self.drawing_context.set_tool(self.drawing_context.previous_tool)
 
     def mousePressEvent(self, event):
         doc_pos = self.canvas.get_doc_coords(event.position().toPoint())

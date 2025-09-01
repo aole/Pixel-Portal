@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QPushButton, QColorDialog
 from PySide6.QtGui import QColor
+from PySide6.QtCore import Signal, Qt
 
 
 class ColorButton(QPushButton):
@@ -24,13 +25,18 @@ class ColorButton(QPushButton):
         self.drawing_context.set_pen_color(QColor(self.color))
 
     def update_active_state(self, active_color):
-        if active_color.name() == self.color:
-            self.setStyleSheet(f"background-color: {self.color}; border: 2px solid #FFFFFF;")
+        if QColor(self.color) == active_color:
+            color = QColor(self.color)
+            brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
+            border_color = "#000000" if brightness > 128 else "#FFFFFF"
+            self.setStyleSheet(f"background-color: {self.color}; border: 2px solid {border_color};")
         else:
             self.setStyleSheet(f"background-color: {self.color}; border: none;")
 
 
 class ActiveColorButton(QPushButton):
+    rightClicked = Signal(QColor)
+
     def __init__(self, drawing_context):
         super().__init__()
         self.drawing_context = drawing_context
@@ -43,6 +49,10 @@ class ActiveColorButton(QPushButton):
         color = QColorDialog.getColor(self.drawing_context.pen_color, self)
         if color.isValid():
             self.drawing_context.set_pen_color(color)
+
+    def contextMenuEvent(self, event):
+        self.rightClicked.emit(self.drawing_context.pen_color)
+        event.accept()
 
     def update_color(self, color):
         self.setStyleSheet(f"background-color: {color.name()}")

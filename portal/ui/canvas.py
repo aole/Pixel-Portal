@@ -70,7 +70,6 @@ class Canvas(QWidget):
     @Slot(QSize)
     def set_document_size(self, size):
         self._document_size = size
-        self.set_initial_zoom()
         self.update()
 
     def keyPressEvent(self, event):

@@ -66,6 +66,7 @@ class ToolBarBuilder:
         toolbar.layout().setAlignment(Qt.AlignLeft)
 
         active_color_button = ActiveColorButton(self.app.drawing_context)
+        active_color_button.rightClicked.connect(self.main_window.add_color_to_palette)
         toolbar.addWidget(active_color_button)
 
         from portal.tools import get_tools
