@@ -4,7 +4,7 @@ from PIL import Image
 import os
 from datetime import datetime
 
-def get_pipeline(is_img2img=False):
+def get_pipeline(is_img2img=False, use_lora=False):
     """
     Loads and returns the appropriate Stable Diffusion XL pipeline.
     This function should only be called once per session.
@@ -24,9 +24,10 @@ def get_pipeline(is_img2img=False):
         use_safetensors=True,
     ).to(device)
 
-    print("Loading LoRA...")
-    pipe.load_lora_weights(lora_filename)
-    print("AI pipeline loaded successfully.")
+    if use_lora:
+        print("Loading LoRA...")
+        pipe.load_lora_weights(lora_filename)
+        print("AI pipeline loaded successfully.")
     
     return pipe
 
@@ -34,6 +35,8 @@ def prompt_to_image(
     pipe: StableDiffusionXLPipeline,
     prompt: str,
     original_size: tuple[int, int],
+    num_inference_steps: int = 20,
+    guidance_scale: float = 7.0,
     output_dir: str = "output",
 ) -> Image.Image:
     """Generates an image from a prompt using a pre-loaded pipeline."""
@@ -42,8 +45,8 @@ def prompt_to_image(
     print("Generating image from prompt...")
     generated_image = pipe(
         prompt=prompt,
-        num_inference_steps=20,
-        guidance_scale=7.0,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
     ).images[0]
 
     # Save and resize
@@ -57,6 +60,9 @@ def image_to_image(
     pipe: StableDiffusionXLImg2ImgPipeline,
     input_image: Image.Image,
     prompt: str,
+    strength: float = 0.8,
+    num_inference_steps: int = 20,
+    guidance_scale: float = 7.0,
     output_dir: str = "output",
 ) -> Image.Image:
     """Generates an image from another image using a pre-loaded pipeline."""
@@ -70,9 +76,9 @@ def image_to_image(
     generated_image = pipe(
         prompt=prompt,
         image=model_input_image,
-        strength=0.8,
-        num_inference_steps=20,
-        guidance_scale=7.0,
+        strength=strength,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
     ).images[0]
 
     # Save and resize

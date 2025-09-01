@@ -1,4 +1,6 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QRadioButton, QPushButton, QProgressBar, QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QRadioButton, QPushButton, QProgressBar,
+                               QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout, QCheckBox, QSlider,
+                                 QSizePolicy)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from PIL import Image
@@ -10,20 +12,30 @@ class GenerationThread(QThread):
     generation_complete = Signal(object)
     generation_failed = Signal(str)
 
-    def __init__(self, pipe, mode, image, prompt, original_size):
+    def __init__(self, pipe, mode, image, prompt, original_size, num_inference_steps, guidance_scale, strength, use_lora):
         super().__init__()
         self.pipe = pipe
         self.mode = mode
         self.image = image
         self.prompt = prompt
         self.original_size = original_size
+        self.num_inference_steps = num_inference_steps
+        self.guidance_scale = guidance_scale
+        self.strength = strength
+        self.use_lora = use_lora
 
     def run(self):
         try:
             if self.mode == "Image to Image":
-                generated_image = image_to_image(self.pipe, self.image, self.prompt)
+                generated_image = image_to_image(self.pipe, self.image, self.prompt,
+                                                 strength=self.strength,
+                                                 num_inference_steps=self.num_inference_steps,
+                                                 guidance_scale=self.guidance_scale)
             else:
-                generated_image = prompt_to_image(self.pipe, self.prompt, original_size=self.original_size)
+                generated_image = prompt_to_image(self.pipe, self.prompt,
+                                                  original_size=self.original_size,
+                                                  num_inference_steps=self.num_inference_steps,
+                                                  guidance_scale=self.guidance_scale)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
@@ -42,45 +54,65 @@ class AIPanel(QWidget):
 
         self.layout = QVBoxLayout(self)
 
-        self.prompt_input = QLineEdit()
+        self.prompt_input = QTextEdit()
         self.prompt_input.setText(AIPanel.last_prompt)
+        self.prompt_input.setFixedHeight(self.fontMetrics().lineSpacing() * 4)
         self.layout.addWidget(self.prompt_input)
 
-        self.image_viewer = QLabel()
-        self.image_viewer.setAlignment(Qt.AlignCenter)
-        self.image_viewer.setMinimumSize(512, 512)
-        self.alphabg_pixmap = QPixmap('alphabg.png')
-        self.image_viewer.setPixmap(self.alphabg_pixmap)
-        self.layout.addWidget(self.image_viewer)
+        # --- Sliders and Checkbox ---
+        sliders_layout = QVBoxLayout()
 
-        self.radio_button_group = QButtonGroup()
-        self.prompt_to_image_radio = QRadioButton("Prompt to Image")
-        self.prompt_to_image_radio.setChecked(True)
-        self.layout.addWidget(self.prompt_to_image_radio)
-        self.radio_button_group.addButton(self.prompt_to_image_radio)
-        self.image_to_image_radio = QRadioButton("Image to Image")
-        self.layout.addWidget(self.image_to_image_radio)
-        self.radio_button_group.addButton(self.image_to_image_radio)
+        self.use_lora_checkbox = QCheckBox("Use LoRA")
+        sliders_layout.addWidget(self.use_lora_checkbox)
+
+        # Steps Slider
+        steps_layout = QHBoxLayout()
+        self.steps_label = QLabel("Steps: 20")
+        steps_layout.addWidget(self.steps_label)
+        self.steps_slider = QSlider(Qt.Horizontal)
+        self.steps_slider.setRange(1, 100)
+        self.steps_slider.setValue(20)
+        self.steps_slider.valueChanged.connect(lambda value: self.steps_label.setText(f"Steps: {value}"))
+        steps_layout.addWidget(self.steps_slider)
+        sliders_layout.addLayout(steps_layout)
+
+        # Guidance Scale Slider
+        guidance_layout = QHBoxLayout()
+        self.guidance_label = QLabel("Guidance: 7.0")
+        guidance_layout.addWidget(self.guidance_label)
+        self.guidance_slider = QSlider(Qt.Horizontal)
+        self.guidance_slider.setRange(0, 200)
+        self.guidance_slider.setValue(70)
+        self.guidance_slider.valueChanged.connect(lambda value: self.guidance_label.setText(f"Guidance: {value / 10.0}"))
+        guidance_layout.addWidget(self.guidance_slider)
+        sliders_layout.addLayout(guidance_layout)
+
+        # Strength Slider
+        strength_layout = QHBoxLayout()
+        self.strength_label = QLabel("Strength: 0.8")
+        strength_layout.addWidget(self.strength_label)
+        self.strength_slider = QSlider(Qt.Horizontal)
+        self.strength_slider.setRange(0, 100)
+        self.strength_slider.setValue(80)
+        self.strength_slider.valueChanged.connect(lambda value: self.strength_label.setText(f"Strength: {value / 100.0}"))
+        strength_layout.addWidget(self.strength_slider)
+        sliders_layout.addLayout(strength_layout)
+
+        self.layout.addLayout(sliders_layout)
 
         # --- Buttons ---
-        self.generate_buttons_widget = QWidget()
-        generate_buttons_layout = QHBoxLayout(self.generate_buttons_widget)
-        generate_buttons_layout.setContentsMargins(0,0,0,0)
-        self.generate_button = QPushButton("Generate")
-        generate_buttons_layout.addWidget(self.generate_button)
-        self.layout.addWidget(self.generate_buttons_widget)
+        buttons_layout = QHBoxLayout()
+        self.prompt_to_image_button = QPushButton("Prompt to Image")
+        self.image_to_image_button = QPushButton("Image to Image")
+        self.variations_button = QPushButton("Variations")
 
-        self.viewer_buttons_widget = QWidget()
-        viewer_buttons_layout = QHBoxLayout(self.viewer_buttons_widget)
-        viewer_buttons_layout.setContentsMargins(0,0,0,0)
-        self.accept_button = QPushButton("Accept")
-        self.cancel_viewer_button = QPushButton("Cancel")
-        self.regenerate_button = QPushButton("Regenerate")
-        viewer_buttons_layout.addWidget(self.accept_button)
-        viewer_buttons_layout.addWidget(self.cancel_viewer_button)
-        viewer_buttons_layout.addWidget(self.regenerate_button)
-        self.layout.addWidget(self.viewer_buttons_widget)
-        self.viewer_buttons_widget.setVisible(False)
+        buttons_layout.addWidget(self.prompt_to_image_button)
+        buttons_layout.addWidget(self.image_to_image_button)
+        buttons_layout.addWidget(self.variations_button)
+
+        self.layout.addLayout(buttons_layout)
+
+        self.variations_button.setEnabled(False)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate
@@ -88,48 +120,46 @@ class AIPanel(QWidget):
         self.layout.addWidget(self.progress_bar)
 
         # --- Connections ---
-        self.generate_button.clicked.connect(self.start_generation)
-        self.accept_button.clicked.connect(self.accept_image)
-        self.cancel_viewer_button.clicked.connect(self.cancel_viewer)
-        self.regenerate_button.clicked.connect(self.regenerate_image)
-        self.image_to_image_radio.toggled.connect(self.on_mode_changed)
+        self.prompt_to_image_button.clicked.connect(lambda: self.start_generation("Prompt to Image"))
+        self.image_to_image_button.clicked.connect(lambda: self.start_generation("Image to Image"))
+        self.variations_button.clicked.connect(self.generate_variations)
 
-    def on_mode_changed(self, checked):
-        if checked:
-            image = self.app.get_current_image()
-            if image:
-                pixmap = self.pil_to_pixmap(image)
-                self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
-        else:
-            self.image_viewer.setPixmap(self.alphabg_pixmap)
 
-    def start_generation(self):
-        prompt = self.prompt_input.text()
+    def start_generation(self, mode):
+        prompt = self.prompt_input.toPlainText()
         if not prompt:
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
             return
 
         AIPanel.last_prompt = prompt
-        mode = "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
         input_image = None
         original_size = (self.app.document.width, self.app.document.height)
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
+            if input_image is None:
+                QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
+                return
 
         self.progress_bar.setVisible(True)
-        self.generate_buttons_widget.setEnabled(False)
-        self.viewer_buttons_widget.setVisible(False)
+        self.set_buttons_enabled(False)
+
+        use_lora = self.use_lora_checkbox.isChecked()
 
         # Load the pipeline if it's not already loaded
         if AIPanel.pipe is None:
             is_img2img = (mode == "Image to Image")
             try:
-                AIPanel.pipe = get_pipeline(is_img2img)
+                AIPanel.pipe = get_pipeline(is_img2img, use_lora)
             except Exception as e:
                 self.on_generation_failed(f"Failed to load AI model: {e}")
                 return
 
-        self.thread = GenerationThread(AIPanel.pipe, mode, input_image, prompt, original_size)
+        num_inference_steps = self.steps_slider.value()
+        guidance_scale = self.guidance_slider.value() / 10.0
+        strength = self.strength_slider.value() / 100.0
+
+        self.thread = GenerationThread(AIPanel.pipe, mode, input_image, prompt, original_size,
+                                       num_inference_steps, guidance_scale, strength, use_lora)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.start()
@@ -137,34 +167,29 @@ class AIPanel(QWidget):
     def on_generation_complete(self, result):
         if isinstance(result, Image.Image):
             self.generated_image = result
-            pixmap = self.pil_to_pixmap(result)
-            self.image_viewer.setPixmap(pixmap.scaled(self.image_viewer.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
-        
+            self.image_generated.emit(self.generated_image)
+
         self.progress_bar.setVisible(False)
-        self.generate_buttons_widget.setVisible(False)
-        self.generate_buttons_widget.setEnabled(True)
-        self.viewer_buttons_widget.setVisible(True)
+        self.set_buttons_enabled(True)
+        self.variations_button.setEnabled(True)
+
 
     def on_generation_failed(self, error_message):
         self.progress_bar.setVisible(False)
-        self.generate_buttons_widget.setEnabled(True)
+        self.set_buttons_enabled(True)
         QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
 
-    def accept_image(self):
+    def generate_variations(self):
         if self.generated_image:
-            self.image_generated.emit(self.generated_image)
-        self.cancel_viewer()
+            self.start_generation("Image to Image")
+        else:
+            QMessageBox.warning(self, "Warning", "No image to generate variations from.")
 
-    def cancel_viewer(self):
-        self.viewer_buttons_widget.setVisible(False)
-        self.generate_buttons_widget.setVisible(True)
-        self.generated_image = None
-        self.image_viewer.setPixmap(self.alphabg_pixmap)
+    def set_buttons_enabled(self, enabled):
+        self.prompt_to_image_button.setEnabled(enabled)
+        self.image_to_image_button.setEnabled(enabled)
+        self.variations_button.setEnabled(enabled and self.generated_image is not None)
 
-    def regenerate_image(self):
-        self.viewer_buttons_widget.setVisible(False)
-        self.generate_buttons_widget.setVisible(True)
-        self.start_generation()
 
     def _cleanup_gpu_memory(self):
         """Deletes the model and clears the GPU cache."""
@@ -187,6 +212,9 @@ class AIPanel(QWidget):
 
     def get_settings(self):
         return {
-            "prompt": self.prompt_input.text(),
-            "mode": "Image to Image" if self.image_to_image_radio.isChecked() else "Prompt to Image"
+            "prompt": self.prompt_input.toPlainText(),
+            "use_lora": self.use_lora_checkbox.isChecked(),
+            "steps": self.steps_slider.value(),
+            "guidance": self.guidance_slider.value(),
+            "strength": self.strength_slider.value(),
         }
