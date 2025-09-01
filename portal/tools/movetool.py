@@ -31,7 +31,7 @@ class MoveTool(BaseTool):
             self.original_selection_shape = self.canvas.selection_shape
             self.command_generated.emit(("cut_selection", "move_tool_start"))
         else:
-            self.command_generated.emit(("get_active_layer_image", "move_tool_start_no_selection"))
+            self.command_generated.emit(("cut_selection", "move_tool_start_no_selection"))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.canvas.original_image is None:

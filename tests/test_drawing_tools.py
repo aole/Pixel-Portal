@@ -244,7 +244,7 @@ def test_move_mouse_events_no_selection(move_tool, qtbot):
     with qtbot.waitSignal(tool.command_generated) as blocker:
         tool.mousePressEvent(press_event, QPoint(10, 10))
     assert blocker.signal_triggered
-    assert blocker.args == [("get_active_layer_image", "move_tool_start_no_selection")]
+    assert blocker.args == [("cut_selection", "move_tool_start_no_selection")]
 
     # Mouse Move
     move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 30), QPoint(20, 30), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
