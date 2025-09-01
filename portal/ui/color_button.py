@@ -4,11 +4,12 @@ from PySide6.QtCore import Signal, Qt
 
 
 class ColorButton(QPushButton):
+    color_removed = Signal(str)
+
     def __init__(self, color, drawing_context):
         super().__init__()
         self.drawing_context = drawing_context
         self.setFixedSize(24, 24)
-        self.clicked.connect(self.on_click)
         self.drawing_context.pen_color_changed.connect(self.update_active_state)
         self.set_color(color)
         self.update_active_state(self.drawing_context.pen_color)
@@ -21,8 +22,13 @@ class ColorButton(QPushButton):
         self.setToolTip(self.color)
         self.update_active_state(self.drawing_context.pen_color)
 
-    def on_click(self):
-        self.drawing_context.set_pen_color(QColor(self.color))
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.drawing_context.set_pen_color(QColor(self.color))
+        elif event.button() == Qt.RightButton:
+            self.drawing_context.set_pen_color(QColor(self.color))
+            self.color_removed.emit(self.color)
+        super().mousePressEvent(event)
 
     def update_active_state(self, active_color):
         if QColor(self.color) == active_color:

@@ -238,15 +238,17 @@ def test_application_startup(qtbot):
         mock_exit.assert_not_called()
 
 
+from PySide6.QtCore import Qt
+
 def test_color_button(qtbot):
     """Test that the set_pen_color method is called on the app when a color button is clicked."""
     mock_drawing_context = MagicMock()
     button = ColorButton(QColor("red"), mock_drawing_context)
     qtbot.addWidget(button)
 
-    button.click()
+    qtbot.mouseClick(button, Qt.LeftButton)
 
-    mock_drawing_context.set_pen_color.assert_called_once_with("#ff0000")
+    mock_drawing_context.set_pen_color.assert_called_once_with(QColor("red"))
 
 @patch("PySide6.QtWidgets.QColorDialog.getColor")
 def test_active_color_button(mock_get_color, qtbot):
@@ -269,6 +271,7 @@ def mock_main_window(qapp):
     window.app = MagicMock()
     window.open_new_file_dialog = MagicMock()
     window.load_palette_from_image = MagicMock()
+    window.save_palette_as_png = MagicMock()
     window.open_resize_dialog = MagicMock()
     window.open_background_color_dialog = MagicMock()
     window.toggle_ai_panel = MagicMock()
@@ -290,6 +293,7 @@ def test_setup_actions(mock_main_window):
     assert action_manager.open_action is not None
     assert action_manager.save_action is not None
     assert action_manager.load_palette_action is not None
+    assert action_manager.save_palette_as_png_action is not None
     assert action_manager.exit_action is not None
     assert action_manager.undo_action is not None
     assert action_manager.redo_action is not None
@@ -325,6 +329,9 @@ def test_setup_actions(mock_main_window):
 
     action_manager.load_palette_action.trigger()
     mock_main_window.load_palette_from_image.assert_called_once()
+
+    action_manager.save_palette_as_png_action.trigger()
+    mock_main_window.save_palette_as_png.assert_called_once()
 
     action_manager.exit_action.trigger()
     mock_main_window.app.exit.assert_called_once()

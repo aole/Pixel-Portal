@@ -15,6 +15,8 @@ class MenuBarBuilder:
         file_menu.addAction(self.action_manager.save_action)
         file_menu.addSeparator()
         file_menu.addAction(self.action_manager.load_palette_action)
+        file_menu.addAction(self.action_manager.save_palette_as_png_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.action_manager.exit_action)
 
         edit_menu = menu_bar.addMenu("&Edit")
