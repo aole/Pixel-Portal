@@ -1,8 +1,11 @@
 from PySide6.QtWidgets import QPushButton, QColorDialog
 from PySide6.QtGui import QColor
+from PySide6.QtCore import Signal, Qt
 
 
 class ColorButton(QPushButton):
+    rightClicked = Signal(QColor)
+
     def __init__(self, color, drawing_context):
         super().__init__()
         self.drawing_context = drawing_context
@@ -23,9 +26,18 @@ class ColorButton(QPushButton):
     def on_click(self):
         self.drawing_context.set_pen_color(QColor(self.color))
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self.rightClicked.emit(QColor(self.color))
+        else:
+            super().mousePressEvent(event)
+
     def update_active_state(self, active_color):
         if active_color.name() == self.color:
-            self.setStyleSheet(f"background-color: {self.color}; border: 2px solid #FFFFFF;")
+            color = QColor(self.color)
+            brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
+            border_color = "#000000" if brightness > 128 else "#FFFFFF"
+            self.setStyleSheet(f"background-color: {self.color}; border: 2px solid {border_color};")
         else:
             self.setStyleSheet(f"background-color: {self.color}; border: none;")
 

@@ -187,12 +187,23 @@ class MainWindow(QMainWindow):
         num_default_cols = (len(colors) + 1) // 2
         for i, color in enumerate(colors):
             button = ColorButton(color, self.app.drawing_context)
+            button.rightClicked.connect(self.add_color_to_palette)
             self.main_palette_buttons.append(button)
             row = i % 2
             col = i // 2
             self.color_layout.addWidget(button, row, col)
 
-        pass
+    def add_color_to_palette(self, color):
+        colors = self.get_palette()
+        if color.name() not in colors:
+            colors.append(color.name())
+            self.update_palette(colors)
+            self.save_palette(colors)
+
+    def save_palette(self, colors):
+        with open("palettes/default.colors", "w") as f:
+            for color in colors:
+                f.write(f"{color}\n")
 
     def update_pen_width_label(self, width):
         self.pen_width_label.setText(f"{width:02d}")

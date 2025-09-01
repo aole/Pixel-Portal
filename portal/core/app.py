@@ -51,6 +51,8 @@ class App(QObject):
         self.undo_manager.clear()
         self.undo_stack_changed.emit()
         self.document_changed.emit()
+        if self.main_window:
+            self.main_window.canvas.set_initial_zoom()
 
     def on_layer_visibility_changed(self, index):
         self.document_changed.emit()
@@ -63,6 +65,8 @@ class App(QObject):
         if self.document:
             command = ResizeCommand(self.document, width, height, interpolation)
             self.execute_command(command)
+            if self.main_window:
+                self.main_window.canvas.set_initial_zoom()
 
     @Slot()
     def crop_to_selection(self):
@@ -108,6 +112,8 @@ class App(QObject):
             self.undo_manager.clear()
             self.undo_stack_changed.emit()
             self.document_changed.emit()
+            if self.main_window:
+                self.main_window.canvas.set_initial_zoom()
 
     @Slot()
     def save_document(self):
