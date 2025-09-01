@@ -24,7 +24,7 @@ def test_new_file_dialog(qtbot):
 
 def test_open_image(qtbot, monkeypatch):
     """Test that an image is opened and colors are extracted."""
-    mock_get_open_file_name = MagicMock(return_value=("portal/tests/test_image.png", "Image Files (*.png *.jpg *.bmp)"))
+    mock_get_open_file_name = MagicMock(return_value=("tests/test_image.png", "Image Files (*.png *.jpg *.bmp)"))
     monkeypatch.setattr("PySide6.QtWidgets.QFileDialog.getOpenFileName", mock_get_open_file_name)
 
     dialog = PaletteDialog()

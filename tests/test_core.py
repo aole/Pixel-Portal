@@ -199,7 +199,7 @@ def test_undo_redo(app, qtbot):
 
 @patch('PySide6.QtWidgets.QFileDialog.getOpenFileName')
 def test_open_document(mock_get_open_file_name, app, qtbot):
-    test_image_path = os.path.abspath('portal/tests/test_image.png')
+    test_image_path = os.path.abspath('tests/test_image.png')
     mock_get_open_file_name.return_value = (test_image_path, 'Image Files (*.png *.jpg *.bmp)')
 
     with qtbot.waitSignal(app.document_changed, raising=True) as document_blocker, \

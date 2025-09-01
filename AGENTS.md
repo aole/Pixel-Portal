@@ -8,11 +8,11 @@ Due to a segmentation fault that occurs when running the full test suite, the te
 
 Example:
 ```bash
-QT_QPA_PLATFORM=offscreen python -m pytest portal/tests/test_core.py
-QT_QPA_PLATFORM=offscreen python -m pytest portal/tests/test_dialogs.py
-QT_QPA_PLATFORM=offscreen python -m pytest portal/tests/test_document_and_layers.py
-QT_QPA_PLATFORM=offscreen python -m pytest portal/tests/test_drawing_tools.py
-QT_QPA_PLATFORM=offscreen python -m pytest portal/tests/test_selection_tools.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_core.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_dialogs.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_and_layers.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_drawing_tools.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
 ```
 
 ## Committing Changes
