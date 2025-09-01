@@ -79,3 +79,11 @@ class Layer(QObject):
         layer = cls(width, height, name)
         layer.image = qimage
         return layer
+
+    def flip_horizontal(self):
+        self.image = self.image.mirrored(True, False)
+        self.on_image_change.emit()
+
+    def flip_vertical(self):
+        self.image = self.image.mirrored(False, True)
+        self.on_image_change.emit()

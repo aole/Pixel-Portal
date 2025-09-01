@@ -98,12 +98,14 @@ def test_flip_horizontal_vertical(document):
         layer.image.setPixelColor(0, 0, QColor("red"))
         layer.image.setPixelColor(99, 99, QColor("blue"))
 
-    document.flip_horizontal()
+    for layer in document.layer_manager.layers:
+        layer.flip_horizontal()
     for layer in document.layer_manager.layers:
         assert layer.image.pixelColor(99, 0) == QColor("red")
         assert layer.image.pixelColor(0, 99) == QColor("blue")
 
-    document.flip_vertical()
+    for layer in document.layer_manager.layers:
+        layer.flip_vertical()
     for layer in document.layer_manager.layers:
         assert layer.image.pixelColor(99, 99) == QColor("red")
         assert layer.image.pixelColor(0, 0) == QColor("blue")

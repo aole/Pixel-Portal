@@ -147,18 +147,11 @@ class App(QObject):
     def select_none(self):
         self.select_none_triggered.emit()
 
-    @Slot()
-    def flip_horizontal(self):
+    @Slot(bool, bool, bool)
+    def flip(self, horizontal, vertical, all_layers):
         if self.document:
-            command = FlipCommand(self.document, 'horizontal')
+            command = FlipCommand(self.document, horizontal, vertical, all_layers)
             self.execute_command(command)
-
-    @Slot()
-    def flip_vertical(self):
-        if self.document:
-            command = FlipCommand(self.document, 'vertical')
-            self.execute_command(command)
-
     @Slot()
     def invert_selection(self):
         self.invert_selection_triggered.emit()

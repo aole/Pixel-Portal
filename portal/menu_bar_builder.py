@@ -34,8 +34,7 @@ class MenuBarBuilder:
         image_menu.addAction(self.action_manager.resize_action)
         image_menu.addAction(self.action_manager.crop_action)
         image_menu.addSeparator()
-        image_menu.addAction(self.action_manager.flip_horizontal_action)
-        image_menu.addAction(self.action_manager.flip_vertical_action)
+        image_menu.addAction(self.action_manager.flip_action)
 
         view_menu = menu_bar.addMenu("&View")
         background_menu = view_menu.addMenu("&Background")

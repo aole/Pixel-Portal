@@ -141,10 +141,9 @@ def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
     mock_paste_command.return_value.execute.assert_called_once()
 
 @patch('portal.app.FlipCommand')
-def test_flip_horizontal(mock_flip_command, app):
-    app.flip_horizontal()
-
-    mock_flip_command.assert_called_once_with(app.document, 'horizontal')
+def test_flip(mock_flip_command, app):
+    app.flip(horizontal=True, vertical=False, all_layers=False)
+    mock_flip_command.assert_called_once_with(app.document, True, False, False)
     mock_flip_command.return_value.execute.assert_called_once()
 
 import os
@@ -164,13 +163,6 @@ from PySide6.QtCore import QPoint
 from portal.drawing import Drawing
 from portal.undo import UndoManager
 
-
-@patch('portal.app.FlipCommand')
-def test_flip_vertical(mock_flip_command, app):
-    app.flip_vertical()
-
-    mock_flip_command.assert_called_once_with(app.document, 'vertical')
-    mock_flip_command.return_value.execute.assert_called_once()
 
 def test_undo_redo(app, qtbot):
     initial_width = app.document.width
@@ -312,6 +304,7 @@ def mock_main_window(qapp):
     window.open_resize_dialog = MagicMock()
     window.open_background_color_dialog = MagicMock()
     window.toggle_ai_panel = MagicMock()
+    window.open_flip_dialog = MagicMock()
     return window
 
 def test_setup_actions(mock_main_window):
@@ -339,8 +332,7 @@ def test_setup_actions(mock_main_window):
     assert action_manager.invert_selection_action is not None
     assert action_manager.resize_action is not None
     assert action_manager.crop_action is not None
-    assert action_manager.flip_horizontal_action is not None
-    assert action_manager.flip_vertical_action is not None
+    assert action_manager.flip_action is not None
     assert action_manager.checkered_action is not None
     assert action_manager.white_action is not None
     assert action_manager.black_action is not None
@@ -398,11 +390,8 @@ def test_setup_actions(mock_main_window):
     action_manager.crop_action.trigger()
     mock_main_window.app.crop_to_selection.assert_called_once()
 
-    action_manager.flip_horizontal_action.trigger()
-    mock_main_window.app.flip_horizontal.assert_called_once()
-
-    action_manager.flip_vertical_action.trigger()
-    mock_main_window.app.flip_vertical.assert_called_once()
+    action_manager.flip_action.trigger()
+    mock_main_window.open_flip_dialog.assert_called_once()
 
     action_manager.custom_color_action.trigger()
     mock_main_window.open_background_color_dialog.assert_called_once()
@@ -519,7 +508,7 @@ def test_flip_command(document, layer):
     layer.image.setPixelColor(99, 99, QColor("blue"))
 
     # Horizontal flip
-    command_h = FlipCommand(document, 'horizontal')
+    command_h = FlipCommand(document, horizontal=True, vertical=False, all_layers=False)
     command_h.execute()
     assert layer.image.pixelColor(99, 0) == QColor("red")
     assert layer.image.pixelColor(0, 99) == QColor("blue")
@@ -529,7 +518,7 @@ def test_flip_command(document, layer):
     assert layer.image.pixelColor(99, 99) == QColor("blue")
 
     # Vertical flip
-    command_v = FlipCommand(document, 'vertical')
+    command_v = FlipCommand(document, horizontal=False, vertical=True, all_layers=False)
     command_v.execute()
     assert layer.image.pixelColor(0, 99) == QColor("red")
     assert layer.image.pixelColor(99, 0) == QColor("blue")
@@ -537,6 +526,26 @@ def test_flip_command(document, layer):
     command_v.undo()
     assert layer.image.pixelColor(0, 0) == QColor("red")
     assert layer.image.pixelColor(99, 99) == QColor("blue")
+
+def test_flip_command_all_layers(document):
+    """Test that the FlipCommand correctly flips all layers in the document."""
+    # Create a non-symmetrical image on each layer
+    for layer in document.layer_manager.layers:
+        layer.image.fill(QColor(0, 0, 0, 0))
+        layer.image.setPixelColor(0, 0, QColor("red"))
+        layer.image.setPixelColor(99, 99, QColor("blue"))
+
+    # Horizontal flip all layers
+    command_h = FlipCommand(document, horizontal=True, vertical=False, all_layers=True)
+    command_h.execute()
+    for layer in document.layer_manager.layers:
+        assert layer.image.pixelColor(99, 0) == QColor("red")
+        assert layer.image.pixelColor(0, 99) == QColor("blue")
+
+    command_h.undo()
+    for layer in document.layer_manager.layers:
+        assert layer.image.pixelColor(0, 0) == QColor("red")
+        assert layer.image.pixelColor(99, 99) == QColor("blue")
 
 def test_add_layer_command(document):
     """Test that the AddLayerCommand adds a new layer and that undo removes it."""
