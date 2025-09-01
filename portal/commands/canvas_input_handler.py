@@ -10,9 +10,13 @@ class CanvasInputHandler:
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Alt:
             self.drawing_context.set_tool("Picker")
+        elif event.key() == Qt.Key_Control:
+            self.drawing_context.set_tool("Move")
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
+            self.drawing_context.set_tool(self.drawing_context.previous_tool)
+        elif event.key() == Qt.Key_Control:
             self.drawing_context.set_tool(self.drawing_context.previous_tool)
 
     def mousePressEvent(self, event):

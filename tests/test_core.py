@@ -561,6 +561,32 @@ def test_add_layer_command(document):
     assert len(document.layer_manager.layers) == initial_layer_count
 
 
+from portal.commands.canvas_input_handler import CanvasInputHandler
+
+def test_ctrl_key_activates_move_tool(app, qtbot):
+    """Test that pressing Ctrl activates the Move tool and releasing it reverts to the previous tool."""
+    # Set initial tool
+    app.drawing_context.set_tool("Pen")
+    assert app.drawing_context.tool == "Pen"
+
+    # Mock a canvas to instantiate the handler
+    mock_canvas = MagicMock()
+    mock_canvas.drawing_context = app.drawing_context
+    handler = CanvasInputHandler(mock_canvas)
+
+    # Simulate Ctrl press
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Control
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Move"
+    assert app.drawing_context.previous_tool == "Pen"
+
+    # Simulate Ctrl release
+    handler.keyReleaseEvent(mock_event)
+    assert app.drawing_context.tool == "Pen"
+
+
 def test_add_command():
     """Test that a command is added to the undo stack and that the redo stack is cleared."""
     undo_manager = UndoManager()

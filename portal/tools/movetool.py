@@ -60,7 +60,8 @@ class MoveTool(BaseTool):
 
         command = MoveCommand(
             layer=active_layer,
-            original_image=self.before_image,
+            before_move_image=self.before_image,
+            after_cut_image=active_layer.image.copy(),
             moved_image=self.canvas.original_image,
             delta=delta,
             original_selection_shape=self.original_selection_shape,
