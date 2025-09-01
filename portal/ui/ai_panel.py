@@ -105,17 +105,14 @@ class AIPanel(QWidget):
         self.prompt_to_image_button = QPushButton("Prompt to Image")
         self.image_to_image_button = QPushButton("Image to Image")
         self.variations_button = QPushButton("Variations")
-        self.copy_to_layer_button = QPushButton("Copy to New Layer")
 
         buttons_layout.addWidget(self.prompt_to_image_button)
         buttons_layout.addWidget(self.image_to_image_button)
         buttons_layout.addWidget(self.variations_button)
-        buttons_layout.addWidget(self.copy_to_layer_button)
 
         self.layout.addLayout(buttons_layout)
 
         self.variations_button.setEnabled(False)
-        self.copy_to_layer_button.setEnabled(False)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate
@@ -126,7 +123,6 @@ class AIPanel(QWidget):
         self.prompt_to_image_button.clicked.connect(lambda: self.start_generation("Prompt to Image"))
         self.image_to_image_button.clicked.connect(lambda: self.start_generation("Image to Image"))
         self.variations_button.clicked.connect(self.generate_variations)
-        self.copy_to_layer_button.clicked.connect(self.copy_to_new_layer)
 
 
     def start_generation(self, mode):
@@ -176,7 +172,6 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.set_buttons_enabled(True)
         self.variations_button.setEnabled(True)
-        self.copy_to_layer_button.setEnabled(True)
 
 
     def on_generation_failed(self, error_message):
@@ -190,17 +185,10 @@ class AIPanel(QWidget):
         else:
             QMessageBox.warning(self, "Warning", "No image to generate variations from.")
 
-    def copy_to_new_layer(self):
-        if self.generated_image:
-            self.image_generated.emit(self.generated_image)
-        else:
-            QMessageBox.warning(self, "Warning", "No image to copy.")
-
     def set_buttons_enabled(self, enabled):
         self.prompt_to_image_button.setEnabled(enabled)
         self.image_to_image_button.setEnabled(enabled)
         self.variations_button.setEnabled(enabled and self.generated_image is not None)
-        self.copy_to_layer_button.setEnabled(enabled and self.generated_image is not None)
 
 
     def _cleanup_gpu_memory(self):
