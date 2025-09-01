@@ -194,7 +194,8 @@ class MainWindow(QMainWindow):
 
     def add_color_to_palette(self, color):
         colors = self.get_palette()
-        if color.name() not in colors:
+        # Case-insensitive check
+        if color.name().lower() not in [c.lower() for c in colors]:
             colors.append(color.name())
             self.update_palette(colors)
             self.save_palette(colors)
