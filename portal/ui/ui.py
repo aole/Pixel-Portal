@@ -187,7 +187,6 @@ class MainWindow(QMainWindow):
         num_default_cols = (len(colors) + 1) // 2
         for i, color in enumerate(colors):
             button = ColorButton(color, self.app.drawing_context)
-            button.rightClicked.connect(self.add_color_to_palette)
             self.main_palette_buttons.append(button)
             row = i % 2
             col = i // 2

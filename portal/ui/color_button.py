@@ -4,8 +4,6 @@ from PySide6.QtCore import Signal, Qt
 
 
 class ColorButton(QPushButton):
-    rightClicked = Signal(QColor)
-
     def __init__(self, color, drawing_context):
         super().__init__()
         self.drawing_context = drawing_context
@@ -26,10 +24,6 @@ class ColorButton(QPushButton):
     def on_click(self):
         self.drawing_context.set_pen_color(QColor(self.color))
 
-    def contextMenuEvent(self, event):
-        self.rightClicked.emit(QColor(self.color))
-        event.accept()
-
     def update_active_state(self, active_color):
         if QColor(self.color) == active_color:
             color = QColor(self.color)
@@ -41,6 +35,8 @@ class ColorButton(QPushButton):
 
 
 class ActiveColorButton(QPushButton):
+    rightClicked = Signal(QColor)
+
     def __init__(self, drawing_context):
         super().__init__()
         self.drawing_context = drawing_context
@@ -53,6 +49,10 @@ class ActiveColorButton(QPushButton):
         color = QColorDialog.getColor(self.drawing_context.pen_color, self)
         if color.isValid():
             self.drawing_context.set_pen_color(color)
+
+    def contextMenuEvent(self, event):
+        self.rightClicked.emit(self.drawing_context.pen_color)
+        event.accept()
 
     def update_color(self, color):
         self.setStyleSheet(f"background-color: {color.name()}")
