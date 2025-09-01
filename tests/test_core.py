@@ -2,8 +2,8 @@
 import pytest
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
-from portal.app import App
-from portal.drawing_context import DrawingContext
+from portal.core.app import App
+from portal.core.drawing_context import DrawingContext
 from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
@@ -120,7 +120,7 @@ def test_clear_layer(app, qtbot):
         app.clear_layer()
     assert blocker
 
-@patch('portal.app.CropCommand')
+@patch('portal.core.app.CropCommand')
 def test_perform_crop(mock_crop_command, app):
     rect = QRect(10, 10, 20, 20)
     app.perform_crop(rect)
@@ -128,7 +128,7 @@ def test_perform_crop(mock_crop_command, app):
     mock_crop_command.assert_called_once_with(app.document, rect)
     mock_crop_command.return_value.execute.assert_called_once()
 
-@patch('portal.app.PasteCommand')
+@patch('portal.core.app.PasteCommand')
 @patch('PySide6.QtWidgets.QApplication.clipboard')
 def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
     # Mock the clipboard to return a valid QImage
@@ -140,7 +140,7 @@ def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
     mock_paste_command.assert_called_once_with(app.document, mock_image)
     mock_paste_command.return_value.execute.assert_called_once()
 
-@patch('portal.app.FlipCommand')
+@patch('portal.core.app.FlipCommand')
 def test_flip(mock_flip_command, app):
     app.flip(horizontal=True, vertical=False, all_layers=False)
     mock_flip_command.assert_called_once_with(app.document, True, False, False)
@@ -149,19 +149,19 @@ def test_flip(mock_flip_command, app):
 import os
 import sys
 from portal.main import MainWindow
-from portal.ui import ColorButton, ActiveColorButton
+from portal.ui.color_button import ColorButton, ActiveColorButton
 from PySide6.QtWidgets import QMainWindow, QApplication
-from portal.action_manager import ActionManager
-from portal.document import Document
-from portal.layer import Layer
-from portal.command import (
+from portal.commands.action_manager import ActionManager
+from portal.core.document import Document
+from portal.core.layer import Layer
+from portal.core.command import (
     ResizeCommand, FlipCommand, AddLayerCommand, PasteCommand, CropCommand,
     DrawCommand, FillCommand, ShapeCommand, DuplicateLayerCommand,
     ClearLayerCommand, RemoveLayerCommand, MoveLayerCommand
 )
 from PySide6.QtCore import QPoint
-from portal.drawing import Drawing
-from portal.undo import UndoManager
+from portal.core.drawing import Drawing
+from portal.core.undo import UndoManager
 
 
 def test_undo_redo(app, qtbot):

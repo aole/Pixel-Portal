@@ -1,7 +1,7 @@
 import pytest
-from portal.canvas import Canvas
-from portal.drawing_context import DrawingContext
-from portal.document import Document
+from portal.ui.canvas import Canvas
+from portal.core.drawing_context import DrawingContext
+from portal.core.document import Document
 
 def test_segfault(qtbot):
     drawing_context = DrawingContext()

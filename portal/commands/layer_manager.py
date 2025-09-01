@@ -1,4 +1,4 @@
-from .layer import Layer
+from portal.core.layer import Layer
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt

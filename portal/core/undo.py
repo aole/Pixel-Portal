@@ -1,4 +1,4 @@
-from .command import Command
+from portal.core.command import Command
 
 
 class UndoManager:

@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath
 
 from portal.tools.basetool import BaseTool
-from ..command import MoveCommand
+from portal.core.command import MoveCommand
 
 
 class MoveTool(BaseTool):

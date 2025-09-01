@@ -2,7 +2,7 @@ import functools
 from PySide6.QtWidgets import QToolBar, QLabel, QSlider, QToolButton, QMenu
 from PySide6.QtGui import QPixmap, QIcon, QAction, QActionGroup
 from PySide6.QtCore import Qt
-from .color_button import ActiveColorButton
+from portal.ui.color_button import ActiveColorButton
 
 class ToolBarBuilder:
     def __init__(self, main_window, app):
@@ -68,7 +68,7 @@ class ToolBarBuilder:
         active_color_button = ActiveColorButton(self.app.drawing_context)
         toolbar.addWidget(active_color_button)
 
-        from .tools import get_tools
+        from portal.tools import get_tools
         tools = get_tools()
         self.tool_actions = {}
         self.tool_action_group = QActionGroup(self.main_window)
