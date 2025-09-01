@@ -326,7 +326,6 @@ def test_setup_actions(mock_main_window):
     assert action_manager.undo_action is not None
     assert action_manager.redo_action is not None
     assert action_manager.paste_as_new_layer_action is not None
-    assert action_manager.clear_action is not None
     assert action_manager.select_all_action is not None
     assert action_manager.select_none_action is not None
     assert action_manager.invert_selection_action is not None
@@ -370,9 +369,6 @@ def test_setup_actions(mock_main_window):
 
     action_manager.paste_as_new_layer_action.trigger()
     mock_main_window.app.paste_as_new_layer.assert_called_once()
-
-    action_manager.clear_action.trigger()
-    mock_main_window.app.clear_layer.assert_called_once()
 
     action_manager.select_all_action.trigger()
     mock_main_window.app.select_all.assert_called_once()
