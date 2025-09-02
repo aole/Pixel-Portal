@@ -86,7 +86,7 @@ class App(QObject):
             self.execute_command(command)
 
     @Slot()
-    def open_document(self):
+    def open_document(self, update_settings=True):
         file_path, _ = QFileDialog.getOpenFileName(
             None,
             "Open Image", 
@@ -94,10 +94,11 @@ class App(QObject):
             "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
         )
         if file_path:
-            self.last_directory = os.path.dirname(file_path)
-            self.config.set('General', 'last_directory', self.last_directory)
-            with open('settings.ini', 'w') as configfile:
-                self.config.write(configfile)
+            if update_settings:
+                self.last_directory = os.path.dirname(file_path)
+                self.config.set('General', 'last_directory', self.last_directory)
+                with open('settings.ini', 'w') as configfile:
+                    self.config.write(configfile)
 
             if file_path.lower().endswith(('.tif', '.tiff')):
                 self.document = Document.load_tiff(file_path)
@@ -116,7 +117,7 @@ class App(QObject):
                 self.main_window.canvas.set_initial_zoom()
 
     @Slot()
-    def save_document(self):
+    def save_document(self, update_settings=True):
         file_path, selected_filter = QFileDialog.getSaveFileName(
             None,
             "Save Image", 
@@ -124,10 +125,11 @@ class App(QObject):
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
         )
         if file_path:
-            self.last_directory = os.path.dirname(file_path)
-            self.config.set('General', 'last_directory', self.last_directory)
-            with open('settings.ini', 'w') as configfile:
-                self.config.write(configfile)
+            if update_settings:
+                self.last_directory = os.path.dirname(file_path)
+                self.config.set('General', 'last_directory', self.last_directory)
+                with open('settings.ini', 'w') as configfile:
+                    self.config.write(configfile)
 
             if "TIFF" in selected_filter:
                 self.document.save_tiff(file_path)
