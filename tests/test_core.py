@@ -196,7 +196,7 @@ def test_open_document(mock_get_open_file_name, app, qtbot):
 
     with qtbot.waitSignal(app.document_changed, raising=True) as document_blocker, \
          qtbot.waitSignal(app.undo_stack_changed, raising=True) as undo_blocker:
-        app.open_document(update_settings=False))
+        app.open_document(update_settings=False)
 
     assert app.document.width == 32
     assert app.document.height == 32
@@ -213,7 +213,7 @@ def test_save_document(mock_get_save_file_name, app, tmp_path):
     # create a red pixel
     app.document.layer_manager.layers[0].image.setPixelColor(0, 0, QColor("red"))
 
-    app.save_document(update_settings=False))
+    app.save_document(update_settings=False)
 
     assert os.path.exists(save_path)
 

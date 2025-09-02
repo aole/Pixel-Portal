@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath
+from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath, QCursor
 
 from portal.tools.basetool import BaseTool
 from portal.core.command import MoveCommand
@@ -16,6 +16,7 @@ class MoveTool(BaseTool):
         self.moving_selection = False
         self.original_selection_shape: QPainterPath | None = None
         self.before_image = None
+        self.cursor = QCursor(Qt.OpenHandCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos

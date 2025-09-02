@@ -1,5 +1,5 @@
 from portal.tools.basetool import BaseTool
-from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent, QKeySequence
+from PySide6.QtGui import QPainter, QPen, QImage, QPainterPath, QMouseEvent, QKeySequence, QCursor
 from PySide6.QtCore import QPoint, Qt
 from portal.core.command import DrawCommand
 
@@ -12,8 +12,13 @@ class PenTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.points = []
+        self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
+            return
+
         self.points = [doc_pos]
 
         # Use a transparent temp image for the preview overlay
@@ -28,6 +33,10 @@ class PenTool(BaseTool):
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.points:
+            return
+
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
             return
 
         self.points.append(doc_pos)

@@ -238,8 +238,10 @@ class CanvasRenderer:
             painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
 
     def draw_cursor(self, painter, target_rect, doc_image):
+        active_layer = self.canvas.document.layer_manager.active_layer
         if (
             not self.canvas.mouse_over_canvas
+            or (active_layer and not active_layer.visible)
             or self.canvas.drawing_context.tool in ["Bucket", "Picker"]
             or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed

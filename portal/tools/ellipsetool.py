@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt, QCursor
 
 from portal.tools.basetool import BaseTool
 from portal.core.command import ShapeCommand
@@ -13,8 +13,13 @@ class EllipseTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
+        self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
+            return
+
         self.start_point = doc_pos
         self.canvas.temp_image_replaces_active_layer = True
         # The command will need the original image state
@@ -22,6 +27,10 @@ class EllipseTool(BaseTool):
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.canvas.original_image is None:
+            return
+
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
             return
 
         self.canvas.temp_image = self.canvas.original_image.copy()
