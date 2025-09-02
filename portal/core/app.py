@@ -203,7 +203,6 @@ class App(QObject):
     @Slot(object)
     def handle_command(self, command):
         if isinstance(command, tuple):
-            print(f"Ignoring tuple-based command in App.handle_command: {command}")
             return
 
         if command:
