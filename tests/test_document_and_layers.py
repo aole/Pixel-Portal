@@ -1,6 +1,7 @@
 import pytest
 from PySide6.QtGui import QImage, QColor
-from PySide6.QtCore import QRect
+from PySide6.QtCore import QRect, Signal
+from PySide6.QtGui import QCursor
 from portal.core.document import Document
 from portal.core.layer import Layer
 from portal.commands.layer_manager import LayerManager
@@ -241,12 +242,21 @@ def test_merge_layer_down(layer_manager):
 
 
 def test_toggle_visibility(layer_manager):
-    """Test that the visibility of the layer at the given index is toggled."""
+    """Test that toggling visibility emits a command."""
     layer_manager.add_layer("Layer 1")
     layer_to_toggle_index = 1
-    initial_visibility = layer_manager.layers[layer_to_toggle_index].visible
+
+    spy = Mock()
+    layer_manager.command_generated.connect(spy)
+
     layer_manager.toggle_visibility(layer_to_toggle_index)
-    assert layer_manager.layers[layer_to_toggle_index].visible != initial_visibility
+
+    spy.assert_called_once()
+    command = spy.call_args[0][0]
+    from portal.commands.layer_commands import SetLayerVisibleCommand
+    assert isinstance(command, SetLayerVisibleCommand)
+    assert command.layer_index == layer_to_toggle_index
+    assert command.visible is False # The initial visibility is True
 
 
 def test_clone(layer_manager):
@@ -564,6 +574,7 @@ def test_mouse_press_event(canvas):
 def test_mouse_move_event(canvas):
     """Test that the correct tool's mouseMoveEvent is called and cursor position is updated."""
     mock_tool = Mock()
+    mock_tool.cursor = QCursor(Qt.CrossCursor)
     canvas.current_tool = mock_tool
     event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     canvas.mouseMoveEvent(event)

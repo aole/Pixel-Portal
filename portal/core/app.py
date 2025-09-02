@@ -27,6 +27,7 @@ class App(QObject):
         self.document = Document(64, 64)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
+        self.document.layer_manager.command_generated.connect(self.handle_command)
         self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
 
@@ -48,6 +49,7 @@ class App(QObject):
         self.document = Document(width, height)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
+        self.document.layer_manager.command_generated.connect(self.handle_command)
         self.undo_manager.clear()
         self.undo_stack_changed.emit()
         self.document_changed.emit()

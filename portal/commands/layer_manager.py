@@ -2,6 +2,7 @@ from portal.core.layer import Layer
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt
+from portal.commands.layer_commands import SetLayerVisibleCommand
 
 
 class LayerManager(QObject):
@@ -10,6 +11,7 @@ class LayerManager(QObject):
     """
     layer_visibility_changed = Signal(int)
     layer_structure_changed = Signal()
+    command_generated = Signal(object)
 
     def __init__(self, width: int, height: int, create_background: bool = True):
         super().__init__()
@@ -118,8 +120,10 @@ class LayerManager(QObject):
         """Toggles the visibility of the layer at the given index."""
         if not (0 <= index < len(self.layers)):
             raise IndexError("Layer index out of range.")
-        self.layers[index].visible = not self.layers[index].visible
-        self.layer_visibility_changed.emit(index)
+
+        layer = self.layers[index]
+        command = SetLayerVisibleCommand(self, index, not layer.visible)
+        self.command_generated.emit(command)
 
     def clone(self):
         """Creates a deep copy of the layer manager."""
