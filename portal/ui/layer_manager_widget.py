@@ -30,6 +30,9 @@ class LayerManagerWidget(QWidget):
         self.layer_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.layer_list.itemSelectionChanged.connect(self.on_selection_changed)
         self.layer_list.model().rowsMoved.connect(self.on_layers_moved)
+        self.layer_list.merge_down_requested.connect(self.merge_layer_down)
+        self.layer_list.select_opaque_requested.connect(self.select_opaque)
+        self.layer_list.duplicate_requested.connect(self.duplicate_layer_from_menu)
         self.layout.addWidget(self.layer_list)
 
         # Toolbar
@@ -43,10 +46,6 @@ class LayerManagerWidget(QWidget):
         self.remove_button = QPushButton(QIcon("icons/layerdelete.png"), "")
         self.remove_button.clicked.connect(self.remove_layer)
         self.toolbar.addWidget(self.remove_button)
-
-        self.duplicate_button = QPushButton(QIcon("icons/layerduplicate.png"), "")
-        self.duplicate_button.clicked.connect(self.duplicate_layer)
-        self.toolbar.addWidget(self.duplicate_button)
 
         self.clear_button = QPushButton(QIcon("icons/layerclear.png"), "")
         self.clear_button.clicked.connect(self.clear_layer)
@@ -139,17 +138,6 @@ class LayerManagerWidget(QWidget):
         command = RemoveLayerCommand(self.app.document.layer_manager, actual_index)
         self.app.execute_command(command)
 
-    def duplicate_layer(self):
-        """Duplicates the selected layer."""
-        current_row = self.layer_list.currentRow()
-        if current_row == -1:
-            return
-        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
-        
-        from portal.core.command import DuplicateLayerCommand
-        command = DuplicateLayerCommand(self.app.document.layer_manager, actual_index)
-        self.app.execute_command(command)
-
     def move_layer_up(self):
         current_row = self.layer_list.currentRow()
         if current_row == -1: return
@@ -166,4 +154,23 @@ class LayerManagerWidget(QWidget):
         
         from portal.core.command import MoveLayerCommand
         command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index - 1)
+        self.app.execute_command(command)
+
+    def merge_layer_down(self, index_in_list):
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
+        from portal.commands.layer_commands import MergeLayerDownCommand
+        command = MergeLayerDownCommand(self.app.document.layer_manager, actual_index)
+        self.app.execute_command(command)
+
+    def select_opaque(self, index_in_list):
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
+        layer = self.app.document.layer_manager.layers[actual_index]
+        from portal.commands.selection_commands import SelectOpaqueCommand
+        command = SelectOpaqueCommand(layer, self.canvas)
+        self.app.execute_command(command)
+
+    def duplicate_layer_from_menu(self, index_in_list):
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
+        from portal.core.command import DuplicateLayerCommand
+        command = DuplicateLayerCommand(self.app.document.layer_manager, actual_index)
         self.app.execute_command(command)
