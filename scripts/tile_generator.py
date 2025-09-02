@@ -2,6 +2,14 @@ import math
 from PySide6.QtGui import QPainter, QPolygonF, QColor
 from PySide6.QtCore import QPointF
 
+# Define the parameters for the script
+params = [
+    {'name': 'tile_type', 'type': 'choice', 'label': 'Tile Type', 'choices': ['Isometric', 'Hexagonal'], 'default': 'Isometric'},
+    {'name': 'size', 'type': 'number', 'label': 'Tile Size', 'default': 32, 'min': 4, 'max': 256},
+    {'name': 'fill_color', 'type': 'color', 'label': 'Fill Color', 'default': '#808080'},
+    {'name': 'outline_color', 'type': 'color', 'label': 'Outline Color', 'default': '#000000'},
+]
+
 def draw_isometric_tile(painter, size):
     """Draws an isometric tile."""
     half_size = size / 2
@@ -27,18 +35,7 @@ def draw_hex_tile(painter, size):
     ])
     painter.drawPolygon(polygon)
 
-# Define the parameters for the script
-params = [
-    {'name': 'tile_type', 'type': 'choice', 'label': 'Tile Type', 'choices': ['Isometric', 'Hexagonal'], 'default': 'Isometric'},
-    {'name': 'size', 'type': 'number', 'label': 'Tile Size', 'default': 32, 'min': 4, 'max': 256},
-    {'name': 'fill_color', 'type': 'color', 'label': 'Fill Color', 'default': '#808080'},
-    {'name': 'outline_color', 'type': 'color', 'label': 'Outline Color', 'default': '#000000'},
-]
-
-# Get user input using the new dialog
-values = api.get_parameters(params)
-
-if values:
+def main(api, values):
     tile_type = values['tile_type']
     size = values['size']
     fill_color = values['fill_color']
@@ -48,16 +45,20 @@ if values:
     new_layer = api.create_layer(f"{tile_type} Tile")
 
     if new_layer:
-        # Draw the tile
-        painter = QPainter(new_layer.image)
-        painter.setBrush(fill_color)
-        painter.setPen(outline_color)
+        # Define the drawing logic as a function
+        def draw_tile(image):
+            painter = QPainter(image)
+            painter.setBrush(fill_color)
+            painter.setPen(outline_color)
 
-        if tile_type == "Isometric":
-            draw_isometric_tile(painter, size)
-        elif tile_type == "Hexagonal":
-            draw_hex_tile(painter, size)
+            if tile_type == "Isometric":
+                draw_isometric_tile(painter, size)
+            elif tile_type == "Hexagonal":
+                draw_hex_tile(painter, size)
 
-        painter.end()
+            painter.end()
+
+        # Execute the drawing as an undoable command
+        api.modify_layer(new_layer, draw_tile)
     else:
         api.show_message_box("Script Error", "Could not create a new layer.")

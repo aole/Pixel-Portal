@@ -25,6 +25,41 @@ class Command(ABC):
         raise NotImplementedError
 
 
+class CompositeCommand(Command):
+    """A command that is composed of other commands."""
+    def __init__(self, commands: list[Command], name: str = "Composite"):
+        self.commands = commands
+        self.name = name
+
+    def execute(self):
+        for command in self.commands:
+            command.execute()
+
+    def undo(self):
+        for command in reversed(self.commands):
+            command.undo()
+
+
+class ModifyImageCommand(Command):
+    """A command that modifies a layer's image with a drawing function."""
+    def __init__(self, layer: Layer, drawing_func):
+        self.layer = layer
+        self.drawing_func = drawing_func
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+
+        self.drawing_func(self.layer.image)
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        if self.before_image:
+            self.layer.image = self.before_image.copy()
+            self.layer.on_image_change.emit()
+
+
 class DrawCommand(Command):
     def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document: 'Document', selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
         from portal.core.document import Document
@@ -544,24 +579,3 @@ class MoveLayerCommand(Command):
         if self.layer_manager.active_layer_index == self.to_index:
             self.layer_manager.active_layer_index = self.from_index
         self.layer_manager.layer_structure_changed.emit()
-
-class RunScriptCommand(Command):
-    def __init__(self, app, script_code: str):
-        self.app = app
-        self.script_code = script_code
-        self.before_document = None
-
-    def execute(self):
-        if self.before_document is None:
-            self.before_document = self.app.document.clone()
-
-        exec(self.script_code, {'api': self.app.scripting_api})
-
-    def undo(self):
-        if self.before_document:
-            self.app.document = self.before_document
-            # Reconnect signals since the document object is replaced
-            self.app.document.layer_manager.layer_visibility_changed.connect(self.app.on_layer_visibility_changed)
-            self.app.document.layer_manager.layer_structure_changed.connect(self.app.on_layer_structure_changed)
-            self.app.document.layer_manager.command_generated.connect(self.app.handle_command)
-            self.app.document_changed.emit()
