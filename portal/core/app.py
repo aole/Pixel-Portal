@@ -202,7 +202,7 @@ class App(QObject):
         if not active_layer:
             return
 
-        selection = self.main_window.canvas.selection_path
+        selection = self.main_window.canvas.selection_shape
         command = ClearLayerCommand(active_layer, selection)
         self.execute_command(command)
 
@@ -235,7 +235,7 @@ class App(QObject):
         if not active_layer:
             return None
 
-        selection = self.main_window.canvas.selection_path
+        selection = self.main_window.canvas.selection_shape
         if selection and not selection.isEmpty():
             return active_layer.image.copy(selection.boundingRect().toRect())
         else:

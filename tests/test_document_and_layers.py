@@ -643,7 +643,7 @@ class TestClipboard:
         active_layer.image.fill(QColor("red"))
 
         # Mock selection to be empty
-        app.main_window.canvas.selection_path = None
+        app.main_window.canvas.selection_shape = None
 
         # Perform copy
         app.copy()
@@ -667,9 +667,9 @@ class TestClipboard:
 
         # Mock selection
         selection_rect = QRect(5, 5, 10, 10)
-        selection_path = QPainterPath()
-        selection_path.addRect(selection_rect)
-        app.main_window.canvas.selection_path = selection_path
+        selection_shape = QPainterPath()
+        selection_shape.addRect(selection_rect)
+        app.main_window.canvas.selection_shape = selection_shape
 
         # Perform copy
         app.copy()
@@ -691,7 +691,7 @@ class TestClipboard:
         active_layer.image.fill(QColor("green"))
 
         # Mock selection to be empty
-        app.main_window.canvas.selection_path = None
+        app.main_window.canvas.selection_shape = None
 
         # Perform cut
         app.cut()
@@ -720,9 +720,9 @@ class TestClipboard:
 
         # Mock selection
         selection_rect = QRect(5, 5, 10, 10)
-        selection_path = QPainterPath()
-        selection_path.addRect(selection_rect)
-        app.main_window.canvas.selection_path = selection_path
+        selection_shape = QPainterPath()
+        selection_shape.addRect(selection_rect)
+        app.main_window.canvas.selection_shape = selection_shape
 
         # Perform cut
         app.cut()
