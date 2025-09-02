@@ -20,6 +20,9 @@ class ActionManager:
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.app.save_document)
 
+        self.save_palette_as_png_action = QAction("Save Palette as PNG...", self.main_window)
+        self.save_palette_as_png_action.triggered.connect(self.main_window.save_palette_as_png)
+
         self.load_palette_action = QAction("Load Palette from Image...", self.main_window)
         self.load_palette_action.triggered.connect(self.main_window.load_palette_from_image)
 

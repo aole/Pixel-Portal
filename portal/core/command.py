@@ -428,24 +428,25 @@ class ShapeCommand(Command):
             self.layer.on_image_change.emit()
 
 class MoveCommand(Command):
-    def __init__(self, layer: Layer, original_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
+    def __init__(self, layer: Layer, before_move_image: QImage, after_cut_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
         self.layer = layer
-        self.original_image = original_image
+        self.before_move_image = before_move_image
+        self.after_cut_image = after_cut_image
         self.moved_image = moved_image
         self.delta = delta
         self.original_selection_shape = original_selection_shape
 
     def execute(self):
+        # Restore the 'after_cut' state first to handle redo correctly
+        self.layer.image = self.after_cut_image.copy()
         painter = QPainter(self.layer.image)
         painter.drawImage(self.delta, self.moved_image)
         painter.end()
         self.layer.on_image_change.emit()
 
     def undo(self):
-        painter = QPainter(self.layer.image)
-        painter.setCompositionMode(QPainter.CompositionMode_Source)
-        painter.drawImage(0, 0, self.original_image)
-        painter.end()
+        # Restore the original state from before the move operation began
+        self.layer.image = self.before_move_image.copy()
         self.layer.on_image_change.emit()
 
 class DuplicateLayerCommand(Command):

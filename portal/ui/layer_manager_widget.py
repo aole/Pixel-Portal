@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
+    QWidget, QVBoxLayout, QListWidgetItem,
     QPushButton, QHBoxLayout, QAbstractItemView
 )
+from portal.ui.layer_list_widget import LayerListWidget
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
 from portal.core.app import App
@@ -25,7 +26,7 @@ class LayerManagerWidget(QWidget):
         self.layout.setSpacing(0)
 
         # Layer List
-        self.layer_list = QListWidget()
+        self.layer_list = LayerListWidget()
         self.layer_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.layer_list.itemSelectionChanged.connect(self.on_selection_changed)
         self.layer_list.model().rowsMoved.connect(self.on_layers_moved)

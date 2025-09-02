@@ -1,5 +1,5 @@
 from PySide6.QtGui import QImage, QColor, QPainter
-from PySide6.QtCore import QSize, QObject, Signal
+from PySide6.QtCore import QSize, QObject, Signal, Qt
 
 class Layer(QObject):
     """
@@ -81,9 +81,9 @@ class Layer(QObject):
         return layer
 
     def flip_horizontal(self):
-        self.image = self.image.mirrored(True, False)
+        self.image = self.image.flipped(Qt.Horizontal)
         self.on_image_change.emit()
 
     def flip_vertical(self):
-        self.image = self.image.mirrored(False, True)
+        self.image = self.image.flipped(Qt.Vertical)
         self.on_image_change.emit()

@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
 
         if command_type == "get_active_layer_image":
             self.canvas.original_image = active_layer.image.copy()
-            if command_data == "line_tool_start" or command_data == "ellipse_tool_start" or command_data == "rectangle_tool_start":
+            if command_data in ["line_tool_start", "ellipse_tool_start", "rectangle_tool_start", "move_tool_start_no_selection"]:
                 self.canvas.temp_image = self.canvas.original_image.copy()
 
         elif command_type == "cut_selection":
@@ -187,10 +187,21 @@ class MainWindow(QMainWindow):
         num_default_cols = (len(colors) + 1) // 2
         for i, color in enumerate(colors):
             button = ColorButton(color, self.app.drawing_context)
+            button.color_removed.connect(self.remove_color_from_palette)
             self.main_palette_buttons.append(button)
             row = i % 2
             col = i // 2
             self.color_layout.addWidget(button, row, col)
+
+    def remove_color_from_palette(self, color_to_remove):
+        colors = self.get_palette()
+        # Case-insensitive removal
+        colors_lower = [c.lower() for c in colors]
+        if color_to_remove.lower() in colors_lower:
+            index_to_remove = colors_lower.index(color_to_remove.lower())
+            colors.pop(index_to_remove)
+            self.update_palette(colors)
+            self.save_palette(colors)
 
     def add_color_to_palette(self, color):
         colors = self.get_palette()
@@ -290,4 +301,32 @@ class MainWindow(QMainWindow):
 
     def get_palette(self):
         return [button.color for button in self.main_palette_buttons]
+
+    def save_palette_as_png(self):
+        colors = self.get_palette()
+        if not colors:
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Palette as PNG",
+            os.path.expanduser("~"),
+            "PNG Files (*.png)"
+        )
+
+        if not file_path:
+            return
+
+        from PySide6.QtGui import QPainter
+
+        image = QImage(len(colors) * 4, 4, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+
+        for i, color_hex in enumerate(colors):
+            color = QColor(color_hex)
+            painter.fillRect(i * 4, 0, 4, 4, color)
+
+        painter.end()
+        image.save(file_path)
         
