@@ -17,7 +17,7 @@ class SelectOpaqueCommand(Command):
                 if qAlpha(image.pixel(x, y)) > 0:
                     path.addRect(x, y, 1, 1)
 
-        self.canvas._update_selection_and_emit_size(path)
+        self.canvas._update_selection_and_emit_size(path.simplified())
 
     def undo(self):
         self.canvas._update_selection_and_emit_size(self.previous_selection)
