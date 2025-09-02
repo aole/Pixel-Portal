@@ -372,6 +372,61 @@ class PasteCommand(Command):
                 pass
 
 
+class PasteInSelectionCommand(Command):
+    def __init__(self, document: 'Document', q_image: QImage, selection: QPainterPath):
+        from portal.core.document import Document
+        self.document = document
+        self.q_image = q_image
+        self.selection = selection
+        self.added_layer = None
+        self.insertion_index = None
+        self.old_active_layer = document.layer_manager.active_layer
+
+    def execute(self):
+        if self.added_layer is None:
+            # First execution
+            pasted_content_image = QImage(self.document.width, self.document.height, QImage.Format_ARGB32)
+            pasted_content_image.fill(Qt.transparent)
+
+            painter = QPainter(pasted_content_image)
+            painter.setClipPath(self.selection)
+
+            scaled_image = self.q_image.scaled(
+                self.selection.boundingRect().size().toSize(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+
+            brect = self.selection.boundingRect()
+            point = QPoint(
+                brect.x() + (brect.width() - scaled_image.width()) / 2,
+                brect.y() + (brect.height() - scaled_image.height()) / 2,
+            )
+
+            painter.drawImage(point, scaled_image)
+            painter.end()
+
+            self.document.layer_manager.add_layer_with_image(pasted_content_image, name="Pasted Layer")
+            self.added_layer = self.document.layer_manager.active_layer
+            self.insertion_index = self.document.layer_manager.active_layer_index
+        else:
+            # Redo
+            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
+            self.document.layer_manager.select_layer(self.insertion_index)
+            self.document.layer_manager.layer_structure_changed.emit()
+
+    def undo(self):
+        if self.added_layer:
+            try:
+                index = self.document.layer_manager.layers.index(self.added_layer)
+                self.document.layer_manager.remove_layer(index)
+                if self.old_active_layer in self.document.layer_manager.layers:
+                    old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
+                    self.document.layer_manager.select_layer(old_active_index)
+            except ValueError:
+                pass
+
+
 class FillCommand(Command):
     def __init__(self, document: 'Document', layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, mirror_x: bool, mirror_y: bool):
         from portal.core.document import Document

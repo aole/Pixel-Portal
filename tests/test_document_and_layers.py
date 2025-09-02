@@ -752,6 +752,9 @@ class TestClipboard:
         image_to_paste.fill(QColor("yellow"))
         QApplication.clipboard().setImage(image_to_paste)
 
+        # Mock no selection
+        app.main_window.canvas.selection_shape = None
+
         # Perform paste
         app.paste()
 
@@ -782,3 +785,42 @@ class TestClipboard:
         pasted_layer = app.document.layer_manager.active_layer
         assert pasted_layer.name == "Pasted Layer"
         assert pasted_layer.image.pixelColor(15, 15) == QColor("orange")
+
+    def test_paste_in_selection(self, app):
+        """Test that the image from the clipboard is pasted into the selection."""
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QPainterPath
+
+        # Setup document and layer
+        app.new_document(20, 20)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("blue"))
+
+        # Create a selection
+        selection_rect = QRect(5, 5, 10, 10)
+        selection_shape = QPainterPath()
+        selection_shape.addRect(selection_rect)
+        app.main_window.canvas.selection_shape = selection_shape
+
+        # Put an image on the clipboard
+        image_to_paste = QImage(8, 8, QImage.Format_ARGB32)
+        image_to_paste.fill(QColor("yellow"))
+        QApplication.clipboard().setImage(image_to_paste)
+
+        # Perform paste
+        app.paste()
+
+        # Verify that the image is pasted into the selection
+        # The center of the selection is (10, 10)
+        # The pasted image should be centered in the selection
+        # The pasted image is 8x8, it will be scaled to 10x10 to fit the selection
+        new_layer = app.document.layer_manager.active_layer
+        assert new_layer is not active_layer
+        assert new_layer.name == "Pasted Layer"
+        assert new_layer.image.pixelColor(10, 10) == QColor("yellow")
+        # The corner of the selection should be yellow
+        assert new_layer.image.pixelColor(5, 5) == QColor("yellow")
+        # The area outside the selection should be transparent
+        assert new_layer.image.pixelColor(4, 4) == QColor(0, 0, 0, 0)
+        # Verify that the original layer is unchanged
+        assert active_layer.image.pixelColor(10, 10) == QColor("blue")

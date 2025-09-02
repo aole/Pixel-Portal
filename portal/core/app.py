@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
+from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, PasteInSelectionCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
 from portal.core.scripting import ScriptingAPI
@@ -217,13 +217,19 @@ class App(QObject):
 
     @Slot()
     def paste(self):
-        if not self.document:
+        if not self.document or not self.main_window:
             return
 
         clipboard = QApplication.clipboard()
         image = clipboard.image()
+        if image.isNull():
+            return
 
-        if not image.isNull():
+        selection = self.main_window.canvas.selection_shape
+        if selection and not selection.isEmpty():
+            command = PasteInSelectionCommand(self.document, image, selection)
+            self.execute_command(command)
+        else:
             command = PasteCommand(self.document, image)
             self.execute_command(command)
 
