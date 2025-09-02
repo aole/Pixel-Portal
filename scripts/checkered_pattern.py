@@ -2,9 +2,9 @@ from PySide6.QtGui import QPainter
 
 # Define the parameters for the script
 params = [
-    {'name': 'color1', 'type': 'color', 'label': 'First Color', 'default': '#ff0000'},
-    {'name': 'color2', 'type': 'color', 'label': 'Second Color', 'default': '#0000ff'},
-    {'name': 'size', 'type': 'number', 'label': 'Square Size', 'default': 10, 'min': 1, 'max': 100},
+    {'name': 'color1', 'type': 'color', 'label': 'First Color', 'default': '#ffffff'},
+    {'name': 'color2', 'type': 'color', 'label': 'Second Color', 'default': '#000000'},
+    {'name': 'size', 'type': 'number', 'label': 'Square Size', 'default': 16, 'min': 2, 'max': 128},
 ]
 
 def main(api, values):
