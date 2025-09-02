@@ -9,6 +9,7 @@ import os
 from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
+from portal.core.scripting import ScriptingAPI
 
 
 class App(QObject):
@@ -30,6 +31,7 @@ class App(QObject):
         self.document.layer_manager.command_generated.connect(self.handle_command)
         self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
+        self.scripting_api = ScriptingAPI(self)
 
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
@@ -220,3 +222,13 @@ class App(QObject):
                 new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
 
         self.add_new_layer_with_image(new_image)
+
+    def run_script(self, script_path):
+        """Runs a Python script."""
+        try:
+            with open(script_path, 'r') as f:
+                script_code = f.read()
+            exec(script_code, {'api': self.scripting_api})
+            self.document_changed.emit()
+        except Exception as e:
+            print(f"Error running script {script_path}: {e}")
