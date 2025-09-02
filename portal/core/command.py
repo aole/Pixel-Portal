@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from portal.core.layer import Layer
-from portal.core.document import Document
 from portal.core.drawing import Drawing
 
 
@@ -27,7 +26,8 @@ class Command(ABC):
 
 
 class DrawCommand(Command):
-    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document, selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
+    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document: 'Document', selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
+        from portal.core.document import Document
         self.layer = layer
         self.points = points
         self.color = color
@@ -176,7 +176,8 @@ class DrawCommand(Command):
 
 
 class FlipCommand(Command):
-    def __init__(self, document: Document, horizontal: bool, vertical: bool, all_layers: bool):
+    def __init__(self, document: 'Document', horizontal: bool, vertical: bool, all_layers: bool):
+        from portal.core.document import Document
         self.document = document
         self.horizontal = horizontal
         self.vertical = vertical
@@ -219,7 +220,8 @@ class FlipCommand(Command):
 
 
 class ResizeCommand(Command):
-    def __init__(self, document: Document, new_width: int, new_height: int, interpolation: str):
+    def __init__(self, document: 'Document', new_width: int, new_height: int, interpolation: str):
+        from portal.core.document import Document
         self.document = document
         self.new_width = new_width
         self.new_height = new_height
@@ -235,7 +237,8 @@ class ResizeCommand(Command):
 
 
 class CropCommand(Command):
-    def __init__(self, document: Document, rect: QRect):
+    def __init__(self, document: 'Document', rect: QRect):
+        from portal.core.document import Document
         self.document = document
         self.rect = rect
         self.old_document_clone = None
@@ -257,7 +260,8 @@ class CropCommand(Command):
 
 
 class AddLayerCommand(Command):
-    def __init__(self, document: Document, image: QImage = None, name: str = None):
+    def __init__(self, document: 'Document', image: QImage = None, name: str = None):
+        from portal.core.document import Document
         self.document = document
         self.image = image
         self.name = name
@@ -296,7 +300,8 @@ class AddLayerCommand(Command):
                 pass
 
 class PasteCommand(Command):
-    def __init__(self, document: Document, q_image: QImage):
+    def __init__(self, document: 'Document', q_image: QImage):
+        from portal.core.document import Document
         self.document = document
         self.q_image = q_image
         self.added_layer = None
@@ -333,7 +338,8 @@ class PasteCommand(Command):
 
 
 class FillCommand(Command):
-    def __init__(self, document: Document, layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, mirror_x: bool, mirror_y: bool):
+    def __init__(self, document: 'Document', layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, mirror_x: bool, mirror_y: bool):
+        from portal.core.document import Document
         self.document = document
         self.layer = layer
         self.fill_pos = fill_pos
@@ -377,7 +383,8 @@ class FillCommand(Command):
 
 
 class ShapeCommand(Command):
-    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, document, selection_shape: QPainterPath | None, mirror_x: bool = False, mirror_y: bool = False):
+    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, document: 'Document', selection_shape: QPainterPath | None, mirror_x: bool = False, mirror_y: bool = False):
+        from portal.core.document import Document
         self.layer = layer
         self.rect = rect
         self.shape_type = shape_type

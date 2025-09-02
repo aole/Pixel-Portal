@@ -20,6 +20,11 @@ class CanvasInputHandler:
             self.drawing_context.set_tool(self.drawing_context.previous_tool)
 
     def mousePressEvent(self, event):
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if active_layer and not active_layer.visible:
+            self.canvas.setCursor(Qt.ForbiddenCursor)
+            return
+
         doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mousePressEvent(event, doc_pos)
@@ -36,9 +41,18 @@ class CanvasInputHandler:
 
         doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
 
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if active_layer and not active_layer.visible:
+            self.canvas.setCursor(Qt.ForbiddenCursor)
+        else:
+            self.canvas.setCursor(self.canvas.current_tool.cursor)
+
         if not (event.buttons() & Qt.LeftButton):
             if hasattr(self.canvas.current_tool, "mouseHoverEvent"):
                 self.canvas.current_tool.mouseHoverEvent(event, doc_pos)
+
+        if active_layer and not active_layer.visible:
+            return
 
         if event.buttons() & Qt.LeftButton:
             self.canvas.current_tool.mouseMoveEvent(event, doc_pos)
@@ -53,6 +67,11 @@ class CanvasInputHandler:
             self.canvas.update()
 
     def mouseReleaseEvent(self, event):
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if active_layer and not active_layer.visible:
+            self.canvas.setCursor(self.canvas.current_tool.cursor)
+            return
+
         doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mouseReleaseEvent(event, doc_pos)
