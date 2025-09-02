@@ -8,6 +8,12 @@ class CanvasInputHandler:
         self.drawing_context = canvas.drawing_context
 
     def keyPressEvent(self, event):
+        key_text = event.text()
+        for tool in self.canvas.tools.values():
+            if tool.shortcut and key_text == tool.shortcut:
+                self.drawing_context.set_tool(tool.name)
+                return
+
         if event.key() == Qt.Key_Alt:
             self.drawing_context.set_tool("Picker")
         elif event.key() == Qt.Key_Control:
