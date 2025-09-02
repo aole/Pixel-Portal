@@ -25,6 +25,41 @@ class Command(ABC):
         raise NotImplementedError
 
 
+class CompositeCommand(Command):
+    """A command that is composed of other commands."""
+    def __init__(self, commands: list[Command], name: str = "Composite"):
+        self.commands = commands
+        self.name = name
+
+    def execute(self):
+        for command in self.commands:
+            command.execute()
+
+    def undo(self):
+        for command in reversed(self.commands):
+            command.undo()
+
+
+class ModifyImageCommand(Command):
+    """A command that modifies a layer's image with a drawing function."""
+    def __init__(self, layer: Layer, drawing_func):
+        self.layer = layer
+        self.drawing_func = drawing_func
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+
+        self.drawing_func(self.layer.image)
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        if self.before_image:
+            self.layer.image = self.before_image.copy()
+            self.layer.on_image_change.emit()
+
+
 class DrawCommand(Command):
     def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document: 'Document', selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
         from portal.core.document import Document

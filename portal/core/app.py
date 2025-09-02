@@ -6,9 +6,11 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
+from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
+from portal.core.scripting import ScriptingAPI
+from portal.ui.script_dialog import ScriptDialog
 
 
 class App(QObject):
@@ -30,6 +32,10 @@ class App(QObject):
         self.document.layer_manager.command_generated.connect(self.handle_command)
         self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
+        self.scripting_api = ScriptingAPI(self)
+
+        self.is_recording = False
+        self.recorded_commands = []
 
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
@@ -40,8 +46,11 @@ class App(QObject):
 
     def execute_command(self, command):
         command.execute()
-        self.undo_manager.add_command(command)
-        self.undo_stack_changed.emit()
+        if self.is_recording:
+            self.recorded_commands.append(command)
+        else:
+            self.undo_manager.add_command(command)
+            self.undo_stack_changed.emit()
         self.document_changed.emit()
 
     @Slot(int, int)
@@ -220,3 +229,50 @@ class App(QObject):
                 new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
 
         self.add_new_layer_with_image(new_image)
+
+    def run_script(self, script_path):
+        """
+        Runs a script by defining its parameters, showing a dialog to get user input,
+        and then executing the script's main function as a single undoable command.
+        """
+        try:
+            with open(script_path, 'r') as f:
+                script_code = f.read()
+
+            # Execute the script in a temporary namespace to get params and main function
+            script_namespace = {}
+            exec(script_code, script_namespace)
+
+            params = script_namespace.get('params')
+            main_func = script_namespace.get('main')
+
+            if not callable(main_func):
+                raise ValueError("Script must define a main(api, values) function.")
+
+            # Get parameters from user if the script defines them
+            values = {}
+            if params:
+                dialog = ScriptDialog(params, self.main_window)
+                if dialog.exec():
+                    values = dialog.get_values()
+                else:
+                    return # User cancelled
+
+            # Start recording and execute the main logic
+            self.is_recording = True
+            self.recorded_commands = []
+
+            main_func(self.scripting_api, values)
+
+            self.is_recording = False
+
+            # Create a composite command if any commands were recorded
+            if self.recorded_commands:
+                script_name = os.path.splitext(os.path.basename(script_path))[0]
+                composite_command = CompositeCommand(self.recorded_commands, name=f"Run Script: {script_name}")
+                self.undo_manager.add_command(composite_command)
+                self.undo_stack_changed.emit()
+
+        except Exception as e:
+            print(f"Error running script {script_path}: {e}")
+            self.is_recording = False # Ensure recording is turned off on error

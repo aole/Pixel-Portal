@@ -1,3 +1,6 @@
+import os
+import functools
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow
 from portal.commands.action_manager import ActionManager
 
@@ -51,3 +54,19 @@ class MenuBarBuilder:
 
         view_menu.addSeparator()
         view_menu.addAction(self.action_manager.ai_action)
+
+        scripting_menu = menu_bar.addMenu("&Scripting")
+        self.populate_scripting_menu(scripting_menu)
+
+    def populate_scripting_menu(self, scripting_menu):
+        scripts_dir = 'scripts'
+        if not os.path.exists(scripts_dir):
+            return
+
+        for filename in os.listdir(scripts_dir):
+            if filename.endswith('.py'):
+                script_path = os.path.join(scripts_dir, filename)
+                action_name = os.path.splitext(filename)[0].replace('_', ' ').title()
+                action = QAction(action_name, self.window)
+                action.triggered.connect(functools.partial(self.window.app.run_script, script_path))
+                scripting_menu.addAction(action)
