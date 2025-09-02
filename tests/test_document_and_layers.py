@@ -616,3 +616,169 @@ def test_toggle_grid(canvas):
         canvas.toggle_grid()
         assert not canvas.grid_visible
         mock_update.assert_called_once()
+
+
+@pytest.fixture
+def app(qapp):
+    """Returns an App instance."""
+    from portal.core.app import App
+    from portal.ui.ui import MainWindow
+
+    # Mock the main window and other UI components
+    # to avoid actual window creation during tests.
+    app = App()
+    app.main_window = MagicMock(spec=MainWindow)
+    app.main_window.canvas = MagicMock(spec=Canvas)
+    return app
+
+
+class TestClipboard:
+    def test_copy_layer(self, app):
+        """Test that the entire layer is copied to the clipboard when there is no selection."""
+        from PySide6.QtWidgets import QApplication
+
+        # Setup document and layer
+        app.new_document(10, 10)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("red"))
+
+        # Mock selection to be empty
+        app.main_window.canvas.selection_path = None
+
+        # Perform copy
+        app.copy()
+
+        # Verify clipboard
+        clipboard = QApplication.clipboard()
+        clipboard_image = clipboard.image()
+        assert not clipboard_image.isNull()
+        assert clipboard_image.size() == active_layer.image.size()
+        assert clipboard_image.pixelColor(5, 5) == QColor("red")
+
+    def test_copy_selection(self, app):
+        """Test that only the selected area is copied to the clipboard."""
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QPainterPath
+
+        # Setup document and layer
+        app.new_document(20, 20)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("blue"))
+
+        # Mock selection
+        selection_rect = QRect(5, 5, 10, 10)
+        selection_path = QPainterPath()
+        selection_path.addRect(selection_rect)
+        app.main_window.canvas.selection_path = selection_path
+
+        # Perform copy
+        app.copy()
+
+        # Verify clipboard
+        clipboard = QApplication.clipboard()
+        clipboard_image = clipboard.image()
+        assert not clipboard_image.isNull()
+        assert clipboard_image.size() == selection_rect.size()
+        assert clipboard_image.pixelColor(0, 0) == QColor("blue")
+
+    def test_cut_layer(self, app):
+        """Test that the entire layer is copied and then cleared."""
+        from PySide6.QtWidgets import QApplication
+
+        # Setup document and layer
+        app.new_document(10, 10)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("green"))
+
+        # Mock selection to be empty
+        app.main_window.canvas.selection_path = None
+
+        # Perform cut
+        app.cut()
+
+        # Verify clipboard
+        clipboard = QApplication.clipboard()
+        clipboard_image = clipboard.image()
+        assert not clipboard_image.isNull()
+        assert clipboard_image.pixelColor(5, 5) == QColor("green")
+
+        # Verify layer is cleared
+        assert active_layer.image.pixelColor(5, 5) == QColor(0, 0, 0, 0)
+
+    def test_cut_selection(self, app):
+        """Test that the selected area is copied and then cleared."""
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QPainterPath
+
+        # Setup document and layer
+        app.new_document(20, 20)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("purple"))
+        # Fill a non-selected area to ensure it's not cleared
+        active_layer.image.setPixelColor(1, 1, QColor("red"))
+
+
+        # Mock selection
+        selection_rect = QRect(5, 5, 10, 10)
+        selection_path = QPainterPath()
+        selection_path.addRect(selection_rect)
+        app.main_window.canvas.selection_path = selection_path
+
+        # Perform cut
+        app.cut()
+
+        # Verify clipboard
+        clipboard = QApplication.clipboard()
+        clipboard_image = clipboard.image()
+        assert not clipboard_image.isNull()
+        assert clipboard_image.size() == selection_rect.size()
+        assert clipboard_image.pixelColor(0, 0) == QColor("purple")
+
+        # Verify selected area is cleared
+        assert active_layer.image.pixelColor(7, 7) == QColor(0, 0, 0, 0)
+        # Verify non-selected area is not cleared
+        assert active_layer.image.pixelColor(1, 1) == QColor("red")
+
+    def test_paste(self, app):
+        """Test that the image from the clipboard is pasted as a new layer."""
+        from PySide6.QtWidgets import QApplication
+
+        # Setup document
+        app.new_document(10, 10)
+        initial_layer_count = len(app.document.layer_manager.layers)
+
+        # Put an image on the clipboard
+        image_to_paste = QImage(5, 5, QImage.Format_ARGB32)
+        image_to_paste.fill(QColor("yellow"))
+        QApplication.clipboard().setImage(image_to_paste)
+
+        # Perform paste
+        app.paste()
+
+        # Verify new layer
+        assert len(app.document.layer_manager.layers) == initial_layer_count + 1
+        pasted_layer = app.document.layer_manager.active_layer
+        assert pasted_layer.name == "Pasted Layer"
+        assert pasted_layer.image.size() == app.document.render().size()
+        assert pasted_layer.image.pixelColor(2, 2) == QColor("yellow")
+        assert pasted_layer.image.pixelColor(7, 7) == QColor(0, 0, 0, 0)
+
+    def test_paste_as_new_image(self, app):
+        """Test that a new document is created with the image from the clipboard."""
+        from PySide6.QtWidgets import QApplication
+
+        # Put an image on the clipboard
+        image_to_paste = QImage(30, 40, QImage.Format_ARGB32)
+        image_to_paste.fill(QColor("orange"))
+        QApplication.clipboard().setImage(image_to_paste)
+
+        # Perform paste as new image
+        app.paste_as_new_image()
+
+        # Verify new document
+        assert app.document.width == 30
+        assert app.document.height == 40
+        assert len(app.document.layer_manager.layers) == 2 # Pasted layer + initial layer
+        pasted_layer = app.document.layer_manager.active_layer
+        assert pasted_layer.name == "Pasted Layer"
+        assert pasted_layer.image.pixelColor(15, 15) == QColor("orange")

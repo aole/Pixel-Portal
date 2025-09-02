@@ -38,9 +38,21 @@ class ActionManager:
         self.redo_action.setShortcut("Ctrl+Shift+Z")
         self.redo_action.triggered.connect(self.app.redo)
 
-        self.paste_as_new_layer_action = QAction("Paste as New Layer", self.main_window)
-        self.paste_as_new_layer_action.setShortcut("Ctrl+Shift+V")
-        self.paste_as_new_layer_action.triggered.connect(self.app.paste_as_new_layer)
+        self.cut_action = QAction("Cu&t", self.main_window)
+        self.cut_action.setShortcut(QKeySequence.Cut)
+        self.cut_action.triggered.connect(self.app.cut)
+
+        self.copy_action = QAction("&Copy", self.main_window)
+        self.copy_action.setShortcut(QKeySequence.Copy)
+        self.copy_action.triggered.connect(self.app.copy)
+
+        self.paste_action = QAction("&Paste", self.main_window)
+        self.paste_action.setShortcut(QKeySequence.Paste)
+        self.paste_action.triggered.connect(self.app.paste)
+
+        self.paste_as_new_image_action = QAction("Paste as New Image", self.main_window)
+        self.paste_as_new_image_action.setShortcut("Ctrl+Shift+V")
+        self.paste_as_new_image_action.triggered.connect(self.app.paste_as_new_image)
 
         self.clear_action = QAction(QIcon("icons/clear.png"), "Clear", self.main_window)
         self.clear_action.setShortcut(QKeySequence.Delete)

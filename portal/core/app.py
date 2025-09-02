@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
+from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
 from portal.core.scripting import ScriptingAPI
@@ -86,6 +86,16 @@ class App(QObject):
     def perform_crop(self, selection_rect):
         command = CropCommand(self.document, selection_rect)
         self.execute_command(command)
+
+    @Slot()
+    def paste_as_new_image(self):
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+
+        if not image.isNull():
+            self.new_document(image.width(), image.height())
+            command = PasteCommand(self.document, image)
+            self.execute_command(command)
 
     @Slot()
     def paste_as_new_layer(self):
@@ -180,6 +190,56 @@ class App(QObject):
     @Slot()
     def clear_layer(self):
         self.clear_layer_triggered.emit()
+
+    @Slot()
+    def cut(self):
+        if not self.document or not self.main_window:
+            return
+
+        self.copy()
+
+        active_layer = self.document.layer_manager.active_layer
+        if not active_layer:
+            return
+
+        selection = self.main_window.canvas.selection_path
+        command = ClearLayerCommand(active_layer, selection)
+        self.execute_command(command)
+
+    @Slot()
+    def copy(self):
+        if not self.document:
+            return
+
+        image = self._get_selected_image()
+        if image:
+            QApplication.clipboard().setImage(image)
+
+    @Slot()
+    def paste(self):
+        if not self.document:
+            return
+
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+
+        if not image.isNull():
+            command = PasteCommand(self.document, image)
+            self.execute_command(command)
+
+    def _get_selected_image(self) -> QImage | None:
+        if not self.document or not self.main_window:
+            return None
+
+        active_layer = self.document.layer_manager.active_layer
+        if not active_layer:
+            return None
+
+        selection = self.main_window.canvas.selection_path
+        if selection and not selection.isEmpty():
+            return active_layer.image.copy(selection.boundingRect().toRect())
+        else:
+            return active_layer.image.copy()
 
     @Slot()
     def exit(self):
