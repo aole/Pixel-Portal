@@ -242,7 +242,7 @@ class CanvasRenderer:
         if (
             not self.canvas.mouse_over_canvas
             or (active_layer and not active_layer.visible)
-            or self.canvas.drawing_context.tool in ["Bucket", "Picker"]
+            or self.canvas.drawing_context.tool in ["Bucket", "Picker", "Move"]
             or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed
         ):
