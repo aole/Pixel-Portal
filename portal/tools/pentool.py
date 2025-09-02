@@ -15,6 +15,10 @@ class PenTool(BaseTool):
         self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
+            return
+
         self.points = [doc_pos]
 
         # Use a transparent temp image for the preview overlay
@@ -29,6 +33,10 @@ class PenTool(BaseTool):
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.points:
+            return
+
+        active_layer = self.canvas.document.layer_manager.active_layer
+        if not active_layer or not active_layer.visible:
             return
 
         self.points.append(doc_pos)
