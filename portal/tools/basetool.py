@@ -13,7 +13,7 @@ class BaseTool(QObject):
     def __init__(self, canvas):
         super().__init__()
         self.canvas = canvas
-        self.cursor = None
+        self.cursor = QCursor(Qt.ArrowCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         pass

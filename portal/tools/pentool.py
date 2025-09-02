@@ -7,7 +7,7 @@ from portal.core.command import DrawCommand
 class PenTool(BaseTool):
     name = "Pen"
     icon = "icons/toolpen.png"
-    shortcut = "p"
+    shortcut = "b"
 
     def __init__(self, canvas):
         super().__init__(canvas)

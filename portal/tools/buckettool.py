@@ -8,7 +8,7 @@ from portal.core.command import FillCommand
 class BucketTool(BaseTool):
     name = "Bucket"
     icon = "icons/toolbucket.png"
-    shortcut = "b"
+    shortcut = "f"
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         active_layer = self.canvas.document.layer_manager.active_layer
