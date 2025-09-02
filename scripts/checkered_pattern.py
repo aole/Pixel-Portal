@@ -28,7 +28,5 @@ if values:
                 else:
                     painter.fillRect(x, y, size, size, color2)
         painter.end()
-
-        api.show_message_box("Script Finished", "Checkered pattern created.")
     else:
         api.show_message_box("Script Error", "Could not create a new layer.")

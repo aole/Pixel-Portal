@@ -59,7 +59,5 @@ if values:
             draw_hex_tile(painter, size)
 
         painter.end()
-
-        api.show_message_box("Script Finished", f"{tile_type} tile created.")
     else:
         api.show_message_box("Script Error", "Could not create a new layer.")

@@ -544,3 +544,24 @@ class MoveLayerCommand(Command):
         if self.layer_manager.active_layer_index == self.to_index:
             self.layer_manager.active_layer_index = self.from_index
         self.layer_manager.layer_structure_changed.emit()
+
+class RunScriptCommand(Command):
+    def __init__(self, app, script_code: str):
+        self.app = app
+        self.script_code = script_code
+        self.before_document = None
+
+    def execute(self):
+        if self.before_document is None:
+            self.before_document = self.app.document.clone()
+
+        exec(self.script_code, {'api': self.app.scripting_api})
+
+    def undo(self):
+        if self.before_document:
+            self.app.document = self.before_document
+            # Reconnect signals since the document object is replaced
+            self.app.document.layer_manager.layer_visibility_changed.connect(self.app.on_layer_visibility_changed)
+            self.app.document.layer_manager.layer_structure_changed.connect(self.app.on_layer_structure_changed)
+            self.app.document.layer_manager.command_generated.connect(self.app.handle_command)
+            self.app.document_changed.emit()

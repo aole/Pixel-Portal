@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
 import configparser
 import os
-from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand
+from portal.core.command import FlipCommand, ResizeCommand, CropCommand, PasteCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, RunScriptCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
 from portal.core.scripting import ScriptingAPI
@@ -224,11 +224,13 @@ class App(QObject):
         self.add_new_layer_with_image(new_image)
 
     def run_script(self, script_path):
-        """Runs a Python script."""
+        """Runs a Python script as a single undoable command."""
         try:
             with open(script_path, 'r') as f:
                 script_code = f.read()
-            exec(script_code, {'api': self.scripting_api})
-            self.document_changed.emit()
+
+            command = RunScriptCommand(self, script_code)
+            self.execute_command(command)
+
         except Exception as e:
             print(f"Error running script {script_path}: {e}")
