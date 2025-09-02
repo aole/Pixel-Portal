@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QMouseEvent, QPainter, QPen, QImage, QPainterPath
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, QImage, QPainterPath, QCursor
 
 from portal.tools.basetool import BaseTool
 from portal.core.command import DrawCommand
@@ -13,6 +13,7 @@ class EraserTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.points = []
+        self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.canvas.is_erasing_preview = True

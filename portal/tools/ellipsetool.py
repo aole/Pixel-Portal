@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt, QCursor
 
 from portal.tools.basetool import BaseTool
 from portal.core.command import ShapeCommand
@@ -13,6 +13,7 @@ class EllipseTool(BaseTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
+        self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
