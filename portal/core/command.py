@@ -391,19 +391,16 @@ class PasteInSelectionCommand(Command):
             painter = QPainter(pasted_content_image)
             painter.setClipPath(self.selection)
 
-            scaled_image = self.q_image.scaled(
-                self.selection.boundingRect().size().toSize(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
+            # Center the image within the selection's bounding rect
+            selection_brect = self.selection.boundingRect()
+            image_rect = self.q_image.rect()
 
-            brect = self.selection.boundingRect()
             point = QPoint(
-                brect.x() + (brect.width() - scaled_image.width()) / 2,
-                brect.y() + (brect.height() - scaled_image.height()) / 2,
+                selection_brect.x() + (selection_brect.width() - image_rect.width()) / 2,
+                selection_brect.y() + (selection_brect.height() - image_rect.height()) / 2,
             )
 
-            painter.drawImage(point, scaled_image)
+            painter.drawImage(point, self.q_image)
             painter.end()
 
             self.document.layer_manager.add_layer_with_image(pasted_content_image, name="Pasted Layer")

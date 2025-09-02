@@ -786,41 +786,62 @@ class TestClipboard:
         assert pasted_layer.name == "Pasted Layer"
         assert pasted_layer.image.pixelColor(15, 15) == QColor("orange")
 
-    def test_paste_in_selection(self, app):
-        """Test that the image from the clipboard is pasted into the selection."""
+    def test_paste_in_selection_smaller_image(self, app):
+        """Test pasting an image smaller than the selection."""
         from PySide6.QtWidgets import QApplication
         from PySide6.QtGui import QPainterPath
 
-        # Setup document and layer
         app.new_document(20, 20)
         active_layer = app.document.layer_manager.active_layer
         active_layer.image.fill(QColor("blue"))
 
-        # Create a selection
         selection_rect = QRect(5, 5, 10, 10)
         selection_shape = QPainterPath()
         selection_shape.addRect(selection_rect)
         app.main_window.canvas.selection_shape = selection_shape
 
-        # Put an image on the clipboard
-        image_to_paste = QImage(8, 8, QImage.Format_ARGB32)
+        image_to_paste = QImage(6, 6, QImage.Format_ARGB32)
         image_to_paste.fill(QColor("yellow"))
         QApplication.clipboard().setImage(image_to_paste)
 
-        # Perform paste
         app.paste()
 
-        # Verify that the image is pasted into the selection
-        # The center of the selection is (10, 10)
-        # The pasted image should be centered in the selection
-        # The pasted image is 8x8, it will be scaled to 10x10 to fit the selection
         new_layer = app.document.layer_manager.active_layer
         assert new_layer is not active_layer
-        assert new_layer.name == "Pasted Layer"
-        assert new_layer.image.pixelColor(10, 10) == QColor("yellow")
-        # The corner of the selection should be yellow
-        assert new_layer.image.pixelColor(5, 5) == QColor("yellow")
-        # The area outside the selection should be transparent
-        assert new_layer.image.pixelColor(4, 4) == QColor(0, 0, 0, 0)
-        # Verify that the original layer is unchanged
-        assert active_layer.image.pixelColor(10, 10) == QColor("blue")
+        # Image (6x6) is centered in selection (10x10 at 5,5). Top-left of image is at 7,7.
+        assert new_layer.image.pixelColor(7, 7) == QColor("yellow") # Top-left of pasted
+        assert new_layer.image.pixelColor(12, 12) == QColor("yellow") # Bottom-right of pasted
+        assert new_layer.image.pixelColor(6, 6) == QColor(0, 0, 0, 0) # Outside pasted, inside selection
+        assert active_layer.image.pixelColor(10, 10) == QColor("blue") # Original layer unchanged
+
+    def test_paste_in_selection_larger_image(self, app):
+        """Test pasting an image larger than the selection (cropping)."""
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QPainterPath
+
+        app.new_document(20, 20)
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("blue"))
+
+        selection_rect = QRect(5, 5, 10, 10)
+        selection_shape = QPainterPath()
+        selection_shape.addRect(selection_rect)
+        app.main_window.canvas.selection_shape = selection_shape
+
+        image_to_paste = QImage(12, 12, QImage.Format_ARGB32)
+        image_to_paste.fill(QColor("yellow"))
+        # Create a red pixel that should be cropped out
+        image_to_paste.setPixelColor(0, 0, QColor("red"))
+        QApplication.clipboard().setImage(image_to_paste)
+
+        app.paste()
+
+        new_layer = app.document.layer_manager.active_layer
+        assert new_layer is not active_layer
+        # Image (12x12) is centered in selection (10x10 at 5,5). Top-left of image is at 4,4.
+        # The selection path will clip the drawing.
+        assert new_layer.image.pixelColor(4, 4) == QColor(0, 0, 0, 0) # Outside selection
+        assert new_layer.image.pixelColor(5, 5) == QColor("yellow")   # Inside selection and pasted image
+        # The red pixel at (0,0) of the original image would be at (4,4) on the canvas, which is outside the selection.
+        # Let's check a pixel that would have been red.
+        assert new_layer.image.pixelColor(4, 4) != QColor("red")
