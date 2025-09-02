@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QMessageBox, QInputDialog, QColorDialog
-from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QMessageBox
 from portal.core.layer import Layer
+from portal.ui.script_dialog import ScriptDialog
 
 class ScriptingAPI:
     def __init__(self, app):
@@ -30,23 +30,9 @@ class ScriptingAPI:
         """Shows a message box with the given title and text."""
         QMessageBox.information(self.app.main_window, title, text)
 
-    def get_text(self, title, label):
-        """Shows an input dialog to get text from the user."""
-        text, ok = QInputDialog.getText(self.app.main_window, title, label)
-        if ok:
-            return text
-        return None
-
-    def get_color(self, title):
-        """Shows a color dialog to get a color from the user."""
-        color = QColorDialog.getColor(parent=self.app.main_window, title=title)
-        if color.isValid():
-            return color
-        return None
-
-    def get_item(self, title, label, items):
-        """Shows a dialog to get an item from a list from the user."""
-        item, ok = QInputDialog.getItem(self.app.main_window, title, label, items, 0, False)
-        if ok and item:
-            return item
+    def get_parameters(self, params):
+        """Shows a dialog to get parameters from the user."""
+        dialog = ScriptDialog(params, self.app.main_window)
+        if dialog.exec():
+            return dialog.get_values()
         return None
