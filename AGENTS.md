@@ -6,6 +6,8 @@ When running the test suite, you must set the `QT_QPA_PLATFORM` environment vari
 
 Due to a segmentation fault that occurs when running the full test suite, the tests must be run on each file separately.
 
+If a test file consistently fails with a segmentation fault, even on the `main` branch, it should be skipped.
+
 Example:
 ```bash
 QT_QPA_PLATFORM=offscreen python -m pytest tests/test_core.py

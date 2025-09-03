@@ -82,25 +82,25 @@ class MainWindow(QMainWindow):
 
         # Preview Panel
         self.preview_panel = PreviewPanel(self.app)
-        preview_dock_widget = QDockWidget("Preview", self)
-        preview_dock_widget.setWidget(self.preview_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, preview_dock_widget)
+        self.preview_dock = QDockWidget("Preview", self)
+        self.preview_dock.setWidget(self.preview_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
 
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
-        layer_dock_widget = QDockWidget("Layers", self)
-        layer_dock_widget.setWidget(self.layer_manager_widget)
-        self.addDockWidget(Qt.RightDockWidgetArea, layer_dock_widget)
+        self.layer_manager_dock = QDockWidget("Layers", self)
+        self.layer_manager_dock.setWidget(self.layer_manager_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.layer_manager_dock)
 
         # AI Panel
         self.ai_panel = AIPanel(self.app)
         self.ai_panel.image_generated.connect(self.app.add_new_layer_with_image)
-        self.ai_dock_widget = QDockWidget("AI", self)
-        self.ai_dock_widget.setWidget(self.ai_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.ai_dock_widget)
-        self.ai_dock_widget.setFloating(True)
-        self.ai_dock_widget.hide()
+        self.ai_panel_dock = QDockWidget("AI", self)
+        self.ai_panel_dock.setWidget(self.ai_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.ai_panel_dock)
+        self.ai_panel_dock.setFloating(True)
+        self.ai_panel_dock.hide()
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
@@ -115,6 +115,13 @@ class MainWindow(QMainWindow):
         self.app.crop_to_selection_triggered.connect(self.on_crop_to_selection)
         self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
         self.app.exit_triggered.connect(self.close)
+
+        menu_bar_builder.set_panels(self.layer_manager_dock, self.preview_dock, self.ai_panel_dock)
+        menu_bar_builder.set_toolbars([
+            toolbar_builder.top_toolbar,
+            toolbar_builder.left_toolbar,
+            self.color_toolbar
+        ])
 
     @Slot(object)
     def handle_canvas_message(self, data):
@@ -264,10 +271,10 @@ class MainWindow(QMainWindow):
         return list(unique_colors)
 
     def toggle_ai_panel(self):
-        if self.ai_dock_widget.isVisible():
-            self.ai_dock_widget.hide()
+        if self.ai_panel_dock.isVisible():
+            self.ai_panel_dock.hide()
         else:
-            self.ai_dock_widget.show()
+            self.ai_panel_dock.show()
 
     def open_new_file_dialog(self):
         dialog = NewFileDialog(self.app, self)

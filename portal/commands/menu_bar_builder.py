@@ -9,6 +9,17 @@ class MenuBarBuilder:
     def __init__(self, window: QMainWindow, action_manager: ActionManager):
         self.window = window
         self.action_manager = action_manager
+        self.panels_menu = None
+        self.toolbars_menu = None
+
+    def set_panels(self, layer_manager_dock, preview_dock, ai_panel_dock):
+        self.panels_menu.addAction(layer_manager_dock.toggleViewAction())
+        self.panels_menu.addAction(preview_dock.toggleViewAction())
+        self.panels_menu.addAction(ai_panel_dock.toggleViewAction())
+
+    def set_toolbars(self, toolbars):
+        for toolbar in toolbars:
+            self.toolbars_menu.addAction(toolbar.toggleViewAction())
 
     def setup_menus(self):
         menu_bar = self.window.menuBar()
@@ -57,7 +68,10 @@ class MenuBarBuilder:
         background_menu.addAction(self.action_manager.custom_color_action)
 
         view_menu.addSeparator()
-        view_menu.addAction(self.action_manager.ai_action)
+
+        windows_menu = menu_bar.addMenu("&Windows")
+        self.panels_menu = windows_menu.addMenu("&Panels")
+        self.toolbars_menu = windows_menu.addMenu("&Toolbars")
 
         scripting_menu = menu_bar.addMenu("&Scripting")
         self.populate_scripting_menu(scripting_menu)
