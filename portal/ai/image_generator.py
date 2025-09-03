@@ -1,22 +1,31 @@
 import torch
-from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 from PIL import Image
 import os
 from datetime import datetime
 
-def get_pipeline(is_img2img=False, use_lora=False):
+
+def get_pipeline(model_name="SD1.5", is_img2img=False):
     """
-    Loads and returns the appropriate Stable Diffusion XL pipeline.
+    Loads and returns the appropriate Stable Diffusion pipeline.
     This function should only be called once per session.
     """
-    base_model_filename = r"models\sdxl\juggernautXL_ragnarokBy.safetensors"
-    lora_filename = r"models\lora_sdxl\pixel-art-xl-v1.1.safetensors"
-    
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if device == "cuda" else torch.float32
 
-    print("Loading AI pipeline...")
-    PipelineClass = StableDiffusionXLImg2ImgPipeline if is_img2img else StableDiffusionXLPipeline
+    print(f"Loading {model_name} AI pipeline...")
+
+    if model_name == "SDXL":
+        base_model_filename = r"models/sdxl/juggernautXL_ragnarokBy.safetensors"
+        PipelineClass = StableDiffusionXLImg2ImgPipeline if is_img2img else StableDiffusionXLPipeline
+
+    elif model_name == "SD1.5":
+        base_model_filename = r"models/sd1.5/aziibpixelmix_v10.safetensors"
+        PipelineClass = StableDiffusionImg2ImgPipeline if is_img2img else StableDiffusionPipeline
+
+    else:
+        raise ValueError("Invalid model name")
     
     pipe = PipelineClass.from_single_file(
         base_model_filename,
@@ -24,15 +33,12 @@ def get_pipeline(is_img2img=False, use_lora=False):
         use_safetensors=True,
     ).to(device)
 
-    if use_lora:
-        print("Loading LoRA...")
-        pipe.load_lora_weights(lora_filename)
-        print("AI pipeline loaded successfully.")
+    print("AI pipeline loaded successfully.")
     
     return pipe
 
 def prompt_to_image(
-    pipe: StableDiffusionXLPipeline,
+    pipe: object,
     prompt: str,
     original_size: tuple[int, int],
     num_inference_steps: int = 20,
@@ -57,7 +63,7 @@ def prompt_to_image(
     return final_image
 
 def image_to_image(
-    pipe: StableDiffusionXLImg2ImgPipeline,
+    pipe: object,
     input_image: Image.Image,
     prompt: str,
     strength: float = 0.8,
@@ -70,7 +76,11 @@ def image_to_image(
     original_size = input_image.size
 
     print("Preparing input image for img2img...")
-    model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.LANCZOS)
+    if isinstance(pipe, StableDiffusionXLImg2ImgPipeline):
+        model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.LANCZOS)
+    else:
+        model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.LANCZOS)
+
 
     print("Generating image from image...")
     generated_image = pipe(
