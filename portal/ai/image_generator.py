@@ -52,12 +52,25 @@ def prompt_to_image(
 ) -> Image.Image:
     """Generates an image from a prompt using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("tmp", exist_ok=True)
+
+    def callback(step, timestep, latents):
+        # convert latents to image
+        latents = 1 / 0.18215 * latents
+        image = pipe.vae.decode(latents).sample
+        image = (image / 2 + 0.5).clamp(0, 1)
+        image = image.cpu().permute(0, 2, 3, 1).numpy()
+        image = (image[0] * 255).round().astype("uint8")
+        image = Image.fromarray(image)
+        image.save(f"tmp/step_{step:03d}.png")
 
     print("Generating image from prompt...")
     generated_image = pipe(
         prompt=prompt,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
+        callback=callback,
+        callback_steps=1,
     ).images[0]
 
     # Save and resize
@@ -78,15 +91,24 @@ def image_to_image(
 ) -> Image.Image:
     """Generates an image from another image using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("tmp", exist_ok=True)
     original_size = input_image.size
+
+    def callback(step, timestep, latents):
+        # convert latents to image
+        latents = 1 / 0.18215 * latents
+        image = pipe.vae.decode(latents).sample
+        image = (image / 2 + 0.5).clamp(0, 1)
+        image = image.cpu().permute(0, 2, 3, 1).numpy()
+        image = (image[0] * 255).round().astype("uint8")
+        image = Image.fromarray(image)
+        image.save(f"tmp/step_{step:03d}.png")
 
     print("Preparing input image for img2img...")
     if isinstance(pipe, StableDiffusionXLImg2ImgPipeline):
         model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
     else:
         model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
-
-    model_input_image.save('tmp/tmp.png')
 
     print("Generating image from image...")
     generated_image = pipe(
@@ -95,6 +117,8 @@ def image_to_image(
         strength=strength,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
+        callback=callback,
+        callback_steps=1,
     ).images[0]
 
     # Save and resize
