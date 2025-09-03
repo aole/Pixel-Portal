@@ -50,6 +50,8 @@ class LayerManager(QObject):
         painter.drawImage(0, 0, q_image)
         painter.end()
 
+        new_layer.image.save("debug_03_final_layer_image.png")
+
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
         self.layer_structure_changed.emit()

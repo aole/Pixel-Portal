@@ -270,6 +270,8 @@ class App(QObject):
         else:
             q_image = image
 
+        q_image.save("debug_02_qimage_in_app.png")
+
         command = AddLayerCommand(self.document, q_image, "AI Generated Layer")
         self.execute_command(command)
 

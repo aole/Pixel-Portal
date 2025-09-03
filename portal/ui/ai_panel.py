@@ -43,6 +43,7 @@ class AIPanel(QWidget):
     image_generated = Signal(object)
     last_prompt = "Chibi warrior, fighting stance, plain background"
     pipe = None # Class variable to hold the loaded pipeline
+    current_model = None
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -154,11 +155,17 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(True)
         self.set_buttons_enabled(False)
 
+        # if the model has changed, unload the old one
+        if AIPanel.current_model != model_name:
+            self._cleanup_gpu_memory()
+            AIPanel.current_model = None
+
         # Load the pipeline if it's not already loaded
         if AIPanel.pipe is None:
             is_img2img = (mode == "Image to Image")
             try:
                 AIPanel.pipe = get_pipeline(model_name, is_img2img)
+                AIPanel.current_model = model_name
             except Exception as e:
                 self.on_generation_failed(f"Failed to load AI model: {e}")
                 return
@@ -175,6 +182,7 @@ class AIPanel(QWidget):
 
     def on_generation_complete(self, result):
         if isinstance(result, Image.Image):
+            result.save("debug_01_pil_from_generator.png")
             self.generated_image = result
             self.image_generated.emit(self.generated_image)
 
