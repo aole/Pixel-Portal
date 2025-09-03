@@ -130,6 +130,10 @@ class AIPanel(QWidget):
         self.image_to_image_button.clicked.connect(lambda: self.start_generation("Image to Image"))
         self.variations_button.clicked.connect(self.generate_variations)
 
+        if not torch.cuda.is_available():
+            QMessageBox.warning(self, "CUDA Not Available", "CUDA is not available. AI features will be disabled.")
+            self.set_buttons_enabled(False)
+
 
     def start_generation(self, mode):
         prompt = self.prompt_input.toPlainText()

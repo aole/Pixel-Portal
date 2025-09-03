@@ -20,3 +20,7 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
 ## Committing Changes
 
 When committing changes, please do not commit changes to `settings.ini` if the only change is to the `last_directory` setting. This is a user-specific setting and should not be part of the repository's history.
+
+## AI Features
+
+The AI features in this application require a specific hardware and software environment (e.g., a CUDA-enabled GPU and large model files) that may not be available in the testing environment. Therefore, any tests related to AI functionality should be skipped.
