@@ -4,6 +4,8 @@ from portal.core.drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QApplication
+from PIL import Image
+from PIL.ImageQt import ImageQt
 import configparser
 import os
 from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, PasteInSelectionCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
@@ -263,7 +265,12 @@ class App(QObject):
         return self.document.get_current_image_for_ai()
 
     def add_new_layer_with_image(self, image):
-        command = AddLayerCommand(self.document, image, "AI Generated Layer")
+        if isinstance(image, Image.Image):
+            q_image = ImageQt(image)
+        else:
+            q_image = image
+
+        command = AddLayerCommand(self.document, q_image, "AI Generated Layer")
         self.execute_command(command)
 
     @Slot(object)
