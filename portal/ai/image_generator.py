@@ -16,6 +16,11 @@ def get_pipeline(model_name="SD1.5", is_img2img=False):
 
     print(f"Loading {model_name} AI pipeline...")
 
+    pipeline_params = {
+        "torch_dtype": torch_dtype,
+        "use_safetensors": True,
+    }
+
     if model_name == "SDXL":
         base_model_filename = r"models/sdxl/juggernautXL_ragnarokBy.safetensors"
         PipelineClass = StableDiffusionXLImg2ImgPipeline if is_img2img else StableDiffusionXLPipeline
@@ -23,14 +28,14 @@ def get_pipeline(model_name="SD1.5", is_img2img=False):
     elif model_name == "SD1.5":
         base_model_filename = r"models/sd1.5/aziibpixelmix_v10.safetensors"
         PipelineClass = StableDiffusionImg2ImgPipeline if is_img2img else StableDiffusionPipeline
+        pipeline_params["clip_skip"] = 2
 
     else:
         raise ValueError("Invalid model name")
     
     pipe = PipelineClass.from_single_file(
         base_model_filename,
-        torch_dtype=torch_dtype,
-        use_safetensors=True,
+        **pipeline_params
     ).to(device)
 
     print("AI pipeline loaded successfully.")

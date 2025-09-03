@@ -266,7 +266,7 @@ class App(QObject):
 
     def add_new_layer_with_image(self, image):
         if isinstance(image, Image.Image):
-            q_image = ImageQt(image)
+            q_image = QImage(ImageQt(image))
         else:
             q_image = image
 
