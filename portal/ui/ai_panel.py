@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QRadioButton, QPushButton, QProgressBar,
-                               QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout, QCheckBox, QSlider,
+                               QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout, QComboBox, QSlider,
                                  QSizePolicy)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
@@ -12,7 +12,7 @@ class GenerationThread(QThread):
     generation_complete = Signal(object)
     generation_failed = Signal(str)
 
-    def __init__(self, pipe, mode, image, prompt, original_size, num_inference_steps, guidance_scale, strength, use_lora):
+    def __init__(self, pipe, mode, image, prompt, original_size, num_inference_steps, guidance_scale, strength):
         super().__init__()
         self.pipe = pipe
         self.mode = mode
@@ -22,7 +22,6 @@ class GenerationThread(QThread):
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.strength = strength
-        self.use_lora = use_lora
 
     def run(self):
         try:
@@ -44,6 +43,7 @@ class AIPanel(QWidget):
     image_generated = Signal(object)
     last_prompt = "Chibi warrior, fighting stance, plain background"
     pipe = None # Class variable to hold the loaded pipeline
+    current_model = None
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -59,11 +59,17 @@ class AIPanel(QWidget):
         self.prompt_input.setFixedHeight(self.fontMetrics().lineSpacing() * 4)
         self.layout.addWidget(self.prompt_input)
 
-        # --- Sliders and Checkbox ---
-        sliders_layout = QVBoxLayout()
+        # --- Model Selection ---
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("Model:"))
+        self.model_combo = QComboBox()
+        self.model_combo.addItems(["SD1.5", "SDXL"])
+        self.model_combo.setCurrentText("SD1.5")
+        model_layout.addWidget(self.model_combo)
+        self.layout.addLayout(model_layout)
 
-        self.use_lora_checkbox = QCheckBox("Use LoRA")
-        sliders_layout.addWidget(self.use_lora_checkbox)
+        # --- Sliders ---
+        sliders_layout = QVBoxLayout()
 
         # Steps Slider
         steps_layout = QHBoxLayout()
@@ -131,9 +137,16 @@ class AIPanel(QWidget):
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
             return
 
+        additions = "pixel art, pixel world"
+        if additions not in prompt:
+            prompt = f"{prompt}, {additions}"
+
         AIPanel.last_prompt = prompt
         input_image = None
         original_size = (self.app.document.width, self.app.document.height)
+
+        model_name = self.model_combo.currentText()
+
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
             if input_image is None:
@@ -143,13 +156,17 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(True)
         self.set_buttons_enabled(False)
 
-        use_lora = self.use_lora_checkbox.isChecked()
+        # if the model has changed, unload the old one
+        if AIPanel.current_model != model_name:
+            self._cleanup_gpu_memory()
+            AIPanel.current_model = None
 
         # Load the pipeline if it's not already loaded
         if AIPanel.pipe is None:
             is_img2img = (mode == "Image to Image")
             try:
-                AIPanel.pipe = get_pipeline(is_img2img, use_lora)
+                AIPanel.pipe = get_pipeline(model_name, is_img2img)
+                AIPanel.current_model = model_name
             except Exception as e:
                 self.on_generation_failed(f"Failed to load AI model: {e}")
                 return
@@ -159,7 +176,7 @@ class AIPanel(QWidget):
         strength = self.strength_slider.value() / 100.0
 
         self.thread = GenerationThread(AIPanel.pipe, mode, input_image, prompt, original_size,
-                                       num_inference_steps, guidance_scale, strength, use_lora)
+                                       num_inference_steps, guidance_scale, strength)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.start()
@@ -213,7 +230,7 @@ class AIPanel(QWidget):
     def get_settings(self):
         return {
             "prompt": self.prompt_input.toPlainText(),
-            "use_lora": self.use_lora_checkbox.isChecked(),
+            "model": self.model_combo.currentText(),
             "steps": self.steps_slider.value(),
             "guidance": self.guidance_slider.value(),
             "strength": self.strength_slider.value(),
