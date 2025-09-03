@@ -266,11 +266,11 @@ class App(QObject):
 
     def add_new_layer_with_image(self, image):
         if isinstance(image, Image.Image):
-            q_image = QImage(ImageQt(image))
+            # Resize the PIL image to the document size before converting
+            resized_image = image.resize((self.document.width, self.document.height), Image.Resampling.NEAREST)
+            q_image = QImage(ImageQt(resized_image))
         else:
             q_image = image
-
-        q_image.save("debug_02_qimage_in_app.png")
 
         command = AddLayerCommand(self.document, q_image, "AI Generated Layer")
         self.execute_command(command)

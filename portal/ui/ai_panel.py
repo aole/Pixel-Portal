@@ -182,7 +182,6 @@ class AIPanel(QWidget):
 
     def on_generation_complete(self, result):
         if isinstance(result, Image.Image):
-            result.save("debug_01_pil_from_generator.png")
             self.generated_image = result
             self.image_generated.emit(self.generated_image)
 
