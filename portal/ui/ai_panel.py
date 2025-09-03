@@ -137,14 +137,15 @@ class AIPanel(QWidget):
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
             return
 
+        additions = "pixel art, pixel world"
+        if additions not in prompt:
+            prompt = f"{prompt}, {additions}"
+
         AIPanel.last_prompt = prompt
         input_image = None
+        original_size = (self.app.document.width, self.app.document.height)
 
         model_name = self.model_combo.currentText()
-        if model_name == "SDXL":
-            original_size = (1024, 1024)
-        else:
-            original_size = (512, 512)
 
         if mode == "Image to Image":
             input_image = self.app.get_current_image()
