@@ -391,15 +391,8 @@ class PasteInSelectionCommand(Command):
             painter = QPainter(pasted_content_image)
             painter.setClipPath(self.selection)
 
-            # Center the image within the selection's bounding rect
-            selection_brect = self.selection.boundingRect()
-            image_rect = self.q_image.rect()
-
-            point = QPoint(
-                selection_brect.x() + (selection_brect.width() - image_rect.width()) / 2,
-                selection_brect.y() + (selection_brect.height() - image_rect.height()) / 2,
-            )
-
+            # Paste the image at the top-left of the selection's bounding rect
+            point = self.selection.boundingRect().topLeft()
             painter.drawImage(point, self.q_image)
             painter.end()
 
