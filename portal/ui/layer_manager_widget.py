@@ -132,11 +132,22 @@ class LayerManagerWidget(QWidget):
         current_row = self.layer_list.currentRow()
         if current_row == -1:
             return
-        actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
-        from portal.core.command import RemoveLayerCommand
-        command = RemoveLayerCommand(self.app.document.layer_manager, actual_index)
-        self.app.execute_command(command)
+        layer_manager = self.app.document.layer_manager
+        actual_index = len(layer_manager.layers) - 1 - current_row
+
+        if len(layer_manager.layers) == 1:
+            # Last layer. Clear it instead of removing.
+            from portal.core.command import ClearLayerCommand
+            active_layer = layer_manager.active_layer
+            if active_layer:
+                selection = self.canvas.selection_shape
+                command = ClearLayerCommand(active_layer, selection)
+                self.app.execute_command(command)
+        else:
+            from portal.core.command import RemoveLayerCommand
+            command = RemoveLayerCommand(layer_manager, actual_index)
+            self.app.execute_command(command)
 
     def move_layer_up(self):
         current_row = self.layer_list.currentRow()

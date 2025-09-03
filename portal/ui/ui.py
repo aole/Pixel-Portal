@@ -236,10 +236,13 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open Image for Palette",
-            os.path.expanduser("~"),
+            self.app.last_directory,
             "Image Files (*.png *.jpg *.bmp)"
         )
         if file_path:
+            self.app.last_directory = os.path.dirname(file_path)
+            self.app.config.set('General', 'last_directory', self.app.last_directory)
+
             colors = self.extract_unique_colors(file_path)
             if colors:
                 self.update_palette(colors)
@@ -302,6 +305,17 @@ class MainWindow(QMainWindow):
     def get_palette(self):
         return [button.color for button in self.main_palette_buttons]
 
+    def closeEvent(self, event):
+        if self.app.check_for_unsaved_changes():
+            ai_settings = self.ai_panel.get_settings()
+            if not self.app.config.has_section('AI'):
+                self.app.config.add_section('AI')
+            self.app.config.set('AI', 'last_prompt', ai_settings['prompt'])
+            self.app.save_settings()
+            event.accept()
+        else:
+            event.ignore()
+
     def save_palette_as_png(self):
         colors = self.get_palette()
         if not colors:
@@ -310,12 +324,15 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Palette as PNG",
-            os.path.expanduser("~"),
+            self.app.last_directory,
             "PNG Files (*.png)"
         )
 
         if not file_path:
             return
+
+        self.app.last_directory = os.path.dirname(file_path)
+        self.app.config.set('General', 'last_directory', self.app.last_directory)
 
         from PySide6.QtGui import QPainter
 
