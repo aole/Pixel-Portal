@@ -41,7 +41,6 @@ class GenerationThread(QThread):
 
 class AIPanel(QWidget):
     image_generated = Signal(object)
-    last_prompt = "Chibi warrior, fighting stance, plain background"
     pipe = None # Class variable to hold the loaded pipeline
     current_model = None
 
@@ -55,7 +54,8 @@ class AIPanel(QWidget):
         self.layout = QVBoxLayout(self)
 
         self.prompt_input = QTextEdit()
-        self.prompt_input.setText(AIPanel.last_prompt)
+        last_prompt = self.app.config.get('AI', 'last_prompt', fallback="Chibi warrior, fighting stance, plain background")
+        self.prompt_input.setText(last_prompt)
         self.prompt_input.setFixedHeight(self.fontMetrics().lineSpacing() * 4)
         self.layout.addWidget(self.prompt_input)
 
@@ -141,7 +141,11 @@ class AIPanel(QWidget):
         if additions not in prompt:
             prompt = f"{prompt}, {additions}"
 
-        AIPanel.last_prompt = prompt
+        if not self.app.config.has_section('AI'):
+            self.app.config.add_section('AI')
+        self.app.config.set('AI', 'last_prompt', prompt)
+        self.app.save_settings()
+
         input_image = None
         original_size = (self.app.document.width, self.app.document.height)
 

@@ -3,7 +3,7 @@ from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtWidgets import QFileDialog, QApplication
+from PySide6.QtWidgets import QFileDialog, QApplication, QMessageBox
 import configparser
 import os
 from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, PasteInSelectionCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
@@ -36,6 +36,7 @@ class App(QObject):
 
         self.is_recording = False
         self.recorded_commands = []
+        self.is_dirty = False
 
         self.config = configparser.ConfigParser()
         self.config.read('settings.ini')
@@ -51,15 +52,20 @@ class App(QObject):
         else:
             self.undo_manager.add_command(command)
             self.undo_stack_changed.emit()
+        self.is_dirty = True
         self.document_changed.emit()
 
     @Slot(int, int)
     def new_document(self, width, height):
+        if not self.check_for_unsaved_changes():
+            return
+
         self.document = Document(width, height)
         self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
         self.document.layer_manager.command_generated.connect(self.handle_command)
         self.undo_manager.clear()
+        self.is_dirty = False
         self.undo_stack_changed.emit()
         self.document_changed.emit()
         if self.main_window:
@@ -107,7 +113,14 @@ class App(QObject):
             self.execute_command(command)
 
     @Slot()
+    def save_settings(self):
+        with open('settings.ini', 'w') as configfile:
+            self.config.write(configfile)
+
     def open_document(self, update_settings=True):
+        if not self.check_for_unsaved_changes():
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             None,
             "Open Image", 
@@ -118,8 +131,7 @@ class App(QObject):
             if update_settings:
                 self.last_directory = os.path.dirname(file_path)
                 self.config.set('General', 'last_directory', self.last_directory)
-                with open('settings.ini', 'w') as configfile:
-                    self.config.write(configfile)
+                self.save_settings()
 
             if file_path.lower().endswith(('.tif', '.tiff')):
                 self.document = Document.load_tiff(file_path)
@@ -132,6 +144,7 @@ class App(QObject):
             self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
             self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
             self.undo_manager.clear()
+            self.is_dirty = False
             self.undo_stack_changed.emit()
             self.document_changed.emit()
             if self.main_window:
@@ -149,14 +162,15 @@ class App(QObject):
             if update_settings:
                 self.last_directory = os.path.dirname(file_path)
                 self.config.set('General', 'last_directory', self.last_directory)
-                with open('settings.ini', 'w') as configfile:
-                    self.config.write(configfile)
+                self.save_settings()
 
             if "TIFF" in selected_filter:
                 self.document.save_tiff(file_path)
             else:
                 image = self.document.render()
                 image.save(file_path)
+
+            self.is_dirty = False
 
     @Slot()
     def undo(self):
@@ -250,6 +264,26 @@ class App(QObject):
     @Slot()
     def exit(self):
         self.exit_triggered.emit()
+
+    def check_for_unsaved_changes(self):
+        if not self.is_dirty:
+            return True
+
+        message_box = QMessageBox()
+        message_box.setText("The document has been modified.")
+        message_box.setInformativeText("Do you want to save your changes?")
+        message_box.setStandardButtons(QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
+        message_box.setDefaultButton(QMessageBox.Save)
+        ret = message_box.exec()
+
+        if ret == QMessageBox.Save:
+            self.save_document()
+            return not self.is_dirty
+        elif ret == QMessageBox.Discard:
+            return True
+        elif ret == QMessageBox.Cancel:
+            return False
+        return False
 
     @Slot(bool)
     def set_mirror_x(self, enabled):
