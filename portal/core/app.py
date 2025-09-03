@@ -155,6 +155,7 @@ class App(QObject):
 
             self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
             self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
+            self.document.layer_manager.command_generated.connect(self.handle_command)
             self.undo_manager.clear()
             self.is_dirty = False
             self.undo_stack_changed.emit()

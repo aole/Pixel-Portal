@@ -82,10 +82,11 @@ def image_to_image(
 
     print("Preparing input image for img2img...")
     if isinstance(pipe, StableDiffusionXLImg2ImgPipeline):
-        model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.LANCZOS)
+        model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
     else:
-        model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.LANCZOS)
+        model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
 
+    model_input_image.save('tmp/tmp.png')
 
     print("Generating image from image...")
     generated_image = pipe(
