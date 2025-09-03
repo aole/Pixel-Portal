@@ -242,7 +242,6 @@ class MainWindow(QMainWindow):
         if file_path:
             self.app.last_directory = os.path.dirname(file_path)
             self.app.config.set('General', 'last_directory', self.app.last_directory)
-            self.app.save_settings()
 
             colors = self.extract_unique_colors(file_path)
             if colors:
@@ -334,7 +333,6 @@ class MainWindow(QMainWindow):
 
         self.app.last_directory = os.path.dirname(file_path)
         self.app.config.set('General', 'last_directory', self.app.last_directory)
-        self.app.save_settings()
 
         from PySide6.QtGui import QPainter
 

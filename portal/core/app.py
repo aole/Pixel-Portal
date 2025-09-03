@@ -114,10 +114,24 @@ class App(QObject):
 
     @Slot()
     def save_settings(self):
-        with open('settings.ini', 'w') as configfile:
-            self.config.write(configfile)
+        try:
+            if self.main_window:
+                ai_settings = self.main_window.ai_panel.get_settings()
+                if not self.config.has_section('AI'):
+                    self.config.add_section('AI')
+                self.config.set('AI', 'last_prompt', ai_settings['prompt'])
 
-    def open_document(self, update_settings=True):
+            with open('settings.ini', 'w') as configfile:
+                self.config.write(configfile)
+        except Exception as e:
+            error_box = QMessageBox()
+            error_box.setIcon(QMessageBox.Critical)
+            error_box.setText("Error saving settings")
+            error_box.setInformativeText(f"Could not write to settings.ini.\n\nReason: {e}")
+            error_box.setStandardButtons(QMessageBox.Ok)
+            error_box.exec()
+
+    def open_document(self):
         if not self.check_for_unsaved_changes():
             return
 
@@ -128,10 +142,8 @@ class App(QObject):
             "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
         )
         if file_path:
-            if update_settings:
-                self.last_directory = os.path.dirname(file_path)
-                self.config.set('General', 'last_directory', self.last_directory)
-                self.save_settings()
+            self.last_directory = os.path.dirname(file_path)
+            self.config.set('General', 'last_directory', self.last_directory)
 
             if file_path.lower().endswith(('.tif', '.tiff')):
                 self.document = Document.load_tiff(file_path)
@@ -151,7 +163,7 @@ class App(QObject):
                 self.main_window.canvas.set_initial_zoom()
 
     @Slot()
-    def save_document(self, update_settings=True):
+    def save_document(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
             None,
             "Save Image", 
@@ -159,10 +171,8 @@ class App(QObject):
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
         )
         if file_path:
-            if update_settings:
-                self.last_directory = os.path.dirname(file_path)
-                self.config.set('General', 'last_directory', self.last_directory)
-                self.save_settings()
+            self.last_directory = os.path.dirname(file_path)
+            self.config.set('General', 'last_directory', self.last_directory)
 
             if "TIFF" in selected_filter:
                 self.document.save_tiff(file_path)
