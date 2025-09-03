@@ -2,6 +2,7 @@ import torch
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 from PIL import Image
 import os
+import shutil
 from datetime import datetime
 
 
@@ -52,25 +53,28 @@ def prompt_to_image(
 ) -> Image.Image:
     """Generates an image from a prompt using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
-    os.makedirs("tmp", exist_ok=True)
+    if os.path.exists("tmp"):
+        shutil.rmtree("tmp")
+    os.makedirs("tmp")
 
-    def callback(step, timestep, latents):
+    def callback(pipe, step_index, timestep, callback_kwargs):
         # convert latents to image
+        latents = callback_kwargs["latents"]
         latents = 1 / 0.18215 * latents
         image = pipe.vae.decode(latents).sample
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
         image = (image[0] * 255).round().astype("uint8")
         image = Image.fromarray(image)
-        image.save(f"tmp/step_{step:03d}.png")
+        image.save(f"tmp/step_{step_index:03d}.png")
+        return callback_kwargs
 
     print("Generating image from prompt...")
     generated_image = pipe(
         prompt=prompt,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback=callback,
-        callback_steps=1,
+        callback_on_step_end=callback,
     ).images[0]
 
     # Save and resize
@@ -91,18 +95,22 @@ def image_to_image(
 ) -> Image.Image:
     """Generates an image from another image using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
-    os.makedirs("tmp", exist_ok=True)
+    if os.path.exists("tmp"):
+        shutil.rmtree("tmp")
+    os.makedirs("tmp")
     original_size = input_image.size
 
-    def callback(step, timestep, latents):
+    def callback(pipe, step_index, timestep, callback_kwargs):
         # convert latents to image
+        latents = callback_kwargs["latents"]
         latents = 1 / 0.18215 * latents
         image = pipe.vae.decode(latents).sample
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
         image = (image[0] * 255).round().astype("uint8")
         image = Image.fromarray(image)
-        image.save(f"tmp/step_{step:03d}.png")
+        image.save(f"tmp/step_{step_index:03d}.png")
+        return callback_kwargs
 
     print("Preparing input image for img2img...")
     if isinstance(pipe, StableDiffusionXLImg2ImgPipeline):
@@ -117,8 +125,7 @@ def image_to_image(
         strength=strength,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback=callback,
-        callback_steps=1,
+        callback_on_step_end=callback,
     ).images[0]
 
     # Save and resize
