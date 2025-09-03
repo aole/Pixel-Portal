@@ -70,10 +70,6 @@ def prompt_to_image(
         return callback_kwargs
 
     print("Generating image from prompt...")
-    print(f"  pipe: {pipe.__class__.__name__}")
-    print(f"  prompt: {prompt}")
-    print(f"  num_inference_steps: {num_inference_steps}")
-    print(f"  guidance_scale: {guidance_scale}")
     generated_image = pipe(
         prompt=prompt,
         num_inference_steps=num_inference_steps,
@@ -123,11 +119,6 @@ def image_to_image(
         model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
 
     print("Generating image from image...")
-    print(f"  pipe: {pipe.__class__.__name__}")
-    print(f"  prompt: {prompt}")
-    print(f"  strength: {strength}")
-    print(f"  num_inference_steps: {num_inference_steps}")
-    print(f"  guidance_scale: {guidance_scale}")
     generated_image = pipe(
         prompt=prompt,
         image=model_input_image,
