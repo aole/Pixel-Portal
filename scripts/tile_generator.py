@@ -5,21 +5,32 @@ from PySide6.QtCore import QPointF
 # Define the parameters for the script
 params = [
     {'name': 'tile_type', 'type': 'choice', 'label': 'Tile Type', 'choices': ['Isometric', 'Hexagonal'], 'default': 'Isometric'},
-    {'name': 'size', 'type': 'number', 'label': 'Tile Size', 'default': 32, 'min': 4, 'max': 256},
+    {'name': 'size', 'type': 'number', 'label': 'Tile Size', 'default': 32, 'min': 8, 'max': 256},
     {'name': 'fill_color', 'type': 'color', 'label': 'Fill Color', 'default': '#808080'},
     {'name': 'outline_color', 'type': 'color', 'label': 'Outline Color', 'default': '#000000'},
 ]
 
 def draw_isometric_tile(painter, size):
     """Draws an isometric tile."""
-    half_size = size / 2
-    polygon = QPolygonF([
-        QPointF(half_size, 0),
-        QPointF(size, half_size),
-        QPointF(half_size, size),
-        QPointF(0, half_size)
-    ])
-    painter.drawPolygon(polygon)
+    height = size // 2
+    
+    y_up = height // 2 - 1
+    y_dn = y_up + 1
+    x_end = size - 2
+    for x in range (0, size // 2, 2):
+        painter.drawPoint(x, y_up)
+        painter.drawPoint(x + 1, y_up)
+        painter.drawPoint(x, y_dn)
+        painter.drawPoint(x + 1, y_dn)
+        
+        painter.drawPoint(x_end, y_up)
+        painter.drawPoint(x_end + 1, y_up)
+        painter.drawPoint(x_end, y_dn)
+        painter.drawPoint(x_end + 1, y_dn)
+        
+        y_up -= 1
+        y_dn += 1
+        x_end -= 2
 
 def draw_hex_tile(painter, size):
     """Draws a hexagonal tile."""
