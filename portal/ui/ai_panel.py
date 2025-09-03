@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
+from portal.ai.enums import GenerationMode
 from portal.ai.image_generator import image_to_image, prompt_to_image, get_pipeline
 import torch
 
@@ -12,7 +13,7 @@ class GenerationThread(QThread):
     generation_complete = Signal(object)
     generation_failed = Signal(str)
 
-    def __init__(self, pipe, mode, image, prompt, original_size, num_inference_steps, guidance_scale, strength):
+    def __init__(self, pipe, mode: GenerationMode, image, prompt, original_size, num_inference_steps, guidance_scale, strength):
         super().__init__()
         self.pipe = pipe
         self.mode = mode
@@ -25,7 +26,7 @@ class GenerationThread(QThread):
 
     def run(self):
         try:
-            if self.mode == "Image to Image":
+            if self.mode == GenerationMode.IMAGE_TO_IMAGE:
                 generated_image = image_to_image(self.pipe, self.image, self.prompt,
                                                  strength=self.strength,
                                                  num_inference_steps=self.num_inference_steps,
@@ -126,8 +127,8 @@ class AIPanel(QWidget):
         self.layout.addWidget(self.progress_bar)
 
         # --- Connections ---
-        self.prompt_to_image_button.clicked.connect(lambda: self.start_generation("Prompt to Image"))
-        self.image_to_image_button.clicked.connect(lambda: self.start_generation("Image to Image"))
+        self.prompt_to_image_button.clicked.connect(lambda: self.start_generation(GenerationMode.PROMPT_TO_IMAGE))
+        self.image_to_image_button.clicked.connect(lambda: self.start_generation(GenerationMode.IMAGE_TO_IMAGE))
         self.variations_button.clicked.connect(self.generate_variations)
 
         if not torch.cuda.is_available():
@@ -135,7 +136,7 @@ class AIPanel(QWidget):
             self.set_buttons_enabled(False)
 
 
-    def start_generation(self, mode):
+    def start_generation(self, mode: GenerationMode):
         prompt = self.prompt_input.toPlainText()
         if not prompt:
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
@@ -155,7 +156,7 @@ class AIPanel(QWidget):
 
         model_name = self.model_combo.currentText()
 
-        if mode == "Image to Image":
+        if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
             if input_image is None:
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
@@ -171,7 +172,7 @@ class AIPanel(QWidget):
 
         # Load the pipeline if it's not already loaded
         if AIPanel.pipe is None:
-            is_img2img = (mode == "Image to Image")
+            is_img2img = (mode == GenerationMode.IMAGE_TO_IMAGE)
             try:
                 AIPanel.pipe = get_pipeline(model_name, is_img2img)
                 AIPanel.current_model = model_name
@@ -206,7 +207,7 @@ class AIPanel(QWidget):
 
     def generate_variations(self):
         if self.generated_image:
-            self.start_generation("Image to Image")
+            self.start_generation(GenerationMode.IMAGE_TO_IMAGE)
         else:
             QMessageBox.warning(self, "Warning", "No image to generate variations from.")
 
