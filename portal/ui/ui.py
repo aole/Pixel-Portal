@@ -117,6 +117,11 @@ class MainWindow(QMainWindow):
         self.app.exit_triggered.connect(self.close)
 
         menu_bar_builder.set_panels(self.layer_manager_dock, self.preview_dock, self.ai_panel_dock)
+        menu_bar_builder.set_toolbars([
+            toolbar_builder.top_toolbar,
+            toolbar_builder.left_toolbar,
+            self.color_toolbar
+        ])
 
     @Slot(object)
     def handle_canvas_message(self, data):
