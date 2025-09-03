@@ -308,6 +308,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self.app.check_for_unsaved_changes():
+            ai_settings = self.ai_panel.get_settings()
+            if not self.app.config.has_section('AI'):
+                self.app.config.add_section('AI')
+            self.app.config.set('AI', 'last_prompt', ai_settings['prompt'])
+            self.app.save_settings()
             event.accept()
         else:
             event.ignore()
