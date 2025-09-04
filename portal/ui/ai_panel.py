@@ -24,23 +24,30 @@ class GenerationThread(QThread):
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.strength = strength
+        self.is_cancelled = False
+
+    def cancel(self):
+        self.is_cancelled = True
 
     def run(self):
         try:
             step_callback = lambda image: self.generation_step.emit(image)
 
+            cancellation_token = lambda: self.is_cancelled
             if self.mode == GenerationMode.IMAGE_TO_IMAGE:
                 generated_image = image_to_image(self.pipe, self.image, self.prompt,
                                                  strength=self.strength,
                                                  num_inference_steps=self.num_inference_steps,
                                                  guidance_scale=self.guidance_scale,
-                                                 step_callback=step_callback)
+                                                 step_callback=step_callback,
+                                                 cancellation_token=cancellation_token)
             else:
                 generated_image = prompt_to_image(self.pipe, self.prompt,
                                                   original_size=self.original_size,
                                                   num_inference_steps=self.num_inference_steps,
                                                   guidance_scale=self.guidance_scale,
-                                                  step_callback=step_callback)
+                                                  step_callback=step_callback,
+                                                  cancellation_token=cancellation_token)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
@@ -128,15 +135,24 @@ class AIPanel(QWidget):
 
         self.variations_button.setEnabled(False)
 
+        progress_layout = QHBoxLayout()
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate
+        progress_layout.addWidget(self.progress_bar)
+
+        self.cancel_button = QPushButton("X")
+        self.cancel_button.setFixedSize(20, 20)
+        progress_layout.addWidget(self.cancel_button)
+        self.layout.addLayout(progress_layout)
+
         self.progress_bar.setVisible(False)
-        self.layout.addWidget(self.progress_bar)
+        self.cancel_button.setVisible(False)
 
         # --- Connections ---
         self.prompt_to_image_button.clicked.connect(lambda: self.start_generation(GenerationMode.PROMPT_TO_IMAGE))
         self.image_to_image_button.clicked.connect(lambda: self.start_generation(GenerationMode.IMAGE_TO_IMAGE))
         self.variations_button.clicked.connect(self.generate_variations)
+        self.cancel_button.clicked.connect(self.cancel_generation)
 
         if not torch.cuda.is_available():
             QMessageBox.warning(self, "CUDA Not Available", "CUDA is not available. AI features will be disabled.")
@@ -170,6 +186,7 @@ class AIPanel(QWidget):
                 return
 
         self.progress_bar.setVisible(True)
+        self.cancel_button.setVisible(True)
         self.set_buttons_enabled(False)
 
         is_img2img = (mode == GenerationMode.IMAGE_TO_IMAGE)
@@ -217,15 +234,22 @@ class AIPanel(QWidget):
             self.image_generated.emit(self.generated_image)
 
         self.progress_bar.setVisible(False)
+        self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
         self.variations_button.setEnabled(True)
         self.preview_panel.update_preview()
 
 
+    def cancel_generation(self):
+        if self.thread and self.thread.isRunning():
+            self.thread.cancel()
+
     def on_generation_failed(self, error_message):
         self.progress_bar.setVisible(False)
+        self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
-        QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
+        if not self.thread.is_cancelled:
+            QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
 
     def generate_variations(self):
         if self.generated_image:
