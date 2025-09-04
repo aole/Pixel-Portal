@@ -50,11 +50,14 @@ def prompt_to_image(
     guidance_scale: float = 7.0,
     output_dir: str = "output",
     step_callback=None,
+    cancellation_token=None,
 ) -> Image.Image:
     """Generates an image from a prompt using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
 
     def callback(pipe, step_index, timestep, callback_kwargs):
+        if cancellation_token and cancellation_token():
+            pipe._interrupt = True
         if step_callback:
             # convert latents to image
             latents = callback_kwargs["latents"]
@@ -72,7 +75,7 @@ def prompt_to_image(
         prompt=prompt,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback_on_step_end=callback if step_callback else None,
+        callback_on_step_end=callback,
     ).images[0]
 
     # Save and resize
@@ -91,12 +94,15 @@ def image_to_image(
     guidance_scale: float = 7.0,
     output_dir: str = "output",
     step_callback=None,
+    cancellation_token=None,
 ) -> Image.Image:
     """Generates an image from another image using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
     original_size = input_image.size
 
     def callback(pipe, step_index, timestep, callback_kwargs):
+        if cancellation_token and cancellation_token():
+            pipe._interrupt = True
         if step_callback:
             # convert latents to image
             latents = callback_kwargs["latents"]
@@ -122,7 +128,7 @@ def image_to_image(
         strength=strength,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback_on_step_end=callback if step_callback else None,
+        callback_on_step_end=callback,
     ).images[0]
 
     # Save and resize
