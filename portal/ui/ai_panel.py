@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QTextEdit, QRadioButton, QPushButton, QProgressBar,
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QRadioButton, QPushButton, QProgressBar,
                                QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout, QComboBox, QSlider,
                                  QSizePolicy)
 from PySide6.QtCore import Qt, QThread, Signal
@@ -197,9 +197,9 @@ class AIPanel(QWidget):
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
                 return
 
-            if QApplication.instance().ui.canvas.selection_shape is not None:
+            if self.app.main_window.canvas.selection_shape is not None:
                 is_inpaint = True
-                mask_image = QApplication.instance().ui.canvas.get_selection_mask_pil()
+                mask_image = self.app.main_window.canvas.get_selection_mask_pil()
 
 
         self.progress_bar.setVisible(True)
