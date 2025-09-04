@@ -19,6 +19,7 @@ from portal.core.renderer import CanvasRenderer
 from portal.ui.background import Background
 from portal.tools import get_tools
 from portal.commands.canvas_input_handler import CanvasInputHandler
+from PIL import Image, ImageQt
 
 
 class Canvas(QWidget):
@@ -124,6 +125,21 @@ class Canvas(QWidget):
             self.selection_shape = qpp
         self.update()
         self._update_selection_and_emit_size(self.selection_shape)
+
+    def get_selection_mask_pil(self) -> Image.Image:
+        if self.selection_shape is None:
+            return None
+
+        mask = QImage(self._document_size, QImage.Format_ARGB32)
+        mask.fill(Qt.black)
+
+        painter = QPainter(mask)
+        painter.setBrush(Qt.white)
+        painter.setPen(Qt.white)
+        painter.drawPath(self.selection_shape)
+        painter.end()
+
+        return ImageQt.fromqimage(mask)
 
     def enterEvent(self, event):
         self.setFocus()
