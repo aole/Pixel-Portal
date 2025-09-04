@@ -6,7 +6,7 @@ from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
-from portal.ai.image_generator import image_to_image, prompt_to_image, get_pipeline
+from portal.ai.image_generator import image_to_image, prompt_to_image, get_pipeline, inpaint_image
 import torch
 
 class GenerationThread(QThread):
@@ -14,11 +14,12 @@ class GenerationThread(QThread):
     generation_failed = Signal(str)
     generation_step = Signal(object)
 
-    def __init__(self, pipe, mode: GenerationMode, image, prompt, original_size, num_inference_steps, guidance_scale, strength):
+    def __init__(self, pipe, mode: GenerationMode, image, prompt, original_size, num_inference_steps, guidance_scale, strength, mask_image=None):
         super().__init__()
         self.pipe = pipe
         self.mode = mode
         self.image = image
+        self.mask_image = mask_image
         self.prompt = prompt
         self.original_size = original_size
         self.num_inference_steps = num_inference_steps
@@ -35,12 +36,20 @@ class GenerationThread(QThread):
 
             cancellation_token = lambda: self.is_cancelled
             if self.mode == GenerationMode.IMAGE_TO_IMAGE:
-                generated_image = image_to_image(self.pipe, self.image, self.prompt,
-                                                 strength=self.strength,
-                                                 num_inference_steps=self.num_inference_steps,
-                                                 guidance_scale=self.guidance_scale,
-                                                 step_callback=step_callback,
-                                                 cancellation_token=cancellation_token)
+                if self.mask_image:
+                    generated_image = inpaint_image(self.pipe, self.image, self.mask_image, self.prompt,
+                                                     strength=self.strength,
+                                                     num_inference_steps=self.num_inference_steps,
+                                                     guidance_scale=self.guidance_scale,
+                                                     step_callback=step_callback,
+                                                     cancellation_token=cancellation_token)
+                else:
+                    generated_image = image_to_image(self.pipe, self.image, self.prompt,
+                                                    strength=self.strength,
+                                                    num_inference_steps=self.num_inference_steps,
+                                                    guidance_scale=self.guidance_scale,
+                                                    step_callback=step_callback,
+                                                    cancellation_token=cancellation_token)
             else:
                 generated_image = prompt_to_image(self.pipe, self.prompt,
                                                   original_size=self.original_size,
@@ -57,6 +66,7 @@ class AIPanel(QWidget):
     pipe = None # Class variable to hold the loaded pipeline
     current_model = None
     is_img2img = None
+    is_inpaint = None
 
     def __init__(self, app, preview_panel, parent=None):
         super().__init__(parent)
@@ -175,15 +185,22 @@ class AIPanel(QWidget):
         self.app.save_settings()
 
         input_image = None
+        mask_image = None
         original_size = (self.app.document.width, self.app.document.height)
 
         model_name = self.model_combo.currentText()
 
+        is_inpaint = False
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
             if input_image is None:
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
                 return
+
+            if self.app.canvas.selection_shape is not None:
+                is_inpaint = True
+                mask_image = self.app.canvas.get_selection_mask_pil()
+
 
         self.progress_bar.setVisible(True)
         self.cancel_button.setVisible(True)
@@ -192,17 +209,19 @@ class AIPanel(QWidget):
         is_img2img = (mode == GenerationMode.IMAGE_TO_IMAGE)
 
         # if the model or pipeline type has changed, unload the old one
-        if AIPanel.current_model != model_name or AIPanel.is_img2img != is_img2img:
+        if AIPanel.current_model != model_name or AIPanel.is_img2img != is_img2img or AIPanel.is_inpaint != is_inpaint:
             self._cleanup_gpu_memory()
             AIPanel.current_model = None
             AIPanel.is_img2img = None
+            AIPanel.is_inpaint = None
 
         # Load the pipeline if it's not already loaded
         if AIPanel.pipe is None:
             try:
-                AIPanel.pipe = get_pipeline(model_name, is_img2img)
+                AIPanel.pipe = get_pipeline(model_name, is_img2img, is_inpaint)
                 AIPanel.current_model = model_name
                 AIPanel.is_img2img = is_img2img
+                AIPanel.is_inpaint = is_inpaint
             except Exception as e:
                 self.on_generation_failed(f"Failed to load AI model: {e}")
                 return
@@ -212,7 +231,7 @@ class AIPanel(QWidget):
         strength = self.strength_slider.value() / 100.0
 
         self.thread = GenerationThread(AIPanel.pipe, mode, input_image, prompt, original_size,
-                                       num_inference_steps, guidance_scale, strength)
+                                       num_inference_steps, guidance_scale, strength, mask_image=mask_image)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.generation_step.connect(self.on_generation_step)
