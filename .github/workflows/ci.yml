@@ -22,7 +22,7 @@ jobs:
       run: |
         # Install system dependencies required by PySide6 for a headless environment
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-glx xvfb
+        sudo apt-get install -y xvfb
         
         # Install Python packages
         python -m pip install --upgrade pip
