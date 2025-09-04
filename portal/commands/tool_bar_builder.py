@@ -77,7 +77,7 @@ class ToolBarBuilder:
         self.tool_action_group = QActionGroup(self.main_window)
 
         for tool in tools:
-            if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
+            if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color", "Rotate"]:
                 continue
 
             action = QAction(QIcon(tool.icon), tool.name, self.main_window)
@@ -130,6 +130,17 @@ class ToolBarBuilder:
                 self.main_window.selection_button.setDefaultAction(action)
 
         self.left_toolbar.addWidget(self.main_window.selection_button)
+
+        rotate_tool = next((tool for tool in tools if tool.name == "Rotate"), None)
+        if rotate_tool:
+            action = QAction(QIcon(rotate_tool.icon), rotate_tool.name, self.main_window)
+            action.setCheckable(True)
+            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, rotate_tool.name))
+            button = QToolButton()
+            button.setDefaultAction(action)
+            self.left_toolbar.addWidget(button)
+            self.tool_actions[rotate_tool.name] = action
+            self.tool_action_group.addAction(action)
 
     def update_tool_buttons(self, tool_name):
         if tool_name in self.tool_actions:

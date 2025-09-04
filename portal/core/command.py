@@ -1,5 +1,6 @@
+import logging
 from abc import ABC, abstractmethod
-from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
+from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker, QTransform
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from portal.core.layer import Layer
 from portal.core.drawing import Drawing
@@ -624,3 +625,39 @@ class MoveLayerCommand(Command):
         if self.layer_manager.active_layer_index == self.to_index:
             self.layer_manager.active_layer_index = self.from_index
         self.layer_manager.layer_structure_changed.emit()
+
+
+class RotateCommand(Command):
+    def __init__(self, layer: Layer, before_rotate_image: QImage, rotated_image: QImage, angle: float, center: QPoint, selection: QPainterPath | None):
+        self.layer = layer
+        self.before_rotate_image = before_rotate_image
+        self.rotated_image = rotated_image
+        self.angle = angle
+        self.center = center
+        self.selection = selection
+        logging.basicConfig(level=logging.INFO)
+
+    def execute(self):
+        logging.info("RotateCommand.execute")
+        transform = QTransform().translate(self.center.x(), self.center.y()).rotate(self.angle).translate(-self.center.x(), -self.center.y())
+
+        if self.selection:
+            final_image = self.before_rotate_image.copy()
+            painter = QPainter(final_image)
+
+            painter.setClipPath(self.selection)
+            painter.eraseRect(self.selection.boundingRect())
+
+            painter.setTransform(transform)
+            painter.drawImage(self.selection.boundingRect().toRect().topLeft(), self.rotated_image)
+            painter.end()
+            self.layer.image = final_image
+        else:
+            self.layer.image = self.before_rotate_image.transformed(transform, Qt.FastTransformation)
+
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        logging.info("RotateCommand.undo")
+        self.layer.image = self.before_rotate_image.copy()
+        self.layer.on_image_change.emit()
