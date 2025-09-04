@@ -1,0 +1,39 @@
+name: Run Python Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' # You can change this to your desired Python version
+
+    - name: Install Dependencies
+      run: |
+        # Install system dependencies required by PySide6 for a headless environment
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx xvfb
+        
+        # Install Python packages
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Tests
+      run: |
+        # Run each test file separately under xvfb, as specified in AGENTS.md
+        xvfb-run -a python -m pytest --log-cli-level=INFO tests/test_core.py
+        xvfb-run -a python -m pytest --log-cli-level=INFO tests/test_dialogs.py
+        xvfb-run -a python -m pytest --log-cli-level=INFO tests/test_document_and_layers.py
+        xvfb-run -a python -m pytest --log-cli-level=INFO tests/test_drawing_tools.py
+        xvfb-run -a python -m pytest --log-cli-level=INFO tests/test_selection_tools.py
+        
