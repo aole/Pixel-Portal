@@ -2,7 +2,6 @@ import torch
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 from PIL import Image
 import os
-import shutil
 from datetime import datetime
 
 
@@ -50,23 +49,22 @@ def prompt_to_image(
     num_inference_steps: int = 20,
     guidance_scale: float = 7.0,
     output_dir: str = "output",
+    step_callback=None,
 ) -> Image.Image:
     """Generates an image from a prompt using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
-    if os.path.exists("tmp"):
-        shutil.rmtree("tmp")
-    os.makedirs("tmp")
 
     def callback(pipe, step_index, timestep, callback_kwargs):
-        # convert latents to image
-        latents = callback_kwargs["latents"]
-        latents = 1 / 0.18215 * latents
-        image = pipe.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clamp(0, 1)
-        image = image.cpu().permute(0, 2, 3, 1).numpy()
-        image = (image[0] * 255).round().astype("uint8")
-        image = Image.fromarray(image)
-        image.save(f"tmp/step_{step_index:03d}.png")
+        if step_callback:
+            # convert latents to image
+            latents = callback_kwargs["latents"]
+            latents = 1 / 0.18215 * latents
+            image = pipe.vae.decode(latents).sample
+            image = (image / 2 + 0.5).clamp(0, 1)
+            image = image.cpu().permute(0, 2, 3, 1).numpy()
+            image = (image[0] * 255).round().astype("uint8")
+            image = Image.fromarray(image)
+            step_callback(image)
         return callback_kwargs
 
     print("Generating image from prompt...")
@@ -74,7 +72,7 @@ def prompt_to_image(
         prompt=prompt,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback_on_step_end=callback,
+        callback_on_step_end=callback if step_callback else None,
     ).images[0]
 
     # Save and resize
@@ -92,24 +90,23 @@ def image_to_image(
     num_inference_steps: int = 20,
     guidance_scale: float = 7.0,
     output_dir: str = "output",
+    step_callback=None,
 ) -> Image.Image:
     """Generates an image from another image using a pre-loaded pipeline."""
     os.makedirs(output_dir, exist_ok=True)
-    if os.path.exists("tmp"):
-        shutil.rmtree("tmp")
-    os.makedirs("tmp")
     original_size = input_image.size
 
     def callback(pipe, step_index, timestep, callback_kwargs):
-        # convert latents to image
-        latents = callback_kwargs["latents"]
-        latents = 1 / 0.18215 * latents
-        image = pipe.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clamp(0, 1)
-        image = image.cpu().permute(0, 2, 3, 1).numpy()
-        image = (image[0] * 255).round().astype("uint8")
-        image = Image.fromarray(image)
-        image.save(f"tmp/step_{step_index:03d}.png")
+        if step_callback:
+            # convert latents to image
+            latents = callback_kwargs["latents"]
+            latents = 1 / 0.18215 * latents
+            image = pipe.vae.decode(latents).sample
+            image = (image / 2 + 0.5).clamp(0, 1)
+            image = image.cpu().permute(0, 2, 3, 1).numpy()
+            image = (image[0] * 255).round().astype("uint8")
+            image = Image.fromarray(image)
+            step_callback(image)
         return callback_kwargs
 
     print("Preparing input image for img2img...")
@@ -125,7 +122,7 @@ def image_to_image(
         strength=strength,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
-        callback_on_step_end=callback,
+        callback_on_step_end=callback if step_callback else None,
     ).images[0]
 
     # Save and resize

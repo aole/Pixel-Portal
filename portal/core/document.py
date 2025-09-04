@@ -93,6 +93,8 @@ class Document:
     def resize(self, width, height, interpolation):
         self.width = width
         self.height = height
+        self.layer_manager.width = width
+        self.layer_manager.height = height
 
         if interpolation == "Smooth":
             mode = Qt.SmoothTransformation
