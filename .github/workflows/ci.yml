@@ -22,11 +22,13 @@ jobs:
       run: |
         # Install system dependencies required by PySide6 for a headless environment
         sudo apt-get update
-        sudo apt-get install -y xvfb
-        
-        # Install Python packages
-        python -m pip install --upgrade pip
+        pip install -U pip
         pip install -r requirements.txt
+        sudo apt-get install -y libxcb-cursor0
+        sudo apt-get install -y libxkbcommon-x11-0
+        sudo apt-get install -y libxcb-icccm4
+        sudo apt-get install -y libxcb-keysyms1
+        sudo apt-get install -y xvfb
 
     - name: Run Tests
       run: |
