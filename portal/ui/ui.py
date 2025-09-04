@@ -99,8 +99,9 @@ class MainWindow(QMainWindow):
         self.ai_panel_dock = QDockWidget("AI", self)
         self.ai_panel_dock.setWidget(self.ai_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.ai_panel_dock)
-        self.ai_panel_dock.setFloating(True)
-        self.ai_panel_dock.hide()
+
+        self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
+        self.layer_manager_dock.raise_()
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)

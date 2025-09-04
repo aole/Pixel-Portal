@@ -56,7 +56,7 @@ class AIPanel(QWidget):
         self.app = app
         self.preview_panel = preview_panel
         self.setWindowTitle("AI Image Generation")
-        self.setMinimumWidth(512)
+        self.setMinimumWidth(128)
         self.generated_image = None
 
         self.layout = QVBoxLayout(self)
@@ -116,9 +116,9 @@ class AIPanel(QWidget):
 
         # --- Buttons ---
         buttons_layout = QHBoxLayout()
-        self.prompt_to_image_button = QPushButton("Prompt to Image")
-        self.image_to_image_button = QPushButton("Image to Image")
-        self.variations_button = QPushButton("Variations")
+        self.prompt_to_image_button = QPushButton("T to I")
+        self.image_to_image_button = QPushButton("I to I")
+        self.variations_button = QPushButton("Vr")
 
         buttons_layout.addWidget(self.prompt_to_image_button)
         buttons_layout.addWidget(self.image_to_image_button)
