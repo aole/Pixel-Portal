@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.layer_manager_dock)
 
         # AI Panel
-        self.ai_panel = AIPanel(self.app)
+        self.ai_panel = AIPanel(self.app, self.preview_panel)
         self.ai_panel.image_generated.connect(self.app.add_new_layer_with_image)
         self.ai_panel_dock = QDockWidget("AI", self)
         self.ai_panel_dock.setWidget(self.ai_panel)

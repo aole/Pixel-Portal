@@ -51,9 +51,10 @@ class AIPanel(QWidget):
     current_model = None
     is_img2img = None
 
-    def __init__(self, app, parent=None):
+    def __init__(self, app, preview_panel, parent=None):
         super().__init__(parent)
         self.app = app
+        self.preview_panel = preview_panel
         self.setWindowTitle("AI Image Generation")
         self.setMinimumWidth(512)
         self.generated_image = None
@@ -207,8 +208,8 @@ class AIPanel(QWidget):
                 image = image.resize((128, 128), Image.Resampling.NEAREST)
 
             pixmap = self.pil_to_pixmap(image)
-            self.app.ui.preview_panel.preview_label.setPixmap(pixmap)
-            self.app.ui.preview_panel.preview_label.setFixedSize(pixmap.size())
+            self.preview_panel.preview_label.setPixmap(pixmap)
+            self.preview_panel.preview_label.setFixedSize(pixmap.size())
 
     def on_generation_complete(self, result):
         if isinstance(result, Image.Image):
@@ -218,7 +219,7 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.set_buttons_enabled(True)
         self.variations_button.setEnabled(True)
-        self.app.ui.preview_panel.update_preview()
+        self.preview_panel.update_preview()
 
 
     def on_generation_failed(self, error_message):
