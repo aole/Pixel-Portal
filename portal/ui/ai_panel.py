@@ -12,6 +12,7 @@ import torch
 class GenerationThread(QThread):
     generation_complete = Signal(object)
     generation_failed = Signal(str)
+    generation_step = Signal(object)
 
     def __init__(self, pipe, mode: GenerationMode, image, prompt, original_size, num_inference_steps, guidance_scale, strength):
         super().__init__()
@@ -26,16 +27,20 @@ class GenerationThread(QThread):
 
     def run(self):
         try:
+            step_callback = lambda image: self.generation_step.emit(image)
+
             if self.mode == GenerationMode.IMAGE_TO_IMAGE:
                 generated_image = image_to_image(self.pipe, self.image, self.prompt,
                                                  strength=self.strength,
                                                  num_inference_steps=self.num_inference_steps,
-                                                 guidance_scale=self.guidance_scale)
+                                                 guidance_scale=self.guidance_scale,
+                                                 step_callback=step_callback)
             else:
                 generated_image = prompt_to_image(self.pipe, self.prompt,
                                                   original_size=self.original_size,
                                                   num_inference_steps=self.num_inference_steps,
-                                                  guidance_scale=self.guidance_scale)
+                                                  guidance_scale=self.guidance_scale,
+                                                  step_callback=step_callback)
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
@@ -192,7 +197,18 @@ class AIPanel(QWidget):
                                        num_inference_steps, guidance_scale, strength)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
+        self.thread.generation_step.connect(self.on_generation_step)
         self.thread.start()
+
+    def on_generation_step(self, image):
+        if isinstance(image, Image.Image):
+            # If the image is larger than 128px in width or height, scale it down.
+            if image.width > 128 or image.height > 128:
+                image = image.resize((128, 128), Image.Resampling.NEAREST)
+
+            pixmap = self.pil_to_pixmap(image)
+            self.app.ui.preview_panel.preview_label.setPixmap(pixmap)
+            self.app.ui.preview_panel.preview_label.setFixedSize(pixmap.size())
 
     def on_generation_complete(self, result):
         if isinstance(result, Image.Image):
@@ -202,6 +218,7 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.set_buttons_enabled(True)
         self.variations_button.setEnabled(True)
+        self.app.ui.preview_panel.update_preview()
 
 
     def on_generation_failed(self, error_message):
