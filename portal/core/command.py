@@ -645,8 +645,9 @@ class RotateCommand(Command):
             final_image = self.before_rotate_image.copy()
             painter = QPainter(final_image)
 
-            painter.setClipPath(self.selection)
-            painter.eraseRect(self.selection.boundingRect())
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.fillPath(self.selection, Qt.transparent)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
 
             painter.setTransform(transform)
             painter.drawImage(self.selection.boundingRect().toRect().topLeft(), self.rotated_image)

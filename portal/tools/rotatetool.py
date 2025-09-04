@@ -24,7 +24,6 @@ class RotateTool(BaseTool):
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         logging.info("RotateTool.mousePressEvent")
-        self.canvas.temp_image_replaces_active_layer = True
         active_layer = self.canvas.document.layer_manager.active_layer
         if not active_layer:
             return
@@ -32,10 +31,12 @@ class RotateTool(BaseTool):
         self.before_image = active_layer.image.copy()
 
         if self.canvas.selection_shape:
+            self.canvas.temp_image_replaces_active_layer = False
             self.command_generated.emit(("cut_selection", "rotate_tool_start"))
             self.center = self.canvas.selection_shape.boundingRect().center().toPoint()
             self.original_image = self.canvas.original_image
         else:
+            self.canvas.temp_image_replaces_active_layer = True
             self.command_generated.emit(("cut_selection", "rotate_tool_start_no_selection"))
             self.center = active_layer.image.rect().center()
             self.original_image = active_layer.image.copy()
@@ -51,12 +52,18 @@ class RotateTool(BaseTool):
         transform = QTransform().translate(self.center.x(), self.center.y()).rotate(angle).translate(-self.center.x(), -self.center.y())
 
         if self.canvas.selection_shape:
-            # This part needs to be implemented properly for selection rotation preview
-            self.canvas.temp_image.fill(Qt.transparent)
-            painter = QPainter(self.canvas.temp_image)
-            painter.setTransform(transform)
-            painter.drawImage(QRect(self.center - QPoint(self.original_image.width() / 2, self.original_image.height() / 2), self.original_image.size()), self.original_image)
-            painter.end()
+            # Create the "after cut" image in temp_image
+            self.canvas.temp_image = self.before_image.copy()
+            p = QPainter(self.canvas.temp_image)
+            p.setClipPath(self.canvas.selection_shape)
+            p.eraseRect(self.canvas.selection_shape.boundingRect())
+            p.end()
+
+            # Draw the rotated selection on top
+            p2 = QPainter(self.canvas.temp_image)
+            p2.setTransform(transform)
+            p2.drawImage(self.canvas.selection_shape.boundingRect().toRect().topLeft(), self.original_image)
+            p2.end()
         else:
             self.canvas.temp_image = self.original_image.transformed(transform, Qt.FastTransformation)
 
