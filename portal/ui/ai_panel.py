@@ -197,9 +197,9 @@ class AIPanel(QWidget):
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
                 return
 
-            if self.app.canvas.selection_shape is not None:
+            if self.app.ui.canvas.selection_shape is not None:
                 is_inpaint = True
-                mask_image = self.app.canvas.get_selection_mask_pil()
+                mask_image = self.app.ui.canvas.get_selection_mask_pil()
 
 
         self.progress_bar.setVisible(True)
