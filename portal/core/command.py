@@ -653,7 +653,13 @@ class RotateCommand(Command):
             painter.end()
             self.layer.image = final_image
         else:
-            self.layer.image = self.before_rotate_image.transformed(transform, Qt.FastTransformation)
+            new_image = QImage(self.before_rotate_image.size(), QImage.Format_ARGB32)
+            new_image.fill(Qt.transparent)
+            painter = QPainter(new_image)
+            painter.setTransform(transform)
+            painter.drawImage(0, 0, self.before_rotate_image)
+            painter.end()
+            self.layer.image = new_image
 
         self.layer.on_image_change.emit()
 
