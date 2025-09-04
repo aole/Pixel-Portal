@@ -2,6 +2,8 @@
 
 ## Running Tests
 
+**Important:** Do not run any tests unless explicitly asked to do so.
+
 When running the test suite, you must set the `QT_QPA_PLATFORM` environment variable to `offscreen`. This is because the tests use PySide6, which requires a GUI, and the testing environment is headless.
 
 Due to a segmentation fault that occurs when running the full test suite, the tests must be run on each file separately.
