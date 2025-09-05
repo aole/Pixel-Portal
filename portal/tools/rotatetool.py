@@ -44,10 +44,11 @@ class RotateTool(BaseTool):
         dy = canvas_pos.y() - handle_pos.y()
         distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance <= 6:
-            self.is_hovering_handle = True
-        else:
-            self.is_hovering_handle = False
+        new_hover_state = (distance <= 6)
+
+        if self.is_hovering_handle != new_hover_state:
+            self.is_hovering_handle = new_hover_state
+            self.canvas.repaint()
 
         if self.is_dragging:
             dx = canvas_pos.x() - center.x()
@@ -55,8 +56,6 @@ class RotateTool(BaseTool):
             self.angle = math.atan2(dy, dx)
             self.angle_changed.emit(math.degrees(self.angle))
             self.canvas.update()
-
-        self.canvas.update()
 
     def mouseReleaseEvent(self, event, doc_pos):
         self.is_dragging = False
