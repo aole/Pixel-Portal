@@ -1,4 +1,7 @@
 from portal.core.command import Command
+from PySide6.QtGui import QTransform, QPoint, QImage, QPainter
+from PySide6.QtCore import Qt
+from portal.core.layer import Layer
 
 
 class MergeLayerDownCommand(Command):
@@ -46,3 +49,36 @@ class SetLayerVisibleCommand(Command):
     def undo(self):
         self.layer_manager.layers[self.layer_index].visible = self.previous_visible
         self.layer_manager.layer_visibility_changed.emit(self.layer_index)
+
+
+class RotateLayerCommand(Command):
+    def __init__(self, layer: 'Layer', angle_degrees: float):
+        self.layer = layer
+        self.angle_degrees = angle_degrees
+        self.before_image = None
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+
+        image_to_rotate = self.before_image
+        center = image_to_rotate.rect().center()
+
+        transform = QTransform().translate(center.x(), center.y()).rotate(self.angle_degrees).translate(-center.x(), -center.y())
+
+        new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
+        new_image.fill(Qt.transparent)
+
+        painter = QPainter(new_image)
+        painter.setTransform(transform)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawImage(0, 0, image_to_rotate)
+        painter.end()
+
+        self.layer.image = new_image
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        if self.before_image:
+            self.layer.image = self.before_image.copy()
+            self.layer.on_image_change.emit()

@@ -2,6 +2,7 @@ import math
 from PySide6.QtGui import QCursor, QPen, QColor
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools.basetool import BaseTool
+from portal.commands.layer_commands import RotateLayerCommand
 
 
 class RotateTool(BaseTool):
@@ -75,7 +76,20 @@ class RotateTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event, doc_pos):
-        self.is_dragging = False
+        if self.is_dragging:
+            self.is_dragging = False
+
+            active_layer = self.canvas.document.layer_manager.active_layer
+            if active_layer:
+                command = RotateLayerCommand(active_layer, math.degrees(self.angle))
+                self.command_generated.emit(command)
+
+            # Reset angle and gizmo
+            self.angle = 0.0
+            self.angle_changed.emit(math.degrees(self.angle))
+            self.canvas.repaint()
+        else:
+            self.is_dragging = False
 
     def draw_overlay(self, painter):
         painter.save()
