@@ -57,6 +57,11 @@ class MainWindow(QMainWindow):
         # Status bar
         self.status_bar_manager = StatusBarManager(self)
 
+        # Connect signals for RotateTool
+        if "Rotate" in self.canvas.tools:
+            rotate_tool = self.canvas.tools["Rotate"]
+            rotate_tool.angle_changed.connect(self.status_bar_manager.update_rotation_angle_label)
+
         # Connect signals
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.drawing_context.tool_changed.connect(toolbar_builder.update_tool_buttons)
@@ -64,6 +69,7 @@ class MainWindow(QMainWindow):
         self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
         self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
+        self.app.drawing_context.tool_changed.connect(self.on_tool_changed_for_status_bar)
 
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
@@ -299,6 +305,13 @@ class MainWindow(QMainWindow):
     def update_brush_button(self, brush_type):
         self.action_manager.circular_brush_action.setChecked(brush_type == "Circular")
         self.action_manager.square_brush_action.setChecked(brush_type == "Square")
+
+    def on_tool_changed_for_status_bar(self, tool_name):
+        if tool_name != "Rotate":
+            self.status_bar_manager.update_rotation_angle_label(None)
+        else:
+            # When switching to the Rotate tool, display the initial angle (0)
+            self.status_bar_manager.update_rotation_angle_label(0)
 
     def on_mirror_changed(self):
         is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y

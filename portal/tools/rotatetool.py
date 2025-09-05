@@ -1,5 +1,6 @@
+import math
 from PySide6.QtGui import QCursor, QPen, QColor
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, Signal
 from portal.tools.basetool import BaseTool
 
 
@@ -9,34 +10,80 @@ class RotateTool(BaseTool):
     """
     name = "Rotate"
     icon = "icons/toolrotate.png"
+    angle_changed = Signal(float)
 
     def __init__(self, canvas):
         super().__init__(canvas)
         self.cursor = QCursor(Qt.ArrowCursor)
+        self.angle = 0.0
+        self.is_hovering_handle = False
+        self.is_dragging = False
+
+    def get_center(self):
+        target_rect = self.canvas.get_target_rect()
+        if self.canvas.selection_shape:
+            center_doc = self.canvas.selection_shape.boundingRect().center()
+            return self.canvas.get_canvas_coords(center_doc)
+        else:
+            return target_rect.center()
+
+    def get_handle_pos(self):
+        center = self.get_center()
+        return QPoint(
+            center.x() + 100 * math.cos(self.angle),
+            center.y() + 100 * math.sin(self.angle),
+        )
+
+    def mousePressEvent(self, event, doc_pos):
+        if self.is_hovering_handle:
+            self.is_dragging = True
+
+    def mouseMoveEvent(self, event, doc_pos):
+        canvas_pos = self.canvas.get_canvas_coords(doc_pos)
+        center = self.get_center()
+        handle_pos = self.get_handle_pos()
+
+        dx = canvas_pos.x() - handle_pos.x()
+        dy = canvas_pos.y() - handle_pos.y()
+        distance = math.sqrt(dx * dx + dy * dy)
+
+        if distance <= 6:
+            self.is_hovering_handle = True
+        else:
+            self.is_hovering_handle = False
+
+        if self.is_dragging:
+            dx = canvas_pos.x() - center.x()
+            dy = canvas_pos.y() - center.y()
+            self.angle = math.atan2(dy, dx)
+            self.angle_changed.emit(math.degrees(self.angle))
+            self.canvas.update()
+
+        self.canvas.update()
+
+    def mouseReleaseEvent(self, event, doc_pos):
+        self.is_dragging = False
 
     def draw_overlay(self, painter):
         painter.save()
 
-        target_rect = self.canvas.get_target_rect()
+        center = self.get_center()
+        handle_pos = self.get_handle_pos()
 
-        if self.canvas.selection_shape:
-            center_doc = self.canvas.selection_shape.boundingRect().center()
-            center = self.canvas.get_canvas_coords(center_doc)
-        else:
-            center = target_rect.center()
+        color = QColor("lightgreen") if self.is_hovering_handle else QColor("green")
 
         # Circle
-        pen = QPen(QColor("green"), 4)
+        pen = QPen(color, 4)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(center, 10, 10)
 
         # Line
-        painter.drawLine(center, QPoint(center.x() + 100, center.y()))
+        painter.drawLine(center, handle_pos)
 
         # Handle
-        painter.setBrush(QColor("green"))
+        painter.setBrush(color)
         painter.setPen(Qt.NoPen)
-        painter.drawEllipse(QPoint(center.x() + 100, center.y()), 6, 6)
+        painter.drawEllipse(handle_pos, 6, 6)
 
         painter.restore()
