@@ -1,6 +1,6 @@
 import math
 from PySide6.QtGui import QCursor, QPen, QColor
-from PySide6.QtCore import Qt, QPoint, Signal
+from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools.basetool import BaseTool
 
 
@@ -19,17 +19,31 @@ class RotateTool(BaseTool):
         self.is_hovering_handle = False
         self.is_dragging = False
 
-    def get_center(self):
+    def _get_canvas_coords_f(self, doc_pos_f: QPointF) -> QPointF:
+        doc_width_scaled = self.canvas._document_size.width() * self.canvas.zoom
+        doc_height_scaled = self.canvas._document_size.height() * self.canvas.zoom
+        canvas_width = self.canvas.width()
+        canvas_height = self.canvas.height()
+
+        x_offset = (canvas_width - doc_width_scaled) / 2 + self.canvas.x_offset
+        y_offset = (canvas_height - doc_height_scaled) / 2 + self.canvas.y_offset
+
+        return QPointF(
+            doc_pos_f.x() * self.canvas.zoom + x_offset,
+            doc_pos_f.y() * self.canvas.zoom + y_offset,
+        )
+
+    def get_center(self) -> QPointF:
         target_rect = self.canvas.get_target_rect()
         if self.canvas.selection_shape:
             center_doc = self.canvas.selection_shape.boundingRect().center()
-            return self.canvas.get_canvas_coords(center_doc)
+            return self._get_canvas_coords_f(center_doc)
         else:
-            return target_rect.center()
+            return QPointF(target_rect.center())
 
-    def get_handle_pos(self):
+    def get_handle_pos(self) -> QPointF:
         center = self.get_center()
-        return QPoint(
+        return QPointF(
             center.x() + 100 * math.cos(self.angle),
             center.y() + 100 * math.sin(self.angle),
         )
@@ -39,7 +53,7 @@ class RotateTool(BaseTool):
             self.is_dragging = True
 
     def mouseMoveEvent(self, event, doc_pos):
-        canvas_pos = self.canvas.get_canvas_coords(doc_pos)
+        canvas_pos = self._get_canvas_coords_f(QPointF(doc_pos))
         center = self.get_center()
         handle_pos = self.get_handle_pos()
 
