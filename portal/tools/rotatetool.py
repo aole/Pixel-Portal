@@ -65,7 +65,10 @@ class RotateTool(BaseTool):
             p2.drawImage(self.canvas.selection_shape.boundingRect().toRect().topLeft(), self.original_image)
             p2.end()
         else:
-            self.canvas.temp_image = self.original_image.transformed(transform, Qt.FastTransformation)
+            # DEBUG: Create a solid green image to test the preview pipeline
+            self.canvas.temp_image = QImage(self.original_image.size(), QImage.Format_ARGB32)
+            self.canvas.temp_image.fill(Qt.green)
+            # self.canvas.temp_image = self.original_image.transformed(transform, Qt.FastTransformation)
 
         self.canvas.update()
 
