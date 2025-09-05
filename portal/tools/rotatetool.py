@@ -2,7 +2,7 @@ import math
 import logging
 
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtGui import QCursor, QMouseEvent, QPainter, QTransform
+from PySide6.QtGui import QCursor, QMouseEvent, QPainter, QTransform, QImage
 
 from portal.core.command import RotateCommand
 from portal.tools.basetool import BaseTool
