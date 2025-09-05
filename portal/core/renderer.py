@@ -319,28 +319,24 @@ class CanvasRenderer:
     def draw_rotation_gizmo(self, painter, target_rect):
         painter.save()
 
-        transform = QTransform()
-        transform.translate(target_rect.x(), target_rect.y())
-        transform.scale(self.canvas.zoom, self.canvas.zoom)
-        painter.setTransform(transform)
-
-        # Gizmo should be drawn at the center of the document for now.
-        center_x = self.canvas.document.width / 2
-        center_y = self.canvas.document.height / 2
+        if self.canvas.selection_shape:
+            center_doc = self.canvas.selection_shape.boundingRect().center()
+            center = self.canvas.get_canvas_coords(center_doc)
+        else:
+            center = target_rect.center()
 
         # Circle
         pen = QPen(QColor("blue"), 2)
-        pen.setCosmetic(True) # This makes the pen width independent of zoom
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(QPoint(center_x, center_y), 8, 8)
+        painter.drawEllipse(center, 8, 8)
 
         # Line
-        painter.drawLine(int(center_x), int(center_y), int(center_x + 10), int(center_y))
+        painter.drawLine(center, QPoint(center.x() + 10, center.y()))
 
         # Handle
         painter.setBrush(QColor("blue"))
         painter.setPen(Qt.NoPen)
-        painter.drawEllipse(QPoint(center_x + 10, center_y), 3, 3)
+        painter.drawEllipse(QPoint(center.x() + 10, center.y()), 3, 3)
 
         painter.restore()
