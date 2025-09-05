@@ -33,8 +33,7 @@ class CanvasRenderer:
         self._draw_mirror_guides(painter, target_rect, document)
         self.draw_grid(painter, target_rect)
         self.draw_cursor(painter, target_rect, image_to_draw_on)
-        if self.canvas.drawing_context.tool == "Rotate":
-            self.draw_rotation_gizmo(painter, target_rect)
+        self.canvas.current_tool.draw_overlay(painter)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
 
@@ -315,28 +314,3 @@ class CanvasRenderer:
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
-
-    def draw_rotation_gizmo(self, painter, target_rect):
-        painter.save()
-
-        if self.canvas.selection_shape:
-            center_doc = self.canvas.selection_shape.boundingRect().center()
-            center = self.canvas.get_canvas_coords(center_doc)
-        else:
-            center = target_rect.center()
-
-        # Circle
-        pen = QPen(QColor("blue"), 2)
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(center, 8, 8)
-
-        # Line
-        painter.drawLine(center, QPoint(center.x() + 10, center.y()))
-
-        # Handle
-        painter.setBrush(QColor("blue"))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(QPoint(center.x() + 10, center.y()), 3, 3)
-
-        painter.restore()
