@@ -19,19 +19,6 @@ class RotateTool(BaseTool):
         self.is_hovering_handle = False
         self.is_dragging = False
 
-    def _get_canvas_coords_f(self, doc_pos_f: QPointF) -> QPointF:
-        doc_width_scaled = self.canvas._document_size.width() * self.canvas.zoom
-        doc_height_scaled = self.canvas._document_size.height() * self.canvas.zoom
-        canvas_width = self.canvas.width()
-        canvas_height = self.canvas.height()
-
-        x_offset = (canvas_width - doc_width_scaled) / 2 + self.canvas.x_offset
-        y_offset = (canvas_height - doc_height_scaled) / 2 + self.canvas.y_offset
-
-        return QPointF(
-            doc_pos_f.x() * self.canvas.zoom + x_offset,
-            doc_pos_f.y() * self.canvas.zoom + y_offset,
-        )
 
     def get_center(self) -> QPointF:
         target_rect = self.canvas.get_target_rect()
@@ -49,7 +36,7 @@ class RotateTool(BaseTool):
             self.is_dragging = True
 
     def mouseMoveEvent(self, event, doc_pos):
-        canvas_pos = self._get_canvas_coords_f(QPointF(doc_pos))
+        canvas_pos = QPointF(event.pos())
         center = self.get_center()
         handle_pos = self.get_handle_pos()
 
