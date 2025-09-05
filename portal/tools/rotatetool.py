@@ -35,11 +35,7 @@ class RotateTool(BaseTool):
 
     def get_center(self) -> QPointF:
         target_rect = self.canvas.get_target_rect()
-        if self.canvas.selection_shape:
-            center_doc = self.canvas.selection_shape.boundingRect().center()
-            return self._get_canvas_coords_f(center_doc)
-        else:
-            return QPointF(target_rect.center())
+        return QPointF(target_rect.center())
 
     def get_handle_pos(self) -> QPointF:
         center = self.get_center()
