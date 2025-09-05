@@ -33,6 +33,8 @@ class CanvasRenderer:
         self._draw_mirror_guides(painter, target_rect, document)
         self.draw_grid(painter, target_rect)
         self.draw_cursor(painter, target_rect, image_to_draw_on)
+        if self.canvas.drawing_context.tool == "Rotate":
+            self.draw_rotation_gizmo(painter, target_rect)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
 
@@ -242,7 +244,7 @@ class CanvasRenderer:
         if (
             not self.canvas.mouse_over_canvas
             or (active_layer and not active_layer.visible)
-            or self.canvas.drawing_context.tool in ["Bucket", "Picker", "Move"]
+            or self.canvas.drawing_context.tool in ["Bucket", "Picker", "Move", "Rotate"]
             or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed
         ):
@@ -314,12 +316,31 @@ class CanvasRenderer:
         else:
             painter.drawRect(cursor_screen_rect)
 
+    def draw_rotation_gizmo(self, painter, target_rect):
+        painter.save()
 
-        # Draw the inverted outline on top
-        painter.setPen(inverted_color)
+        transform = QTransform()
+        transform.translate(target_rect.x(), target_rect.y())
+        transform.scale(self.canvas.zoom, self.canvas.zoom)
+        painter.setTransform(transform)
+
+        # Gizmo should be drawn at the center of the document for now.
+        center_x = self.canvas.document.width / 2
+        center_y = self.canvas.document.height / 2
+
+        # Circle
+        pen = QPen(QColor("blue"), 2)
+        pen.setCosmetic(True) # This makes the pen width independent of zoom
+        painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QPoint(center_x, center_y), 8, 8)
 
-        if self.canvas.drawing_context.brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
+        # Line
+        painter.drawLine(int(center_x), int(center_y), int(center_x + 10), int(center_y))
+
+        # Handle
+        painter.setBrush(QColor("blue"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPoint(center_x + 10, center_y), 3, 3)
+
+        painter.restore()
