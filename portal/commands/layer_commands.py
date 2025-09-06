@@ -51,9 +51,10 @@ class SetLayerVisibleCommand(Command):
 
 
 class RotateLayerCommand(Command):
-    def __init__(self, layer: 'Layer', angle_degrees: float):
+    def __init__(self, layer: 'Layer', angle_degrees: float, center_point: QPoint):
         self.layer = layer
         self.angle_degrees = angle_degrees
+        self.center_point = center_point
         self.before_image = None
 
     def execute(self):
@@ -61,7 +62,7 @@ class RotateLayerCommand(Command):
             self.before_image = self.layer.image.copy()
 
         image_to_rotate = self.before_image
-        center = image_to_rotate.rect().center()
+        center = self.center_point
 
         transform = QTransform().translate(center.x(), center.y()).rotate(self.angle_degrees).translate(-center.x(), -center.y())
 

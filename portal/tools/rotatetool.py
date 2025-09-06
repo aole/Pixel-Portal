@@ -21,6 +21,15 @@ class RotateTool(BaseTool):
         self.is_dragging = False
         self.original_image = None
 
+    def get_rotation_center_doc(self) -> QPoint:
+        if self.canvas.selection_shape:
+            return self.canvas.selection_shape.boundingRect().center().toPoint()
+        else:
+            active_layer = self.canvas.document.layer_manager.active_layer
+            if active_layer:
+                return active_layer.image.rect().center()
+            return QPoint(0, 0) # Fallback
+
     def get_center(self) -> QPointF:
         target_rect = self.canvas.get_target_rect()
         if self.canvas.selection_shape:
@@ -81,7 +90,7 @@ class RotateTool(BaseTool):
 
         if self.original_image:
             image_to_rotate = self.original_image
-            center_of_image = image_to_rotate.rect().center()
+            center_of_image = self.get_rotation_center_doc()
             transform = QTransform().translate(center_of_image.x(), center_of_image.y()).rotate(math.degrees(self.angle)).translate(-center_of_image.x(), -center_of_image.y())
 
             new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
@@ -102,7 +111,8 @@ class RotateTool(BaseTool):
 
             active_layer = self.canvas.document.layer_manager.active_layer
             if active_layer:
-                command = RotateLayerCommand(active_layer, math.degrees(self.angle))
+                center_doc = self.get_rotation_center_doc()
+                command = RotateLayerCommand(active_layer, math.degrees(self.angle), center_doc)
                 self.command_generated.emit(command)
 
             self.is_dragging = False
