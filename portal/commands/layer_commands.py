@@ -1,7 +1,6 @@
 from portal.core.command import Command
-from PySide6.QtGui import QTransform, QPoint, QImage, QPainter
-from PySide6.QtCore import Qt
-from portal.core.layer import Layer
+from PySide6.QtGui import QTransform, QImage, QPainter
+from PySide6.QtCore import Qt, QPoint
 
 
 class MergeLayerDownCommand(Command):
