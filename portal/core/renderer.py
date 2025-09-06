@@ -28,7 +28,26 @@ class CanvasRenderer:
         target_rect = self.canvas.get_target_rect()
 
         self._draw_background(painter, target_rect)
-        image_to_draw_on = self._draw_document(painter, target_rect, document)
+
+        # Explicitly handle rotation preview to override normal document drawing
+        if self.drawing_context.tool == "Rotate" and self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:
+            final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
+            final_image.fill(QColor("transparent"))
+            image_painter = QPainter(final_image)
+            active_layer = document.layer_manager.active_layer
+            for layer in document.layer_manager.layers:
+                if layer.visible:
+                    image_to_draw = layer.image
+                    if layer is active_layer:
+                        image_to_draw = self.canvas.temp_image
+                    image_painter.setOpacity(layer.opacity)
+                    image_painter.drawImage(0, 0, image_to_draw)
+            image_painter.end()
+            painter.drawImage(target_rect, final_image)
+            image_to_draw_on = final_image
+        else:
+            image_to_draw_on = self._draw_document(painter, target_rect, document)
+
         self._draw_border(painter, target_rect)
         self._draw_mirror_guides(painter, target_rect, document)
         self.draw_grid(painter, target_rect)
@@ -309,6 +328,16 @@ class CanvasRenderer:
         # Fill the cursor rectangle with the brush color
         painter.setBrush(self.canvas.drawing_context.pen_color)
         painter.setPen(Qt.NoPen)  # No outline for the fill
+
+        if self.canvas.drawing_context.brush_type == "Circular":
+            painter.drawEllipse(cursor_screen_rect)
+        else:
+            painter.drawRect(cursor_screen_rect)
+
+
+        # Draw the inverted outline on top
+        painter.setPen(inverted_color)
+        painter.setBrush(Qt.NoBrush)
 
         if self.canvas.drawing_context.brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)

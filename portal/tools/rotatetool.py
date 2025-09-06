@@ -1,5 +1,5 @@
 import math
-from PySide6.QtGui import QCursor, QPen, QColor
+from PySide6.QtGui import QCursor, QPen, QColor, QTransform, QImage, QPainter
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
@@ -19,6 +19,7 @@ class RotateTool(BaseTool):
         self.angle = 0.0
         self.is_hovering_handle = False
         self.is_dragging = False
+        self.original_image = None
 
     def get_center(self) -> QPointF:
         target_rect = self.canvas.get_target_rect()
@@ -47,6 +48,10 @@ class RotateTool(BaseTool):
     def mousePressEvent(self, event, doc_pos):
         if self.is_hovering_handle:
             self.is_dragging = True
+            active_layer = self.canvas.document.layer_manager.active_layer
+            if active_layer:
+                self.original_image = active_layer.image.copy()
+                self.canvas.temp_image_replaces_active_layer = True
 
     def mouseHoverEvent(self, event, doc_pos):
         canvas_pos = QPointF(event.pos())
@@ -73,23 +78,51 @@ class RotateTool(BaseTool):
         dy = canvas_pos.y() - center.y()
         self.angle = math.atan2(dy, dx)
         self.angle_changed.emit(math.degrees(self.angle))
+
+        if self.original_image:
+            image_to_rotate = self.original_image
+            center_of_image = image_to_rotate.rect().center()
+            transform = QTransform().translate(center_of_image.x(), center_of_image.y()).rotate(math.degrees(self.angle)).translate(-center_of_image.x(), -center_of_image.y())
+
+            new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
+            new_image.fill(Qt.transparent)
+            painter = QPainter(new_image)
+            painter.setTransform(transform)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawImage(0, 0, image_to_rotate)
+            painter.end()
+            self.canvas.temp_image = new_image
+
         self.canvas.update()
 
     def mouseReleaseEvent(self, event, doc_pos):
         if self.is_dragging:
-            self.is_dragging = False
+            self.canvas.temp_image = None
+            self.canvas.temp_image_replaces_active_layer = False
 
             active_layer = self.canvas.document.layer_manager.active_layer
             if active_layer:
                 command = RotateLayerCommand(active_layer, math.degrees(self.angle))
                 self.command_generated.emit(command)
 
-            # Reset angle and gizmo
+            self.is_dragging = False
+            self.original_image = None
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))
-            self.canvas.repaint()
         else:
             self.is_dragging = False
+
+    def deactivate(self):
+        if self.is_dragging:
+            self.canvas.temp_image = None
+            self.canvas.temp_image_replaces_active_layer = False
+            if self.original_image and self.canvas.document.layer_manager.active_layer:
+                self.canvas.document.layer_manager.active_layer.image = self.original_image
+                self.canvas.document.layer_manager.active_layer.on_image_change.emit()
+            self.is_dragging = False
+            self.original_image = None
+            self.angle = 0.0
+            self.angle_changed.emit(math.degrees(self.angle))
 
     def draw_overlay(self, painter):
         painter.save()
