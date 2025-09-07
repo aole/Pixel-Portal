@@ -13,9 +13,11 @@ class StatusBarManager:
         self.main_window.cursor_pos_label = QLabel("Cursor: (0, 0)")
         self.main_window.zoom_level_label = QLabel("Zoom: 100%")
         self.main_window.selection_size_label = QLabel("")
+        self.main_window.rotation_angle_label = QLabel("")
         status_bar.addWidget(self.main_window.cursor_pos_label)
         status_bar.addWidget(self.main_window.zoom_level_label)
         status_bar.addWidget(self.main_window.selection_size_label)
+        status_bar.addWidget(self.main_window.rotation_angle_label)
 
     def _connect_signals(self):
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
@@ -33,3 +35,9 @@ class StatusBarManager:
             self.main_window.selection_size_label.setText(f"Selection: {width}x{height}")
         else:
             self.main_window.selection_size_label.setText("")
+
+    def update_rotation_angle_label(self, angle):
+        if angle is not None:
+            self.main_window.rotation_angle_label.setText(f"Angle: {round(angle)}°")
+        else:
+            self.main_window.rotation_angle_label.setText("")

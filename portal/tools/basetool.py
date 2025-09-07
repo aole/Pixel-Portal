@@ -34,3 +34,7 @@ class BaseTool(QObject):
     def deactivate(self):
         """Called when the tool is switched."""
         pass
+
+    def draw_overlay(self, painter):
+        """Called when the canvas is being painted."""
+        pass
