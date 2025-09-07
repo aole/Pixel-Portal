@@ -89,32 +89,32 @@ class RotateTool(BaseTool):
         self.angle_changed.emit(math.degrees(self.angle))
 
         if self.original_image:
-            image_to_rotate = self.original_image
-            center_of_image = self.get_rotation_center_doc()
-            transform = QTransform().translate(center_of_image.x(), center_of_image.y()).rotate(math.degrees(self.angle)).translate(-center_of_image.x(), -center_of_image.y())
+            image_to_modify = self.original_image.copy()
+            painter = QPainter(image_to_modify)
+            painter.setRenderHint(QPainter.Antialiasing, False)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+
+            center = self.get_rotation_center_doc()
+            transform = QTransform().translate(center.x(), center.y()).rotate(math.degrees(self.angle)).translate(-center.x(), -center.y())
 
             selection_shape = self.canvas.selection_shape
             if selection_shape:
-                rotated_full_image = image_to_rotate.transformed(transform, Qt.SmoothTransformation)
-
-                preview_image = self.original_image.copy()
-                painter = QPainter(preview_image)
                 painter.setClipPath(selection_shape)
+                painter.setCompositionMode(QPainter.CompositionMode_Clear)
+                painter.fillRect(self.original_image.rect(), Qt.transparent)
+                painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
 
-                x = center_of_image.x() - rotated_full_image.width() / 2
-                y = center_of_image.y() - rotated_full_image.height() / 2
-                painter.drawImage(QPoint(int(x), int(y)), rotated_full_image)
-                painter.end()
-                self.canvas.temp_image = preview_image
-            else:
-                new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
-                new_image.fill(Qt.transparent)
-                painter = QPainter(new_image)
                 painter.setTransform(transform)
-                painter.setRenderHint(QPainter.SmoothPixmapTransform)
-                painter.drawImage(0, 0, image_to_rotate)
-                painter.end()
-                self.canvas.temp_image = new_image
+                painter.drawImage(0, 0, self.original_image)
+            else:
+                painter.setTransform(transform)
+                painter.setCompositionMode(QPainter.CompositionMode_Clear)
+                painter.fillRect(self.original_image.rect(), Qt.transparent)
+                painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                painter.drawImage(0, 0, self.original_image)
+
+            painter.end()
+            self.canvas.temp_image = image_to_modify
 
         self.canvas.update()
 

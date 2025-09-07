@@ -62,37 +62,35 @@ class RotateLayerCommand(Command):
         if self.before_image is None:
             self.before_image = self.layer.image.copy()
 
-        image_to_rotate = self.before_image
-        center = self.center_point
+        image_to_modify = self.before_image.copy()
+        painter = QPainter(image_to_modify)
+        painter.setRenderHint(QPainter.Antialiasing, False)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
 
+        center = self.center_point
         transform = QTransform().translate(center.x(), center.y()).rotate(self.angle_degrees).translate(-center.x(), -center.y())
 
         if self.selection_shape:
-            # When there is a selection, we rotate the whole layer, but only apply
-            # the rotated pixels inside the selection area.
-            rotated_full_image = image_to_rotate.transformed(transform, Qt.SmoothTransformation)
-
-            final_image = self.before_image.copy()
-            painter = QPainter(final_image)
+            # Clear the area within the selection
             painter.setClipPath(self.selection_shape)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.fillRect(self.layer.image.rect(), Qt.transparent)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
 
-            # Paste the rotated image back, centered on the rotation point
-            x = center.x() - rotated_full_image.width() / 2
-            y = center.y() - rotated_full_image.height() / 2
-            painter.drawImage(QPoint(int(x), int(y)), rotated_full_image)
-            painter.end()
-            self.layer.image = final_image
-        else:
-            # Original logic for rotating the whole layer
-            new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
-            new_image.fill(Qt.transparent)
-            painter = QPainter(new_image)
+            # Draw the rotated original image, clipped to the selection
             painter.setTransform(transform)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawImage(0, 0, image_to_rotate)
-            painter.end()
-            self.layer.image = new_image
+            painter.drawImage(0, 0, self.before_image)
+        else:
+            # If no selection, rotate the whole image
+            painter.setTransform(transform)
+            # We need to clear the painter's own background before drawing
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.fillRect(self.layer.image.rect(), Qt.transparent)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            painter.drawImage(0, 0, self.before_image)
 
+        painter.end()
+        self.layer.image = image_to_modify
         self.layer.on_image_change.emit()
 
     def undo(self):
