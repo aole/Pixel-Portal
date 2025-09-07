@@ -93,14 +93,28 @@ class RotateTool(BaseTool):
             center_of_image = self.get_rotation_center_doc()
             transform = QTransform().translate(center_of_image.x(), center_of_image.y()).rotate(math.degrees(self.angle)).translate(-center_of_image.x(), -center_of_image.y())
 
-            new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
-            new_image.fill(Qt.transparent)
-            painter = QPainter(new_image)
-            painter.setTransform(transform)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawImage(0, 0, image_to_rotate)
-            painter.end()
-            self.canvas.temp_image = new_image
+            selection_shape = self.canvas.selection_shape
+            if selection_shape:
+                rotated_full_image = image_to_rotate.transformed(transform, Qt.SmoothPixmapTransform)
+
+                preview_image = self.original_image.copy()
+                painter = QPainter(preview_image)
+                painter.setClipPath(selection_shape)
+
+                x = center_of_image.x() - rotated_full_image.width() / 2
+                y = center_of_image.y() - rotated_full_image.height() / 2
+                painter.drawImage(QPoint(int(x), int(y)), rotated_full_image)
+                painter.end()
+                self.canvas.temp_image = preview_image
+            else:
+                new_image = QImage(image_to_rotate.size(), QImage.Format_ARGB32)
+                new_image.fill(Qt.transparent)
+                painter = QPainter(new_image)
+                painter.setTransform(transform)
+                painter.setRenderHint(QPainter.SmoothPixmapTransform)
+                painter.drawImage(0, 0, image_to_rotate)
+                painter.end()
+                self.canvas.temp_image = new_image
 
         self.canvas.update()
 
@@ -112,7 +126,8 @@ class RotateTool(BaseTool):
             active_layer = self.canvas.document.layer_manager.active_layer
             if active_layer:
                 center_doc = self.get_rotation_center_doc()
-                command = RotateLayerCommand(active_layer, math.degrees(self.angle), center_doc)
+                selection_shape = self.canvas.selection_shape
+                command = RotateLayerCommand(active_layer, math.degrees(self.angle), center_doc, selection_shape)
                 self.command_generated.emit(command)
 
             self.is_dragging = False
