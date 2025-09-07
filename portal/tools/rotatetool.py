@@ -95,7 +95,7 @@ class RotateTool(BaseTool):
 
             selection_shape = self.canvas.selection_shape
             if selection_shape:
-                rotated_full_image = image_to_rotate.transformed(transform, Qt.SmoothPixmapTransform)
+                rotated_full_image = image_to_rotate.transformed(transform, Qt.SmoothTransformation)
 
                 preview_image = self.original_image.copy()
                 painter = QPainter(preview_image)
