@@ -21,16 +21,20 @@ class RotateTool(BaseTool):
         self.is_hovering_center = False
         self.drag_mode = None  # None, 'rotate', or 'pivot'
         self.original_image = None
+        self.pivot_doc = QPoint(0, 0)
+
+    def activate(self):
         self.pivot_doc = self.calculate_default_pivot_doc()
 
     def calculate_default_pivot_doc(self) -> QPoint:
         if self.canvas.selection_shape:
             return self.canvas.selection_shape.boundingRect().center().toPoint()
-        else:
-            active_layer = self.canvas.document.layer_manager.active_layer
-            if active_layer:
-                return active_layer.image.rect().center()
-            return QPoint(0, 0)  # Fallback
+
+        document = self.canvas.document
+        if document and document.layer_manager and document.layer_manager.active_layer:
+            return document.layer_manager.active_layer.image.rect().center()
+
+        return QPoint(0, 0)  # Fallback
 
     def get_rotation_center_doc(self) -> QPoint:
         return self.pivot_doc
