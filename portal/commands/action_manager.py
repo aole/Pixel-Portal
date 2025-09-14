@@ -7,7 +7,21 @@ class ActionManager:
         self.app = main_window.app
 
     def setup_actions(self, canvas):
-        # File actions
+        """Set up all application actions by delegating to category builders.
+
+        Adding a new action category is as simple as implementing another
+        ``_build_*`` helper and invoking it here.
+        """
+        self._build_file_actions()
+        self._build_edit_actions()
+        self._build_select_actions()
+        self._build_image_actions()
+        self._build_layer_actions()
+        self._build_view_actions(canvas)
+        self._build_tool_actions()
+
+    def _build_file_actions(self):
+        """Create actions related to file management."""
         self.new_action = QAction(QIcon("icons/new.png"), "&New", self.main_window)
         self.new_action.setShortcut("Ctrl+N")
         self.new_action.triggered.connect(self.main_window.open_new_file_dialog)
@@ -29,7 +43,8 @@ class ActionManager:
         self.exit_action = QAction("&Exit", self.main_window)
         self.exit_action.triggered.connect(self.app.exit)
 
-        # Edit actions
+    def _build_edit_actions(self):
+        """Create actions for standard edit operations."""
         self.undo_action = QAction("&Undo", self.main_window)
         self.undo_action.setShortcut(QKeySequence.Undo)
         self.undo_action.triggered.connect(self.app.undo)
@@ -58,7 +73,8 @@ class ActionManager:
         self.clear_action.setShortcut(QKeySequence.Delete)
         self.clear_action.triggered.connect(self.app.clear_layer)
 
-        # Select actions
+    def _build_select_actions(self):
+        """Create actions for selection manipulation."""
         self.select_all_action = QAction("Select &All", self.main_window)
         self.select_all_action.setShortcut("Ctrl+A")
         self.select_all_action.triggered.connect(self.app.select_all)
@@ -71,7 +87,8 @@ class ActionManager:
         self.invert_selection_action.setShortcut("Ctrl+I")
         self.invert_selection_action.triggered.connect(self.app.invert_selection)
 
-        # Image actions
+    def _build_image_actions(self):
+        """Create actions that modify the current image."""
         self.resize_action = QAction(QIcon("icons/resize.png"), "&Resize", self.main_window)
         self.resize_action.setShortcut("Ctrl+R")
         self.resize_action.triggered.connect(self.main_window.open_resize_dialog)
@@ -83,33 +100,43 @@ class ActionManager:
         self.flip_action = QAction("Flip...", self.main_window)
         self.flip_action.triggered.connect(self.main_window.open_flip_dialog)
 
-        # Layer actions
+    def _build_layer_actions(self):
+        """Create actions operating on layers."""
         self.conform_to_palette_action = QAction("Conform to Palette", self.main_window)
         self.conform_to_palette_action.triggered.connect(self.app.conform_to_palette)
 
-        # View actions
+    def _build_view_actions(self, canvas):
+        """Create actions that affect the canvas view."""
         self.checkered_action = QAction("Checkered Background", self.main_window)
         self.checkered_action.triggered.connect(lambda: canvas.set_background(Background()))
+
         self.white_action = QAction("White", self.main_window)
         self.white_action.triggered.connect(lambda: canvas.set_background(Background(QColor("white"))))
+
         self.black_action = QAction("Black", self.main_window)
         self.black_action.triggered.connect(lambda: canvas.set_background(Background(QColor("black"))))
+
         self.gray_action = QAction("Gray", self.main_window)
         self.gray_action.triggered.connect(lambda: canvas.set_background(Background(QColor("gray"))))
+
         self.magenta_action = QAction("Magenta", self.main_window)
         self.magenta_action.triggered.connect(lambda: canvas.set_background(Background(QColor("magenta"))))
+
         self.custom_color_action = QAction("Custom Color...", self.main_window)
         self.custom_color_action.triggered.connect(self.main_window.open_background_color_dialog)
 
-        # Tool actions
+    def _build_tool_actions(self):
+        """Create actions for selecting and configuring tools."""
         self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self.main_window)
         self.circular_brush_action.setCheckable(True)
+
         self.square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self.main_window)
         self.square_brush_action.setCheckable(True)
 
         self.mirror_x_action = QAction(QIcon("icons/mirrorx.png"), "Mirror X", self.main_window)
         self.mirror_x_action.setCheckable(True)
         self.mirror_x_action.triggered.connect(self.app.set_mirror_x)
+
         self.mirror_y_action = QAction(QIcon("icons/mirrory.png"), "Mirror Y", self.main_window)
         self.mirror_y_action.setCheckable(True)
         self.mirror_y_action.triggered.connect(self.app.set_mirror_y)
