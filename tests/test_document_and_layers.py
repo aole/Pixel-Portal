@@ -4,7 +4,7 @@ from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QCursor
 from portal.core.document import Document
 from portal.core.layer import Layer
-from portal.commands.layer_manager import LayerManager
+from portal.core.layer_manager import LayerManager
 from portal.core.drawing import Drawing
 from PySide6.QtCore import QPoint, QSize
 from portal.core.renderer import CanvasRenderer
