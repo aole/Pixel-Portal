@@ -200,6 +200,9 @@ def test_open_document(mock_get_open_file_name, app, qtbot):
 
     assert app.document.width == 32
     assert app.document.height == 32
+    assert len(app.document.layer_manager.layers) == 1
+    top_left = app.document.layer_manager.active_layer.image.pixelColor(0, 0)
+    assert top_left == QColor(0, 0, 0)
     assert document_blocker
     assert undo_blocker
 

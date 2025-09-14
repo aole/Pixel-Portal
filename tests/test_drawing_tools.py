@@ -138,7 +138,7 @@ def line_tool(qtbot):
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
     mock_canvas.selection_shape = None
-    mock_canvas._document_size = (256, 256)
+    mock_canvas._document_size = QSize(256, 256)
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
@@ -334,7 +334,7 @@ def ellipse_tool(qtbot):
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
     mock_canvas.selection_shape = None
-    mock_canvas._document_size = (256, 256)
+    mock_canvas._document_size = QSize(256, 256)
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False

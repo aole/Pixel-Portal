@@ -25,8 +25,8 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/your-username/portal-image-editor.git
-   cd portal-image-editor
+   git clone https://github.com/your-username/Pixel-Portal.git
+   cd Pixel-Portal
    ```
 
 2. **Create a virtual environment:**
@@ -50,14 +50,14 @@ python -m portal.main
 
 ## Running the Tests
 
-To run the automated tests for this system, you can use the `pytest` command:
+The test suite relies on PySide6 and must run in a headless environment. Set the
+`QT_QPA_PLATFORM` environment variable to `offscreen` and execute each test file
+individually:
 
 ```sh
-pytest
-```
-
-Alternatively, you can use the provided shell script, which will also run the tests:
-
-```sh
-./run_tests.sh
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_core.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_dialogs.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_and_layers.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_drawing_tools.py
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
 ```
