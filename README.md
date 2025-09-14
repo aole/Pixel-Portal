@@ -9,6 +9,7 @@ Pixel-Portal is a lightweight, cross-platform image editor built with Python and
 - **Selection Tools**: Tools for selecting parts of the image, including Rectangle, Circle, and Lasso selections.
 - **Image Manipulation**: Resize, crop, and flip the canvas.
 - **AI-Powered Image Generation**: Integrated with state-of-the-art AI models to generate images from text prompts.
+- **Optional Background Removal**: Strip backgrounds from generated images using `rembg` (requires `onnxruntime`).
 - **Undo/Redo**: A robust undo/redo system to make editing easier and non-destructive.
 - **Customizable Interface**: A simple and intuitive interface that can be customized to your liking.
 

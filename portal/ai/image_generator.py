@@ -12,7 +12,12 @@ from diffusers import (
     StableDiffusionXLPipeline,
 )
 from PIL import Image
-from rembg import remove as rembg_remove
+try:
+    from rembg import remove as rembg_remove
+except Exception:  # ImportError or runtime errors such as missing onnxruntime
+    rembg_remove = None
+
+REMBG_AVAILABLE = rembg_remove is not None
 
 
 class ImageGenerator:
@@ -95,11 +100,20 @@ class ImageGenerator:
             print("AI pipeline and GPU cache cleared.")
 
     def _remove_background(self, image: Image.Image) -> Image.Image:
+        if not REMBG_AVAILABLE:
+            print(
+                "Background removal unavailable: rembg or its dependencies are not installed."
+            )
+            return image
         try:
             return rembg_remove(image)
         except Exception as e:
             print(f"Background removal failed: {e}")
             return image
+
+    @staticmethod
+    def is_background_removal_available() -> bool:
+        return REMBG_AVAILABLE
 
     def prompt_to_image(
         self,

@@ -131,6 +131,11 @@ class AIPanel(QWidget):
 
         # --- Background Removal ---
         self.remove_bg_checkbox = QCheckBox("Remove BG")
+        if not self.image_generator.is_background_removal_available():
+            self.remove_bg_checkbox.setEnabled(False)
+            self.remove_bg_checkbox.setToolTip(
+                "Install rembg and onnxruntime to enable background removal"
+            )
         self.layout.addWidget(self.remove_bg_checkbox)
 
         # --- Sliders ---
