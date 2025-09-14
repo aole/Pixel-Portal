@@ -3,14 +3,16 @@ from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
-from portal.core.command import ClearLayerCommand, FlipCommand, ResizeCommand, CropCommand, PasteCommand, PasteInSelectionCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
+from portal.core.command import FlipCommand, ResizeCommand, CropCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
 from portal.core.scripting import ScriptingAPI
 from portal.ui.script_dialog import ScriptDialog
+from portal.core.services.document_service import DocumentService
+from portal.core.services.clipboard_service import ClipboardService
 
 
 class App(QObject):
@@ -23,7 +25,7 @@ class App(QObject):
     clear_layer_triggered = Signal()
     exit_triggered = Signal()
 
-    def __init__(self):
+    def __init__(self, document_service: DocumentService | None = None, clipboard_service: ClipboardService | None = None):
         super().__init__()
         self.main_window = None
         self.document = Document(64, 64)
@@ -33,6 +35,11 @@ class App(QObject):
         self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
         self.scripting_api = ScriptingAPI(self)
+
+        self.document_service = document_service or DocumentService()
+        self.clipboard_service = clipboard_service or ClipboardService(self.document_service)
+        self.document_service.app = self
+        self.clipboard_service.app = self
 
         self.is_recording = False
         self.recorded_commands = []
@@ -94,25 +101,6 @@ class App(QObject):
         self.execute_command(command)
 
     @Slot()
-    def paste_as_new_image(self):
-        clipboard = QApplication.clipboard()
-        image = clipboard.image()
-
-        if not image.isNull():
-            self.new_document(image.width(), image.height())
-            command = PasteCommand(self.document, image)
-            self.execute_command(command)
-
-    @Slot()
-    def paste_as_new_layer(self):
-        clipboard = QApplication.clipboard()
-        image = clipboard.image()
-
-        if self.document and not image.isNull():
-            command = PasteCommand(self.document, image)
-            self.execute_command(command)
-
-    @Slot()
     def save_settings(self):
         try:
             if self.main_window:
@@ -130,58 +118,6 @@ class App(QObject):
             error_box.setInformativeText(f"Could not write to settings.ini.\n\nReason: {e}")
             error_box.setStandardButtons(QMessageBox.Ok)
             error_box.exec()
-
-    def open_document(self):
-        if not self.check_for_unsaved_changes():
-            return
-
-        file_path, _ = QFileDialog.getOpenFileName(
-            None,
-            "Open Image", 
-            self.last_directory, 
-            "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
-        )
-        if file_path:
-            self.last_directory = os.path.dirname(file_path)
-            self.config.set('General', 'last_directory', self.last_directory)
-
-            if file_path.lower().endswith(('.tif', '.tiff')):
-                self.document = Document.load_tiff(file_path)
-            else:
-                image = QImage(file_path)
-                if not image.isNull():
-                    self.document = Document(image.width(), image.height())
-                    self.document.layer_manager.layers[0].image = image
-
-            self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
-            self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-            self.document.layer_manager.command_generated.connect(self.handle_command)
-            self.undo_manager.clear()
-            self.is_dirty = False
-            self.undo_stack_changed.emit()
-            self.document_changed.emit()
-            if self.main_window:
-                self.main_window.canvas.set_initial_zoom()
-
-    @Slot()
-    def save_document(self):
-        file_path, selected_filter = QFileDialog.getSaveFileName(
-            None,
-            "Save Image", 
-            self.last_directory, 
-            "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
-        )
-        if file_path:
-            self.last_directory = os.path.dirname(file_path)
-            self.config.set('General', 'last_directory', self.last_directory)
-
-            if "TIFF" in selected_filter:
-                self.document.save_tiff(file_path)
-            else:
-                image = self.document.render()
-                image.save(file_path)
-
-            self.is_dirty = False
 
     @Slot()
     def undo(self):
@@ -217,62 +153,6 @@ class App(QObject):
         self.clear_layer_triggered.emit()
 
     @Slot()
-    def cut(self):
-        if not self.document or not self.main_window:
-            return
-
-        self.copy()
-
-        active_layer = self.document.layer_manager.active_layer
-        if not active_layer:
-            return
-
-        selection = self.main_window.canvas.selection_shape
-        command = ClearLayerCommand(active_layer, selection)
-        self.execute_command(command)
-
-    @Slot()
-    def copy(self):
-        if not self.document:
-            return
-
-        image = self._get_selected_image()
-        if image:
-            QApplication.clipboard().setImage(image)
-
-    @Slot()
-    def paste(self):
-        if not self.document or not self.main_window:
-            return
-
-        clipboard = QApplication.clipboard()
-        image = clipboard.image()
-        if image.isNull():
-            return
-
-        selection = self.main_window.canvas.selection_shape
-        if selection and not selection.isEmpty():
-            command = PasteInSelectionCommand(self.document, image, selection)
-            self.execute_command(command)
-        else:
-            command = PasteCommand(self.document, image)
-            self.execute_command(command)
-
-    def _get_selected_image(self) -> QImage | None:
-        if not self.document or not self.main_window:
-            return None
-
-        active_layer = self.document.layer_manager.active_layer
-        if not active_layer:
-            return None
-
-        selection = self.main_window.canvas.selection_shape
-        if selection and not selection.isEmpty():
-            return active_layer.image.copy(selection.boundingRect().toRect())
-        else:
-            return active_layer.image.copy()
-
-    @Slot()
     def exit(self):
         self.exit_triggered.emit()
 
@@ -288,7 +168,7 @@ class App(QObject):
         ret = message_box.exec()
 
         if ret == QMessageBox.Save:
-            self.save_document()
+            self.document_service.save_document()
             return not self.is_dirty
         elif ret == QMessageBox.Discard:
             return True
