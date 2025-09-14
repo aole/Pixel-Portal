@@ -646,7 +646,7 @@ class TestClipboard:
         app.main_window.canvas.selection_shape = None
 
         # Perform copy
-        app.copy()
+        app.clipboard_service.copy()
 
         # Verify clipboard
         clipboard = QApplication.clipboard()
@@ -672,7 +672,7 @@ class TestClipboard:
         app.main_window.canvas.selection_shape = selection_shape
 
         # Perform copy
-        app.copy()
+        app.clipboard_service.copy()
 
         # Verify clipboard
         clipboard = QApplication.clipboard()
@@ -694,7 +694,7 @@ class TestClipboard:
         app.main_window.canvas.selection_shape = None
 
         # Perform cut
-        app.cut()
+        app.clipboard_service.cut()
 
         # Verify clipboard
         clipboard = QApplication.clipboard()
@@ -725,7 +725,7 @@ class TestClipboard:
         app.main_window.canvas.selection_shape = selection_shape
 
         # Perform cut
-        app.cut()
+        app.clipboard_service.cut()
 
         # Verify clipboard
         clipboard = QApplication.clipboard()
@@ -756,7 +756,7 @@ class TestClipboard:
         app.main_window.canvas.selection_shape = None
 
         # Perform paste
-        app.paste()
+        app.clipboard_service.paste()
 
         # Verify new layer
         assert len(app.document.layer_manager.layers) == initial_layer_count + 1
@@ -776,7 +776,7 @@ class TestClipboard:
         QApplication.clipboard().setImage(image_to_paste)
 
         # Perform paste as new image
-        app.paste_as_new_image()
+        app.clipboard_service.paste_as_new_image()
 
         # Verify new document
         assert app.document.width == 30
@@ -804,7 +804,7 @@ class TestClipboard:
         image_to_paste.fill(QColor("yellow"))
         QApplication.clipboard().setImage(image_to_paste)
 
-        app.paste()
+        app.clipboard_service.paste()
 
         new_layer = app.document.layer_manager.active_layer
         assert new_layer is not active_layer
@@ -834,7 +834,7 @@ class TestClipboard:
         image_to_paste.setPixelColor(0, 0, QColor("red"))
         QApplication.clipboard().setImage(image_to_paste)
 
-        app.paste()
+        app.clipboard_service.paste()
 
         new_layer = app.document.layer_manager.active_layer
         assert new_layer is not active_layer

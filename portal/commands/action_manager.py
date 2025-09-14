@@ -14,11 +14,11 @@ class ActionManager:
 
         self.open_action = QAction(QIcon("icons/load.png"), "&Open", self.main_window)
         self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.app.open_document)
+        self.open_action.triggered.connect(self.app.document_service.open_document)
 
         self.save_action = QAction(QIcon("icons/save.png"), "&Save", self.main_window)
         self.save_action.setShortcut("Ctrl+S")
-        self.save_action.triggered.connect(self.app.save_document)
+        self.save_action.triggered.connect(self.app.document_service.save_document)
 
         self.save_palette_as_png_action = QAction("Save Palette as PNG...", self.main_window)
         self.save_palette_as_png_action.triggered.connect(self.main_window.save_palette_as_png)
@@ -40,19 +40,19 @@ class ActionManager:
 
         self.cut_action = QAction("Cu&t", self.main_window)
         self.cut_action.setShortcut(QKeySequence.Cut)
-        self.cut_action.triggered.connect(self.app.cut)
+        self.cut_action.triggered.connect(self.app.clipboard_service.cut)
 
         self.copy_action = QAction("&Copy", self.main_window)
         self.copy_action.setShortcut(QKeySequence.Copy)
-        self.copy_action.triggered.connect(self.app.copy)
+        self.copy_action.triggered.connect(self.app.clipboard_service.copy)
 
         self.paste_action = QAction("&Paste", self.main_window)
         self.paste_action.setShortcut(QKeySequence.Paste)
-        self.paste_action.triggered.connect(self.app.paste)
+        self.paste_action.triggered.connect(self.app.clipboard_service.paste)
 
         self.paste_as_new_image_action = QAction("Paste as New Image", self.main_window)
         self.paste_as_new_image_action.setShortcut("Ctrl+Shift+V")
-        self.paste_as_new_image_action.triggered.connect(self.app.paste_as_new_image)
+        self.paste_as_new_image_action.triggered.connect(self.app.clipboard_service.paste_as_new_image)
 
         self.clear_action = QAction(QIcon("icons/clear.png"), "Clear", self.main_window)
         self.clear_action.setShortcut(QKeySequence.Delete)

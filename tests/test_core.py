@@ -128,14 +128,14 @@ def test_perform_crop(mock_crop_command, app):
     mock_crop_command.assert_called_once_with(app.document, rect)
     mock_crop_command.return_value.execute.assert_called_once()
 
-@patch('portal.core.app.PasteCommand')
+@patch('portal.core.services.clipboard_service.PasteCommand')
 @patch('PySide6.QtWidgets.QApplication.clipboard')
 def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
     # Mock the clipboard to return a valid QImage
     mock_image = QImage(10, 10, QImage.Format_RGB32)
     mock_clipboard.return_value.image.return_value = mock_image
 
-    app.paste_as_new_layer()
+    app.clipboard_service.paste_as_new_layer()
 
     mock_paste_command.assert_called_once_with(app.document, mock_image)
     mock_paste_command.return_value.execute.assert_called_once()
@@ -196,7 +196,7 @@ def test_open_document(mock_get_open_file_name, app, qtbot):
 
     with qtbot.waitSignal(app.document_changed, raising=True) as document_blocker, \
          qtbot.waitSignal(app.undo_stack_changed, raising=True) as undo_blocker:
-        app.open_document()
+        app.document_service.open_document()
 
     assert app.document.width == 32
     assert app.document.height == 32
@@ -216,7 +216,7 @@ def test_save_document(mock_get_save_file_name, app, tmp_path):
     # create a red pixel
     app.document.layer_manager.layers[0].image.setPixelColor(0, 0, QColor("red"))
 
-    app.save_document()
+    app.document_service.save_document()
 
     assert os.path.exists(save_path)
 
@@ -272,6 +272,8 @@ def test_active_color_button(mock_get_color, qtbot):
 def mock_main_window(qapp):
     window = QMainWindow()
     window.app = MagicMock()
+    window.app.document_service = MagicMock()
+    window.app.clipboard_service = MagicMock()
     window.open_new_file_dialog = MagicMock()
     window.load_palette_from_image = MagicMock()
     window.save_palette_as_png = MagicMock()
@@ -325,10 +327,10 @@ def test_setup_actions(mock_main_window):
     mock_main_window.open_new_file_dialog.assert_called_once()
 
     action_manager.open_action.trigger()
-    mock_main_window.app.open_document.assert_called_once()
+    mock_main_window.app.document_service.open_document.assert_called_once()
 
     action_manager.save_action.trigger()
-    mock_main_window.app.save_document.assert_called_once()
+    mock_main_window.app.document_service.save_document.assert_called_once()
 
     action_manager.load_palette_action.trigger()
     mock_main_window.load_palette_from_image.assert_called_once()
@@ -346,7 +348,7 @@ def test_setup_actions(mock_main_window):
     mock_main_window.app.redo.assert_called_once()
 
     action_manager.paste_as_new_image_action.trigger()
-    mock_main_window.app.paste_as_new_image.assert_called_once()
+    mock_main_window.app.clipboard_service.paste_as_new_image.assert_called_once()
 
     action_manager.select_all_action.trigger()
     mock_main_window.app.select_all.assert_called_once()
