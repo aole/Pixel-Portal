@@ -1,4 +1,4 @@
-from portal.commands.layer_manager import LayerManager
+from portal.core.layer_manager import LayerManager
 from portal.core.layer import Layer
 from PySide6.QtGui import QImage, QPainter, QTransform
 from PySide6.QtCore import QSize, QBuffer, Qt
