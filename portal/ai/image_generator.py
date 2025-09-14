@@ -12,6 +12,7 @@ from diffusers import (
     StableDiffusionXLPipeline,
 )
 from PIL import Image
+from rembg import remove as rembg_remove
 
 
 class ImageGenerator:
@@ -93,6 +94,13 @@ class ImageGenerator:
                 torch.cuda.empty_cache()
             print("AI pipeline and GPU cache cleared.")
 
+    def _remove_background(self, image: Image.Image) -> Image.Image:
+        try:
+            return rembg_remove(image)
+        except Exception as e:
+            print(f"Background removal failed: {e}")
+            return image
+
     def prompt_to_image(
         self,
         prompt: str,
@@ -102,6 +110,7 @@ class ImageGenerator:
         output_dir: str | None = None,
         step_callback=None,
         cancellation_token=None,
+        remove_background: bool = False,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -130,6 +139,9 @@ class ImageGenerator:
             callback_on_step_end=callback,
         ).images[0]
 
+        if remove_background:
+            generated_image = self._remove_background(generated_image)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"generated_{timestamp}.png"
         generated_image.save(os.path.join(output_dir, filename))
@@ -146,6 +158,7 @@ class ImageGenerator:
         output_dir: str | None = None,
         step_callback=None,
         cancellation_token=None,
+        remove_background: bool = False,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -184,6 +197,9 @@ class ImageGenerator:
             callback_on_step_end=callback,
         ).images[0]
 
+        if remove_background:
+            generated_image = self._remove_background(generated_image)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"generated_{timestamp}.png"
         generated_image.save(os.path.join(output_dir, filename))
@@ -201,6 +217,7 @@ class ImageGenerator:
         output_dir: str | None = None,
         step_callback=None,
         cancellation_token=None,
+        remove_background: bool = False,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -241,6 +258,9 @@ class ImageGenerator:
             guidance_scale=guidance_scale,
             callback_on_step_end=callback,
         ).images[0]
+
+        if remove_background:
+            generated_image = self._remove_background(generated_image)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"generated_{timestamp}.png"
