@@ -6,7 +6,7 @@ from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
-from portal.ai.image_generator import image_to_image, prompt_to_image, get_pipeline, inpaint_image
+from portal.ai.image_generator import ImageGenerator
 import torch
 
 class GenerationThread(QThread):
@@ -14,9 +14,20 @@ class GenerationThread(QThread):
     generation_failed = Signal(str)
     generation_step = Signal(object)
 
-    def __init__(self, pipe, mode: GenerationMode, image, prompt, original_size, num_inference_steps, guidance_scale, strength, mask_image=None):
+    def __init__(
+        self,
+        generator: ImageGenerator,
+        mode: GenerationMode,
+        image,
+        prompt,
+        original_size,
+        num_inference_steps,
+        guidance_scale,
+        strength,
+        mask_image=None,
+    ):
         super().__init__()
-        self.pipe = pipe
+        self.generator = generator
         self.mode = mode
         self.image = image
         self.mask_image = mask_image
@@ -37,41 +48,47 @@ class GenerationThread(QThread):
             cancellation_token = lambda: self.is_cancelled
             if self.mode == GenerationMode.IMAGE_TO_IMAGE:
                 if self.mask_image:
-                    generated_image = inpaint_image(self.pipe, self.image, self.mask_image, self.prompt,
-                                                     strength=self.strength,
-                                                     num_inference_steps=self.num_inference_steps,
-                                                     guidance_scale=self.guidance_scale,
-                                                     step_callback=step_callback,
-                                                     cancellation_token=cancellation_token)
+                    generated_image = self.generator.inpaint_image(
+                        self.image,
+                        self.mask_image,
+                        self.prompt,
+                        strength=self.strength,
+                        num_inference_steps=self.num_inference_steps,
+                        guidance_scale=self.guidance_scale,
+                        step_callback=step_callback,
+                        cancellation_token=cancellation_token,
+                    )
                 else:
-                    generated_image = image_to_image(self.pipe, self.image, self.prompt,
-                                                    strength=self.strength,
-                                                    num_inference_steps=self.num_inference_steps,
-                                                    guidance_scale=self.guidance_scale,
-                                                    step_callback=step_callback,
-                                                    cancellation_token=cancellation_token)
+                    generated_image = self.generator.image_to_image(
+                        self.image,
+                        self.prompt,
+                        strength=self.strength,
+                        num_inference_steps=self.num_inference_steps,
+                        guidance_scale=self.guidance_scale,
+                        step_callback=step_callback,
+                        cancellation_token=cancellation_token,
+                    )
             else:
-                generated_image = prompt_to_image(self.pipe, self.prompt,
-                                                  original_size=self.original_size,
-                                                  num_inference_steps=self.num_inference_steps,
-                                                  guidance_scale=self.guidance_scale,
-                                                  step_callback=step_callback,
-                                                  cancellation_token=cancellation_token)
+                generated_image = self.generator.prompt_to_image(
+                    self.prompt,
+                    original_size=self.original_size,
+                    num_inference_steps=self.num_inference_steps,
+                    guidance_scale=self.guidance_scale,
+                    step_callback=step_callback,
+                    cancellation_token=cancellation_token,
+                )
             self.generation_complete.emit(generated_image)
         except Exception as e:
             self.generation_failed.emit(str(e))
 
 class AIPanel(QWidget):
     image_generated = Signal(object)
-    pipe = None # Class variable to hold the loaded pipeline
-    current_model = None
-    is_img2img = None
-    is_inpaint = None
 
     def __init__(self, app, preview_panel, parent=None):
         super().__init__(parent)
         self.app = app
         self.preview_panel = preview_panel
+        self.image_generator = ImageGenerator()
         self.setWindowTitle("AI Image Generation")
         self.setMinimumWidth(128)
         self.generated_image = None
@@ -98,38 +115,49 @@ class AIPanel(QWidget):
 
         # Steps Slider
         steps_layout = QHBoxLayout()
-        self.steps_label = QLabel("Steps: 20")
+        self.steps_label = QLabel()
         steps_layout.addWidget(self.steps_label)
         self.steps_slider = QSlider(Qt.Horizontal)
         self.steps_slider.setRange(1, 100)
-        self.steps_slider.setValue(20)
-        self.steps_slider.valueChanged.connect(lambda value: self.steps_label.setText(f"Steps: {value}"))
         steps_layout.addWidget(self.steps_slider)
         sliders_layout.addLayout(steps_layout)
 
         # Guidance Scale Slider
         guidance_layout = QHBoxLayout()
-        self.guidance_label = QLabel("Guidance: 7.0")
+        self.guidance_label = QLabel()
         guidance_layout.addWidget(self.guidance_label)
         self.guidance_slider = QSlider(Qt.Horizontal)
         self.guidance_slider.setRange(0, 200)
-        self.guidance_slider.setValue(70)
-        self.guidance_slider.valueChanged.connect(lambda value: self.guidance_label.setText(f"Guidance: {value / 10.0}"))
         guidance_layout.addWidget(self.guidance_slider)
         sliders_layout.addLayout(guidance_layout)
 
         # Strength Slider
         strength_layout = QHBoxLayout()
-        self.strength_label = QLabel("Strength: 0.8")
+        self.strength_label = QLabel()
         strength_layout.addWidget(self.strength_label)
         self.strength_slider = QSlider(Qt.Horizontal)
         self.strength_slider.setRange(0, 100)
-        self.strength_slider.setValue(80)
-        self.strength_slider.valueChanged.connect(lambda value: self.strength_label.setText(f"Strength: {value / 100.0}"))
         strength_layout.addWidget(self.strength_slider)
         sliders_layout.addLayout(strength_layout)
 
         self.layout.addLayout(sliders_layout)
+
+        # Initialize sliders with defaults
+        defaults = self.image_generator.defaults
+        steps_default = defaults.get("num_inference_steps", 20)
+        self.steps_slider.setValue(steps_default)
+        self.steps_label.setText(f"Steps: {steps_default}")
+        self.steps_slider.valueChanged.connect(lambda value: self.steps_label.setText(f"Steps: {value}"))
+
+        guidance_default = defaults.get("guidance_scale", 7.0)
+        self.guidance_slider.setValue(int(guidance_default * 10))
+        self.guidance_label.setText(f"Guidance: {guidance_default}")
+        self.guidance_slider.valueChanged.connect(lambda value: self.guidance_label.setText(f"Guidance: {value / 10.0}"))
+
+        strength_default = defaults.get("strength", 0.8)
+        self.strength_slider.setValue(int(strength_default * 100))
+        self.strength_label.setText(f"Strength: {strength_default}")
+        self.strength_slider.valueChanged.connect(lambda value: self.strength_label.setText(f"Strength: {value / 100.0}"))
 
         # --- Buttons ---
         buttons_layout = QHBoxLayout()
@@ -208,29 +236,17 @@ class AIPanel(QWidget):
 
         is_img2img = (mode == GenerationMode.IMAGE_TO_IMAGE)
 
-        # if the model or pipeline type has changed, unload the old one
-        if AIPanel.current_model != model_name or AIPanel.is_img2img != is_img2img or AIPanel.is_inpaint != is_inpaint:
-            self._cleanup_gpu_memory()
-            AIPanel.current_model = None
-            AIPanel.is_img2img = None
-            AIPanel.is_inpaint = None
-
-        # Load the pipeline if it's not already loaded
-        if AIPanel.pipe is None:
-            try:
-                AIPanel.pipe = get_pipeline(model_name, is_img2img, is_inpaint)
-                AIPanel.current_model = model_name
-                AIPanel.is_img2img = is_img2img
-                AIPanel.is_inpaint = is_inpaint
-            except Exception as e:
-                self.on_generation_failed(f"Failed to load AI model: {e}")
-                return
+        try:
+            self.image_generator.load_pipeline(model_name, is_img2img=is_img2img, is_inpaint=is_inpaint)
+        except Exception as e:
+            self.on_generation_failed(f"Failed to load AI model: {e}")
+            return
 
         num_inference_steps = self.steps_slider.value()
         guidance_scale = self.guidance_slider.value() / 10.0
         strength = self.strength_slider.value() / 100.0
 
-        self.thread = GenerationThread(AIPanel.pipe, mode, input_image, prompt, original_size,
+        self.thread = GenerationThread(self.image_generator, mode, input_image, prompt, original_size,
                                        num_inference_steps, guidance_scale, strength, mask_image=mask_image)
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
@@ -284,12 +300,7 @@ class AIPanel(QWidget):
 
     def _cleanup_gpu_memory(self):
         """Deletes the model and clears the GPU cache."""
-        if AIPanel.pipe is not None:
-            del AIPanel.pipe
-            AIPanel.pipe = None
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            print("AI pipeline and GPU cache cleared.")
+        self.image_generator.cleanup()
 
     def closeEvent(self, event):
         """Clean up GPU memory when the panel is closed."""

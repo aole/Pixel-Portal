@@ -1,0 +1,17 @@
+{
+  "models": {
+    "SDXL": {
+      "path": "models/sdxl/juggernautXL_ragnarokBy.safetensors"
+    },
+    "SD1.5": {
+      "path": "models/sd1.5/aziibpixelmix_v10.safetensors",
+      "clip_skip": 2
+    }
+  },
+  "defaults": {
+    "num_inference_steps": 20,
+    "guidance_scale": 7.0,
+    "strength": 0.8,
+    "output_dir": "output"
+  }
+}
