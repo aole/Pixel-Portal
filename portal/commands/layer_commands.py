@@ -82,11 +82,11 @@ class RotateLayerCommand(Command):
             painter.drawImage(0, 0, self.before_image)
         else:
             # If no selection, rotate the whole image
-            painter.setTransform(transform)
             # We need to clear the painter's own background before drawing
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
             painter.fillRect(self.layer.image.rect(), Qt.transparent)
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            painter.setTransform(transform)
             painter.drawImage(0, 0, self.before_image)
 
         painter.end()

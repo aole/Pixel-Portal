@@ -112,10 +112,10 @@ class RotateTool(BaseTool):
                     painter.setTransform(transform)
                     painter.drawImage(0, 0, self.original_image)
                 else:
-                    painter.setTransform(transform)
                     painter.setCompositionMode(QPainter.CompositionMode_Clear)
                     painter.fillRect(self.original_image.rect(), Qt.transparent)
                     painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                    painter.setTransform(transform)
                     painter.drawImage(0, 0, self.original_image)
 
                 painter.end()
