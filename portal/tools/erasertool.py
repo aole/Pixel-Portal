@@ -9,6 +9,7 @@ class EraserTool(BaseTool):
     name = "Eraser"
     icon = "icons/brush.png"
     shortcut = "e"
+    category = "draw"
 
     def __init__(self, canvas):
         super().__init__(canvas)

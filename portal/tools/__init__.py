@@ -15,6 +15,19 @@ def get_tools():
             module = importlib.import_module(module_name)
             for attribute_name in dir(module):
                 attribute = getattr(module, attribute_name)
-                if isinstance(attribute, type) and issubclass(attribute, BaseTool) and attribute is not BaseTool and attribute.name:
-                    tools.append(attribute)
+                if (
+                    isinstance(attribute, type)
+                    and issubclass(attribute, BaseTool)
+                    and attribute is not BaseTool
+                    and getattr(attribute, "name", None)
+                ):
+                    tools.append(
+                        {
+                            "class": attribute,
+                            "name": attribute.name,
+                            "icon": getattr(attribute, "icon", None),
+                            "shortcut": getattr(attribute, "shortcut", None),
+                            "category": getattr(attribute, "category", None),
+                        }
+                    )
     return tools

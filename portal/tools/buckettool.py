@@ -9,6 +9,7 @@ class BucketTool(BaseTool):
     name = "Bucket"
     icon = "icons/toolbucket.png"
     shortcut = "f"
+    category = "draw"
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         active_layer = self.canvas.document.layer_manager.active_layer

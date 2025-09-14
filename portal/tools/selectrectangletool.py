@@ -8,6 +8,7 @@ class SelectRectangleTool(BaseSelectTool):
     name = "Select Rectangle"
     icon = "icons/toolselectrect.png"
     shortcut = "s"
+    category = "select"
 
     def __init__(self, canvas):
         super().__init__(canvas)

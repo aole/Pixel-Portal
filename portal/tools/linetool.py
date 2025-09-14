@@ -9,6 +9,7 @@ class LineTool(BaseTool):
     name = "Line"
     icon = "icons/toolline.png"
     shortcut = "l"
+    category = "shape"
 
     def __init__(self, canvas):
         super().__init__(canvas)

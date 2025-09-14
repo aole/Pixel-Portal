@@ -76,60 +76,64 @@ class ToolBarBuilder:
         self.tool_actions = {}
         self.tool_action_group = QActionGroup(self.main_window)
 
-        for tool in tools:
-            if tool.name in ["Line", "Rectangle", "Ellipse", "Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]:
-                continue
-
-            action = QAction(QIcon(tool.icon), tool.name, self.main_window)
+        # Direct access tools (not shape or select)
+        for tool in [t for t in tools if t["category"] not in ("shape", "select")]:
+            action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
             action.setCheckable(True)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
+            action.triggered.connect(
+                functools.partial(self.app.drawing_context.set_tool, tool["name"])
+            )
             button = QToolButton()
             button.setDefaultAction(action)
             self.left_toolbar.addWidget(button)
-            self.tool_actions[tool.name] = action
+            self.tool_actions[tool["name"]] = action
             self.tool_action_group.addAction(action)
-            if tool.name == "Pen":
+            if tool["name"] == "Pen":
                 action.setChecked(True)
 
         # Shape Tools
-        self.main_window.shape_button = QToolButton(self.main_window)
-        self.main_window.shape_button.setIcon(QIcon("icons/toolline.png"))
-        self.main_window.shape_button.setPopupMode(QToolButton.MenuButtonPopup)
-        shape_menu = QMenu(self.main_window.shape_button)
-        self.main_window.shape_button.setMenu(shape_menu)
+        shape_tools = [t for t in tools if t["category"] == "shape"]
+        if shape_tools:
+            self.main_window.shape_button = QToolButton(self.main_window)
+            self.main_window.shape_button.setPopupMode(QToolButton.MenuButtonPopup)
+            shape_menu = QMenu(self.main_window.shape_button)
+            self.main_window.shape_button.setMenu(shape_menu)
 
-        shape_tools = [tool for tool in tools if tool.name in ["Line", "Rectangle", "Ellipse"]]
-        for tool in shape_tools:
-            action = QAction(QIcon(tool.icon), tool.name, self.main_window)
-            action.setCheckable(True)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
-            shape_menu.addAction(action)
-            self.tool_actions[tool.name] = action
-            self.tool_action_group.addAction(action)
-            if tool.name == "Line":
-                self.main_window.shape_button.setDefaultAction(action)
+            for idx, tool in enumerate(shape_tools):
+                action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
+                action.setCheckable(True)
+                action.triggered.connect(
+                    functools.partial(self.app.drawing_context.set_tool, tool["name"])
+                )
+                shape_menu.addAction(action)
+                self.tool_actions[tool["name"]] = action
+                self.tool_action_group.addAction(action)
+                if idx == 0:
+                    self.main_window.shape_button.setDefaultAction(action)
 
-        self.left_toolbar.addWidget(self.main_window.shape_button)
+            self.left_toolbar.addWidget(self.main_window.shape_button)
 
         # Selection Tools
-        self.main_window.selection_button = QToolButton(self.main_window)
-        self.main_window.selection_button.setIcon(QIcon("icons/toolselectrect.png"))
-        self.main_window.selection_button.setPopupMode(QToolButton.MenuButtonPopup)
-        selection_menu = QMenu(self.main_window.selection_button)
-        self.main_window.selection_button.setMenu(selection_menu)
+        selection_tools = [t for t in tools if t["category"] == "select"]
+        if selection_tools:
+            self.main_window.selection_button = QToolButton(self.main_window)
+            self.main_window.selection_button.setPopupMode(QToolButton.MenuButtonPopup)
+            selection_menu = QMenu(self.main_window.selection_button)
+            self.main_window.selection_button.setMenu(selection_menu)
 
-        selection_tools = [tool for tool in tools if tool.name in ["Select Rectangle", "Select Circle", "Select Lasso", "Select Color"]]
-        for tool in selection_tools:
-            action = QAction(QIcon(tool.icon), tool.name, self.main_window)
-            action.setCheckable(True)
-            action.triggered.connect(functools.partial(self.app.drawing_context.set_tool, tool.name))
-            selection_menu.addAction(action)
-            self.tool_actions[tool.name] = action
-            self.tool_action_group.addAction(action)
-            if tool.name == "Select Rectangle":
-                self.main_window.selection_button.setDefaultAction(action)
+            for idx, tool in enumerate(selection_tools):
+                action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
+                action.setCheckable(True)
+                action.triggered.connect(
+                    functools.partial(self.app.drawing_context.set_tool, tool["name"])
+                )
+                selection_menu.addAction(action)
+                self.tool_actions[tool["name"]] = action
+                self.tool_action_group.addAction(action)
+                if idx == 0:
+                    self.main_window.selection_button.setDefaultAction(action)
 
-        self.left_toolbar.addWidget(self.main_window.selection_button)
+            self.left_toolbar.addWidget(self.main_window.selection_button)
 
     def update_tool_buttons(self, tool_name):
         if tool_name in self.tool_actions:

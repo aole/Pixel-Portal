@@ -9,6 +9,7 @@ class RectangleTool(BaseTool):
     name = "Rectangle"
     icon = "icons/toolrect.png"
     shortcut = "r"
+    category = "shape"
 
     def __init__(self, canvas):
         super().__init__(canvas)
