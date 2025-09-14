@@ -6,7 +6,18 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
-from portal.core.command import FlipCommand, ResizeCommand, CropCommand, AddLayerCommand, DrawCommand, FillCommand, ShapeCommand, MoveCommand, CompositeCommand
+from portal.core.command import (
+    FlipCommand,
+    ResizeCommand,
+    CropCommand,
+    AddLayerCommand,
+    DrawCommand,
+    FillCommand,
+    ShapeCommand,
+    MoveCommand,
+    CompositeCommand,
+)
+from portal.commands.layer_commands import RemoveBackgroundCommand
 from PySide6.QtCore import QPoint
 from portal.core.color_utils import find_closest_color
 from portal.core.scripting import ScriptingAPI
@@ -219,6 +230,13 @@ class App(QObject):
                 new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
 
         self.add_new_layer_with_image(new_image)
+
+    def remove_background_from_layer(self):
+        layer = self.document.layer_manager.active_layer
+        if not layer:
+            return
+        command = RemoveBackgroundCommand(layer)
+        self.execute_command(command)
 
     def run_script(self, script_path):
         """

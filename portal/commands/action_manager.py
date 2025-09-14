@@ -1,6 +1,13 @@
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from portal.ui.background import Background
 
+# Check for optional background removal dependency
+try:
+    import rembg  # noqa: F401
+    REMBG_AVAILABLE = True
+except Exception:
+    REMBG_AVAILABLE = False
+
 class ActionManager:
     def __init__(self, main_window):
         self.main_window = main_window
@@ -104,6 +111,14 @@ class ActionManager:
         """Create actions operating on layers."""
         self.conform_to_palette_action = QAction("Conform to Palette", self.main_window)
         self.conform_to_palette_action.triggered.connect(self.app.conform_to_palette)
+
+        self.remove_background_action = QAction("Remove Background", self.main_window)
+        self.remove_background_action.triggered.connect(self.app.remove_background_from_layer)
+        self.remove_background_action.setEnabled(REMBG_AVAILABLE)
+        if not REMBG_AVAILABLE:
+            self.remove_background_action.setToolTip(
+                "Background removal unavailable: install rembg and onnxruntime"
+            )
 
     def _build_view_actions(self, canvas):
         """Create actions that affect the canvas view."""

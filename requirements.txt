@@ -8,3 +8,5 @@ Pillow
 huggingface-hub
 scikit-learn
 numpy
+rembg
+onnxruntime

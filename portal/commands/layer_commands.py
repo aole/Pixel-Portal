@@ -1,6 +1,14 @@
 from portal.core.command import Command
 from PySide6.QtGui import QTransform, QImage, QPainter, QPainterPath
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QBuffer
+from PIL import Image
+from PIL.ImageQt import ImageQt
+import io
+
+try:
+    from rembg import remove as rembg_remove
+except Exception:  # ImportError or runtime errors
+    rembg_remove = None
 
 
 class MergeLayerDownCommand(Command):
@@ -97,3 +105,32 @@ class RotateLayerCommand(Command):
         if self.before_image:
             self.layer.image = self.before_image.copy()
             self.layer.on_image_change.emit()
+
+
+class RemoveBackgroundCommand(Command):
+    def __init__(self, layer):
+        self.layer = layer
+        self.before_image = layer.image.copy()
+
+    def execute(self):
+        if rembg_remove is None:
+            print(
+                "Background removal unavailable: rembg or its dependencies are not installed."
+            )
+            return
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        self.before_image.save(buffer, "PNG")
+        pil_image = Image.open(io.BytesIO(buffer.data()))
+        try:
+            result = rembg_remove(pil_image)
+        except Exception as e:
+            print(f"Background removal failed: {e}")
+            return
+        q_image = ImageQt(result.convert("RGBA"))
+        self.layer.image = QImage(q_image)
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        self.layer.image = self.before_image.copy()
+        self.layer.on_image_change.emit()

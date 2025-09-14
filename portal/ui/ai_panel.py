@@ -1,6 +1,20 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QRadioButton, QPushButton, QProgressBar,
-                               QMessageBox, QButtonGroup, QLabel, QWidget, QHBoxLayout, QComboBox, QSlider,
-                                 QSizePolicy)
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QTextEdit,
+    QRadioButton,
+    QPushButton,
+    QProgressBar,
+    QMessageBox,
+    QButtonGroup,
+    QLabel,
+    QWidget,
+    QHBoxLayout,
+    QComboBox,
+    QSlider,
+    QSizePolicy,
+    QCheckBox,
+)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from PIL import Image
@@ -24,6 +38,7 @@ class GenerationThread(QThread):
         num_inference_steps,
         guidance_scale,
         strength,
+        remove_background=False,
         mask_image=None,
     ):
         super().__init__()
@@ -36,6 +51,7 @@ class GenerationThread(QThread):
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.strength = strength
+        self.remove_background = remove_background
         self.is_cancelled = False
 
     def cancel(self):
@@ -57,6 +73,7 @@ class GenerationThread(QThread):
                         guidance_scale=self.guidance_scale,
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
+                        remove_background=self.remove_background,
                     )
                 else:
                     generated_image = self.generator.image_to_image(
@@ -67,6 +84,7 @@ class GenerationThread(QThread):
                         guidance_scale=self.guidance_scale,
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
+                        remove_background=self.remove_background,
                     )
             else:
                 generated_image = self.generator.prompt_to_image(
@@ -76,6 +94,7 @@ class GenerationThread(QThread):
                     guidance_scale=self.guidance_scale,
                     step_callback=step_callback,
                     cancellation_token=cancellation_token,
+                    remove_background=self.remove_background,
                 )
             self.generation_complete.emit(generated_image)
         except Exception as e:
@@ -109,6 +128,15 @@ class AIPanel(QWidget):
         self.model_combo.setCurrentText("SD1.5")
         model_layout.addWidget(self.model_combo)
         self.layout.addLayout(model_layout)
+
+        # --- Background Removal ---
+        self.remove_bg_checkbox = QCheckBox("Remove BG")
+        if not self.image_generator.is_background_removal_available():
+            self.remove_bg_checkbox.setEnabled(False)
+            self.remove_bg_checkbox.setToolTip(
+                "Install rembg and onnxruntime to enable background removal"
+            )
+        self.layout.addWidget(self.remove_bg_checkbox)
 
         # --- Sliders ---
         sliders_layout = QVBoxLayout()
@@ -246,8 +274,20 @@ class AIPanel(QWidget):
         guidance_scale = self.guidance_slider.value() / 10.0
         strength = self.strength_slider.value() / 100.0
 
-        self.thread = GenerationThread(self.image_generator, mode, input_image, prompt, original_size,
-                                       num_inference_steps, guidance_scale, strength, mask_image=mask_image)
+        remove_background = self.remove_bg_checkbox.isChecked()
+
+        self.thread = GenerationThread(
+            self.image_generator,
+            mode,
+            input_image,
+            prompt,
+            original_size,
+            num_inference_steps,
+            guidance_scale,
+            strength,
+            remove_background=remove_background,
+            mask_image=mask_image,
+        )
         self.thread.generation_complete.connect(self.on_generation_complete)
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.generation_step.connect(self.on_generation_step)
