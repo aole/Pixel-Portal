@@ -62,9 +62,10 @@ class Canvas(QWidget):
         # Properties that were previously in App
         self._document_size = QSize(64, 64)
 
-        self.tools = {tool.name: tool(self) for tool in get_tools()}
+        tool_defs = get_tools()
+        self.tools = {tool_def["name"]: tool_def["class"](self) for tool_def in tool_defs}
         for tool in self.tools.values():
-            if hasattr(tool, 'command_generated'):
+            if hasattr(tool, "command_generated"):
                 tool.command_generated.connect(self.command_generated)
         self.current_tool = self.tools["Pen"]
 

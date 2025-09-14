@@ -6,6 +6,7 @@ class PickerTool(BaseTool):
     name = "Picker"
     icon = "icons/toolpicker.png"
     shortcut = "i"
+    category = "draw"
 
     def __init__(self, canvas):
         super().__init__(canvas)

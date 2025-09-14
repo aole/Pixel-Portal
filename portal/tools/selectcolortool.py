@@ -7,6 +7,7 @@ class SelectColorTool(BaseTool):
     name = "Select Color"
     icon = "icons/toolselectcolor.png"
     shortcut = "w"
+    category = "select"
 
     def __init__(self, canvas):
         super().__init__(canvas)

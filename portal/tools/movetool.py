@@ -9,6 +9,7 @@ class MoveTool(BaseTool):
     name = "Move"
     icon = "icons/toolmove.png"
     shortcut = "m"
+    category = "draw"
 
     def __init__(self, canvas):
         super().__init__(canvas)

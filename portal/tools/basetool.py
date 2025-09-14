@@ -8,6 +8,7 @@ class BaseTool(QObject):
     name = None
     icon = None
     shortcut = None
+    category = None
     command_generated = Signal(object)
 
     def __init__(self, canvas):

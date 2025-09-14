@@ -4,6 +4,7 @@ from portal.tools.basetool import BaseTool
 
 
 class BaseSelectTool(BaseTool):
+    category = "select"
     def __init__(self, canvas):
         super().__init__(canvas)
         self.moving_selection = False

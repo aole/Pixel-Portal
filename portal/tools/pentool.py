@@ -8,6 +8,7 @@ class PenTool(BaseTool):
     name = "Pen"
     icon = "icons/toolpen.png"
     shortcut = "b"
+    category = "draw"
 
     def __init__(self, canvas):
         super().__init__(canvas)

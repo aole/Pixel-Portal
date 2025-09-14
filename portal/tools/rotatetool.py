@@ -11,6 +11,7 @@ class RotateTool(BaseTool):
     """
     name = "Rotate"
     icon = "icons/toolrotate.png"
+    category = "draw"
     angle_changed = Signal(float)
 
     def __init__(self, canvas):

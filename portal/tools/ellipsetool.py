@@ -9,6 +9,7 @@ class EllipseTool(BaseTool):
     name = "Ellipse"
     icon = "icons/toolellipse.png"
     shortcut = "c"
+    category = "shape"
 
     def __init__(self, canvas):
         super().__init__(canvas)

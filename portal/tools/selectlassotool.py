@@ -8,6 +8,7 @@ class SelectLassoTool(BaseSelectTool):
     name = "Select Lasso"
     icon = "icons/toolselectlasso.png"
     shortcut = "f"
+    category = "select"
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.is_on_selection_border(doc_pos):

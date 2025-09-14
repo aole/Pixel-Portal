@@ -8,6 +8,7 @@ class SelectCircleTool(BaseSelectTool):
     name = "Select Circle"
     icon = "icons/toolselectcircle.png"
     shortcut = "a"
+    category = "select"
 
     def __init__(self, canvas):
         super().__init__(canvas)
