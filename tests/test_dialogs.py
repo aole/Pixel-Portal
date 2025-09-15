@@ -2,11 +2,13 @@
 import os
 from unittest.mock import MagicMock, patch
 from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint, QSize
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from PySide6.QtGui import QImage, QPixmap
 from portal.ui.preview_panel import PreviewPanel
+from portal.ui.canvas import Canvas
+from portal.core.drawing_context import DrawingContext
 
 def test_new_file_dialog(qtbot):
     """Test that the dialog is created and that the new_document method is called on the app when the dialog is accepted."""
@@ -62,3 +64,29 @@ def test_update_preview(qtbot):
     assert not pixmap.isNull()
     assert pixmap.width() == 128
     assert pixmap.height() == 128
+
+
+def test_canvas_tile_preview_toggle(qtbot):
+    context = DrawingContext()
+    canvas = Canvas(context)
+    qtbot.addWidget(canvas)
+
+    assert not canvas.tile_preview_enabled
+    canvas.toggle_tile_preview(True)
+    assert canvas.tile_preview_enabled
+    canvas.toggle_tile_preview(False)
+    assert not canvas.tile_preview_enabled
+
+
+def test_canvas_tile_preview_coord_wrap(qtbot):
+    context = DrawingContext()
+    canvas = Canvas(context)
+    qtbot.addWidget(canvas)
+    canvas.set_document_size(QSize(10, 10))
+    canvas.resize(100, 100)
+    canvas.toggle_tile_preview(True)
+    target = canvas.get_target_rect()
+    outside = QPoint(target.right() + 1, target.top() + 3)
+    wrapped = canvas.get_doc_coords(outside)
+    assert wrapped.x() == 0
+    assert wrapped.y() == 3

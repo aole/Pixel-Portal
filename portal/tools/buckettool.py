@@ -16,10 +16,16 @@ class BucketTool(BaseTool):
         if not active_layer:
             return
 
+        pos = doc_pos
+        if self.canvas.tile_preview_enabled:
+            doc_width = self.canvas.document.width
+            doc_height = self.canvas.document.height
+            pos = QPoint(doc_pos.x() % doc_width, doc_pos.y() % doc_height)
+
         command = FillCommand(
             document=self.canvas.document,
             layer=active_layer,
-            fill_pos=doc_pos,
+            fill_pos=pos,
             fill_color=self.canvas.drawing_context.pen_color,
             selection_shape=self.canvas.selection_shape,
             mirror_x=self.canvas.drawing_context.mirror_x,

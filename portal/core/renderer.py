@@ -47,6 +47,8 @@ class CanvasRenderer:
             image_to_draw_on = final_image
         else:
             image_to_draw_on = self._draw_document(painter, target_rect, document)
+            if self.canvas.tile_preview_enabled:
+                self._draw_tile_preview(painter, target_rect, image_to_draw_on)
 
         self._draw_border(painter, target_rect)
         self._draw_mirror_guides(painter, target_rect, document)
@@ -57,6 +59,26 @@ class CanvasRenderer:
             self.draw_selection_overlay(painter, target_rect)
 
         self._draw_document_dimensions(painter, target_rect, document)
+
+    def _draw_tile_preview(self, painter, target_rect, image):
+        rows = self.canvas.tile_preview_rows
+        cols = self.canvas.tile_preview_cols
+        center_row = rows // 2
+        center_col = cols // 2
+        for row in range(rows):
+            for col in range(cols):
+                if row == center_row and col == center_col:
+                    continue
+                dx = (col - center_col) * target_rect.width()
+                dy = (row - center_row) * target_rect.height()
+                tile_rect = QRect(
+                    target_rect.x() + dx,
+                    target_rect.y() + dy,
+                    target_rect.width(),
+                    target_rect.height(),
+                )
+                self._draw_background(painter, tile_rect)
+                painter.drawImage(tile_rect, image)
 
     def _draw_mirror_guides(self, painter, target_rect, document):
         if not self.drawing_context.mirror_x and not self.drawing_context.mirror_y:

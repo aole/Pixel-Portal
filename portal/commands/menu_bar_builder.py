@@ -71,6 +71,7 @@ class MenuBarBuilder:
         background_menu.addAction(self.action_manager.custom_color_action)
 
         view_menu.addSeparator()
+        view_menu.addAction(self.action_manager.tile_preview_action)
 
         windows_menu = menu_bar.addMenu("&Windows")
         self.panels_menu = windows_menu.addMenu("&Panels")
