@@ -52,6 +52,10 @@ class ToolBarBuilder:
         self.action_manager.square_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Square"))
         self.top_toolbar.addAction(self.action_manager.square_brush_action)
 
+        self.action_manager.pattern_brush_action.setChecked(self.app.drawing_context.brush_type == "Pattern")
+        self.action_manager.pattern_brush_action.triggered.connect(lambda: self.app.drawing_context.set_brush_type("Pattern"))
+        self.top_toolbar.addAction(self.action_manager.pattern_brush_action)
+
         self.top_toolbar.addSeparator()
 
         self.top_toolbar.addAction(self.action_manager.mirror_x_action)
