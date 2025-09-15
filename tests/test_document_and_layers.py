@@ -130,9 +130,36 @@ def test_crop(document):
 
     assert document.width == crop_rect.width()
     assert document.height == crop_rect.height()
+    assert document.layer_manager.width == crop_rect.width()
+    assert document.layer_manager.height == crop_rect.height()
     for layer in document.layer_manager.layers:
         assert layer.image.width() == crop_rect.width()
         assert layer.image.height() == crop_rect.height()
+
+
+def test_crop_expands_document_when_selection_is_larger():
+    """Cropping with a selection larger than the document should expand the canvas."""
+    doc = Document(10, 10)
+    base_layer = doc.layer_manager.layers[0]
+    base_layer.image.fill(QColor(0, 0, 0, 0))
+    base_layer.image.setPixelColor(0, 0, QColor("red"))
+
+    selection_rect = QRect(-5, -3, 20, 20)
+    doc.crop(selection_rect)
+
+    assert doc.width == selection_rect.width()
+    assert doc.height == selection_rect.height()
+    assert doc.layer_manager.width == selection_rect.width()
+    assert doc.layer_manager.height == selection_rect.height()
+
+    assert base_layer.image.width() == selection_rect.width()
+    assert base_layer.image.height() == selection_rect.height()
+    assert base_layer.image.pixelColor(5, 3) == QColor("red")
+
+    doc.layer_manager.add_layer("Post Crop")
+    new_layer = doc.layer_manager.active_layer
+    assert new_layer.image.width() == selection_rect.width()
+    assert new_layer.image.height() == selection_rect.height()
 
 
 def test_set_layer_opacity_command(document):
