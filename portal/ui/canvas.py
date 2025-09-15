@@ -50,6 +50,7 @@ class Canvas(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")
+        self.background_image = None
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
@@ -90,6 +91,10 @@ class Canvas(QWidget):
 
     def set_background(self, background: Background):
         self.background = background
+        if background.image_path:
+            self.background_image = QPixmap(background.image_path)
+        else:
+            self.background_image = None
         self.update()
 
     @Slot(bool)
