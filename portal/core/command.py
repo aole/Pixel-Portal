@@ -74,6 +74,7 @@ class DrawCommand(Command):
         mirror_x: bool = False,
         mirror_y: bool = False,
         wrap: bool = False,
+        pattern_image: QImage | None = None,
     ):
         from portal.core.document import Document
         self.layer = layer
@@ -87,6 +88,7 @@ class DrawCommand(Command):
         self.mirror_y = mirror_y
         self.selection_shape = selection_shape
         self.wrap = wrap
+        self.pattern_image = pattern_image
         self.drawing = Drawing()
 
         self.bounding_rect = self._calculate_bounding_rect()
@@ -140,6 +142,15 @@ class DrawCommand(Command):
         # Add a 1 pixel buffer for safety
         rect = stroke.boundingRect().toRect().adjusted(-1, -1, 1, 1)
 
+        if (
+            self.brush_type == "Pattern"
+            and self.pattern_image is not None
+            and not self.pattern_image.isNull()
+        ):
+            pad_x = max(0, (self.pattern_image.width() + 1) // 2)
+            pad_y = max(0, (self.pattern_image.height() + 1) // 2)
+            rect = rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
+
         # Intersect with layer bounds to stay within the image
         layer_rect = self.layer.image.rect()
         return rect.intersected(layer_rect)
@@ -183,6 +194,7 @@ class DrawCommand(Command):
                         self.mirror_x,
                         self.mirror_y,
                         wrap=self.wrap,
+                        pattern=self.pattern_image,
                     )
                 else:
                     for i in range(len(self.points) - 1):
@@ -197,6 +209,7 @@ class DrawCommand(Command):
                             self.mirror_y,
                             wrap=self.wrap,
                             erase=False,  # We are drawing the mask, not erasing
+                            pattern=self.pattern_image,
                         )
                 mask_painter.end()
 
@@ -217,6 +230,7 @@ class DrawCommand(Command):
                         self.mirror_x,
                         self.mirror_y,
                         wrap=self.wrap,
+                        pattern=self.pattern_image,
                     )
                 else:
                     for i in range(len(self.points) - 1):
@@ -231,6 +245,7 @@ class DrawCommand(Command):
                             self.mirror_y,
                             wrap=self.wrap,
                             erase=False,
+                            pattern=self.pattern_image,
                         )
         finally:
             painter.end()
@@ -511,6 +526,8 @@ class ShapeCommand(Command):
         mirror_x: bool = False,
         mirror_y: bool = False,
         wrap: bool = False,
+        brush_type: str = "Circular",
+        pattern_image: QImage | None = None,
     ):
         from portal.core.document import Document
         self.layer = layer
@@ -523,6 +540,8 @@ class ShapeCommand(Command):
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
         self.wrap = wrap
+        self.brush_type = brush_type
+        self.pattern_image = pattern_image
         self.drawing = Drawing()
         self.before_image = None
 
@@ -531,8 +550,8 @@ class ShapeCommand(Command):
             if self.wrap:
                 self.before_image = self.layer.image.copy()
             else:
-                # Add a 1 pixel buffer for safety, especially for shape outlines
-                buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+                pad_x, pad_y = self._calculate_padding()
+                buffered_rect = self.rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
                 self.before_image = self.layer.image.copy(buffered_rect)
 
         painter = QPainter(self.layer.image)
@@ -545,30 +564,29 @@ class ShapeCommand(Command):
             painter.setPen(pen)
 
             doc_size = QSize(self.document.width, self.document.height)
-            # The brush type for shapes is always 'Circular' for now
-            # This could be a parameter in the future
-            brush_type = "Circular"
             if self.shape_type == 'ellipse':
                 self.drawing.draw_ellipse(
                     painter,
                     self.rect,
                     doc_size,
-                    brush_type,
+                    self.brush_type,
                     self.width,
                     self.mirror_x,
                     self.mirror_y,
                     wrap=self.wrap,
+                    pattern=self.pattern_image,
                 )
             elif self.shape_type == 'rectangle':
                 self.drawing.draw_rect(
                     painter,
                     self.rect,
                     doc_size,
-                    brush_type,
+                    self.brush_type,
                     self.width,
                     self.mirror_x,
                     self.mirror_y,
                     wrap=self.wrap,
+                    pattern=self.pattern_image,
                 )
         finally:
             painter.end()
@@ -581,11 +599,23 @@ class ShapeCommand(Command):
             if self.wrap:
                 painter.drawImage(0, 0, self.before_image)
             else:
-                # Add a 1 pixel buffer for safety
-                buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+                pad_x, pad_y = self._calculate_padding()
+                buffered_rect = self.rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
                 painter.drawImage(buffered_rect.topLeft(), self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
+
+    def _calculate_padding(self) -> tuple[int, int]:
+        pad_x = self.width
+        pad_y = self.width
+        if (
+            self.brush_type == "Pattern"
+            and self.pattern_image is not None
+            and not self.pattern_image.isNull()
+        ):
+            pad_x = max(pad_x, (self.pattern_image.width() + 1) // 2)
+            pad_y = max(pad_y, (self.pattern_image.height() + 1) // 2)
+        return pad_x, pad_y
 
 class MoveCommand(Command):
     def __init__(self, layer: Layer, before_move_image: QImage, after_cut_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):
