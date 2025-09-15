@@ -84,6 +84,7 @@ class PenTool(BaseTool):
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
             wrap=self.canvas.tile_preview_enabled,
+            pattern_image=self.canvas.drawing_context.pattern_brush,
         )
         self.command_generated.emit(command)
 
@@ -124,6 +125,7 @@ class PenTool(BaseTool):
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
                 wrap=self.canvas.tile_preview_enabled,
+                pattern=self.canvas.drawing_context.pattern_brush,
             )
         else:
             for i in range(len(self.points) - 1):
@@ -138,6 +140,7 @@ class PenTool(BaseTool):
                     self.canvas.drawing_context.mirror_y,
                     wrap=self.canvas.tile_preview_enabled,
                     erase=False,
+                    pattern=self.canvas.drawing_context.pattern_brush,
                 )
 
         painter.end()
@@ -157,6 +160,7 @@ class PenTool(BaseTool):
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
                     wrap=True,
+                    pattern=self.canvas.drawing_context.pattern_brush,
                 )
             else:
                 for i in range(len(self.points) - 1):
@@ -171,6 +175,7 @@ class PenTool(BaseTool):
                         self.canvas.drawing_context.mirror_y,
                         wrap=True,
                         erase=False,
+                        pattern=self.canvas.drawing_context.pattern_brush,
                     )
             preview_painter.end()
         

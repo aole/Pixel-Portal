@@ -1,10 +1,21 @@
-from PySide6.QtGui import QPainter, QColor, QPen
+from PySide6.QtGui import QPainter, QColor, QPen, QImage
 from PySide6.QtCore import Qt, QPoint, QSize
 import math
 
 
 class Drawing:
-    def draw_brush(self, painter, point, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
+    def draw_brush(
+        self,
+        painter,
+        point,
+        document_size,
+        brush_type,
+        pen_width,
+        mirror_x,
+        mirror_y,
+        wrap=False,
+        pattern: QImage | None = None,
+    ):
         doc_width = document_size.width()
         doc_height = document_size.height()
 
@@ -35,7 +46,13 @@ class Drawing:
             points_to_draw.add(QPoint(mx, my))
 
         for p in points_to_draw:
-            if brush_type == "Circular":
+            if brush_type == "Pattern" and pattern is not None and not pattern.isNull():
+                half_w = pattern.width() // 2
+                half_h = pattern.height() // 2
+                if pattern.width() > 0 and pattern.height() > 0:
+                    top_left = QPoint(p.x() - half_w, p.y() - half_h)
+                    painter.drawImage(top_left, pattern)
+            elif brush_type == "Circular":
                 self.draw_circular_brush(painter, p, pen_width)
             elif brush_type == "Square":
                 self.draw_square_brush(painter, p, pen_width)
@@ -107,6 +124,7 @@ class Drawing:
         mirror_y,
         wrap=False,
         erase=False,
+        pattern: QImage | None = None,
     ):
         width = document_size.width()
         height = document_size.height()
@@ -120,16 +138,31 @@ class Drawing:
             )
         else:
             brush_func = lambda p: self.draw_brush(
-                painter, p, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap
+                painter,
+                p,
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap,
+                pattern=pattern,
             )
 
         if dx == 0 and dy == 0:
             brush_func(p1)
             return
 
-        steps = max(abs(dx), abs(dy))
-        if steps == 0:
-            return
+        if brush_type == "Pattern" and pattern is not None and not pattern.isNull():
+            step_length = max(pattern.width(), pattern.height())
+            if step_length <= 0:
+                step_length = 1
+            distance = math.hypot(dx, dy)
+            steps = max(math.ceil(distance / step_length), 1)
+        else:
+            steps = max(abs(dx), abs(dy))
+            if steps == 0:
+                return
 
         x_inc = dx / steps
         y_inc = dy / steps
@@ -146,7 +179,18 @@ class Drawing:
             x += x_inc
             y += y_inc
 
-    def draw_rect(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
+    def draw_rect(
+        self,
+        painter,
+        rect,
+        document_size,
+        brush_type,
+        pen_width,
+        mirror_x,
+        mirror_y,
+        wrap=False,
+        pattern: QImage | None = None,
+    ):
         self.draw_line_with_brush(
             painter,
             rect.topLeft(),
@@ -157,6 +201,7 @@ class Drawing:
             mirror_x,
             mirror_y,
             wrap=wrap,
+            pattern=pattern,
         )
         self.draw_line_with_brush(
             painter,
@@ -168,6 +213,7 @@ class Drawing:
             mirror_x,
             mirror_y,
             wrap=wrap,
+            pattern=pattern,
         )
         self.draw_line_with_brush(
             painter,
@@ -179,6 +225,7 @@ class Drawing:
             mirror_x,
             mirror_y,
             wrap=wrap,
+            pattern=pattern,
         )
         self.draw_line_with_brush(
             painter,
@@ -190,9 +237,21 @@ class Drawing:
             mirror_x,
             mirror_y,
             wrap=wrap,
+            pattern=pattern,
         )
 
-    def draw_ellipse(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
+    def draw_ellipse(
+        self,
+        painter,
+        rect,
+        document_size,
+        brush_type,
+        pen_width,
+        mirror_x,
+        mirror_y,
+        wrap=False,
+        pattern: QImage | None = None,
+    ):
         center = rect.center()
         rx = rect.width() / 2
         ry = rect.height() / 2
@@ -212,6 +271,7 @@ class Drawing:
                 mirror_x,
                 mirror_y,
                 wrap=wrap,
+                pattern=pattern,
             )
             self.draw_brush(
                 painter,
@@ -222,6 +282,7 @@ class Drawing:
                 mirror_x,
                 mirror_y,
                 wrap=wrap,
+                pattern=pattern,
             )
 
         for y in range(rect.top(), rect.bottom() + 1):
@@ -236,6 +297,7 @@ class Drawing:
                 mirror_x,
                 mirror_y,
                 wrap=wrap,
+                pattern=pattern,
             )
             self.draw_brush(
                 painter,
@@ -246,6 +308,7 @@ class Drawing:
                 mirror_x,
                 mirror_y,
                 wrap=wrap,
+                pattern=pattern,
             )
 
     def flood_fill(self, layer, start_pos, fill_color, selection_shape=None):
