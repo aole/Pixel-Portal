@@ -1,32 +1,16 @@
-from portal.core.document import Document
-from portal.core.undo import UndoManager
-from portal.core.drawing_context import DrawingContext
 from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtGui import QColor, QImage
-from PySide6.QtWidgets import QMessageBox
-import configparser
 import os
-from portal.core.command import (
-    FlipCommand,
-    ResizeCommand,
-    CropCommand,
-    AddLayerCommand,
-    DrawCommand,
-    FillCommand,
-    ShapeCommand,
-    MoveCommand,
-    CompositeCommand,
-)
-from portal.commands.layer_commands import RemoveBackgroundCommand
-from PySide6.QtCore import QPoint
-from portal.core.color_utils import find_closest_color
+
+from portal.core.document_controller import DocumentController
+from portal.core.settings_controller import SettingsController
 from portal.core.scripting import ScriptingAPI
 from portal.ui.script_dialog import ScriptDialog
-from portal.core.services.document_service import DocumentService
-from portal.core.services.clipboard_service import ClipboardService
+from portal.core.command import CompositeCommand
 
 
 class App(QObject):
+    """Application orchestrator delegating logic to controllers."""
+
     undo_stack_changed = Signal()
     document_changed = Signal()
     select_all_triggered = Signal()
@@ -36,111 +20,91 @@ class App(QObject):
     clear_layer_triggered = Signal()
     exit_triggered = Signal()
 
-    def __init__(self, document_service: DocumentService | None = None, clipboard_service: ClipboardService | None = None):
+    def __init__(self, document_service=None, clipboard_service=None):
         super().__init__()
-        self.main_window = None
-        self.document = Document(64, 64)
-        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
-        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.document.layer_manager.command_generated.connect(self.handle_command)
-        self.drawing_context = DrawingContext()
-        self.undo_manager = UndoManager()
+        self._main_window = None
+
+        self.settings_controller = SettingsController()
+        self.document_controller = DocumentController(
+            self.settings_controller, document_service, clipboard_service
+        )
+        self.document_controller.undo_stack_changed.connect(self.undo_stack_changed.emit)
+        self.document_controller.document_changed.connect(self.document_changed.emit)
+
         self.scripting_api = ScriptingAPI(self)
 
-        self.document_service = document_service or DocumentService()
-        self.clipboard_service = clipboard_service or ClipboardService(self.document_service)
-        self.document_service.app = self
-        self.clipboard_service.app = self
+    # expose common attributes for compatibility
+    @property
+    def document(self):
+        return self.document_controller.document
 
-        self.is_recording = False
-        self.recorded_commands = []
-        self.is_dirty = False
+    @property
+    def undo_manager(self):
+        return self.document_controller.undo_manager
 
-        self.config = configparser.ConfigParser()
-        self.config.read('settings.ini')
-        if not self.config.has_section('General'):
-            self.config.add_section('General')
+    @property
+    def drawing_context(self):
+        return self.document_controller.drawing_context
 
-        self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
+    @property
+    def config(self):
+        return self.settings_controller.config
+
+    @property
+    def last_directory(self):
+        return self.settings_controller.last_directory
+
+    @last_directory.setter
+    def last_directory(self, value):
+        self.settings_controller.last_directory = value
+
+    @property
+    def main_window(self):
+        return self._main_window
+
+    @main_window.setter
+    def main_window(self, window):
+        self._main_window = window
+        self.document_controller.main_window = window
 
     def execute_command(self, command):
-        command.execute()
-        if self.is_recording:
-            self.recorded_commands.append(command)
-        else:
-            self.undo_manager.add_command(command)
-            self.undo_stack_changed.emit()
-        self.is_dirty = True
-        self.document_changed.emit()
+        self.document_controller.execute_command(command)
 
     @Slot(int, int)
     def new_document(self, width, height):
-        if not self.check_for_unsaved_changes():
-            return
-
-        self.document = Document(width, height)
-        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
-        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.document.layer_manager.command_generated.connect(self.handle_command)
-        self.undo_manager.clear()
-        self.is_dirty = False
-        self.undo_stack_changed.emit()
-        self.document_changed.emit()
-        if self.main_window:
-            self.main_window.canvas.set_initial_zoom()
+        self.document_controller.new_document(width, height)
 
     def on_layer_visibility_changed(self, index):
-        self.document_changed.emit()
+        self.document_controller.on_layer_visibility_changed(index)
 
     def on_layer_structure_changed(self):
-        self.document_changed.emit()
+        self.document_controller.on_layer_structure_changed()
 
     @Slot(int, int, object)
     def resize_document(self, width, height, interpolation):
-        if self.document:
-            command = ResizeCommand(self.document, width, height, interpolation)
-            self.execute_command(command)
-            if self.main_window:
-                self.main_window.canvas.set_initial_zoom()
+        self.document_controller.resize_document(width, height, interpolation)
 
     @Slot()
     def crop_to_selection(self):
         self.crop_to_selection_triggered.emit()
 
     def perform_crop(self, selection_rect):
-        command = CropCommand(self.document, selection_rect)
-        self.execute_command(command)
+        self.document_controller.perform_crop(selection_rect)
 
     @Slot()
     def save_settings(self):
-        try:
-            if self.main_window:
-                ai_settings = self.main_window.ai_panel.get_settings()
-                if not self.config.has_section('AI'):
-                    self.config.add_section('AI')
-                self.config.set('AI', 'last_prompt', ai_settings['prompt'])
-
-            with open('settings.ini', 'w') as configfile:
-                self.config.write(configfile)
-        except Exception as e:
-            error_box = QMessageBox()
-            error_box.setIcon(QMessageBox.Critical)
-            error_box.setText("Error saving settings")
-            error_box.setInformativeText(f"Could not write to settings.ini.\n\nReason: {e}")
-            error_box.setStandardButtons(QMessageBox.Ok)
-            error_box.exec()
+        ai_settings = None
+        if self.main_window:
+            ai_settings = self.main_window.ai_panel.get_settings()
+        self.settings_controller.save_settings(ai_settings)
 
     @Slot()
     def undo(self):
-        self.undo_manager.undo()
-        self.undo_stack_changed.emit()
-        self.document_changed.emit()
+        self.document_controller.undo()
 
     @Slot()
     def redo(self):
-        self.undo_manager.redo()
-        self.undo_stack_changed.emit()
-        self.document_changed.emit()
+        self.document_controller.redo()
 
     @Slot()
     def select_all(self):
@@ -152,9 +116,8 @@ class App(QObject):
 
     @Slot(bool, bool, bool)
     def flip(self, horizontal, vertical, all_layers):
-        if self.document:
-            command = FlipCommand(self.document, horizontal, vertical, all_layers)
-            self.execute_command(command)
+        self.document_controller.flip(horizontal, vertical, all_layers)
+
     @Slot()
     def invert_selection(self):
         self.invert_selection_triggered.emit()
@@ -168,86 +131,41 @@ class App(QObject):
         self.exit_triggered.emit()
 
     def check_for_unsaved_changes(self):
-        if not self.is_dirty:
-            return True
-
-        message_box = QMessageBox()
-        message_box.setText("The document has been modified.")
-        message_box.setInformativeText("Do you want to save your changes?")
-        message_box.setStandardButtons(QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-        message_box.setDefaultButton(QMessageBox.Save)
-        ret = message_box.exec()
-
-        if ret == QMessageBox.Save:
-            self.document_service.save_document()
-            return not self.is_dirty
-        elif ret == QMessageBox.Discard:
-            return True
-        elif ret == QMessageBox.Cancel:
-            return False
-        return False
+        return self.document_controller.check_for_unsaved_changes()
 
     @Slot(bool)
     def set_mirror_x(self, enabled):
-        self.drawing_context.set_mirror_x(enabled)
+        self.document_controller.set_mirror_x(enabled)
 
     @Slot(bool)
     def set_mirror_y(self, enabled):
-        self.drawing_context.set_mirror_y(enabled)
+        self.document_controller.set_mirror_y(enabled)
 
     def get_current_image(self):
-        return self.document.get_current_image_for_ai()
+        return self.document_controller.get_current_image()
 
     def add_new_layer_with_image(self, image):
-        command = AddLayerCommand(self.document, image, "AI Generated Layer")
-        self.execute_command(command)
+        self.document_controller.add_new_layer_with_image(image)
 
     @Slot(object)
     def handle_command(self, command):
-        if isinstance(command, tuple):
-            return
-
-        if command:
-            self.execute_command(command)
+        self.document_controller.handle_command(command)
 
     def conform_to_palette(self):
-        if not self.document or not self.main_window:
+        if not self.main_window:
             return
-
         palette_hex = self.main_window.get_palette()
-        if not palette_hex:
-            return
-
-        palette_rgb = [QColor(color).getRgb() for color in palette_hex]
-
-        source_image = self.document.render()
-        new_image = QImage(source_image.size(), QImage.Format_ARGB32)
-
-        for y in range(source_image.height()):
-            for x in range(source_image.width()):
-                pixel_color = source_image.pixelColor(x, y).getRgb()
-                closest_color_rgb = find_closest_color(pixel_color, palette_rgb)
-                new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
-
-        self.add_new_layer_with_image(new_image)
+        self.document_controller.conform_to_palette(palette_hex)
 
     def remove_background_from_layer(self):
-        layer = self.document.layer_manager.active_layer
-        if not layer:
-            return
-        command = RemoveBackgroundCommand(layer)
-        self.execute_command(command)
+        self.document_controller.remove_background_from_layer()
 
     def run_script(self, script_path):
-        """
-        Runs a script by defining its parameters, showing a dialog to get user input,
-        and then executing the script's main function as a single undoable command.
-        """
+        """Runs a script with optional parameters and undo support."""
         try:
             with open(script_path, 'r') as f:
                 script_code = f.read()
 
-            # Execute the script in a temporary namespace to get params and main function
             script_namespace = {}
             exec(script_code, script_namespace)
 
@@ -257,30 +175,29 @@ class App(QObject):
             if not callable(main_func):
                 raise ValueError("Script must define a main(api, values) function.")
 
-            # Get parameters from user if the script defines them
             values = {}
             if params:
                 dialog = ScriptDialog(params, self.main_window)
                 if dialog.exec():
                     values = dialog.get_values()
                 else:
-                    return # User cancelled
+                    return
 
-            # Start recording and execute the main logic
-            self.is_recording = True
-            self.recorded_commands = []
+            self.document_controller.is_recording = True
+            self.document_controller.recorded_commands = []
 
             main_func(self.scripting_api, values)
 
-            self.is_recording = False
+            self.document_controller.is_recording = False
 
-            # Create a composite command if any commands were recorded
-            if self.recorded_commands:
+            if self.document_controller.recorded_commands:
                 script_name = os.path.splitext(os.path.basename(script_path))[0]
-                composite_command = CompositeCommand(self.recorded_commands, name=f"Run Script: {script_name}")
-                self.undo_manager.add_command(composite_command)
-                self.undo_stack_changed.emit()
-
+                composite_command = CompositeCommand(
+                    self.document_controller.recorded_commands,
+                    name=f"Run Script: {script_name}"
+                )
+                self.document_controller.undo_manager.add_command(composite_command)
+                self.document_controller.undo_stack_changed.emit()
         except Exception as e:
             print(f"Error running script {script_path}: {e}")
-            self.is_recording = False # Ensure recording is turned off on error
+            self.document_controller.is_recording = False
