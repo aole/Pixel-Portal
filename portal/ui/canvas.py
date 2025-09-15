@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
 from portal.core.drawing import Drawing
 from portal.core.renderer import CanvasRenderer
-from portal.ui.background import Background
+from portal.ui.background import Background, BackgroundImageMode
 from portal.tools import get_tools
 from portal.commands.canvas_input_handler import CanvasInputHandler
 from PIL import Image, ImageQt
@@ -29,6 +29,8 @@ class Canvas(QWidget):
     selection_size_changed = Signal(int, int)
     canvas_updated = Signal()
     command_generated = Signal(object)
+    background_mode_changed = Signal(object)
+    background_alpha_changed = Signal(float)
 
     def __init__(self, drawing_context, parent=None):
         super().__init__(parent)
@@ -51,6 +53,8 @@ class Canvas(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")
         self.background_image = None
+        self.background_mode = BackgroundImageMode.FIT
+        self.background_image_alpha = 1.0
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
@@ -62,6 +66,8 @@ class Canvas(QWidget):
         self.tile_preview_rows = 3
         self.tile_preview_cols = 3
         self.background = Background()
+        self.background.image_mode = self.background_mode
+        self.background.image_alpha = self.background_image_alpha
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
@@ -90,12 +96,69 @@ class Canvas(QWidget):
         self.input_handler.keyReleaseEvent(event)
 
     def set_background(self, background: Background):
+        previous_mode = self.background_mode
         self.background = background
+
+        mode = background.image_mode
+        if mode is None:
+            mode = self.background_mode
+        elif not isinstance(mode, BackgroundImageMode):
+            try:
+                mode = BackgroundImageMode(mode)
+            except ValueError:
+                mode = self.background_mode
+
+        self.background_mode = mode
+        self.background.image_mode = self.background_mode
+
         if background.image_path:
-            self.background_image = QPixmap(background.image_path)
+            pixmap = QPixmap(background.image_path)
+            self.background_image = pixmap if not pixmap.isNull() else None
         else:
             self.background_image = None
+
+        normalized_alpha = Background._normalize_alpha(background.image_alpha)
+        if normalized_alpha is None:
+            normalized_alpha = self.background_image_alpha
+        self.set_background_image_alpha(normalized_alpha)
+
+        if previous_mode != self.background_mode:
+            self.background_mode_changed.emit(self.background_mode)
+
         self.update()
+
+    def set_background_image_mode(self, mode: BackgroundImageMode):
+        if not isinstance(mode, BackgroundImageMode):
+            try:
+                mode = BackgroundImageMode(mode)
+            except ValueError:
+                return
+
+        if mode == self.background_mode:
+            return
+
+        self.background_mode = mode
+        if self.background:
+            self.background.image_mode = mode
+
+        self.update()
+        self.background_mode_changed.emit(self.background_mode)
+
+    def set_background_image_alpha(self, alpha):
+        normalized = Background._normalize_alpha(alpha)
+        if normalized is None:
+            return
+
+        if self.background:
+            self.background.image_alpha = normalized
+
+        if math.isclose(normalized, self.background_image_alpha, abs_tol=1e-6):
+            return
+
+        self.background_image_alpha = normalized
+
+        self.update()
+        self.background_alpha_changed.emit(self.background_image_alpha)
 
     @Slot(bool)
     def toggle_tile_preview(self, enabled: bool):

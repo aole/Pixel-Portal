@@ -3,6 +3,8 @@ from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
 
+from portal.ui.background import BackgroundImageMode
+
 
 class SettingsController(QObject):
     """Manages application settings persistence."""
@@ -23,6 +25,23 @@ class SettingsController(QObject):
         self.grid_minor_spacing = self._get_grid_int('minor_spacing', 1)
         self._sync_grid_settings_to_config()
 
+        if not self.config.has_section('Background'):
+            self.config.add_section('Background')
+        raw_mode = self.config.get(
+            'Background', 'image_mode', fallback=BackgroundImageMode.FIT.value
+        )
+        try:
+            self.background_image_mode = BackgroundImageMode(raw_mode)
+        except ValueError:
+            self.background_image_mode = BackgroundImageMode.FIT
+
+        try:
+            alpha_value = self.config.getfloat('Background', 'image_alpha')
+        except (configparser.NoOptionError, ValueError):
+            alpha_value = 1.0
+        self.background_image_alpha = max(0.0, min(1.0, float(alpha_value)))
+        self._sync_background_settings_to_config()
+
     def save_settings(self, ai_settings=None):
         """Persist settings to disk."""
         try:
@@ -32,6 +51,7 @@ class SettingsController(QObject):
                 self.config.set('AI', 'last_prompt', ai_settings.get('prompt', ''))
 
             self._sync_grid_settings_to_config()
+            self._sync_background_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
@@ -61,12 +81,24 @@ class SettingsController(QObject):
         self.config.set('Grid', 'major_spacing', str(int(self.grid_major_spacing)))
         self.config.set('Grid', 'minor_spacing', str(int(self.grid_minor_spacing)))
 
+    def _sync_background_settings_to_config(self):
+        if not self.config.has_section('Background'):
+            self.config.add_section('Background')
+        self.config.set('Background', 'image_mode', self.background_image_mode.value)
+        self.config.set('Background', 'image_alpha', f"{self.background_image_alpha:.3f}")
+
     def get_grid_settings(self):
         return {
             'major_visible': self.grid_major_visible,
             'minor_visible': self.grid_minor_visible,
             'major_spacing': int(self.grid_major_spacing),
             'minor_spacing': int(self.grid_minor_spacing),
+        }
+
+    def get_background_settings(self):
+        return {
+            'image_mode': self.background_image_mode,
+            'image_alpha': self.background_image_alpha,
         }
 
     def update_grid_settings(
@@ -82,3 +114,20 @@ class SettingsController(QObject):
         self.grid_major_spacing = max(1, int(major_spacing))
         self.grid_minor_spacing = max(1, int(minor_spacing))
         self._sync_grid_settings_to_config()
+
+    def update_background_settings(self, *, image_mode=None, image_alpha=None):
+        if image_mode is not None:
+            if not isinstance(image_mode, BackgroundImageMode):
+                try:
+                    image_mode = BackgroundImageMode(image_mode)
+                except ValueError:
+                    image_mode = BackgroundImageMode.FIT
+            self.background_image_mode = image_mode
+
+        if image_alpha is not None:
+            try:
+                alpha_value = float(image_alpha)
+            except (TypeError, ValueError):
+                alpha_value = self.background_image_alpha
+            self.background_image_alpha = max(0.0, min(1.0, alpha_value))
+        self._sync_background_settings_to_config()

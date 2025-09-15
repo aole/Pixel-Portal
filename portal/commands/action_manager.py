@@ -16,6 +16,7 @@ class ActionManager:
         Adding a new action category is as simple as implementing another
         ``_build_*`` helper and invoking it here.
         """
+        self.canvas = canvas
         self._build_file_actions()
         self._build_edit_actions()
         self._build_select_actions()

@@ -37,6 +37,12 @@ class MainWindow(QMainWindow):
         self.main_palette_buttons = []
 
         self.canvas = Canvas(self.app.drawing_context)
+        self.canvas.set_background_image_alpha(
+            self.app.settings_controller.background_image_alpha
+        )
+        self.canvas.set_background_image_mode(
+            self.app.settings_controller.background_image_mode
+        )
         self.setCentralWidget(self.canvas)
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
@@ -50,6 +56,13 @@ class MainWindow(QMainWindow):
 
         self.action_manager.setup_actions(self.canvas)
         self.addAction(self.action_manager.clear_action)
+
+        self.canvas.background_mode_changed.connect(
+            self.on_background_image_mode_changed
+        )
+        self.canvas.background_alpha_changed.connect(
+            self.on_background_image_alpha_changed
+        )
 
         # Menu bar
         menu_bar_builder = MenuBarBuilder(self, self.action_manager)
@@ -308,6 +321,12 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.app.settings_controller, self)
         if dialog.exec():
             self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
+            self.canvas.set_background_image_alpha(
+                self.app.settings_controller.background_image_alpha
+            )
+            self.canvas.set_background_image_mode(
+                self.app.settings_controller.background_image_mode
+            )
             self.app.save_settings()
 
     def open_background_color_dialog(self):
@@ -325,7 +344,13 @@ class MainWindow(QMainWindow):
         if file_path:
             self.app.last_directory = os.path.dirname(file_path)
             self.app.config.set('General', 'last_directory', self.app.last_directory)
-            self.canvas.set_background(Background(image_path=file_path))
+            self.canvas.set_background(
+                Background(
+                    image_path=file_path,
+                    image_mode=self.canvas.background_mode,
+                    image_alpha=self.canvas.background_image_alpha,
+                )
+            )
 
     def update_crop_action_state(self, has_selection):
         self.action_manager.crop_action.setEnabled(has_selection)
@@ -344,6 +369,20 @@ class MainWindow(QMainWindow):
 
     def on_mirror_changed(self):
         is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y
+
+    @Slot(object)
+    def on_background_image_mode_changed(self, mode):
+        self.app.settings_controller.update_background_settings(
+            image_mode=mode,
+            image_alpha=self.canvas.background_image_alpha,
+        )
+
+    @Slot(float)
+    def on_background_image_alpha_changed(self, alpha):
+        self.app.settings_controller.update_background_settings(
+            image_mode=self.canvas.background_mode,
+            image_alpha=alpha,
+        )
 
     def open_flip_dialog(self):
         if self.app.document:

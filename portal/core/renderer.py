@@ -12,6 +12,8 @@ from PySide6.QtGui import (
     QTransform,
 )
 
+from portal.ui.background import BackgroundImageMode
+
 
 class CanvasRenderer:
     def __init__(self, canvas, drawing_context):
@@ -119,8 +121,90 @@ class CanvasRenderer:
         painter.restore()
 
     def _draw_background(self, painter, target_rect):
-        if self.canvas.background_image:
-            painter.drawPixmap(target_rect, self.canvas.background_image)
+        background_image = self.canvas.background_image
+        if background_image and not background_image.isNull():
+            mode = getattr(self.canvas, "background_mode", BackgroundImageMode.FIT)
+            alpha = getattr(self.canvas, "background_image_alpha", 1.0)
+            try:
+                alpha = float(alpha)
+            except (TypeError, ValueError):
+                alpha = 1.0
+            alpha = max(0.0, min(1.0, alpha))
+            if alpha <= 0:
+                return
+
+            painter.save()
+            painter.setOpacity(alpha)
+            try:
+                if mode == BackgroundImageMode.STRETCH:
+                    painter.drawPixmap(target_rect, background_image)
+                elif mode == BackgroundImageMode.FIT:
+                    scaled = background_image.scaled(
+                        target_rect.size(), Qt.KeepAspectRatio, Qt.FastTransformation
+                    )
+                    if scaled.isNull():
+                        return
+                    dest_x = target_rect.x() + (target_rect.width() - scaled.width()) / 2
+                    dest_y = target_rect.y() + (target_rect.height() - scaled.height()) / 2
+                    dest_rect = QRect(
+                        int(round(dest_x)),
+                        int(round(dest_y)),
+                        scaled.width(),
+                        scaled.height(),
+                    )
+                    painter.drawPixmap(dest_rect, scaled)
+                elif mode == BackgroundImageMode.FILL:
+                    scaled = background_image.scaled(
+                        target_rect.size(),
+                        Qt.KeepAspectRatioByExpanding,
+                        Qt.FastTransformation,
+                    )
+                    if scaled.isNull():
+                        return
+                    source_x = max(0, (scaled.width() - target_rect.width()) // 2)
+                    source_y = max(0, (scaled.height() - target_rect.height()) // 2)
+                    source_rect = QRect(
+                        source_x,
+                        source_y,
+                        target_rect.width(),
+                        target_rect.height(),
+                    )
+                    painter.drawPixmap(target_rect, scaled, source_rect)
+                elif mode == BackgroundImageMode.CENTER:
+                    scaled_width = max(
+                        1, int(round(background_image.width() * self.canvas.zoom))
+                    )
+                    scaled_height = max(
+                        1, int(round(background_image.height() * self.canvas.zoom))
+                    )
+                    if (
+                        scaled_width != background_image.width()
+                        or scaled_height != background_image.height()
+                    ):
+                        scaled = background_image.scaled(
+                            scaled_width,
+                            scaled_height,
+                            Qt.IgnoreAspectRatio,
+                            Qt.FastTransformation,
+                        )
+                    else:
+                        scaled = background_image
+                    if scaled.isNull():
+                        return
+
+                    dest_x = target_rect.x() + (target_rect.width() - scaled.width()) / 2
+                    dest_y = target_rect.y() + (target_rect.height() - scaled.height()) / 2
+
+                    painter.save()
+                    painter.setClipRect(target_rect)
+                    painter.drawPixmap(int(round(dest_x)), int(round(dest_y)), scaled)
+                    painter.restore()
+                else:
+                    # Fallback to stretch if an unknown mode is set.
+                    painter.drawPixmap(target_rect, background_image)
+            finally:
+                painter.restore()
+            return
         elif self.canvas.background.is_checkered:
             brush = QBrush(self.canvas.background_pixmap)
             transform = QTransform()

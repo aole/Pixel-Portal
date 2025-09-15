@@ -72,7 +72,6 @@ class MenuBarBuilder:
         background_menu.addSeparator()
         background_menu.addAction(self.action_manager.custom_color_action)
         background_menu.addAction(self.action_manager.image_background_action)
-
         view_menu.addSeparator()
         view_menu.addAction(self.action_manager.tile_preview_action)
 
