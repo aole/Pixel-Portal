@@ -252,12 +252,11 @@ class DrawCommand(Command):
             self.layer.on_image_change.emit()
 
     def undo(self):
-        if self.before_image:
-            painter = QPainter(self.layer.image)
-            # Use CompositionMode_Source to replace pixels, ignoring alpha
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            painter.drawImage(0, 0, self.before_image)
-            painter.end()
+        if self.before_image is not None:
+            # Restore the image by swapping in the cached copy rather than
+            # painting it back. Drawing through a QPainter can subtly mutate
+            # pixel values, which broke exact undo comparisons in tests.
+            self.layer.image = self.before_image.copy()
             self.layer.on_image_change.emit()
 
 
@@ -336,13 +335,38 @@ class CropCommand(Command):
         self.document.crop(self.rect)
 
     def undo(self):
-        if self.old_document_clone:
-            # This is a heavy undo, but crop is a complex operation to reverse manually
-            self.document.width = self.old_document_clone.width
-            self.document.height = self.old_document_clone.height
-            self.document.layer_manager = self.old_document_clone.layer_manager
-            # We need to re-emit signals so the UI updates
-            self.document.layer_manager.layer_structure_changed.emit()
+        if not self.old_document_clone:
+            return
+
+        original_doc = self.old_document_clone
+        current_manager = self.document.layer_manager
+        original_manager = original_doc.layer_manager
+
+        # Restore document dimensions.
+        self.document.width = original_doc.width
+        self.document.height = original_doc.height
+        current_manager.width = original_manager.width
+        current_manager.height = original_manager.height
+
+        # Restore layer images and properties in place so existing command
+        # references remain valid for subsequent undo operations.
+        current_layers = current_manager.layers
+        original_layers = original_manager.layers
+
+        if len(current_layers) != len(original_layers):
+            # Fallback: replace the stack entirely if counts diverge (shouldn't
+            # happen for crop but keeps undo resilient to future changes).
+            current_manager.layers = [layer.clone() for layer in original_layers]
+        else:
+            for current_layer, original_layer in zip(current_layers, original_layers):
+                current_layer.image = original_layer.image.copy()
+                current_layer.visible = original_layer.visible
+                current_layer.opacity = original_layer.opacity
+                current_layer.name = original_layer.name
+                current_layer.on_image_change.emit()
+
+        current_manager.active_layer_index = original_manager.active_layer_index
+        current_manager.layer_structure_changed.emit()
 
 
 class AddLayerCommand(Command):
