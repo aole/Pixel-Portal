@@ -34,6 +34,12 @@ class SettingsController(QObject):
             self.background_image_mode = BackgroundImageMode(raw_mode)
         except ValueError:
             self.background_image_mode = BackgroundImageMode.FIT
+
+        try:
+            alpha_value = self.config.getfloat('Background', 'image_alpha')
+        except (configparser.NoOptionError, ValueError):
+            alpha_value = 1.0
+        self.background_image_alpha = max(0.0, min(1.0, float(alpha_value)))
         self._sync_background_settings_to_config()
 
     def save_settings(self, ai_settings=None):
@@ -79,6 +85,7 @@ class SettingsController(QObject):
         if not self.config.has_section('Background'):
             self.config.add_section('Background')
         self.config.set('Background', 'image_mode', self.background_image_mode.value)
+        self.config.set('Background', 'image_alpha', f"{self.background_image_alpha:.3f}")
 
     def get_grid_settings(self):
         return {
@@ -91,6 +98,7 @@ class SettingsController(QObject):
     def get_background_settings(self):
         return {
             'image_mode': self.background_image_mode,
+            'image_alpha': self.background_image_alpha,
         }
 
     def update_grid_settings(
@@ -107,11 +115,19 @@ class SettingsController(QObject):
         self.grid_minor_spacing = max(1, int(minor_spacing))
         self._sync_grid_settings_to_config()
 
-    def update_background_settings(self, *, image_mode):
-        if not isinstance(image_mode, BackgroundImageMode):
+    def update_background_settings(self, *, image_mode=None, image_alpha=None):
+        if image_mode is not None:
+            if not isinstance(image_mode, BackgroundImageMode):
+                try:
+                    image_mode = BackgroundImageMode(image_mode)
+                except ValueError:
+                    image_mode = BackgroundImageMode.FIT
+            self.background_image_mode = image_mode
+
+        if image_alpha is not None:
             try:
-                image_mode = BackgroundImageMode(image_mode)
-            except ValueError:
-                image_mode = BackgroundImageMode.FIT
-        self.background_image_mode = image_mode
+                alpha_value = float(image_alpha)
+            except (TypeError, ValueError):
+                alpha_value = self.background_image_alpha
+            self.background_image_alpha = max(0.0, min(1.0, alpha_value))
         self._sync_background_settings_to_config()

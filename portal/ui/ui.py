@@ -37,6 +37,9 @@ class MainWindow(QMainWindow):
         self.main_palette_buttons = []
 
         self.canvas = Canvas(self.app.drawing_context)
+        self.canvas.set_background_image_alpha(
+            self.app.settings_controller.background_image_alpha
+        )
         self.canvas.set_background_image_mode(
             self.app.settings_controller.background_image_mode
         )
@@ -56,6 +59,9 @@ class MainWindow(QMainWindow):
 
         self.canvas.background_mode_changed.connect(
             self.on_background_image_mode_changed
+        )
+        self.canvas.background_alpha_changed.connect(
+            self.on_background_image_alpha_changed
         )
 
         # Menu bar
@@ -315,6 +321,9 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.app.settings_controller, self)
         if dialog.exec():
             self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
+            self.canvas.set_background_image_alpha(
+                self.app.settings_controller.background_image_alpha
+            )
             self.canvas.set_background_image_mode(
                 self.app.settings_controller.background_image_mode
             )
@@ -339,6 +348,7 @@ class MainWindow(QMainWindow):
                 Background(
                     image_path=file_path,
                     image_mode=self.canvas.background_mode,
+                    image_alpha=self.canvas.background_image_alpha,
                 )
             )
 
@@ -362,7 +372,17 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def on_background_image_mode_changed(self, mode):
-        self.app.settings_controller.update_background_settings(image_mode=mode)
+        self.app.settings_controller.update_background_settings(
+            image_mode=mode,
+            image_alpha=self.canvas.background_image_alpha,
+        )
+
+    @Slot(float)
+    def on_background_image_alpha_changed(self, alpha):
+        self.app.settings_controller.update_background_settings(
+            image_mode=self.canvas.background_mode,
+            image_alpha=alpha,
+        )
 
     def open_flip_dialog(self):
         if self.app.document:

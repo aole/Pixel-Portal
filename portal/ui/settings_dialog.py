@@ -85,7 +85,13 @@ class SettingsDialog(QDialog):
         ):
             self.background_mode_combo.addItem(label, mode)
         canvas_layout.addWidget(self.background_mode_combo, 0, 1)
-        canvas_layout.setRowStretch(1, 1)
+        canvas_layout.addWidget(QLabel("Background image opacity", canvas_tab), 1, 0)
+        self.background_alpha_spin = QSpinBox(canvas_tab)
+        self.background_alpha_spin.setRange(0, 100)
+        self.background_alpha_spin.setSuffix("%")
+        self.background_alpha_spin.setValue(100)
+        canvas_layout.addWidget(self.background_alpha_spin, 1, 1)
+        canvas_layout.setRowStretch(2, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
@@ -107,6 +113,13 @@ class SettingsDialog(QDialog):
         if index >= 0:
             self.background_mode_combo.setCurrentIndex(index)
 
+        background_alpha = background_settings.get("image_alpha", 1.0)
+        try:
+            percent = int(round(float(background_alpha) * 100))
+        except (TypeError, ValueError):
+            percent = 100
+        self.background_alpha_spin.setValue(max(0, min(100, percent)))
+
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
         if isinstance(data, BackgroundImageMode):
@@ -115,6 +128,10 @@ class SettingsDialog(QDialog):
             return BackgroundImageMode(data)
         except ValueError:
             return BackgroundImageMode.FIT
+
+    def get_background_image_alpha(self):
+        value = self.background_alpha_spin.value() / 100.0
+        return max(0.0, min(1.0, value))
 
     def get_grid_settings(self):
         return {
@@ -127,6 +144,7 @@ class SettingsDialog(QDialog):
     def accept(self):
         self.settings_controller.update_grid_settings(**self.get_grid_settings())
         self.settings_controller.update_background_settings(
-            image_mode=self.get_background_image_mode()
+            image_mode=self.get_background_image_mode(),
+            image_alpha=self.get_background_image_alpha(),
         )
         super().accept()

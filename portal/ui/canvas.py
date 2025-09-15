@@ -30,6 +30,7 @@ class Canvas(QWidget):
     canvas_updated = Signal()
     command_generated = Signal(object)
     background_mode_changed = Signal(object)
+    background_alpha_changed = Signal(float)
 
     def __init__(self, drawing_context, parent=None):
         super().__init__(parent)
@@ -53,6 +54,7 @@ class Canvas(QWidget):
         self.background_pixmap = QPixmap("alphabg.png")
         self.background_image = None
         self.background_mode = BackgroundImageMode.FIT
+        self.background_image_alpha = 1.0
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
@@ -65,6 +67,7 @@ class Canvas(QWidget):
         self.tile_preview_cols = 3
         self.background = Background()
         self.background.image_mode = self.background_mode
+        self.background.image_alpha = self.background_image_alpha
         self.background_color = self.palette().window().color()
         self.selection_shape = None
         self.ctrl_pressed = False
@@ -114,6 +117,11 @@ class Canvas(QWidget):
         else:
             self.background_image = None
 
+        normalized_alpha = Background._normalize_alpha(background.image_alpha)
+        if normalized_alpha is None:
+            normalized_alpha = self.background_image_alpha
+        self.set_background_image_alpha(normalized_alpha)
+
         if previous_mode != self.background_mode:
             self.background_mode_changed.emit(self.background_mode)
 
@@ -135,6 +143,22 @@ class Canvas(QWidget):
 
         self.update()
         self.background_mode_changed.emit(self.background_mode)
+
+    def set_background_image_alpha(self, alpha):
+        normalized = Background._normalize_alpha(alpha)
+        if normalized is None:
+            return
+
+        if self.background:
+            self.background.image_alpha = normalized
+
+        if math.isclose(normalized, self.background_image_alpha, abs_tol=1e-6):
+            return
+
+        self.background_image_alpha = normalized
+
+        self.update()
+        self.background_alpha_changed.emit(self.background_image_alpha)
 
     @Slot(bool)
     def toggle_tile_preview(self, enabled: bool):
