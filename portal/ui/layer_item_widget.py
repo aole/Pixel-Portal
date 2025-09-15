@@ -1,6 +1,6 @@
 from PySide6.QtCore import Signal, Qt, QRect
 from PySide6.QtGui import QPixmap, QPainter, QColor
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget, QSlider
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QStackedWidget, QSlider
 
 
 class NameLabel(QLabel):
@@ -97,16 +97,31 @@ class LayerItemWidget(QWidget):
         thumbnail_layout.addWidget(self.thumbnail)
         self.layout.addWidget(thumbnail_container)
 
-        self.label = EditableLabel(self.layer.name)
-        self.label.name_changed.connect(self.on_name_changed)
-        self.layout.addWidget(self.label)
+        # Container for opacity controls and name
+        info_container = QWidget()
+        info_layout = QVBoxLayout(info_container)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Opacity row: percentage label + slider
+        opacity_row = QHBoxLayout()
+        opacity_row.setContentsMargins(0, 0, 0, 0)
+        self.opacity_label = QLabel(f"{int(self.layer.opacity * 100)}%")
+        opacity_row.addWidget(self.opacity_label)
 
         self.opacity_slider = QSlider(Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(int(self.layer.opacity * 100))
         self.opacity_slider.setTracking(False)
         self.opacity_slider.valueChanged.connect(self.on_opacity_slider_changed)
-        self.layout.addWidget(self.opacity_slider)
+        opacity_row.addWidget(self.opacity_slider)
+        info_layout.addLayout(opacity_row)
+
+        # Layer name below the opacity controls
+        self.label = EditableLabel(self.layer.name)
+        self.label.name_changed.connect(self.on_name_changed)
+        info_layout.addWidget(self.label)
+
+        self.layout.addWidget(info_container)
 
         self.update_thumbnail()
         self.update_visibility_icon()
@@ -118,6 +133,7 @@ class LayerItemWidget(QWidget):
         self.layer.name = new_name
 
     def on_opacity_slider_changed(self, value):
+        self.opacity_label.setText(f"{value}%")
         self.opacity_changed.emit(value)
 
     def update_thumbnail(self):
