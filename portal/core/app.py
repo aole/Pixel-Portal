@@ -47,6 +47,26 @@ class App(QObject):
         return self.document_controller.drawing_context
 
     @property
+    def document_service(self):
+        return self.document_controller.document_service
+
+    @document_service.setter
+    def document_service(self, service):
+        self.document_controller.document_service = service
+        if hasattr(service, "app"):
+            service.app = self.document_controller
+
+    @property
+    def clipboard_service(self):
+        return self.document_controller.clipboard_service
+
+    @clipboard_service.setter
+    def clipboard_service(self, service):
+        self.document_controller.clipboard_service = service
+        if hasattr(service, "app"):
+            service.app = self.document_controller
+
+    @property
     def config(self):
         return self.settings_controller.config
 
