@@ -179,3 +179,14 @@ class DocumentController(QObject):
 
     def get_current_image(self):
         return self.document.get_current_image_for_ai()
+
+    @Slot()
+    def create_brush(self):
+        if not self.main_window:
+            return
+        selection = self.main_window.canvas.selection_shape if self.main_window.canvas else None
+        image = self.document.render()
+        if selection and not selection.isEmpty():
+            rect = selection.boundingRect().toRect()
+            image = image.copy(rect)
+        self.drawing_context.set_pattern_brush(image)

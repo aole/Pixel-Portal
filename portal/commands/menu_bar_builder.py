@@ -42,6 +42,7 @@ class MenuBarBuilder:
         edit_menu.addAction(self.action_manager.paste_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.action_manager.paste_as_new_image_action)
+        edit_menu.addAction(self.action_manager.create_brush_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.action_manager.flip_action)
         edit_menu.addSeparator()

@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QImage
 
 
 class DrawingContext(QObject):
@@ -9,6 +9,7 @@ class DrawingContext(QObject):
     brush_type_changed = Signal(str)
     mirror_x_changed = Signal(bool)
     mirror_y_changed = Signal(bool)
+    pattern_brush_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -17,6 +18,7 @@ class DrawingContext(QObject):
         self.pen_color = QColor("black")
         self.pen_width = 1
         self.brush_type = "Circular"
+        self.pattern_brush: QImage | None = None
         self.mirror_x = False
         self.mirror_y = False
 
@@ -55,3 +57,9 @@ class DrawingContext(QObject):
         else:
             self.pen_color = color
         self.pen_color_changed.emit(self.pen_color)
+
+    @Slot(QImage)
+    def set_pattern_brush(self, image):
+        self.pattern_brush = image
+        self.pattern_brush_changed.emit(self.pattern_brush)
+        self.set_brush_type("Pattern")

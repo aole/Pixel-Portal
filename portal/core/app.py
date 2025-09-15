@@ -167,6 +167,10 @@ class App(QObject):
     def add_new_layer_with_image(self, image):
         self.document_controller.add_new_layer_with_image(image)
 
+    @Slot()
+    def create_brush(self):
+        self.document_controller.create_brush()
+
     @Slot(object)
     def handle_command(self, command):
         self.document_controller.handle_command(command)
