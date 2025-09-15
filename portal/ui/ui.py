@@ -15,6 +15,7 @@ from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
 from portal.commands.status_bar_manager import StatusBarManager
 from portal.ui.flip_dialog import FlipDialog
+from portal.ui.tile_preview_dialog import TilePreviewDialog
 
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
@@ -322,6 +323,14 @@ class MainWindow(QMainWindow):
             if dialog.exec():
                 values = dialog.get_values()
                 self.app.flip(values["horizontal"], values["vertical"], values["all_layers"])
+
+    def open_tile_preview_dialog(self):
+        if self.app.document:
+            if not hasattr(self, "tile_preview_dialog") or self.tile_preview_dialog is None:
+                self.tile_preview_dialog = TilePreviewDialog(self.app, self)
+                self.tile_preview_dialog.destroyed.connect(lambda: setattr(self, "tile_preview_dialog", None))
+            self.tile_preview_dialog.show()
+            self.tile_preview_dialog.raise_()
 
     def get_palette(self):
         return [button.color for button in self.main_palette_buttons]

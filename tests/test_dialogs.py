@@ -7,6 +7,7 @@ from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from PySide6.QtGui import QImage, QPixmap
 from portal.ui.preview_panel import PreviewPanel
+from portal.ui.tile_preview_dialog import TilePreviewDialog
 
 def test_new_file_dialog(qtbot):
     """Test that the dialog is created and that the new_document method is called on the app when the dialog is accepted."""
@@ -62,3 +63,20 @@ def test_update_preview(qtbot):
     assert not pixmap.isNull()
     assert pixmap.width() == 128
     assert pixmap.height() == 128
+
+
+def test_tile_preview_dialog_initializes(qtbot):
+    mock_app = MagicMock()
+    mock_document = MagicMock()
+    mock_app.document = mock_document
+
+    image = QImage(16, 16, QImage.Format_RGB32)
+    mock_document.render.return_value = image
+
+    dialog = TilePreviewDialog(mock_app)
+    qtbot.addWidget(dialog)
+
+    mock_document.render.assert_called()
+    pixmap = dialog.preview_label.pixmap()
+    assert pixmap.width() == 16 * dialog.cols_spin.value()
+    assert pixmap.height() == 16 * dialog.rows_spin.value()

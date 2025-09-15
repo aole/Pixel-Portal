@@ -140,6 +140,9 @@ class ActionManager:
         self.custom_color_action = QAction("Custom Color...", self.main_window)
         self.custom_color_action.triggered.connect(self.main_window.open_background_color_dialog)
 
+        self.tile_preview_action = QAction("Tile Preview...", self.main_window)
+        self.tile_preview_action.triggered.connect(self.main_window.open_tile_preview_dialog)
+
     def _build_tool_actions(self):
         """Create actions for selecting and configuring tools."""
         self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self.main_window)
