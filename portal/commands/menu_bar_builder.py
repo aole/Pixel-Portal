@@ -72,11 +72,6 @@ class MenuBarBuilder:
         background_menu.addSeparator()
         background_menu.addAction(self.action_manager.custom_color_action)
         background_menu.addAction(self.action_manager.image_background_action)
-        if getattr(self.action_manager, "background_mode_actions", None):
-            mode_menu = background_menu.addMenu("Image &Mode")
-            for _, action in self.action_manager.background_mode_actions:
-                mode_menu.addAction(action)
-
         view_menu.addSeparator()
         view_menu.addAction(self.action_manager.tile_preview_action)
 

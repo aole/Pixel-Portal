@@ -37,6 +37,9 @@ class MainWindow(QMainWindow):
         self.main_palette_buttons = []
 
         self.canvas = Canvas(self.app.drawing_context)
+        self.canvas.set_background_image_mode(
+            self.app.settings_controller.background_image_mode
+        )
         self.setCentralWidget(self.canvas)
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
@@ -50,6 +53,10 @@ class MainWindow(QMainWindow):
 
         self.action_manager.setup_actions(self.canvas)
         self.addAction(self.action_manager.clear_action)
+
+        self.canvas.background_mode_changed.connect(
+            self.on_background_image_mode_changed
+        )
 
         # Menu bar
         menu_bar_builder = MenuBarBuilder(self, self.action_manager)
@@ -308,6 +315,9 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.app.settings_controller, self)
         if dialog.exec():
             self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
+            self.canvas.set_background_image_mode(
+                self.app.settings_controller.background_image_mode
+            )
             self.app.save_settings()
 
     def open_background_color_dialog(self):
@@ -349,6 +359,10 @@ class MainWindow(QMainWindow):
 
     def on_mirror_changed(self):
         is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y
+
+    @Slot(object)
+    def on_background_image_mode_changed(self, mode):
+        self.app.settings_controller.update_background_settings(image_mode=mode)
 
     def open_flip_dialog(self):
         if self.app.document:

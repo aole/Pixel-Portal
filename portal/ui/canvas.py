@@ -52,7 +52,7 @@ class Canvas(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")
         self.background_image = None
-        self.background_mode = BackgroundImageMode.STRETCH
+        self.background_mode = BackgroundImageMode.FIT
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False

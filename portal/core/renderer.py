@@ -123,7 +123,7 @@ class CanvasRenderer:
     def _draw_background(self, painter, target_rect):
         background_image = self.canvas.background_image
         if background_image and not background_image.isNull():
-            mode = getattr(self.canvas, "background_mode", BackgroundImageMode.STRETCH)
+            mode = getattr(self.canvas, "background_mode", BackgroundImageMode.FIT)
 
             if mode == BackgroundImageMode.STRETCH:
                 painter.drawPixmap(target_rect, background_image)
