@@ -280,6 +280,7 @@ def mock_main_window(qapp):
     window.save_palette_as_png = MagicMock()
     window.open_resize_dialog = MagicMock()
     window.open_background_color_dialog = MagicMock()
+    window.open_background_image_dialog = MagicMock()
     window.toggle_ai_panel = MagicMock()
     window.open_flip_dialog = MagicMock()
     return window
@@ -316,6 +317,7 @@ def test_setup_actions(mock_main_window):
     assert action_manager.gray_action is not None
     assert action_manager.magenta_action is not None
     assert action_manager.custom_color_action is not None
+    assert action_manager.image_background_action is not None
     assert action_manager.circular_brush_action is not None
     assert action_manager.square_brush_action is not None
     assert action_manager.mirror_x_action is not None
@@ -371,6 +373,9 @@ def test_setup_actions(mock_main_window):
 
     action_manager.custom_color_action.trigger()
     mock_main_window.open_background_color_dialog.assert_called_once()
+
+    action_manager.image_background_action.trigger()
+    mock_main_window.open_background_image_dialog.assert_called_once()
 
     action_manager.mirror_x_action.trigger()
     mock_main_window.app.set_mirror_x.assert_called_once()

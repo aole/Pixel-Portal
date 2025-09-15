@@ -307,6 +307,18 @@ class MainWindow(QMainWindow):
         if color.isValid():
             self.canvas.set_background(Background(color))
 
+    def open_background_image_dialog(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open Background Image",
+            self.app.last_directory,
+            "Image Files (*.png *.jpg *.bmp)",
+        )
+        if file_path:
+            self.app.last_directory = os.path.dirname(file_path)
+            self.app.config.set('General', 'last_directory', self.app.last_directory)
+            self.canvas.set_background(Background(image_path=file_path))
+
     def update_crop_action_state(self, has_selection):
         self.action_manager.crop_action.setEnabled(has_selection)
 

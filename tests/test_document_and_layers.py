@@ -563,6 +563,16 @@ def test_set_background(canvas):
     canvas.set_background(background)
     assert canvas.background == background
 
+
+def test_set_background_image(canvas):
+    """Test that an image can be used as the background."""
+    from portal.ui.background import Background
+    image_path = os.path.join(os.path.dirname(__file__), "..", "alphabg.png")
+    background = Background(image_path=image_path)
+    canvas.set_background(background)
+    assert canvas.background == background
+    assert canvas.background_image is not None
+
 def test_select_all(canvas):
     """Test that a selection is created for the entire document."""
     from PySide6.QtCore import QRect

@@ -119,7 +119,9 @@ class CanvasRenderer:
         painter.restore()
 
     def _draw_background(self, painter, target_rect):
-        if self.canvas.background.is_checkered:
+        if self.canvas.background_image:
+            painter.drawPixmap(target_rect, self.canvas.background_image)
+        elif self.canvas.background.is_checkered:
             brush = QBrush(self.canvas.background_pixmap)
             transform = QTransform()
             transform.translate(target_rect.x(), target_rect.y())
