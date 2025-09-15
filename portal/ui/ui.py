@@ -313,6 +313,7 @@ class MainWindow(QMainWindow):
     def update_brush_button(self, brush_type):
         self.action_manager.circular_brush_action.setChecked(brush_type == "Circular")
         self.action_manager.square_brush_action.setChecked(brush_type == "Square")
+        self.action_manager.pattern_brush_action.setChecked(brush_type == "Pattern")
 
     def on_tool_changed_for_status_bar(self, tool_name):
         if tool_name != "Rotate":

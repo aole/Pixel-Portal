@@ -152,6 +152,9 @@ class ActionManager:
         self.square_brush_action = QAction(QIcon("icons/brush_square.png"), "Square", self.main_window)
         self.square_brush_action.setCheckable(True)
 
+        self.pattern_brush_action = QAction(QIcon("icons/brush_pattern.png"), "Pattern", self.main_window)
+        self.pattern_brush_action.setCheckable(True)
+
         self.mirror_x_action = QAction(QIcon("icons/mirrorx.png"), "Mirror X", self.main_window)
         self.mirror_x_action.setCheckable(True)
         self.mirror_x_action.triggered.connect(self.app.set_mirror_x)
