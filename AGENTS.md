@@ -1,5 +1,13 @@
 # Instructions for AI Agents
 
+## Environment Setup for Unix/Test/Headless Runs
+
+Use `requirements-headless.txt` when preparing a Unix, CI, or other headless/testing environment. This trimmed requirements file omits AI-specific dependencies (such as PyTorch and the diffusion stack) that are not required for automated testing. Install it with:
+
+```bash
+pip install -r requirements-headless.txt
+```
+
 ## Running Tests
 
 **Important:** Do not run any tests unless explicitly asked to do so.
