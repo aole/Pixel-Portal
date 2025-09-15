@@ -30,7 +30,11 @@ class CanvasRenderer:
         self._draw_background(painter, target_rect)
 
         # Explicitly handle rotation preview to override normal document drawing
-        if self.drawing_context.tool == "Rotate" and self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:
+        if (
+            self.drawing_context.tool == "Rotate"
+            and self.canvas.temp_image
+            and self.canvas.temp_image_replaces_active_layer
+        ):
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
             image_painter = QPainter(final_image)
@@ -83,7 +87,9 @@ class CanvasRenderer:
                 if overlay is not None:
                     if self.canvas.is_erasing_preview:
                         painter.save()
-                        painter.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                        painter.setCompositionMode(
+                            QPainter.CompositionMode_DestinationOut
+                        )
                         painter.drawImage(tile_rect, overlay)
                         painter.restore()
                     else:
@@ -94,7 +100,7 @@ class CanvasRenderer:
             return
 
         painter.save()
-        pen = QPen(QColor(255, 0, 0, 150)) # A semi-transparent red
+        pen = QPen(QColor(255, 0, 0, 150))  # A semi-transparent red
         pen.setCosmetic(True)
         pen.setStyle(Qt.DashLine)
         painter.setPen(pen)
@@ -111,7 +117,6 @@ class CanvasRenderer:
             painter.drawLine(0, int(center_y), self.canvas.width(), int(center_y))
 
         painter.restore()
-
 
     def _draw_background(self, painter, target_rect):
         if self.canvas.background.is_checkered:
@@ -152,51 +157,39 @@ class CanvasRenderer:
             painter.drawImage(target_rect, final_image)
             return final_image
         else:
-            # This path is for tools that create a temporary overlay or preview.
-            composite_image = document.render()
-            image_to_draw_on = composite_image
+            # This path handles the standard document rendering and optional tool previews.
+            final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
+            final_image.fill(Qt.transparent)
+            p = QPainter(final_image)
 
-            if self.canvas.temp_image:
-                # Create a new final image to compose our preview onto.
-                final_image = QImage(composite_image.size(), QImage.Format_ARGB32)
-                final_image.fill(Qt.transparent)
-                p = QPainter(final_image)
+            active_layer = document.layer_manager.active_layer
+            for layer in document.layer_manager.layers:
+                if not layer.visible:
+                    continue
 
-                # Special case for the eraser preview
-                if self.canvas.is_erasing_preview:
-                    active_layer = document.layer_manager.active_layer
-                    if active_layer:
-                        # Iterate through all layers and draw them in order,
-                        # applying the eraser mask to the active layer.
-                        for layer in document.layer_manager.layers:
-                            if not layer.visible:
-                                continue
+                p.setOpacity(layer.opacity)
 
-                            p.setOpacity(layer.opacity)
-
-                            if layer is active_layer:
-                                # Punch a hole in a copy of the active layer
-                                erased_active_layer = active_layer.image.copy()
-                                p_temp = QPainter(erased_active_layer)
-                                p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
-                                p_temp.drawImage(0, 0, self.canvas.temp_image)  # temp_image is the erase mask
-                                p_temp.end()
-                                p.drawImage(0, 0, erased_active_layer)
-                            else:
-                                p.drawImage(0, 0, layer.image)
-
-                # Case for other tools (Pen, Shapes, etc.)
+                if (
+                    self.canvas.temp_image
+                    and self.canvas.is_erasing_preview
+                    and layer is active_layer
+                ):
+                    # Punch a hole in a copy of the active layer using the erase mask.
+                    erased_active_layer = active_layer.image.copy()
+                    p_temp = QPainter(erased_active_layer)
+                    p_temp.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                    p_temp.drawImage(0, 0, self.canvas.temp_image)
+                    p_temp.end()
+                    p.drawImage(0, 0, erased_active_layer)
                 else:
-                    # Draw the current document state first
-                    p.drawImage(0, 0, composite_image)
-                    # Then draw the temporary tool preview (e.g., a brush stroke) on top
-                    p.drawImage(0, 0, self.canvas.temp_image)
+                    p.drawImage(0, 0, layer.image)
+                    if self.canvas.temp_image and layer is active_layer:
+                        # Draw the temporary tool preview at the correct layer depth
+                        p.drawImage(0, 0, self.canvas.temp_image)
 
-                p.end()
-                image_to_draw_on = final_image
-
-            painter.drawImage(target_rect, image_to_draw_on)
-            return image_to_draw_on
+            p.end()
+            painter.drawImage(target_rect, final_image)
+            return final_image
 
     def _draw_border(self, painter, target_rect):
         border_color = self.canvas.palette().color(QPalette.ColorRole.Text)
@@ -263,7 +256,9 @@ class CanvasRenderer:
 
         # Find the range of document coordinates currently visible on the canvas
         doc_top_left = self.canvas.get_doc_coords(QPoint(0, 0))
-        doc_bottom_right = self.canvas.get_doc_coords(QPoint(self.canvas.width(), self.canvas.height()))
+        doc_bottom_right = self.canvas.get_doc_coords(
+            QPoint(self.canvas.width(), self.canvas.height())
+        )
 
         start_x = max(0, math.floor(doc_top_left.x()))
         end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
@@ -277,7 +272,12 @@ class CanvasRenderer:
                 painter.setPen(major_color)
             else:
                 painter.setPen(minor_color)
-            painter.drawLine(round(canvas_x), target_rect.top(), round(canvas_x), target_rect.bottom())
+            painter.drawLine(
+                round(canvas_x),
+                target_rect.top(),
+                round(canvas_x),
+                target_rect.bottom(),
+            )
 
         # Draw horizontal lines
         for dy in range(start_y, end_y + 1):
@@ -286,14 +286,20 @@ class CanvasRenderer:
                 painter.setPen(major_color)
             else:
                 painter.setPen(minor_color)
-            painter.drawLine(target_rect.left(), round(canvas_y), target_rect.right(), round(canvas_y))
+            painter.drawLine(
+                target_rect.left(),
+                round(canvas_y),
+                target_rect.right(),
+                round(canvas_y),
+            )
 
     def draw_cursor(self, painter, target_rect, doc_image):
         active_layer = self.canvas.document.layer_manager.active_layer
         if (
             not self.canvas.mouse_over_canvas
             or (active_layer and not active_layer.visible)
-            or self.canvas.drawing_context.tool in ["Bucket", "Picker", "Move", "Rotate"]
+            or self.canvas.drawing_context.tool
+            in ["Bucket", "Picker", "Move", "Rotate"]
             or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed
         ):
@@ -309,7 +315,7 @@ class CanvasRenderer:
             doc_pos.x() - int(math.floor(offset)),
             doc_pos.y() - int(math.floor(offset)),
             brush_size,
-            brush_size
+            brush_size,
         )
 
         # Convert document rectangle to screen coordinates for drawing
@@ -322,7 +328,7 @@ class CanvasRenderer:
             int(screen_x),
             int(screen_y),
             max(1, int(screen_width)),
-            max(1, int(screen_height))
+            max(1, int(screen_height)),
         )
 
         # Sample the color from the document image instead of grabbing the screen
@@ -354,7 +360,9 @@ class CanvasRenderer:
         else:
             # Fallback for transparent areas or if off-canvas: use the cached background color
             bg_color = self.canvas.background_color
-            inverted_color = QColor(255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue())
+            inverted_color = QColor(
+                255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue()
+            )
 
         # Fill the cursor rectangle with the brush color
         painter.setBrush(self.canvas.drawing_context.pen_color)
@@ -364,7 +372,6 @@ class CanvasRenderer:
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
-
 
         # Draw the inverted outline on top
         painter.setPen(inverted_color)
