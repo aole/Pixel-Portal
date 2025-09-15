@@ -46,6 +46,7 @@ class MenuBarBuilder:
         edit_menu.addSeparator()
         edit_menu.addAction(self.action_manager.flip_action)
         edit_menu.addSeparator()
+        edit_menu.addAction(self.action_manager.settings_action)
 
         select_menu = menu_bar.addMenu("&Select")
         select_menu.addAction(self.action_manager.select_all_action)

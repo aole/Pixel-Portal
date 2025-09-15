@@ -18,6 +18,7 @@ from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
 from portal.commands.status_bar_manager import StatusBarManager
 from portal.ui.flip_dialog import FlipDialog
+from portal.ui.settings_dialog import SettingsDialog
 
 
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
@@ -38,6 +39,7 @@ class MainWindow(QMainWindow):
         self.canvas = Canvas(self.app.drawing_context)
         self.setCentralWidget(self.canvas)
         self.canvas.set_document(self.app.document)
+        self.apply_grid_settings_from_settings()
 
         # Connect DrawingContext signals to Canvas slots
         self.app.drawing_context.tool_changed.connect(self.canvas.on_tool_changed)
@@ -302,6 +304,12 @@ class MainWindow(QMainWindow):
                 values = dialog.get_values()
                 self.app.resize_document(values["width"], values["height"], values["interpolation"])
 
+    def open_settings_dialog(self):
+        dialog = SettingsDialog(self.app.settings_controller, self)
+        if dialog.exec():
+            self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
+            self.app.save_settings()
+
     def open_background_color_dialog(self):
         color = QColorDialog.getColor(self.canvas.background_color, self)
         if color.isValid():
@@ -331,6 +339,9 @@ class MainWindow(QMainWindow):
             if dialog.exec():
                 values = dialog.get_values()
                 self.app.flip(values["horizontal"], values["vertical"], values["all_layers"])
+
+    def apply_grid_settings_from_settings(self):
+        self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
 
     def get_palette(self):
         return [button.color for button in self.main_palette_buttons]

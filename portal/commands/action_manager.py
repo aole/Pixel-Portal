@@ -80,6 +80,10 @@ class ActionManager:
         self.create_brush_action = QAction("Create Brush", self.main_window)
         self.create_brush_action.triggered.connect(self.app.create_brush)
 
+        self.settings_action = QAction("Settings...", self.main_window)
+        self.settings_action.setShortcut("Ctrl+,")
+        self.settings_action.triggered.connect(self.main_window.open_settings_dialog)
+
     def _build_select_actions(self):
         """Create actions for selection manipulation."""
         self.select_all_action = QAction("Select &All", self.main_window)

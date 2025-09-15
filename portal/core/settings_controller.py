@@ -15,6 +15,14 @@ class SettingsController(QObject):
             self.config.add_section('General')
         self.last_directory = self.config.get('General', 'last_directory', fallback=os.path.expanduser("~"))
 
+        if not self.config.has_section('Grid'):
+            self.config.add_section('Grid')
+        self.grid_major_visible = self._get_grid_bool('major_visible', True)
+        self.grid_minor_visible = self._get_grid_bool('minor_visible', True)
+        self.grid_major_spacing = self._get_grid_int('major_spacing', 8)
+        self.grid_minor_spacing = self._get_grid_int('minor_spacing', 1)
+        self._sync_grid_settings_to_config()
+
     def save_settings(self, ai_settings=None):
         """Persist settings to disk."""
         try:
@@ -22,6 +30,8 @@ class SettingsController(QObject):
                 if not self.config.has_section('AI'):
                     self.config.add_section('AI')
                 self.config.set('AI', 'last_prompt', ai_settings.get('prompt', ''))
+
+            self._sync_grid_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
@@ -32,3 +42,43 @@ class SettingsController(QObject):
             error_box.setInformativeText(f"Could not write to settings.ini.\n\nReason: {e}")
             error_box.setStandardButtons(QMessageBox.Ok)
             error_box.exec()
+
+    def _get_grid_bool(self, option, fallback):
+        try:
+            return self.config.getboolean('Grid', option)
+        except (configparser.NoOptionError, ValueError):
+            return fallback
+
+    def _get_grid_int(self, option, fallback):
+        try:
+            return max(1, self.config.getint('Grid', option))
+        except (configparser.NoOptionError, ValueError):
+            return fallback
+
+    def _sync_grid_settings_to_config(self):
+        self.config.set('Grid', 'major_visible', str(self.grid_major_visible))
+        self.config.set('Grid', 'minor_visible', str(self.grid_minor_visible))
+        self.config.set('Grid', 'major_spacing', str(int(self.grid_major_spacing)))
+        self.config.set('Grid', 'minor_spacing', str(int(self.grid_minor_spacing)))
+
+    def get_grid_settings(self):
+        return {
+            'major_visible': self.grid_major_visible,
+            'minor_visible': self.grid_minor_visible,
+            'major_spacing': int(self.grid_major_spacing),
+            'minor_spacing': int(self.grid_minor_spacing),
+        }
+
+    def update_grid_settings(
+        self,
+        *,
+        major_visible,
+        major_spacing,
+        minor_visible,
+        minor_spacing,
+    ):
+        self.grid_major_visible = bool(major_visible)
+        self.grid_minor_visible = bool(minor_visible)
+        self.grid_major_spacing = max(1, int(major_spacing))
+        self.grid_minor_spacing = max(1, int(minor_spacing))
+        self._sync_grid_settings_to_config()
