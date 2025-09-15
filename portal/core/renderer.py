@@ -393,8 +393,7 @@ class CanvasRenderer:
             source_rect = QRectF(0, 0, pattern_width, pattern_height)
             painter.drawImage(QRectF(cursor_screen_rect), pattern_image, source_rect)
             painter.restore()
-
-        if not use_pattern_cursor:
+        else:
             # Fill the cursor rectangle with the brush color
             painter.setBrush(self.canvas.drawing_context.pen_color)
             painter.setPen(Qt.NoPen)  # No outline for the fill
@@ -404,13 +403,12 @@ class CanvasRenderer:
             else:
                 painter.drawRect(cursor_screen_rect)
 
-        # Draw the inverted outline on top
-        painter.setPen(inverted_color)
-        painter.setBrush(Qt.NoBrush)
+        if not use_pattern_cursor:
+            # Draw the inverted outline on top for solid brushes
+            painter.setPen(inverted_color)
+            painter.setBrush(Qt.NoBrush)
 
-        if use_pattern_cursor:
-            painter.drawRect(cursor_screen_rect)
-        elif brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
+            if brush_type == "Circular":
+                painter.drawEllipse(cursor_screen_rect)
+            else:
+                painter.drawRect(cursor_screen_rect)
