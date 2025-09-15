@@ -178,10 +178,29 @@ class CanvasRenderer:
 
                 # Case for other tools (Pen, Shapes, etc.)
                 else:
-                    # Draw the current document state first
-                    p.drawImage(0, 0, composite_image)
-                    # Then draw the temporary tool preview (e.g., a brush stroke) on top
-                    p.drawImage(0, 0, self.canvas.temp_image)
+                    active_layer = document.layer_manager.active_layer
+                    if active_layer:
+                        # Iterate through all layers and draw them in order,
+                        # drawing the preview on the active layer so that
+                        # the layer order remains correct.
+                        for layer in document.layer_manager.layers:
+                            if not layer.visible:
+                                continue
+
+                            p.setOpacity(layer.opacity)
+
+                            if layer is active_layer:
+                                layer_with_preview = active_layer.image.copy()
+                                p_temp = QPainter(layer_with_preview)
+                                p_temp.drawImage(0, 0, self.canvas.temp_image)
+                                p_temp.end()
+                                p.drawImage(0, 0, layer_with_preview)
+                            else:
+                                p.drawImage(0, 0, layer.image)
+                    else:
+                        # Fallback: draw the document and overlay the preview
+                        p.drawImage(0, 0, composite_image)
+                        p.drawImage(0, 0, self.canvas.temp_image)
 
                 p.end()
                 image_to_draw_on = final_image

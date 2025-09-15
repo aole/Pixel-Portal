@@ -504,6 +504,52 @@ def test_eraser_preview_layer_order(qtbot):
     assert image.pixelColor(32, 32) == QColor("red")
 
 
+def test_draw_preview_layer_order(qtbot):
+    """Test that the drawing preview renders layers in the correct order."""
+    drawing_context = DrawingContext()
+    canvas = Canvas(drawing_context)
+    qtbot.addWidget(canvas)
+    drawing_context.setParent(canvas)
+    document = Document(64, 64)
+    canvas.resize(64, 64)
+    canvas.set_document(document)
+    canvas.zoom = 1.0
+    canvas.background.color = QColor("white")
+
+    # Layer 1 (bottom): Red
+    document.layer_manager.layers[0].image.fill(QColor("red"))
+
+    # Layer 2 (top): Blue
+    document.layer_manager.add_layer("Top Layer")
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    # Set active layer to the bottom layer
+    document.layer_manager.select_layer(0)
+
+    # Start drawing preview on the bottom layer
+    canvas.temp_image = QImage(64, 64, QImage.Format_ARGB32)
+    canvas.temp_image.fill(QColor("white"))
+
+    # Render the canvas
+    image = QImage(64, 64, QImage.Format_ARGB32)
+    painter = QPainter(image)
+    canvas.renderer.paint(painter, document)
+    painter.end()
+
+    # The top layer should still be blue while previewing on the bottom layer.
+    assert image.pixelColor(32, 32) == QColor("blue")
+
+    # Now make the top layer invisible
+    document.layer_manager.layers[1].visible = False
+
+    # Render again to ensure the preview shows on the bottom layer
+    painter = QPainter(image)
+    canvas.renderer.paint(painter, document)
+    painter.end()
+
+    assert image.pixelColor(32, 32) == QColor("white")
+
+
 def test_background_creation_checkered():
     bg = Background()
     assert bg.is_checkered is True
