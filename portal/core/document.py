@@ -106,8 +106,17 @@ class Document:
             layer.on_image_change.emit()
 
     def crop(self, rect):
-        self.width = rect.width()
-        self.height = rect.height()
+        rect = rect.normalized()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return
+
+        new_width = rect.width()
+        new_height = rect.height()
+
+        self.width = new_width
+        self.height = new_height
+        self.layer_manager.width = new_width
+        self.layer_manager.height = new_height
 
         for layer in self.layer_manager.layers:
             layer.image = layer.image.copy(rect)

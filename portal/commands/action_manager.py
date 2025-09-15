@@ -100,7 +100,7 @@ class ActionManager:
         self.resize_action.setShortcut("Ctrl+R")
         self.resize_action.triggered.connect(self.main_window.open_resize_dialog)
 
-        self.crop_action = QAction("Crop to Selection", self.main_window)
+        self.crop_action = QAction("Fit Canvas to Selection", self.main_window)
         self.crop_action.triggered.connect(self.app.crop_to_selection)
         self.crop_action.setEnabled(False)
 
