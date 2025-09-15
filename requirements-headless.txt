@@ -1,0 +1,5 @@
+PySide6
+pytest-qt
+Pillow
+numpy
+scikit-learn
