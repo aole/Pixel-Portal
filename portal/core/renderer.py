@@ -77,6 +77,7 @@ class CanvasRenderer:
                     target_rect.width(),
                     target_rect.height(),
                 )
+                self._draw_background(painter, tile_rect)
                 painter.drawImage(tile_rect, image)
 
     def _draw_mirror_guides(self, painter, target_rect, document):

@@ -2,7 +2,7 @@
 import os
 from unittest.mock import MagicMock, patch
 from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint, QSize
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from PySide6.QtGui import QImage, QPixmap
@@ -76,3 +76,17 @@ def test_canvas_tile_preview_toggle(qtbot):
     assert canvas.tile_preview_enabled
     canvas.toggle_tile_preview(False)
     assert not canvas.tile_preview_enabled
+
+
+def test_canvas_tile_preview_coord_wrap(qtbot):
+    context = DrawingContext()
+    canvas = Canvas(context)
+    qtbot.addWidget(canvas)
+    canvas.set_document_size(QSize(10, 10))
+    canvas.resize(100, 100)
+    canvas.toggle_tile_preview(True)
+    target = canvas.get_target_rect()
+    outside = QPoint(target.right() + 1, target.top() + 3)
+    wrapped = canvas.get_doc_coords(outside)
+    assert wrapped.x() == 0
+    assert wrapped.y() == 3

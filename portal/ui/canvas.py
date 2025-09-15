@@ -175,11 +175,16 @@ class Canvas(QWidget):
 
         if self.zoom == 0:
             return QPoint(0, 0)
-
-        return QPoint(
-            (canvas_pos.x() - x_offset) / self.zoom,
-            (canvas_pos.y() - y_offset) / self.zoom,
-        )
+        doc_x = (canvas_pos.x() - x_offset) / self.zoom
+        doc_y = (canvas_pos.y() - y_offset) / self.zoom
+        if self.tile_preview_enabled:
+            doc_width = self._document_size.width()
+            doc_height = self._document_size.height()
+            if doc_width:
+                doc_x %= doc_width
+            if doc_height:
+                doc_y %= doc_height
+        return QPoint(int(doc_x), int(doc_y))
 
     def get_canvas_coords(self, doc_pos):
         doc_width_scaled = self._document_size.width() * self.zoom
