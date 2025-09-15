@@ -155,6 +155,33 @@ def test_set_layer_opacity_command(document):
     assert rendered_after.pixelColor(50, 50) == blended_before
 
 
+def test_layer_manager_opacity_preview_and_commit():
+    """Layer opacity previews while dragging and commits with undo support."""
+    from PySide6.QtWidgets import QApplication
+    app_qt = QApplication.instance() or QApplication([])
+    from portal.core.app import App
+    from portal.ui.layer_manager_widget import LayerManagerWidget
+    from unittest.mock import MagicMock
+
+    app = App()
+    app.new_document(10, 10)
+    canvas = MagicMock()
+    lm_widget = LayerManagerWidget(app, canvas)
+
+    item = lm_widget.layer_list.item(0)
+    item_widget = lm_widget.layer_list.itemWidget(item)
+    layer = item_widget.layer
+
+    lm_widget.on_opacity_preview_changed(item_widget, 50)
+    assert layer.opacity == 0.5
+
+    lm_widget.on_opacity_changed(item_widget, 50, 25)
+    assert layer.opacity == 0.25
+
+    app.undo()
+    assert layer.opacity == 0.5
+
+
 @pytest.fixture
 def layer():
     """Returns a Layer instance."""

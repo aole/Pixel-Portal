@@ -66,11 +66,15 @@ class ClickableLabel(QLabel):
 
 class LayerItemWidget(QWidget):
     visibility_toggled = Signal()
-    opacity_changed = Signal(int)
+    # Emitted continuously as the slider moves
+    opacity_preview_changed = Signal(int)
+    # Emitted when the slider is released: (old_value, new_value)
+    opacity_changed = Signal(int, int)
 
     def __init__(self, layer):
         super().__init__()
         self.layer = layer
+        self._start_value = int(self.layer.opacity * 100)
 
         self.pixmap_visible = QPixmap("icons/layervisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.pixmap_invisible = QPixmap("icons/layerinvisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -111,8 +115,14 @@ class LayerItemWidget(QWidget):
         self.opacity_slider = QSlider(Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(int(self.layer.opacity * 100))
-        self.opacity_slider.setTracking(False)
-        self.opacity_slider.valueChanged.connect(self.on_opacity_slider_changed)
+        self.opacity_slider.setTracking(True)
+        self.opacity_slider.setFixedHeight(22)
+        self.opacity_slider.setStyleSheet(
+            "QSlider::handle:horizontal { width: 16px; height: 16px; }"
+        )
+        self.opacity_slider.sliderPressed.connect(self.on_opacity_slider_pressed)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_slider_value_changed)
+        self.opacity_slider.sliderReleased.connect(self.on_opacity_slider_released)
         opacity_row.addWidget(self.opacity_slider)
         info_layout.addLayout(opacity_row)
 
@@ -132,9 +142,16 @@ class LayerItemWidget(QWidget):
     def on_name_changed(self, new_name):
         self.layer.name = new_name
 
-    def on_opacity_slider_changed(self, value):
+    def on_opacity_slider_pressed(self):
+        self._start_value = self.opacity_slider.value()
+
+    def on_opacity_slider_value_changed(self, value):
         self.opacity_label.setText(f"{value}%")
-        self.opacity_changed.emit(value)
+        self.opacity_preview_changed.emit(value)
+
+    def on_opacity_slider_released(self):
+        value = self.opacity_slider.value()
+        self.opacity_changed.emit(self._start_value, value)
 
     def update_thumbnail(self):
         # The size of the thumbnail label
