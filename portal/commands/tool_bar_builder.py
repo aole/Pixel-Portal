@@ -71,8 +71,9 @@ class ToolBarBuilder:
         active_color_button.rightClicked.connect(self.main_window.add_color_to_palette)
         self.left_toolbar.addWidget(active_color_button)
 
-        from portal.tools import get_tools
-        tools = get_tools()
+        from portal.tools import registry
+
+        tools = registry.get_tools()
         self.tool_actions = {}
         self.tool_action_group = QActionGroup(self.main_window)
 
