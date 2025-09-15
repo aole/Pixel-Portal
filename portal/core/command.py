@@ -689,3 +689,16 @@ class MoveLayerCommand(Command):
         if self.layer_manager.active_layer_index == self.to_index:
             self.layer_manager.active_layer_index = self.from_index
         self.layer_manager.layer_structure_changed.emit()
+
+
+class SetLayerOpacityCommand(Command):
+    def __init__(self, layer: Layer, opacity: float):
+        self.layer = layer
+        self.new_opacity = opacity
+        self.old_opacity = layer.opacity
+
+    def execute(self):
+        self.layer.opacity = self.new_opacity
+
+    def undo(self):
+        self.layer.opacity = self.old_opacity

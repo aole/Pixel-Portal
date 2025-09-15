@@ -74,6 +74,12 @@ class LayerManagerWidget(QWidget):
             item_widget.visibility_toggled.connect(
                 lambda widget=item_widget: self.on_visibility_toggled(widget)
             )
+            item_widget.opacity_preview_changed.connect(
+                lambda value, widget=item_widget: self.on_opacity_preview_changed(widget, value)
+            )
+            item_widget.opacity_changed.connect(
+                lambda old, new, widget=item_widget: self.on_opacity_changed(widget, old, new)
+            )
             item.setSizeHint(item_widget.sizeHint())
             self.layer_list.setItemWidget(item, item_widget)
 
@@ -103,6 +109,20 @@ class LayerManagerWidget(QWidget):
                 self.app.document.layer_manager.toggle_visibility(actual_index)
                 self.layer_changed.emit()
                 return
+
+    def on_opacity_preview_changed(self, widget, value):
+        """Preview layer opacity while dragging."""
+        widget.layer.opacity = value / 100.0
+        self.layer_changed.emit()
+
+    def on_opacity_changed(self, widget, old_value, new_value):
+        """Commit an undoable change to layer opacity."""
+        # Restore old value so the command captures it correctly
+        widget.layer.opacity = old_value / 100.0
+        from portal.core.command import SetLayerOpacityCommand
+        command = SetLayerOpacityCommand(widget.layer, new_value / 100.0)
+        self.app.execute_command(command)
+        self.layer_changed.emit()
 
     def on_layers_moved(self, parent, start, end, destination, row):
         """Handles reordering layers via drag-and-drop."""
