@@ -1,12 +1,9 @@
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from portal.ui.background import Background
+import importlib.util
 
-# Check for optional background removal dependency
-try:
-    import rembg  # noqa: F401
-    REMBG_AVAILABLE = True
-except Exception:
-    REMBG_AVAILABLE = False
+# Check for optional background removal dependency without importing heavy modules
+REMBG_AVAILABLE = importlib.util.find_spec("rembg") is not None
 
 class ActionManager:
     def __init__(self, main_window):

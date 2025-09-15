@@ -5,7 +5,10 @@ from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
 from PySide6.QtCore import Qt, Slot
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
-from portal.ui.ai_panel import AIPanel
+try:
+    from portal.ui.ai_panel import AIPanel
+except Exception:  # Optional dependency may be missing or heavy to load
+    AIPanel = None
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
@@ -99,15 +102,18 @@ class MainWindow(QMainWindow):
         self.layer_manager_dock.setWidget(self.layer_manager_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, self.layer_manager_dock)
 
-        # AI Panel
-        self.ai_panel = AIPanel(self.app, self.preview_panel)
-        self.ai_panel.image_generated.connect(self.app.add_new_layer_with_image)
-        self.ai_panel_dock = QDockWidget("AI", self)
-        self.ai_panel_dock.setWidget(self.ai_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.ai_panel_dock)
+        # AI Panel (optional)
+        self.ai_panel = None
+        self.ai_panel_dock = None
+        if AIPanel is not None:
+            self.ai_panel = AIPanel(self.app, self.preview_panel)
+            self.ai_panel.image_generated.connect(self.app.add_new_layer_with_image)
+            self.ai_panel_dock = QDockWidget("AI", self)
+            self.ai_panel_dock.setWidget(self.ai_panel)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.ai_panel_dock)
 
-        self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
-        self.layer_manager_dock.raise_()
+            self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
+            self.layer_manager_dock.raise_()
 
         self.app.document_changed.connect(self.preview_panel.update_preview)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
@@ -278,6 +284,8 @@ class MainWindow(QMainWindow):
         return list(unique_colors)
 
     def toggle_ai_panel(self):
+        if not self.ai_panel_dock:
+            return
         if self.ai_panel_dock.isVisible():
             self.ai_panel_dock.hide()
         else:

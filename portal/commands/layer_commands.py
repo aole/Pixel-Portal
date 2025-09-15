@@ -5,10 +5,10 @@ from PIL import Image
 from PIL.ImageQt import ImageQt
 import io
 
-try:
-    from rembg import remove as rembg_remove
-except Exception:  # ImportError or runtime errors
-    rembg_remove = None
+# Importing `rembg` at module load time pulls in heavy dependencies and can
+# significantly slow down or even hang test collection.  To keep the import
+# lightweight, defer it until background removal is actually requested.
+rembg_remove = None
 
 
 class MergeLayerDownCommand(Command):
@@ -113,11 +113,15 @@ class RemoveBackgroundCommand(Command):
         self.before_image = layer.image.copy()
 
     def execute(self):
+        global rembg_remove
         if rembg_remove is None:
-            print(
-                "Background removal unavailable: rembg or its dependencies are not installed."
-            )
-            return
+            try:
+                from rembg import remove as rembg_remove  # type: ignore
+            except Exception:
+                print(
+                    "Background removal unavailable: rembg or its dependencies are not installed."
+                )
+                return
         buffer = QBuffer()
         buffer.open(QBuffer.ReadWrite)
         self.before_image.save(buffer, "PNG")

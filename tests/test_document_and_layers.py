@@ -431,6 +431,7 @@ def test_paint(qtbot):
     """Test that the canvas is rendered correctly, including the background, document, border, grid, and cursor."""
     mock_canvas = MagicMock()
     mock_canvas.palette.return_value.color.return_value = QColor("red")
+    mock_canvas.tile_preview_enabled = False
     mock_drawing_context = MagicMock()
     mock_document = MagicMock()
     mock_painter = MagicMock(spec=QPainter)
