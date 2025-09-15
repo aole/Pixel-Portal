@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt, QCursor
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, Qt, QCursor, QImage
 
 from portal.tools.basetool import BaseTool
 from portal.core.command import ShapeCommand
@@ -24,6 +24,11 @@ class RectangleTool(BaseTool):
         self.start_point = doc_pos
         self.canvas.temp_image_replaces_active_layer = True
         self.command_generated.emit(("get_active_layer_image", "rectangle_tool_start"))
+        if self.canvas.tile_preview_enabled:
+            self.canvas.tile_preview_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
+            self.canvas.tile_preview_image.fill(Qt.transparent)
+        else:
+            self.canvas.tile_preview_image = None
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.canvas.original_image is None:
@@ -61,6 +66,23 @@ class RectangleTool(BaseTool):
             wrap=self.canvas.tile_preview_enabled,
         )
         painter.end()
+        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
+            self.canvas.tile_preview_image.fill(Qt.transparent)
+            preview_painter = QPainter(self.canvas.tile_preview_image)
+            if self.canvas.selection_shape:
+                preview_painter.setClipPath(self.canvas.selection_shape)
+            preview_painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+            self.canvas.drawing.draw_rect(
+                preview_painter,
+                rect,
+                self.canvas._document_size,
+                self.canvas.drawing_context.brush_type,
+                self.canvas.drawing_context.pen_width,
+                self.canvas.drawing_context.mirror_x,
+                self.canvas.drawing_context.mirror_y,
+                wrap=True,
+            )
+            preview_painter.end()
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -100,4 +122,5 @@ class RectangleTool(BaseTool):
         self.canvas.temp_image = None
         self.canvas.original_image = None
         self.canvas.temp_image_replaces_active_layer = False
+        self.canvas.tile_preview_image = None
         self.canvas.update()

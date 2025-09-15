@@ -46,6 +46,7 @@ class Canvas(QWidget):
         self.temp_image = None
         self.temp_image_replaces_active_layer = False
         self.original_image = None
+        self.tile_preview_image = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")

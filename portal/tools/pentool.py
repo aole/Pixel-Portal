@@ -26,6 +26,12 @@ class PenTool(BaseTool):
         self.canvas.temp_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
         self.canvas.temp_image.fill(Qt.transparent)
 
+        if self.canvas.tile_preview_enabled:
+            self.canvas.tile_preview_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
+            self.canvas.tile_preview_image.fill(Qt.transparent)
+        else:
+            self.canvas.tile_preview_image = None
+
         # This flag tells the renderer to draw our temp_image ON TOP of the document, not instead of it.
         self.canvas.temp_image_replaces_active_layer = False
 
@@ -51,6 +57,7 @@ class PenTool(BaseTool):
             self.canvas.temp_image = None
             self.canvas.original_image = None
             self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.tile_preview_image = None
             self.canvas.update()
             return
 
@@ -61,6 +68,7 @@ class PenTool(BaseTool):
             self.canvas.temp_image = None
             self.canvas.original_image = None
             self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.tile_preview_image = None
             self.canvas.update()
             return
 
@@ -84,6 +92,7 @@ class PenTool(BaseTool):
         self.canvas.temp_image = None
         self.canvas.original_image = None
         self.canvas.temp_image_replaces_active_layer = False
+        self.canvas.tile_preview_image = None
         self.canvas.update()
 
     def draw_path_on_temp_image(self):
@@ -92,6 +101,8 @@ class PenTool(BaseTool):
 
         # Clear the temp image before redrawing the path
         self.canvas.temp_image.fill(Qt.transparent)
+        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
+            self.canvas.tile_preview_image.fill(Qt.transparent)
 
         painter = QPainter(self.canvas.temp_image)
 
@@ -130,4 +141,36 @@ class PenTool(BaseTool):
                 )
 
         painter.end()
+
+        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
+            preview_painter = QPainter(self.canvas.tile_preview_image)
+            if self.canvas.selection_shape:
+                preview_painter.setClipPath(self.canvas.selection_shape)
+            preview_painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+            if len(self.points) == 1:
+                self.canvas.drawing.draw_brush(
+                    preview_painter,
+                    self.points[0],
+                    self.canvas._document_size,
+                    self.canvas.drawing_context.brush_type,
+                    self.canvas.drawing_context.pen_width,
+                    self.canvas.drawing_context.mirror_x,
+                    self.canvas.drawing_context.mirror_y,
+                    wrap=True,
+                )
+            else:
+                for i in range(len(self.points) - 1):
+                    self.canvas.drawing.draw_line_with_brush(
+                        preview_painter,
+                        self.points[i],
+                        self.points[i + 1],
+                        self.canvas._document_size,
+                        self.canvas.drawing_context.brush_type,
+                        self.canvas.drawing_context.pen_width,
+                        self.canvas.drawing_context.mirror_x,
+                        self.canvas.drawing_context.mirror_y,
+                        wrap=True,
+                        erase=False,
+                    )
+            preview_painter.end()
         

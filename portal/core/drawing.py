@@ -111,19 +111,11 @@ class Drawing:
         width = document_size.width()
         height = document_size.height()
 
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
         if wrap:
-            end_x = p2.x()
-            end_y = p2.y()
-            if abs(p2.x() - p1.x()) > width / 2:
-                end_x += width if p2.x() < p1.x() else -width
-            if abs(p2.y() - p1.y()) > height / 2:
-                end_y += height if p2.y() < p1.y() else -height
-        else:
-            end_x = p2.x()
-            end_y = p2.y()
-
-        dx = end_x - p1.x()
-        dy = end_y - p1.y()
+            dx = ((dx + width / 2) % width) - width / 2
+            dy = ((dy + height / 2) % height) - height / 2
 
         if erase:
             brush_func = lambda p: self.erase_brush(

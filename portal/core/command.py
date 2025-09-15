@@ -95,6 +95,8 @@ class DrawCommand(Command):
     def _calculate_bounding_rect(self) -> QRect:
         if not self.points:
             return QRect()
+        if self.wrap:
+            return self.layer.image.rect()
 
         doc_width = self.document.width
         doc_height = self.document.height
@@ -526,9 +528,12 @@ class ShapeCommand(Command):
 
     def execute(self):
         if self.before_image is None:
-            # Add a 1 pixel buffer for safety, especially for shape outlines
-            buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
-            self.before_image = self.layer.image.copy(buffered_rect)
+            if self.wrap:
+                self.before_image = self.layer.image.copy()
+            else:
+                # Add a 1 pixel buffer for safety, especially for shape outlines
+                buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+                self.before_image = self.layer.image.copy(buffered_rect)
 
         painter = QPainter(self.layer.image)
         try:
@@ -573,9 +578,12 @@ class ShapeCommand(Command):
         if self.before_image:
             painter = QPainter(self.layer.image)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            # Add a 1 pixel buffer for safety
-            buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
-            painter.drawImage(buffered_rect.topLeft(), self.before_image)
+            if self.wrap:
+                painter.drawImage(0, 0, self.before_image)
+            else:
+                # Add a 1 pixel buffer for safety
+                buffered_rect = self.rect.adjusted(-self.width, -self.width, self.width, self.width)
+                painter.drawImage(buffered_rect.topLeft(), self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
 
