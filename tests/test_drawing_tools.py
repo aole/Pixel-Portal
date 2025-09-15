@@ -55,6 +55,7 @@ def pen_tool(qtbot):
     mock_canvas.temp_image = None
     mock_canvas.original_image = None
     mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
     tool = PenTool(mock_canvas)
     return tool
 
@@ -110,6 +111,7 @@ def eraser_tool(qtbot):
     mock_canvas.temp_image = None
     mock_canvas.original_image = None
     mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
     tool = EraserTool(mock_canvas)
     return tool
 
@@ -165,6 +167,7 @@ def line_tool(qtbot):
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
     tool = LineTool(mock_canvas)
     return tool
 
@@ -215,6 +218,7 @@ def picker_tool(qtbot):
     image.setPixelColor(10, 10, QColor("red"))
     mock_document.render.return_value = image
     mock_canvas.document = mock_document
+    mock_canvas.tile_preview_enabled = False
     tool = PickerTool(mock_canvas)
     return tool
 
@@ -252,6 +256,7 @@ def move_tool(qtbot):
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
     tool = MoveTool(mock_canvas)
     return tool
 
@@ -328,6 +333,7 @@ def bucket_tool(qtbot):
     mock_canvas.selection_shape = None
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
+    mock_canvas.tile_preview_enabled = False
 
     tool = BucketTool(mock_canvas)
     return tool
@@ -361,6 +367,7 @@ def ellipse_tool(qtbot):
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
     tool = EllipseTool(mock_canvas)
     return tool
 

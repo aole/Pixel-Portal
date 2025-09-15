@@ -113,9 +113,6 @@ class Drawing:
 
         dx = p2.x() - p1.x()
         dy = p2.y() - p1.y()
-        if wrap:
-            dx = ((dx + width / 2) % width) - width / 2
-            dy = ((dy + height / 2) % height) - height / 2
 
         if erase:
             brush_func = lambda p: self.erase_brush(
