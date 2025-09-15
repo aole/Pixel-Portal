@@ -120,7 +120,7 @@ def test_clear_layer(app, qtbot):
         app.clear_layer()
     assert blocker
 
-@patch('portal.core.app.CropCommand')
+@patch('portal.core.command.CropCommand')
 def test_perform_crop(mock_crop_command, app):
     rect = QRect(10, 10, 20, 20)
     app.perform_crop(rect)
@@ -140,7 +140,7 @@ def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
     mock_paste_command.assert_called_once_with(app.document, mock_image)
     mock_paste_command.return_value.execute.assert_called_once()
 
-@patch('portal.core.app.FlipCommand')
+@patch('portal.core.command.FlipCommand')
 def test_flip(mock_flip_command, app):
     app.flip(horizontal=True, vertical=False, all_layers=False)
     mock_flip_command.assert_called_once_with(app.document, True, False, False)
