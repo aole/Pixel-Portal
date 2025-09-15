@@ -1,6 +1,6 @@
 from PySide6.QtCore import Signal, Qt, QRect
 from PySide6.QtGui import QPixmap, QPainter, QColor
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QStackedWidget, QSlider
 
 
 class NameLabel(QLabel):
@@ -66,6 +66,7 @@ class ClickableLabel(QLabel):
 
 class LayerItemWidget(QWidget):
     visibility_toggled = Signal()
+    opacity_changed = Signal(int)
 
     def __init__(self, layer):
         super().__init__()
@@ -100,6 +101,13 @@ class LayerItemWidget(QWidget):
         self.label.name_changed.connect(self.on_name_changed)
         self.layout.addWidget(self.label)
 
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setRange(0, 100)
+        self.opacity_slider.setValue(int(self.layer.opacity * 100))
+        self.opacity_slider.setTracking(False)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_slider_changed)
+        self.layout.addWidget(self.opacity_slider)
+
         self.update_thumbnail()
         self.update_visibility_icon()
         self.layer.on_image_change.connect(self.update_thumbnail)
@@ -108,6 +116,9 @@ class LayerItemWidget(QWidget):
 
     def on_name_changed(self, new_name):
         self.layer.name = new_name
+
+    def on_opacity_slider_changed(self, value):
+        self.opacity_changed.emit(value)
 
     def update_thumbnail(self):
         # The size of the thumbnail label

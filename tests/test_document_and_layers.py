@@ -135,6 +135,26 @@ def test_crop(document):
         assert layer.image.height() == crop_rect.height()
 
 
+def test_set_layer_opacity_command(document):
+    """Test that setting layer opacity is undoable and affects rendering."""
+    top_layer = document.layer_manager.layers[1]
+    bottom_color = document.layer_manager.layers[0].image.pixelColor(50, 50)
+    blended_before = document.render().pixelColor(50, 50)
+
+    from portal.core.command import SetLayerOpacityCommand
+
+    command = SetLayerOpacityCommand(top_layer, 0.0)
+    command.execute()
+    assert top_layer.opacity == 0.0
+    rendered = document.render()
+    assert rendered.pixelColor(50, 50) == bottom_color
+
+    command.undo()
+    assert top_layer.opacity == 1.0
+    rendered_after = document.render()
+    assert rendered_after.pixelColor(50, 50) == blended_before
+
+
 @pytest.fixture
 def layer():
     """Returns a Layer instance."""
