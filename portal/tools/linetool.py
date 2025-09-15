@@ -38,7 +38,7 @@ class LineTool(BaseTool):
             self.canvas.drawing_context.pen_width,
             self.canvas.drawing_context.mirror_x,
             self.canvas.drawing_context.mirror_y,
-            wrap=self.canvas.tile_preview_enabled,
+            wrap=False,
         )
         painter.end()
         self.canvas.update()
