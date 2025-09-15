@@ -127,7 +127,7 @@ class EraserTool(BaseTool):
                 self.canvas.drawing_context.pen_width,
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
-                wrap=False,
+                wrap=self.canvas.tile_preview_enabled,
             )
         else:
             for i in range(len(self.points) - 1):
@@ -140,7 +140,7 @@ class EraserTool(BaseTool):
                     self.canvas.drawing_context.pen_width,
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
-                    wrap=False,
+                    wrap=self.canvas.tile_preview_enabled,
                     erase=False,
                 )
 

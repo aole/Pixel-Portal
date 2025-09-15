@@ -63,7 +63,7 @@ class RectangleTool(BaseTool):
             self.canvas.drawing_context.pen_width,
             self.canvas.drawing_context.mirror_x,
             self.canvas.drawing_context.mirror_y,
-            wrap=False,
+            wrap=self.canvas.tile_preview_enabled,
         )
         painter.end()
         if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
