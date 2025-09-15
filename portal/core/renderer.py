@@ -79,6 +79,15 @@ class CanvasRenderer:
                 )
                 self._draw_background(painter, tile_rect)
                 painter.drawImage(tile_rect, image)
+                overlay = self.canvas.tile_preview_image
+                if overlay is not None:
+                    if self.canvas.is_erasing_preview:
+                        painter.save()
+                        painter.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                        painter.drawImage(tile_rect, overlay)
+                        painter.restore()
+                    else:
+                        painter.drawImage(tile_rect, overlay)
 
     def _draw_mirror_guides(self, painter, target_rect, document):
         if not self.drawing_context.mirror_x and not self.drawing_context.mirror_y:
