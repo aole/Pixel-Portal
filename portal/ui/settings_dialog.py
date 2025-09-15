@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -5,6 +6,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QGridLayout,
     QLabel,
+    QSlider,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -86,11 +88,22 @@ class SettingsDialog(QDialog):
             self.background_mode_combo.addItem(label, mode)
         canvas_layout.addWidget(self.background_mode_combo, 0, 1)
         canvas_layout.addWidget(QLabel("Background image opacity", canvas_tab), 1, 0)
-        self.background_alpha_spin = QSpinBox(canvas_tab)
-        self.background_alpha_spin.setRange(0, 100)
-        self.background_alpha_spin.setSuffix("%")
-        self.background_alpha_spin.setValue(100)
-        canvas_layout.addWidget(self.background_alpha_spin, 1, 1)
+        self.background_alpha_slider = QSlider(Qt.Horizontal, canvas_tab)
+        self.background_alpha_slider.setRange(0, 100)
+        self.background_alpha_slider.setSingleStep(1)
+        self.background_alpha_slider.setPageStep(5)
+        self.background_alpha_slider.setValue(100)
+        canvas_layout.addWidget(self.background_alpha_slider, 1, 1)
+
+        self.background_alpha_value_label = QLabel(canvas_tab)
+        self.background_alpha_value_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._update_background_alpha_label(self.background_alpha_slider.value())
+        canvas_layout.addWidget(self.background_alpha_value_label, 1, 2)
+        self.background_alpha_slider.valueChanged.connect(
+            self._update_background_alpha_label
+        )
         canvas_layout.setRowStretch(2, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
@@ -118,7 +131,9 @@ class SettingsDialog(QDialog):
             percent = int(round(float(background_alpha) * 100))
         except (TypeError, ValueError):
             percent = 100
-        self.background_alpha_spin.setValue(max(0, min(100, percent)))
+        clamped_percent = max(0, min(100, percent))
+        self.background_alpha_slider.setValue(clamped_percent)
+        self._update_background_alpha_label(clamped_percent)
 
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
@@ -130,8 +145,11 @@ class SettingsDialog(QDialog):
             return BackgroundImageMode.FIT
 
     def get_background_image_alpha(self):
-        value = self.background_alpha_spin.value() / 100.0
+        value = self.background_alpha_slider.value() / 100.0
         return max(0.0, min(1.0, value))
+
+    def _update_background_alpha_label(self, value):
+        self.background_alpha_value_label.setText(f"{int(value)}%")
 
     def get_grid_settings(self):
         return {
