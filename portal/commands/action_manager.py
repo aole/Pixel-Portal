@@ -1,5 +1,5 @@
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
-from portal.ui.background import Background
+from PySide6.QtGui import QAction, QActionGroup, QIcon, QKeySequence, QColor
+from portal.ui.background import Background, BackgroundImageMode
 import importlib.util
 
 # Check for optional background removal dependency without importing heavy modules
@@ -16,6 +16,7 @@ class ActionManager:
         Adding a new action category is as simple as implementing another
         ``_build_*`` helper and invoking it here.
         """
+        self.canvas = canvas
         self._build_file_actions()
         self._build_edit_actions()
         self._build_select_actions()
@@ -147,6 +148,27 @@ class ActionManager:
         self.image_background_action = QAction("Image...", self.main_window)
         self.image_background_action.triggered.connect(self.main_window.open_background_image_dialog)
 
+        self.background_mode_group = QActionGroup(self.main_window)
+        self.background_mode_group.setExclusive(True)
+        self.background_mode_actions = []
+        for mode, label in (
+            (BackgroundImageMode.STRETCH, "Stretch"),
+            (BackgroundImageMode.FIT, "Fit"),
+            (BackgroundImageMode.FILL, "Fill"),
+            (BackgroundImageMode.CENTER, "Center"),
+        ):
+            action = QAction(label, self.main_window)
+            action.setCheckable(True)
+            if mode == canvas.background_mode:
+                action.setChecked(True)
+            action.triggered.connect(
+                lambda checked, m=mode: canvas.set_background_image_mode(m)
+            )
+            self.background_mode_group.addAction(action)
+            self.background_mode_actions.append((mode, action))
+
+        canvas.background_mode_changed.connect(self._on_background_mode_changed)
+
         self.tile_preview_action = QAction("Tile Preview", self.main_window)
         self.tile_preview_action.setCheckable(True)
         self.tile_preview_action.toggled.connect(canvas.toggle_tile_preview)
@@ -175,3 +197,16 @@ class ActionManager:
 
         self.ai_action = QAction(QIcon("icons/AI.png"), "AI Image", self.main_window)
         self.ai_action.triggered.connect(self.main_window.toggle_ai_panel)
+
+    def _on_background_mode_changed(self, mode):
+        if not isinstance(mode, BackgroundImageMode):
+            try:
+                mode = BackgroundImageMode(mode)
+            except ValueError:
+                return
+
+        for action_mode, action in getattr(self, "background_mode_actions", []):
+            if action_mode == mode:
+                if not action.isChecked():
+                    action.setChecked(True)
+                break
