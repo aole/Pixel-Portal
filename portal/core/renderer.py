@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QPoint, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -384,6 +384,15 @@ class CanvasRenderer:
             inverted_color = QColor(
                 255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue()
             )
+
+        if use_pattern_cursor:
+            painter.save()
+            painter.setOpacity(0.7)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(Qt.NoBrush)
+            source_rect = QRectF(0, 0, pattern_width, pattern_height)
+            painter.drawImage(QRectF(cursor_screen_rect), pattern_image, source_rect)
+            painter.restore()
 
         if not use_pattern_cursor:
             # Fill the cursor rectangle with the brush color

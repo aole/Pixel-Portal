@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QRect
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QMessageBox
 
@@ -186,7 +186,43 @@ class DocumentController(QObject):
             return
         selection = self.main_window.canvas.selection_shape if self.main_window.canvas else None
         image = self.document.render()
+        if image.isNull():
+            return
         if selection and not selection.isEmpty():
             rect = selection.boundingRect().toRect()
+            rect = rect.intersected(image.rect())
+            if rect.isEmpty():
+                return
             image = image.copy(rect)
-        self.drawing_context.set_pattern_brush(image)
+
+        cropped_image = self._crop_to_non_transparent_pixels(image)
+        if cropped_image is None:
+            return
+        self.drawing_context.set_pattern_brush(cropped_image)
+
+    def _crop_to_non_transparent_pixels(self, image: QImage) -> QImage | None:
+        if image.isNull():
+            return None
+
+        width = image.width()
+        height = image.height()
+        min_x, min_y = width, height
+        max_x, max_y = -1, -1
+
+        for y in range(height):
+            for x in range(width):
+                if image.pixelColor(x, y).alpha() > 0:
+                    if x < min_x:
+                        min_x = x
+                    if y < min_y:
+                        min_y = y
+                    if x > max_x:
+                        max_x = x
+                    if y > max_y:
+                        max_y = y
+
+        if max_x < min_x or max_y < min_y:
+            return None
+
+        rect = QRect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+        return image.copy(rect)
