@@ -1,6 +1,5 @@
 1. better icons / set
 3. brush size slider restrict width
 6. better status bar
-10. display saturation/value of current color
 11. polygon create
 12. polygon select
