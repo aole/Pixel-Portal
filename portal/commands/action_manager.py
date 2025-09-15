@@ -77,6 +77,9 @@ class ActionManager:
         self.clear_action.setShortcut(QKeySequence.Delete)
         self.clear_action.triggered.connect(self.app.clear_layer)
 
+        self.create_brush_action = QAction("Create Brush", self.main_window)
+        self.create_brush_action.triggered.connect(self.app.create_brush)
+
     def _build_select_actions(self):
         """Create actions for selection manipulation."""
         self.select_all_action = QAction("Select &All", self.main_window)
