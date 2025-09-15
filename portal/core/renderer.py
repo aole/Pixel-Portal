@@ -305,18 +305,39 @@ class CanvasRenderer:
         ):
             return
 
+        brush_type = self.canvas.drawing_context.brush_type
+        pattern_image = self.canvas.drawing_context.pattern_brush
+        use_pattern_cursor = (
+            brush_type == "Pattern"
+            and pattern_image is not None
+            and not pattern_image.isNull()
+            and pattern_image.width() > 0
+            and pattern_image.height() > 0
+        )
+
         # Use the application's brush size
         brush_size = self.canvas.drawing_context.pen_width
 
         # Center the brush cursor around the mouse position
         doc_pos = self.canvas.cursor_doc_pos
-        offset = brush_size / 2
-        doc_rect = QRect(
-            doc_pos.x() - int(math.floor(offset)),
-            doc_pos.y() - int(math.floor(offset)),
-            brush_size,
-            brush_size,
-        )
+
+        if use_pattern_cursor:
+            pattern_width = pattern_image.width()
+            pattern_height = pattern_image.height()
+            doc_rect = QRect(
+                doc_pos.x() - pattern_width // 2,
+                doc_pos.y() - pattern_height // 2,
+                pattern_width,
+                pattern_height,
+            )
+        else:
+            offset = brush_size / 2
+            doc_rect = QRect(
+                doc_pos.x() - int(math.floor(offset)),
+                doc_pos.y() - int(math.floor(offset)),
+                brush_size,
+                brush_size,
+            )
 
         # Convert document rectangle to screen coordinates for drawing
         screen_x = target_rect.x() + doc_rect.x() * self.canvas.zoom
@@ -364,20 +385,23 @@ class CanvasRenderer:
                 255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue()
             )
 
-        # Fill the cursor rectangle with the brush color
-        painter.setBrush(self.canvas.drawing_context.pen_color)
-        painter.setPen(Qt.NoPen)  # No outline for the fill
+        if not use_pattern_cursor:
+            # Fill the cursor rectangle with the brush color
+            painter.setBrush(self.canvas.drawing_context.pen_color)
+            painter.setPen(Qt.NoPen)  # No outline for the fill
 
-        if self.canvas.drawing_context.brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
+            if brush_type == "Circular":
+                painter.drawEllipse(cursor_screen_rect)
+            else:
+                painter.drawRect(cursor_screen_rect)
 
         # Draw the inverted outline on top
         painter.setPen(inverted_color)
         painter.setBrush(Qt.NoBrush)
 
-        if self.canvas.drawing_context.brush_type == "Circular":
+        if use_pattern_cursor:
+            painter.drawRect(cursor_screen_rect)
+        elif brush_type == "Circular":
             painter.drawEllipse(cursor_screen_rect)
         else:
             painter.drawRect(cursor_screen_rect)
