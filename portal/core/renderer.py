@@ -244,6 +244,12 @@ class CanvasRenderer:
         if self.canvas.zoom < 2 or not self.canvas.grid_visible:
             return
 
+        major_visible = self.canvas.grid_major_visible and self.canvas.grid_major_spacing > 0
+        minor_visible = self.canvas.grid_minor_visible and self.canvas.grid_minor_spacing > 0
+
+        if not major_visible and not minor_visible:
+            return
+
         doc_width = self.canvas._document_size.width()
         doc_height = self.canvas._document_size.height()
 
@@ -253,6 +259,9 @@ class CanvasRenderer:
         minor_color.setAlpha(100)
         major_color = palette.color(QPalette.ColorRole.Text)
         major_color.setAlpha(100)
+
+        major_spacing = max(1, int(self.canvas.grid_major_spacing))
+        minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
 
         # Find the range of document coordinates currently visible on the canvas
         doc_top_left = self.canvas.get_doc_coords(QPoint(0, 0))
@@ -268,10 +277,16 @@ class CanvasRenderer:
         # Draw vertical lines
         for dx in range(start_x, end_x + 1):
             canvas_x = target_rect.x() + dx * self.canvas.zoom
-            if dx % 8 == 0:
-                painter.setPen(major_color)
-            else:
-                painter.setPen(minor_color)
+            pen = None
+            if major_visible and dx % major_spacing == 0:
+                pen = major_color
+            elif minor_visible and dx % minor_spacing == 0:
+                pen = minor_color
+
+            if pen is None:
+                continue
+
+            painter.setPen(pen)
             painter.drawLine(
                 round(canvas_x),
                 target_rect.top(),
@@ -282,10 +297,16 @@ class CanvasRenderer:
         # Draw horizontal lines
         for dy in range(start_y, end_y + 1):
             canvas_y = target_rect.y() + dy * self.canvas.zoom
-            if dy % 8 == 0:
-                painter.setPen(major_color)
-            else:
-                painter.setPen(minor_color)
+            pen = None
+            if major_visible and dy % major_spacing == 0:
+                pen = major_color
+            elif minor_visible and dy % minor_spacing == 0:
+                pen = minor_color
+
+            if pen is None:
+                continue
+
+            painter.setPen(pen)
             painter.drawLine(
                 target_rect.left(),
                 round(canvas_y),

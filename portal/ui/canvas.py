@@ -53,6 +53,10 @@ class Canvas(QWidget):
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
+        self.grid_major_visible = True
+        self.grid_minor_visible = True
+        self.grid_major_spacing = 8
+        self.grid_minor_spacing = 1
         self.tile_preview_enabled = False
         self.tile_preview_rows = 3
         self.tile_preview_cols = 3
@@ -238,6 +242,32 @@ class Canvas(QWidget):
     def toggle_grid(self):
         self.grid_visible = not self.grid_visible
         self.update()
+
+    def set_grid_settings(
+        self,
+        *,
+        major_visible=None,
+        major_spacing=None,
+        minor_visible=None,
+        minor_spacing=None,
+    ):
+        if major_visible is not None:
+            self.grid_major_visible = bool(major_visible)
+        if major_spacing is not None:
+            self.grid_major_spacing = max(1, int(major_spacing))
+        if minor_visible is not None:
+            self.grid_minor_visible = bool(minor_visible)
+        if minor_spacing is not None:
+            self.grid_minor_spacing = max(1, int(minor_spacing))
+        self.update()
+
+    def get_grid_settings(self):
+        return {
+            "major_visible": self.grid_major_visible,
+            "major_spacing": self.grid_major_spacing,
+            "minor_visible": self.grid_minor_visible,
+            "minor_spacing": self.grid_minor_spacing,
+        }
 
     def resizeEvent(self, event):
         # The canvas widget has been resized.
