@@ -33,7 +33,9 @@ def test_toolbar_groups_tools_by_category(qapp, monkeypatch):
         shortcut = "3"
         category = "select"
 
-    from portal.tools import get_tools as real_get_tools
+    from portal.tools import registry as tool_registry
+
+    real_get_tools = tool_registry.get_tools
 
     def fake_get_tools():
         tools = real_get_tools()
@@ -64,7 +66,7 @@ def test_toolbar_groups_tools_by_category(qapp, monkeypatch):
         )
         return tools
 
-    monkeypatch.setattr("portal.tools.get_tools", fake_get_tools)
+    monkeypatch.setattr(tool_registry, "get_tools", fake_get_tools)
 
     builder._setup_left_toolbar()
 
