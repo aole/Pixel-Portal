@@ -30,6 +30,7 @@ def test_draw_line_wraps_across_edges():
         1,
         False,
         False,
+        wrap=True,
         erase=False,
     )
     painter.end()

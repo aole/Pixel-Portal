@@ -59,6 +59,7 @@ class EllipseTool(BaseTool):
             self.canvas.drawing_context.pen_width,
             self.canvas.drawing_context.mirror_x,
             self.canvas.drawing_context.mirror_y,
+            wrap=self.canvas.tile_preview_enabled,
         )
         self.canvas.update()
 
@@ -92,6 +93,7 @@ class EllipseTool(BaseTool):
             selection_shape=self.canvas.selection_shape,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            wrap=self.canvas.tile_preview_enabled,
         )
         self.command_generated.emit(command)
 

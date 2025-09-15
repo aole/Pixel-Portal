@@ -78,6 +78,7 @@ class EraserTool(BaseTool):
             erase=True,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            wrap=self.canvas.tile_preview_enabled,
         )
         self.command_generated.emit(command)
 
@@ -115,6 +116,7 @@ class EraserTool(BaseTool):
                 self.canvas.drawing_context.pen_width,
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
+                wrap=self.canvas.tile_preview_enabled,
             )
         else:
             for i in range(len(self.points) - 1):
@@ -127,7 +129,8 @@ class EraserTool(BaseTool):
                     self.canvas.drawing_context.pen_width,
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
-                    erase=False
+                    wrap=self.canvas.tile_preview_enabled,
+                    erase=False,
                 )
 
         painter.end()

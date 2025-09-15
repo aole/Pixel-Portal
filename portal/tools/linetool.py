@@ -38,6 +38,7 @@ class LineTool(BaseTool):
             self.canvas.drawing_context.pen_width,
             self.canvas.drawing_context.mirror_x,
             self.canvas.drawing_context.mirror_y,
+            wrap=self.canvas.tile_preview_enabled,
         )
         painter.end()
         self.canvas.update()
@@ -61,6 +62,7 @@ class LineTool(BaseTool):
             erase=False,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            wrap=self.canvas.tile_preview_enabled,
         )
         self.command_generated.emit(command)
 

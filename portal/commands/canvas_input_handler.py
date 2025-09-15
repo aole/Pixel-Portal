@@ -33,7 +33,7 @@ class CanvasInputHandler:
 
         doc_pos = self.canvas.get_doc_coords(
             event.position().toPoint(),
-            wrap=not self.canvas.tile_preview_enabled,
+            wrap=self.canvas.tile_preview_enabled,
         )
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mousePressEvent(event, doc_pos)
@@ -50,7 +50,7 @@ class CanvasInputHandler:
 
         doc_pos = self.canvas.get_doc_coords(
             event.position().toPoint(),
-            wrap=not self.canvas.tile_preview_enabled,
+            wrap=self.canvas.tile_preview_enabled,
         )
 
         active_layer = self.canvas.document.layer_manager.active_layer
@@ -86,7 +86,7 @@ class CanvasInputHandler:
 
         doc_pos = self.canvas.get_doc_coords(
             event.position().toPoint(),
-            wrap=not self.canvas.tile_preview_enabled,
+            wrap=self.canvas.tile_preview_enabled,
         )
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mouseReleaseEvent(event, doc_pos)

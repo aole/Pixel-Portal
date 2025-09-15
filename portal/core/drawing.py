@@ -4,20 +4,35 @@ import math
 
 
 class Drawing:
-    def draw_brush(self, painter, point, document_size, brush_type, pen_width, mirror_x, mirror_y):
+    def draw_brush(self, painter, point, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
         doc_width = document_size.width()
         doc_height = document_size.height()
 
-        # Wrap the point so drawing beyond the document edges loops around
-        base_point = QPoint(point.x() % doc_width, point.y() % doc_height)
+        base_x = point.x()
+        base_y = point.y()
+        if wrap:
+            base_x %= doc_width
+            base_y %= doc_height
+        base_point = QPoint(base_x, base_y)
 
         points_to_draw = {base_point}
         if mirror_x:
-            points_to_draw.add(QPoint(doc_width - 1 - base_point.x(), base_point.y()))
+            mx = doc_width - 1 - base_point.x()
+            if wrap:
+                mx %= doc_width
+            points_to_draw.add(QPoint(mx, base_point.y()))
         if mirror_y:
-            points_to_draw.add(QPoint(base_point.x(), doc_height - 1 - base_point.y()))
+            my = doc_height - 1 - base_point.y()
+            if wrap:
+                my %= doc_height
+            points_to_draw.add(QPoint(base_point.x(), my))
         if mirror_x and mirror_y:
-            points_to_draw.add(QPoint(doc_width - 1 - base_point.x(), doc_height - 1 - base_point.y()))
+            mx = doc_width - 1 - base_point.x()
+            my = doc_height - 1 - base_point.y()
+            if wrap:
+                mx %= doc_width
+                my %= doc_height
+            points_to_draw.add(QPoint(mx, my))
 
         for p in points_to_draw:
             if brush_type == "Circular":
@@ -25,20 +40,35 @@ class Drawing:
             elif brush_type == "Square":
                 self.draw_square_brush(painter, p, pen_width)
 
-    def erase_brush(self, painter, point, document_size, pen_width, mirror_x, mirror_y):
+    def erase_brush(self, painter, point, document_size, pen_width, mirror_x, mirror_y, wrap=False):
         doc_width = document_size.width()
         doc_height = document_size.height()
 
-        # Wrap the point so erasing beyond the document edges loops around
-        base_point = QPoint(point.x() % doc_width, point.y() % doc_height)
+        base_x = point.x()
+        base_y = point.y()
+        if wrap:
+            base_x %= doc_width
+            base_y %= doc_height
+        base_point = QPoint(base_x, base_y)
 
         points_to_erase = {base_point}
         if mirror_x:
-            points_to_erase.add(QPoint(doc_width - 1 - base_point.x(), base_point.y()))
+            mx = doc_width - 1 - base_point.x()
+            if wrap:
+                mx %= doc_width
+            points_to_erase.add(QPoint(mx, base_point.y()))
         if mirror_y:
-            points_to_erase.add(QPoint(base_point.x(), doc_height - 1 - base_point.y()))
+            my = doc_height - 1 - base_point.y()
+            if wrap:
+                my %= doc_height
+            points_to_erase.add(QPoint(base_point.x(), my))
         if mirror_x and mirror_y:
-            points_to_erase.add(QPoint(doc_width - 1 - base_point.x(), doc_height - 1 - base_point.y()))
+            mx = doc_width - 1 - base_point.x()
+            my = doc_height - 1 - base_point.y()
+            if wrap:
+                mx %= doc_width
+                my %= doc_height
+            points_to_erase.add(QPoint(mx, my))
 
         painter.save()
         painter.setCompositionMode(QPainter.CompositionMode_Clear)
@@ -65,25 +95,44 @@ class Drawing:
                 if dist_x * dist_x + dist_y * dist_y <= radius * radius:
                     painter.drawPoint(x, y)
 
-    def draw_line_with_brush(self, painter, p1, p2, document_size, brush_type, pen_width, mirror_x, mirror_y, erase=False):
+    def draw_line_with_brush(
+        self,
+        painter,
+        p1,
+        p2,
+        document_size,
+        brush_type,
+        pen_width,
+        mirror_x,
+        mirror_y,
+        wrap=False,
+        erase=False,
+    ):
         width = document_size.width()
         height = document_size.height()
 
-        # Unwrap coordinates so lines crossing edges are continuous
-        end_x = p2.x()
-        end_y = p2.y()
-        if abs(p2.x() - p1.x()) > width / 2:
-            end_x += width if p2.x() < p1.x() else -width
-        if abs(p2.y() - p1.y()) > height / 2:
-            end_y += height if p2.y() < p1.y() else -height
+        if wrap:
+            end_x = p2.x()
+            end_y = p2.y()
+            if abs(p2.x() - p1.x()) > width / 2:
+                end_x += width if p2.x() < p1.x() else -width
+            if abs(p2.y() - p1.y()) > height / 2:
+                end_y += height if p2.y() < p1.y() else -height
+        else:
+            end_x = p2.x()
+            end_y = p2.y()
 
         dx = end_x - p1.x()
         dy = end_y - p1.y()
 
         if erase:
-            brush_func = lambda p: self.erase_brush(painter, p, document_size, pen_width, mirror_x, mirror_y)
+            brush_func = lambda p: self.erase_brush(
+                painter, p, document_size, pen_width, mirror_x, mirror_y, wrap
+            )
         else:
-            brush_func = lambda p: self.draw_brush(painter, p, document_size, brush_type, pen_width, mirror_x, mirror_y)
+            brush_func = lambda p: self.draw_brush(
+                painter, p, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap
+            )
 
         if dx == 0 and dy == 0:
             brush_func(p1)
@@ -100,18 +149,61 @@ class Drawing:
         y = float(p1.y())
 
         for _ in range(int(steps) + 1):
-            wrapped_point = QPoint(round(x) % width, round(y) % height)
+            if wrap:
+                wrapped_point = QPoint(round(x) % width, round(y) % height)
+            else:
+                wrapped_point = QPoint(round(x), round(y))
             brush_func(wrapped_point)
             x += x_inc
             y += y_inc
 
-    def draw_rect(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y):
-        self.draw_line_with_brush(painter, rect.topLeft(), rect.topRight(), document_size, brush_type, pen_width, mirror_x, mirror_y)
-        self.draw_line_with_brush(painter, rect.topRight(), rect.bottomRight(), document_size, brush_type, pen_width, mirror_x, mirror_y)
-        self.draw_line_with_brush(painter, rect.bottomRight(), rect.bottomLeft(), document_size, brush_type, pen_width, mirror_x, mirror_y)
-        self.draw_line_with_brush(painter, rect.bottomLeft(), rect.topLeft(), document_size, brush_type, pen_width, mirror_x, mirror_y)
+    def draw_rect(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
+        self.draw_line_with_brush(
+            painter,
+            rect.topLeft(),
+            rect.topRight(),
+            document_size,
+            brush_type,
+            pen_width,
+            mirror_x,
+            mirror_y,
+            wrap=wrap,
+        )
+        self.draw_line_with_brush(
+            painter,
+            rect.topRight(),
+            rect.bottomRight(),
+            document_size,
+            brush_type,
+            pen_width,
+            mirror_x,
+            mirror_y,
+            wrap=wrap,
+        )
+        self.draw_line_with_brush(
+            painter,
+            rect.bottomRight(),
+            rect.bottomLeft(),
+            document_size,
+            brush_type,
+            pen_width,
+            mirror_x,
+            mirror_y,
+            wrap=wrap,
+        )
+        self.draw_line_with_brush(
+            painter,
+            rect.bottomLeft(),
+            rect.topLeft(),
+            document_size,
+            brush_type,
+            pen_width,
+            mirror_x,
+            mirror_y,
+            wrap=wrap,
+        )
 
-    def draw_ellipse(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y):
+    def draw_ellipse(self, painter, rect, document_size, brush_type, pen_width, mirror_x, mirror_y, wrap=False):
         center = rect.center()
         rx = rect.width() / 2
         ry = rect.height() / 2
@@ -122,14 +214,50 @@ class Drawing:
         for x in range(rect.left(), rect.right() + 1):
             y1 = center.y() - ry * math.sqrt(1 - ((x - center.x()) / rx) ** 2)
             y2 = center.y() + ry * math.sqrt(1 - ((x - center.x()) / rx) ** 2)
-            self.draw_brush(painter, QPoint(x, round(y1)), document_size, brush_type, pen_width, mirror_x, mirror_y)
-            self.draw_brush(painter, QPoint(x, round(y2)), document_size, brush_type, pen_width, mirror_x, mirror_y)
+            self.draw_brush(
+                painter,
+                QPoint(x, round(y1)),
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap=wrap,
+            )
+            self.draw_brush(
+                painter,
+                QPoint(x, round(y2)),
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap=wrap,
+            )
 
         for y in range(rect.top(), rect.bottom() + 1):
             x1 = center.x() - rx * math.sqrt(1 - ((y - center.y()) / ry) ** 2)
             x2 = center.x() + rx * math.sqrt(1 - ((y - center.y()) / ry) ** 2)
-            self.draw_brush(painter, QPoint(round(x1), y), document_size, brush_type, pen_width, mirror_x, mirror_y)
-            self.draw_brush(painter, QPoint(round(x2), y), document_size, brush_type, pen_width, mirror_x, mirror_y)
+            self.draw_brush(
+                painter,
+                QPoint(round(x1), y),
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap=wrap,
+            )
+            self.draw_brush(
+                painter,
+                QPoint(round(x2), y),
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap=wrap,
+            )
 
     def flood_fill(self, layer, start_pos, fill_color, selection_shape=None):
         if not layer:

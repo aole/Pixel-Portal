@@ -61,7 +61,20 @@ class ModifyImageCommand(Command):
 
 
 class DrawCommand(Command):
-    def __init__(self, layer: Layer, points: list[QPoint], color: QColor, width: int, brush_type: str, document: 'Document', selection_shape: QPainterPath | None, erase: bool = False, mirror_x: bool = False, mirror_y: bool = False):
+    def __init__(
+        self,
+        layer: Layer,
+        points: list[QPoint],
+        color: QColor,
+        width: int,
+        brush_type: str,
+        document: 'Document',
+        selection_shape: QPainterPath | None,
+        erase: bool = False,
+        mirror_x: bool = False,
+        mirror_y: bool = False,
+        wrap: bool = False,
+    ):
         from portal.core.document import Document
         self.layer = layer
         self.points = points
@@ -73,6 +86,7 @@ class DrawCommand(Command):
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
         self.selection_shape = selection_shape
+        self.wrap = wrap
         self.drawing = Drawing()
 
         self.bounding_rect = self._calculate_bounding_rect()
@@ -158,7 +172,16 @@ class DrawCommand(Command):
                 # Draw the path onto the mask
                 doc_size = QSize(self.document.width, self.document.height)
                 if len(self.points) == 1:
-                    self.drawing.draw_brush(mask_painter, self.points[0], doc_size, self.brush_type, self.width, self.mirror_x, self.mirror_y)
+                    self.drawing.draw_brush(
+                        mask_painter,
+                        self.points[0],
+                        doc_size,
+                        self.brush_type,
+                        self.width,
+                        self.mirror_x,
+                        self.mirror_y,
+                        wrap=self.wrap,
+                    )
                 else:
                     for i in range(len(self.points) - 1):
                         self.drawing.draw_line_with_brush(
@@ -170,7 +193,8 @@ class DrawCommand(Command):
                             self.width,
                             self.mirror_x,
                             self.mirror_y,
-                            erase=False  # We are drawing the mask, not erasing
+                            wrap=self.wrap,
+                            erase=False,  # We are drawing the mask, not erasing
                         )
                 mask_painter.end()
 
@@ -182,7 +206,16 @@ class DrawCommand(Command):
                 painter.setPen(QPen(self.color))
                 doc_size = QSize(self.document.width, self.document.height)
                 if len(self.points) == 1:
-                    self.drawing.draw_brush(painter, self.points[0], doc_size, self.brush_type, self.width, self.mirror_x, self.mirror_y)
+                    self.drawing.draw_brush(
+                        painter,
+                        self.points[0],
+                        doc_size,
+                        self.brush_type,
+                        self.width,
+                        self.mirror_x,
+                        self.mirror_y,
+                        wrap=self.wrap,
+                    )
                 else:
                     for i in range(len(self.points) - 1):
                         self.drawing.draw_line_with_brush(
@@ -194,7 +227,8 @@ class DrawCommand(Command):
                             self.width,
                             self.mirror_x,
                             self.mirror_y,
-                            erase=False
+                            wrap=self.wrap,
+                            erase=False,
                         )
         finally:
             painter.end()
@@ -463,7 +497,19 @@ class FillCommand(Command):
 
 
 class ShapeCommand(Command):
-    def __init__(self, layer: Layer, rect: QRect, shape_type: str, color: QColor, width: int, document: 'Document', selection_shape: QPainterPath | None, mirror_x: bool = False, mirror_y: bool = False):
+    def __init__(
+        self,
+        layer: Layer,
+        rect: QRect,
+        shape_type: str,
+        color: QColor,
+        width: int,
+        document: 'Document',
+        selection_shape: QPainterPath | None,
+        mirror_x: bool = False,
+        mirror_y: bool = False,
+        wrap: bool = False,
+    ):
         from portal.core.document import Document
         self.layer = layer
         self.rect = rect
@@ -474,6 +520,7 @@ class ShapeCommand(Command):
         self.selection_shape = selection_shape
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
+        self.wrap = wrap
         self.drawing = Drawing()
         self.before_image = None
 
@@ -497,9 +544,27 @@ class ShapeCommand(Command):
             # This could be a parameter in the future
             brush_type = "Circular"
             if self.shape_type == 'ellipse':
-                self.drawing.draw_ellipse(painter, self.rect, doc_size, brush_type, self.width, self.mirror_x, self.mirror_y)
+                self.drawing.draw_ellipse(
+                    painter,
+                    self.rect,
+                    doc_size,
+                    brush_type,
+                    self.width,
+                    self.mirror_x,
+                    self.mirror_y,
+                    wrap=self.wrap,
+                )
             elif self.shape_type == 'rectangle':
-                self.drawing.draw_rect(painter, self.rect, doc_size, brush_type, self.width, self.mirror_x, self.mirror_y)
+                self.drawing.draw_rect(
+                    painter,
+                    self.rect,
+                    doc_size,
+                    brush_type,
+                    self.width,
+                    self.mirror_x,
+                    self.mirror_y,
+                    wrap=self.wrap,
+                )
         finally:
             painter.end()
             self.layer.on_image_change.emit()
