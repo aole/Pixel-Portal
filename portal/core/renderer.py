@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QPoint, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -385,7 +385,15 @@ class CanvasRenderer:
                 255 - bg_color.red(), 255 - bg_color.green(), 255 - bg_color.blue()
             )
 
-        if not use_pattern_cursor:
+        if use_pattern_cursor:
+            painter.save()
+            painter.setOpacity(0.7)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(Qt.NoBrush)
+            source_rect = QRectF(0, 0, pattern_width, pattern_height)
+            painter.drawImage(QRectF(cursor_screen_rect), pattern_image, source_rect)
+            painter.restore()
+        else:
             # Fill the cursor rectangle with the brush color
             painter.setBrush(self.canvas.drawing_context.pen_color)
             painter.setPen(Qt.NoPen)  # No outline for the fill
@@ -395,13 +403,12 @@ class CanvasRenderer:
             else:
                 painter.drawRect(cursor_screen_rect)
 
-        # Draw the inverted outline on top
-        painter.setPen(inverted_color)
-        painter.setBrush(Qt.NoBrush)
+        if not use_pattern_cursor:
+            # Draw the inverted outline on top for solid brushes
+            painter.setPen(inverted_color)
+            painter.setBrush(Qt.NoBrush)
 
-        if use_pattern_cursor:
-            painter.drawRect(cursor_screen_rect)
-        elif brush_type == "Circular":
-            painter.drawEllipse(cursor_screen_rect)
-        else:
-            painter.drawRect(cursor_screen_rect)
+            if brush_type == "Circular":
+                painter.drawEllipse(cursor_screen_rect)
+            else:
+                painter.drawRect(cursor_screen_rect)
