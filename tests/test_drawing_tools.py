@@ -4,6 +4,7 @@ import pytest
 from PySide6.QtCore import QPoint, Qt, QRect, QSize
 from PySide6.QtGui import QMouseEvent, QColor, QImage
 from portal.core.command import DrawCommand, ShapeCommand, FillCommand, MoveCommand
+from portal.core.drawing import Drawing
 from portal.tools.pentool import PenTool
 from portal.tools.linetool import LineTool
 from portal.tools.rectangletool import RectangleTool
@@ -14,6 +15,27 @@ from portal.tools.pickertool import PickerTool
 from portal.tools.movetool import MoveTool
 from PySide6.QtGui import QPainterPath, QPainter
 
+def test_draw_line_wraps_across_edges():
+    image = QImage(8, 8, QImage.Format_ARGB32)
+    image.fill(QColor("transparent"))
+    painter = QPainter(image)
+    drawing = Drawing()
+    painter.setPen(QColor("black"))
+    drawing.draw_line_with_brush(
+        painter,
+        QPoint(6, 3),
+        QPoint(10, 3),
+        QSize(8, 8),
+        "Square",
+        1,
+        False,
+        False,
+        erase=False,
+    )
+    painter.end()
+
+    painted = {x for x in range(8) if image.pixelColor(x, 3).alpha() > 0}
+    assert painted == {0, 1, 2, 6, 7}
 @pytest.fixture
 def pen_tool(qtbot):
     mock_canvas = Mock()

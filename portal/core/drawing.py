@@ -8,13 +8,16 @@ class Drawing:
         doc_width = document_size.width()
         doc_height = document_size.height()
 
-        points_to_draw = {point}
+        # Wrap the point so drawing beyond the document edges loops around
+        base_point = QPoint(point.x() % doc_width, point.y() % doc_height)
+
+        points_to_draw = {base_point}
         if mirror_x:
-            points_to_draw.add(QPoint(doc_width - 1 - point.x(), point.y()))
+            points_to_draw.add(QPoint(doc_width - 1 - base_point.x(), base_point.y()))
         if mirror_y:
-            points_to_draw.add(QPoint(point.x(), doc_height - 1 - point.y()))
+            points_to_draw.add(QPoint(base_point.x(), doc_height - 1 - base_point.y()))
         if mirror_x and mirror_y:
-            points_to_draw.add(QPoint(doc_width - 1 - point.x(), doc_height - 1 - point.y()))
+            points_to_draw.add(QPoint(doc_width - 1 - base_point.x(), doc_height - 1 - base_point.y()))
 
         for p in points_to_draw:
             if brush_type == "Circular":
@@ -26,13 +29,16 @@ class Drawing:
         doc_width = document_size.width()
         doc_height = document_size.height()
 
-        points_to_erase = {point}
+        # Wrap the point so erasing beyond the document edges loops around
+        base_point = QPoint(point.x() % doc_width, point.y() % doc_height)
+
+        points_to_erase = {base_point}
         if mirror_x:
-            points_to_erase.add(QPoint(doc_width - 1 - point.x(), point.y()))
+            points_to_erase.add(QPoint(doc_width - 1 - base_point.x(), base_point.y()))
         if mirror_y:
-            points_to_erase.add(QPoint(point.x(), doc_height - 1 - point.y()))
+            points_to_erase.add(QPoint(base_point.x(), doc_height - 1 - base_point.y()))
         if mirror_x and mirror_y:
-            points_to_erase.add(QPoint(doc_width - 1 - point.x(), doc_height - 1 - point.y()))
+            points_to_erase.add(QPoint(doc_width - 1 - base_point.x(), doc_height - 1 - base_point.y()))
 
         painter.save()
         painter.setCompositionMode(QPainter.CompositionMode_Clear)
@@ -60,8 +66,19 @@ class Drawing:
                     painter.drawPoint(x, y)
 
     def draw_line_with_brush(self, painter, p1, p2, document_size, brush_type, pen_width, mirror_x, mirror_y, erase=False):
-        dx = p2.x() - p1.x()
-        dy = p2.y() - p1.y()
+        width = document_size.width()
+        height = document_size.height()
+
+        # Unwrap coordinates so lines crossing edges are continuous
+        end_x = p2.x()
+        end_y = p2.y()
+        if abs(p2.x() - p1.x()) > width / 2:
+            end_x += width if p2.x() < p1.x() else -width
+        if abs(p2.y() - p1.y()) > height / 2:
+            end_y += height if p2.y() < p1.y() else -height
+
+        dx = end_x - p1.x()
+        dy = end_y - p1.y()
 
         if erase:
             brush_func = lambda p: self.erase_brush(painter, p, document_size, pen_width, mirror_x, mirror_y)
@@ -82,8 +99,9 @@ class Drawing:
         x = float(p1.x())
         y = float(p1.y())
 
-        for i in range(int(steps) + 1):
-            brush_func(QPoint(round(x), round(y)))
+        for _ in range(int(steps) + 1):
+            wrapped_point = QPoint(round(x) % width, round(y) % height)
+            brush_func(wrapped_point)
             x += x_inc
             y += y_inc
 

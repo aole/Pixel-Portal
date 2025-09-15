@@ -31,7 +31,10 @@ class CanvasInputHandler:
             self.canvas.setCursor(Qt.ForbiddenCursor)
             return
 
-        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
+        doc_pos = self.canvas.get_doc_coords(
+            event.position().toPoint(),
+            wrap=not self.canvas.tile_preview_enabled,
+        )
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mousePressEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:
@@ -45,7 +48,10 @@ class CanvasInputHandler:
         self.canvas.cursor_pos_changed.emit(self.canvas.cursor_doc_pos)
         self.canvas.update()
 
-        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
+        doc_pos = self.canvas.get_doc_coords(
+            event.position().toPoint(),
+            wrap=not self.canvas.tile_preview_enabled,
+        )
 
         active_layer = self.canvas.document.layer_manager.active_layer
         if active_layer and not active_layer.visible:
@@ -78,7 +84,10 @@ class CanvasInputHandler:
             self.canvas.setCursor(self.canvas.current_tool.cursor)
             return
 
-        doc_pos = self.canvas.get_doc_coords(event.position().toPoint())
+        doc_pos = self.canvas.get_doc_coords(
+            event.position().toPoint(),
+            wrap=not self.canvas.tile_preview_enabled,
+        )
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:

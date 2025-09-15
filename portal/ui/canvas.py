@@ -164,7 +164,7 @@ class Canvas(QWidget):
         self.unsetCursor()
         self.update()
 
-    def get_doc_coords(self, canvas_pos):
+    def get_doc_coords(self, canvas_pos, wrap=True):
         doc_width_scaled = self._document_size.width() * self.zoom
         doc_height_scaled = self._document_size.height() * self.zoom
         canvas_width = self.width()
@@ -177,7 +177,7 @@ class Canvas(QWidget):
             return QPoint(0, 0)
         doc_x = (canvas_pos.x() - x_offset) / self.zoom
         doc_y = (canvas_pos.y() - y_offset) / self.zoom
-        if self.tile_preview_enabled:
+        if wrap and self.tile_preview_enabled:
             doc_width = self._document_size.width()
             doc_height = self._document_size.height()
             if doc_width:

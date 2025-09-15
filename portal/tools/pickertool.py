@@ -1,5 +1,6 @@
 from portal.tools.basetool import BaseTool
 from PySide6.QtGui import QColor, QCursor, QPixmap
+from PySide6.QtCore import QPoint
 
 
 class PickerTool(BaseTool):
@@ -25,7 +26,10 @@ class PickerTool(BaseTool):
 
     def pick_color(self, doc_pos):
         rendered_image = self.canvas.document.render()
-        if rendered_image.rect().contains(doc_pos):
-            color = rendered_image.pixelColor(doc_pos)
+        doc_width = rendered_image.width()
+        doc_height = rendered_image.height()
+        wrapped = QPoint(doc_pos.x() % doc_width, doc_pos.y() % doc_height)
+        if rendered_image.rect().contains(wrapped):
+            color = rendered_image.pixelColor(wrapped)
             if color.alpha() > 0:  # Only pick visible colors
                 self.canvas.drawing_context.set_pen_color(color.name())
