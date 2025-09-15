@@ -52,6 +52,9 @@ class Canvas(QWidget):
         self.cursor_doc_pos = QPoint()
         self.mouse_over_canvas = False
         self.grid_visible = False
+        self.tile_preview_enabled = False
+        self.tile_preview_rows = 3
+        self.tile_preview_cols = 3
         self.background = Background()
         self.background_color = self.palette().window().color()
         self.selection_shape = None
@@ -82,6 +85,11 @@ class Canvas(QWidget):
 
     def set_background(self, background: Background):
         self.background = background
+        self.update()
+
+    @Slot(bool)
+    def toggle_tile_preview(self, enabled: bool):
+        self.tile_preview_enabled = enabled
         self.update()
 
     @Slot(str)
