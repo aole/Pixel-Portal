@@ -85,8 +85,9 @@ class Canvas(QWidget):
                 tool.command_generated.connect(self.command_generated)
         self.current_tool = self.tools["Pen"]
 
-        self._mirror_handle_radius = 8
-        self._mirror_handle_margin = 18
+        self._mirror_handle_radius = 11
+        self._mirror_handle_margin = 22
+        self._mirror_handle_hit_padding = 6
         self._mirror_handle_hover: str | None = None
         self._mirror_handle_drag: str | None = None
         self._mirror_handle_prev_cursor: QCursor | None = None
@@ -427,12 +428,22 @@ class Canvas(QWidget):
         radius = self._mirror_handle_radius
         diameter = radius * 2
         margin = self._mirror_handle_margin
+        canvas_width = self.width()
+        canvas_height = self.height()
+        max_x = canvas_width - radius
+        max_y = canvas_height - radius
+        if max_x < radius:
+            max_x = radius
+        if max_y < radius:
+            max_y = radius
 
         if self.drawing_context.mirror_x:
             axis_x = self._resolve_mirror_x_position()
             if axis_x is not None:
                 center_x = target_rect.x() + (axis_x + 0.5) * zoom
                 center_y = target_rect.y() - margin
+                center_x = max(radius, min(max_x, center_x))
+                center_y = max(radius, min(max_y, center_y))
                 rects["x"] = QRect(
                     int(round(center_x - radius)),
                     int(round(center_y - radius)),
@@ -445,6 +456,8 @@ class Canvas(QWidget):
             if axis_y is not None:
                 center_y = target_rect.y() + (axis_y + 0.5) * zoom
                 center_x = target_rect.x() - margin
+                center_x = max(radius, min(max_x, center_x))
+                center_y = max(radius, min(max_y, center_y))
                 rects["y"] = QRect(
                     int(round(center_x - radius)),
                     int(round(center_y - radius)),
@@ -455,10 +468,20 @@ class Canvas(QWidget):
         return rects
 
     def _hit_test_mirror_handles(self, pos: QPoint) -> str | None:
-        for axis, rect in self._mirror_handle_rects().items():
+        for axis, rect in self._mirror_handle_hit_rects().items():
             if rect.contains(pos):
                 return axis
         return None
+
+    def _mirror_handle_hit_rects(self) -> dict[str, QRect]:
+        padding = max(0, int(self._mirror_handle_hit_padding))
+        rects = self._mirror_handle_rects()
+        if padding <= 0:
+            return rects
+        return {
+            axis: rect.adjusted(-padding, -padding, padding, padding)
+            for axis, rect in rects.items()
+        }
 
     def _update_mirror_axis_from_position(self, pos: QPoint, axis: str):
         target_rect = self.get_target_rect()
