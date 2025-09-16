@@ -20,6 +20,12 @@ class ScriptingAPI:
             return layers[index]
         return None
 
+    def get_active_layer(self) -> Layer | None:
+        """Returns the currently active layer, if any."""
+        if self.app.document:
+            return self.app.document.layer_manager.active_layer
+        return None
+
     def create_layer(self, name):
         """Creates a new layer with the given name and returns it."""
         if self.app.document:
