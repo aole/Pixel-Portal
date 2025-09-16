@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
@@ -72,10 +73,25 @@ class MainWindow(QMainWindow):
         timeline_layout.setContentsMargins(12, 8, 12, 12)
         timeline_layout.setSpacing(6)
 
+        timeline_header_layout = QHBoxLayout()
+        timeline_header_layout.setContentsMargins(0, 0, 0, 0)
+        timeline_header_layout.setSpacing(8)
+
         timeline_label = QLabel("Timeline", self.timeline_panel)
         timeline_label.setObjectName("animationTimelineLabel")
-        timeline_layout.addWidget(timeline_label, 0, Qt.AlignLeft)
+        timeline_header_layout.addWidget(timeline_label, 0)
+        timeline_header_layout.addStretch()
+
+        self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
+        self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
+        self.timeline_current_frame_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
+
+        timeline_layout.addLayout(timeline_header_layout)
         timeline_layout.addWidget(self.timeline_widget)
+
+        self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
+        self._update_current_frame_label(self.timeline_widget.current_frame())
 
         central_container = QWidget(self)
         central_layout = QVBoxLayout(central_container)
@@ -191,6 +207,9 @@ class MainWindow(QMainWindow):
             toolbar_builder.left_toolbar,
             self.color_toolbar
         ])
+
+    def _update_current_frame_label(self, frame: int) -> None:
+        self.timeline_current_frame_label.setText(f"Frame {frame}")
 
     @Slot(object)
     def handle_canvas_message(self, data):

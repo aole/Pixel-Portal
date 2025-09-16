@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, List, Set
 
-from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QMouseEvent, QPaintEvent, QPainter, QPen, QPalette
 from PySide6.QtWidgets import QMenu, QSizePolicy, QWidget
 
@@ -37,12 +37,14 @@ class AnimationTimelineWidget(QWidget):
         self._keys: Set[int] = {0}
         self._current_frame = 0
         self._margin = 24
-        self._tick_height = 18
+        self._tick_height = 36
         self._preferred_frame_spacing = 16.0
+        self._is_dragging = False
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMouseTracking(True)
 
     # ------------------------------------------------------------------
     # Public API
@@ -114,13 +116,18 @@ class AnimationTimelineWidget(QWidget):
         self.keys_changed.emit(self.keys())
         self.update()
 
-    def duplicate_last_key(self) -> None:
+    def duplicate_last_key(self, target_frame: int | None = None) -> None:
         if not self._keys:
             return
         last_key = max(self._keys)
-        new_frame = last_key + 1
-        while new_frame in self._keys:
-            new_frame += 1
+        if target_frame is None:
+            new_frame = last_key + 1
+            while new_frame in self._keys:
+                new_frame += 1
+        else:
+            new_frame = max(0, int(target_frame))
+        if new_frame in self._keys:
+            return
         self.add_key(new_frame)
         self.set_current_frame(new_frame)
 
@@ -135,7 +142,7 @@ class AnimationTimelineWidget(QWidget):
 
         palette = self.palette()
         guide_color = palette.color(QPalette.Mid)
-        frame_color = palette.color(QPalette.Midlight)
+        frame_color = palette.color(QPalette.WindowText)
         key_color = palette.color(QPalette.Highlight)
         key_border = key_color.darker(130)
         current_color = palette.color(QPalette.Highlight)
@@ -148,19 +155,29 @@ class AnimationTimelineWidget(QWidget):
         painter.drawLine(start_x, layout.track_y, end_x, layout.track_y)
 
         # Draw frame ticks.
-        tick_pen = QPen(frame_color, 1)
+        tick_pen = QPen(frame_color, 1.5)
         for frame in range(layout.max_frame + 1):
             x = start_x + frame * layout.spacing
             if x > end_x + 1:
                 break
             tick_height = self._tick_height
-            if frame % 5 == 0:
+            is_major_tick = frame % 5 == 0
+            if is_major_tick:
                 tick_height = int(self._tick_height * 1.4)
             painter.setPen(tick_pen)
             painter.drawLine(
                 QPointF(x, layout.track_y - tick_height / 2),
                 QPointF(x, layout.track_y + tick_height / 2),
             )
+            if is_major_tick and layout.spacing >= 8:
+                number_rect = QRectF(
+                    x - layout.spacing / 2,
+                    layout.track_y + tick_height / 2 + 4,
+                    layout.spacing,
+                    20,
+                )
+                painter.setPen(QPen(frame_color))
+                painter.drawText(number_rect, Qt.AlignHCenter | Qt.AlignTop, str(frame))
 
         # Draw keyed frames as circles.
         painter.setPen(QPen(key_border, 1.5))
@@ -182,11 +199,33 @@ class AnimationTimelineWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            self._is_dragging = True
             frame = self._frame_at_point(event)
             self.set_current_frame(frame)
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if event.buttons() & Qt.LeftButton:
+            self._is_dragging = True
+        else:
+            self._is_dragging = False
+        if self._is_dragging:
+            frame = self._frame_at_point(event)
+            self.set_current_frame(frame)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if event.button() == Qt.LeftButton:
+            frame = self._frame_at_point(event)
+            self.set_current_frame(frame)
+            self._is_dragging = False
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):  # noqa: N802 - Qt naming
         frame = self._frame_at_point(event)
@@ -199,8 +238,8 @@ class AnimationTimelineWidget(QWidget):
         remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
 
         menu.addSeparator()
-        duplicate_action = menu.addAction("Duplicate Last Key")
-        duplicate_action.setEnabled(bool(self._keys))
+        duplicate_action = menu.addAction(f"Duplicate Last Key @ Frame {frame}")
+        duplicate_action.setEnabled(bool(self._keys) and frame not in self._keys)
 
         chosen = menu.exec(event.globalPos())
         if chosen == add_action:
@@ -208,7 +247,7 @@ class AnimationTimelineWidget(QWidget):
         elif chosen == remove_action:
             self.remove_key(frame)
         elif chosen == duplicate_action:
-            self.duplicate_last_key()
+            self.duplicate_last_key(frame)
 
     # ------------------------------------------------------------------
     # Internal helpers
