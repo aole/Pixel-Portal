@@ -22,6 +22,7 @@ class ActionManager:
         self._build_select_actions()
         self._build_image_actions()
         self._build_layer_actions()
+        self._build_animation_actions()
         self._build_view_actions(canvas)
         self._build_tool_actions()
 
@@ -127,6 +128,37 @@ class ActionManager:
             self.remove_background_action.setToolTip(
                 "Background removal unavailable: install rembg and onnxruntime"
             )
+
+    def _build_animation_actions(self):
+        """Create actions that operate on document frames."""
+        self.next_frame_action = QAction("Next Frame", self.main_window)
+        self.next_frame_action.setShortcut("Alt+Right")
+        self.next_frame_action.triggered.connect(self.app.next_frame)
+
+        self.previous_frame_action = QAction("Previous Frame", self.main_window)
+        self.previous_frame_action.setShortcut("Alt+Left")
+        self.previous_frame_action.triggered.connect(self.app.previous_frame)
+
+        self.add_frame_action = QAction("Add Frame", self.main_window)
+        self.add_frame_action.setShortcut("Ctrl+Shift+N")
+        self.add_frame_action.triggered.connect(self.app.add_frame)
+
+        self.duplicate_frame_action = QAction("Duplicate Frame", self.main_window)
+        self.duplicate_frame_action.setShortcut("Ctrl+Shift+D")
+        self.duplicate_frame_action.triggered.connect(self.app.duplicate_frame)
+
+        self.delete_frame_action = QAction("Delete Frame", self.main_window)
+        self.delete_frame_action.setShortcut("Ctrl+Shift+Delete")
+        self.delete_frame_action.triggered.connect(self.app.remove_frame)
+
+        for action in (
+            self.next_frame_action,
+            self.previous_frame_action,
+            self.add_frame_action,
+            self.duplicate_frame_action,
+            self.delete_frame_action,
+        ):
+            self.main_window.addAction(action)
 
     def _build_view_actions(self, canvas):
         """Create actions that affect the canvas view."""

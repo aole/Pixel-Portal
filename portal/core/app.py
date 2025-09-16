@@ -127,6 +127,38 @@ class App(QObject):
         self.document_controller.redo()
 
     @Slot()
+    def add_frame(self):
+        self.document_controller.add_frame()
+
+    @Slot()
+    def remove_frame(self):
+        self.document_controller.remove_frame()
+
+    @Slot()
+    def duplicate_frame(self):
+        self.document_controller.duplicate_frame()
+
+    @Slot(int)
+    def remove_frame_at(self, index):
+        self.document_controller.remove_frame(index)
+
+    @Slot(int)
+    def duplicate_frame_at(self, index):
+        self.document_controller.duplicate_frame(index)
+
+    @Slot(int)
+    def select_frame(self, index):
+        self.document_controller.select_frame(index)
+
+    @Slot()
+    def next_frame(self):
+        self.document_controller.step_frame(1)
+
+    @Slot()
+    def previous_frame(self):
+        self.document_controller.step_frame(-1)
+
+    @Slot()
     def select_all(self):
         self.select_all_triggered.emit()
 

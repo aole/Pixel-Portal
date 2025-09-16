@@ -31,12 +31,20 @@ generation. Use the notes below to orient yourself quickly before making changes
   - `canvas.py` is the heart of the editor: it maintains zoom, selections, tile preview toggles,
     and exposes signals the rest of the UI consumes.
   - `layer_list_widget.py`, `color_swatch_widget.py`, etc., implement the surrounding panels.
+  - `timeline_widget.py` renders the animation timeline dock. It listens to
+    `Document.add_layer_manager_listener` updates to stay in sync with frame
+    changes—remember to call `set_document` when swapping documents so the
+    internal subscription is refreshed.
 - `portal/tools/`
   - Each tool subclasses `BaseTool` (see `basetool.py`) and is registered in `registry.py`.
   - Common helpers live in `toolutils.py`; the bucket, line, ellipse, rectangle, and eraser tools all
     rely on routines in `portal.core.drawing` for predictable pixel art behaviour.
 - `portal/commands/` wires Qt actions to business logic. `action_manager.py` owns action instances,
   while `menu_bar_builder.py` and friends arrange them in the UI.
+  - Frame navigation shortcuts (`Alt+Left/Right`, `Ctrl+Shift+N/D/Delete`) are
+    declared in `ActionManager._build_animation_actions()`; add new shortcuts
+    there so they propagate to the main window and stay discoverable via the
+    menu bar.
 - `portal/ai/` contains configuration and UI for AI assistance. Treat it as optional.
 - `palettes/` stores default palette definitions (JSON). Use these when adding palette features.
 - `scripts/` contains one-off helpers such as `tile_generator.py` (creates isometric/hex tiles) and

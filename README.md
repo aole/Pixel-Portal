@@ -91,3 +91,17 @@ Canvas compositing and the interactive tools now consult
 `Document.frame_manager.active_layer_manager` directly. This keeps previews,
 temporary overlays, and destructive edits scoped to the active frame while you
 work across an animation.
+
+## Timeline Panel
+
+Use the **Timeline** dock above the status bar to manage frames visually. Each
+frame appears as a horizontal entry—click one to jump to that frame instantly.
+The **Add**, **Delete**, and **Duplicate** buttons mirror the document's frame
+operations, keeping the list in sync automatically when the document changes.
+
+Keyboard shortcuts are also available for quick navigation:
+
+- `Alt+Right` / `Alt+Left` step through frames.
+- `Ctrl+Shift+N` adds a new frame.
+- `Ctrl+Shift+D` duplicates the active frame.
+- `Ctrl+Shift+Delete` removes the active frame.

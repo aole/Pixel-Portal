@@ -1,7 +1,9 @@
-import os
 import functools
+import os
+
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow
+
 from portal.commands.action_manager import ActionManager
 
 
@@ -12,10 +14,19 @@ class MenuBarBuilder:
         self.panels_menu = None
         self.toolbars_menu = None
 
-    def set_panels(self, layer_manager_dock, preview_dock, ai_panel_dock):
+    def set_panels(
+        self,
+        layer_manager_dock,
+        preview_dock,
+        ai_panel_dock,
+        timeline_dock=None,
+    ):
         self.panels_menu.addAction(layer_manager_dock.toggleViewAction())
         self.panels_menu.addAction(preview_dock.toggleViewAction())
-        self.panels_menu.addAction(ai_panel_dock.toggleViewAction())
+        if timeline_dock is not None:
+            self.panels_menu.addAction(timeline_dock.toggleViewAction())
+        if ai_panel_dock is not None:
+            self.panels_menu.addAction(ai_panel_dock.toggleViewAction())
 
     def set_toolbars(self, toolbars):
         for toolbar in toolbars:
@@ -57,6 +68,14 @@ class MenuBarBuilder:
         image_menu = menu_bar.addMenu("&Image")
         image_menu.addAction(self.action_manager.resize_action)
         image_menu.addAction(self.action_manager.crop_action)
+
+        animation_menu = menu_bar.addMenu("&Animation")
+        animation_menu.addAction(self.action_manager.previous_frame_action)
+        animation_menu.addAction(self.action_manager.next_frame_action)
+        animation_menu.addSeparator()
+        animation_menu.addAction(self.action_manager.add_frame_action)
+        animation_menu.addAction(self.action_manager.duplicate_frame_action)
+        animation_menu.addAction(self.action_manager.delete_frame_action)
 
         layer_menu = menu_bar.addMenu("&Layer")
         layer_menu.addAction(self.action_manager.conform_to_palette_action)

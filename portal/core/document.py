@@ -79,6 +79,11 @@ class Document:
         self.frame_manager.select_frame(index)
         self._notify_layer_manager_changed()
 
+    def duplicate_frame(self, index: int | None = None):
+        frame = self.frame_manager.duplicate_frame(index)
+        self._notify_layer_manager_changed()
+        return frame
+
     def render_current_frame(self) -> QImage:
         return self.frame_manager.render_current_frame()
 

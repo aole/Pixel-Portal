@@ -111,6 +111,63 @@ class DocumentController(QObject):
         self.undo_stack_changed.emit()
         self.document_changed.emit()
 
+    @Slot()
+    def add_frame(self):
+        if not self.document:
+            return
+        self.document.add_frame()
+        self.is_dirty = True
+        self.document_changed.emit()
+
+    @Slot()
+    @Slot(int)
+    def remove_frame(self, index: int | None = None):
+        if not self.document:
+            return
+        if index is None:
+            index = self.document.frame_manager.active_frame_index
+        try:
+            self.document.remove_frame(index)
+        except (ValueError, IndexError):
+            return
+        self.is_dirty = True
+        self.document_changed.emit()
+
+    @Slot()
+    @Slot(int)
+    def duplicate_frame(self, index: int | None = None):
+        if not self.document:
+            return
+        if index is None:
+            index = self.document.frame_manager.active_frame_index
+        try:
+            self.document.duplicate_frame(index)
+        except (ValueError, IndexError):
+            return
+        self.is_dirty = True
+        self.document_changed.emit()
+
+    @Slot(int)
+    def select_frame(self, index):
+        if not self.document:
+            return
+        try:
+            self.document.select_frame(index)
+        except (ValueError, IndexError):
+            return
+        self.document_changed.emit()
+
+    @Slot(int)
+    def step_frame(self, offset):
+        if not self.document:
+            return
+        manager = self.document.frame_manager
+        if not manager.frames:
+            return
+        new_index = (manager.active_frame_index + offset) % len(manager.frames)
+        self.document.select_frame(new_index)
+        self.document_changed.emit()
+
     @Slot(bool, bool, bool)
     def flip(self, horizontal, vertical, all_layers):
         if self.document:

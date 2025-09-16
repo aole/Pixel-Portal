@@ -61,6 +61,21 @@ class FrameManager:
         elif self.active_frame_index > index:
             self.active_frame_index -= 1
 
+    def duplicate_frame(self, index: Optional[int] = None) -> Frame:
+        if not self.frames:
+            raise ValueError("No frames available to duplicate.")
+
+        if index is None:
+            index = self.active_frame_index
+
+        if not (0 <= index < len(self.frames)):
+            raise IndexError("Frame index out of range.")
+
+        duplicated = self.frames[index].clone()
+        self.frames.insert(index + 1, duplicated)
+        self.active_frame_index = index + 1
+        return duplicated
+
     def select_frame(self, index: int) -> None:
         if not (0 <= index < len(self.frames)):
             raise IndexError("Frame index out of range.")

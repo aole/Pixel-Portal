@@ -13,6 +13,7 @@ from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
 from portal.ui.preview_panel import PreviewPanel
+from portal.ui.timeline_widget import TimelineWidget
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
@@ -74,6 +75,18 @@ class MainWindow(QMainWindow):
 
         # Status bar
         self.status_bar_manager = StatusBarManager(self)
+
+        # Timeline Panel
+        self.timeline_widget = TimelineWidget(self)
+        self.timeline_widget.set_document(self.app.document)
+        self.timeline_widget.frame_selected.connect(self.app.select_frame)
+        self.timeline_widget.add_frame_requested.connect(self.app.add_frame)
+        self.timeline_widget.delete_frame_requested.connect(self.app.remove_frame_at)
+        self.timeline_widget.duplicate_frame_requested.connect(self.app.duplicate_frame_at)
+        self.timeline_dock = QDockWidget("Timeline", self)
+        self.timeline_dock.setAllowedAreas(Qt.BottomDockWidgetArea)
+        self.timeline_dock.setWidget(self.timeline_widget)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.timeline_dock)
 
         # Connect signals for RotateTool
         if "Rotate" in self.canvas.tools:
@@ -144,7 +157,12 @@ class MainWindow(QMainWindow):
         self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
         self.app.exit_triggered.connect(self.close)
 
-        menu_bar_builder.set_panels(self.layer_manager_dock, self.preview_dock, self.ai_panel_dock)
+        menu_bar_builder.set_panels(
+            self.layer_manager_dock,
+            self.preview_dock,
+            self.ai_panel_dock,
+            self.timeline_dock,
+        )
         menu_bar_builder.set_toolbars([
             toolbar_builder.top_toolbar,
             toolbar_builder.left_toolbar,
@@ -196,6 +214,7 @@ class MainWindow(QMainWindow):
         self.layer_manager_widget.refresh_layers()
         self.canvas.set_document(self.app.document)
         self.canvas.update()
+        self.timeline_widget.set_document(self.app.document)
 
     @Slot()
     def on_crop_to_selection(self):
