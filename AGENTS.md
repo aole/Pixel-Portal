@@ -18,6 +18,10 @@ generation. Use the notes below to orient yourself quickly before making changes
 - `portal/core/`
   - `app.py` hosts the high-level `App` façade that the UI talks to.
   - `document.py`, `layer.py`, and `layer_manager.py` implement the document model.
+  - `frame.py` and `frame_manager.py` wrap layer stacks in animation-friendly frames. The active
+    frame is exposed on `Document.layer_manager` for backwards compatibility. Use
+    `Document.add_layer_manager_listener` when you need to rebind UI callbacks
+    after switching frames.
   - `document_controller.py` handles clipboard imports, palette quantisation, and smart cropping.
   - `drawing.py` contains flood fill, pixel-perfect brushes, symmetry helpers, and wrap-around logic.
   - `renderer.py` draws the canvas, background, grid, and tile preview mosaics.

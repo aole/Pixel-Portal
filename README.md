@@ -63,3 +63,25 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_and_layers.py
 QT_QPA_PLATFORM=offscreen python -m pytest tests/test_drawing_tools.py
 QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
 ```
+
+## Working with Frames
+
+Pixel-Portal's document model now supports multiple frames inside a single
+project. Frames wrap their own layer stack and can be accessed through the
+`Document.frame_manager` helper. A few convenience methods are available on the
+document itself:
+
+- `Document.add_frame()` creates a fresh frame that mirrors the document size.
+- `Document.remove_frame(index)` removes a frame (while ensuring at least one
+  frame remains).
+- `Document.select_frame(index)` switches the active frame and therefore the
+  layer manager the UI interacts with.
+- `Document.render_current_frame()` composites the active frame into a single
+  `QImage`.
+- `Document.add_layer_manager_listener(callback)` registers a hook that fires
+  whenever the active frame changes. This keeps UI components wired to the
+  correct `LayerManager` as the selection moves between frames.
+
+The existing `Document.layer_manager` attribute now resolves to the layer
+manager belonging to the currently selected frame, so existing layer-centric
+tooling continues to operate without modification.

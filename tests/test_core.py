@@ -283,6 +283,7 @@ def mock_main_window(qapp):
     window.open_background_image_dialog = MagicMock()
     window.toggle_ai_panel = MagicMock()
     window.open_flip_dialog = MagicMock()
+    window.open_settings_dialog = MagicMock()
     return window
 
 def test_setup_actions(mock_main_window):

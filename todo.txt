@@ -3,3 +3,4 @@
 6. better status bar
 11. polygon create
 12. polygon select
+15. wire timeline UI to Document.add_layer_manager_listener for frame awareness
