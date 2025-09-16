@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QTransform,
     QCursor,
     QPalette,
+    QMouseEvent,
 )
 from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
 from portal.core.drawing import Drawing
@@ -84,9 +85,20 @@ class Canvas(QWidget):
                 tool.command_generated.connect(self.command_generated)
         self.current_tool = self.tools["Pen"]
 
+        self._mirror_handle_radius = 8
+        self._mirror_handle_margin = 18
+        self._mirror_handle_hover: str | None = None
+        self._mirror_handle_drag: str | None = None
+        self._mirror_handle_prev_cursor: QCursor | None = None
+
+        self.drawing_context.mirror_x_position_changed.connect(self.update)
+        self.drawing_context.mirror_y_position_changed.connect(self.update)
+        self._reset_mirror_axes()
+
     @Slot(QSize)
     def set_document_size(self, size):
         self._document_size = size
+        self._reset_mirror_axes()
         self.update()
 
     def keyPressEvent(self, event):
@@ -274,12 +286,64 @@ class Canvas(QWidget):
         )
 
     def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            handle = self._hit_test_mirror_handles(event.position().toPoint())
+            if handle is not None:
+                self._mirror_handle_drag = handle
+                self._mirror_handle_hover = handle
+                self._update_mirror_axis_from_position(event.position().toPoint(), handle)
+                if self._mirror_handle_prev_cursor is None:
+                    self._mirror_handle_prev_cursor = self.cursor()
+                self.setCursor(Qt.ClosedHandCursor)
+                return
+
         self.input_handler.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        if self._mirror_handle_drag is not None:
+            self._update_cursor_position_from_event(event)
+            self._update_mirror_axis_from_position(
+                event.position().toPoint(), self._mirror_handle_drag
+            )
+            return
+
         self.input_handler.mouseMoveEvent(event)
 
+        handle = self._hit_test_mirror_handles(event.position().toPoint())
+        if handle != self._mirror_handle_hover:
+            if handle is not None:
+                if self._mirror_handle_drag is None:
+                    self._mirror_handle_prev_cursor = self.cursor()
+                self.setCursor(Qt.OpenHandCursor)
+            elif self._mirror_handle_hover is not None:
+                if self._mirror_handle_prev_cursor is not None:
+                    self.setCursor(self._mirror_handle_prev_cursor)
+                else:
+                    self.setCursor(self.current_tool.cursor)
+                self._mirror_handle_prev_cursor = None
+        self._mirror_handle_hover = handle
+
     def mouseReleaseEvent(self, event):
+        if (
+            self._mirror_handle_drag is not None
+            and event.button() == Qt.LeftButton
+        ):
+            self._update_mirror_axis_from_position(
+                event.position().toPoint(), self._mirror_handle_drag
+            )
+            self._mirror_handle_drag = None
+            handle = self._hit_test_mirror_handles(event.position().toPoint())
+            if handle is not None:
+                self.setCursor(Qt.OpenHandCursor)
+            else:
+                if self._mirror_handle_prev_cursor is not None:
+                    self.setCursor(self._mirror_handle_prev_cursor)
+                else:
+                    self.setCursor(self.current_tool.cursor)
+                self._mirror_handle_prev_cursor = None
+            self._mirror_handle_hover = handle
+            return
+
         self.input_handler.mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent):
@@ -297,6 +361,130 @@ class Canvas(QWidget):
         x = (canvas_width - doc_width_scaled) / 2 + self.x_offset
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
         return QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
+
+    def _reset_mirror_axes(self):
+        width = self._document_size.width()
+        if width > 0:
+            current = self.drawing_context.mirror_x_position
+            if current is None:
+                self.drawing_context.set_mirror_x_position(
+                    self._default_mirror_position(width)
+                )
+            else:
+                clamped = self._clamp_mirror_position(current, width)
+                self.drawing_context.set_mirror_x_position(clamped)
+
+        height = self._document_size.height()
+        if height > 0:
+            current = self.drawing_context.mirror_y_position
+            if current is None:
+                self.drawing_context.set_mirror_y_position(
+                    self._default_mirror_position(height)
+                )
+            else:
+                clamped = self._clamp_mirror_position(current, height)
+                self.drawing_context.set_mirror_y_position(clamped)
+
+    @staticmethod
+    def _default_mirror_position(length: int) -> float:
+        if length <= 0:
+            return 0.0
+        return (length - 1) / 2.0
+
+    @staticmethod
+    def _clamp_mirror_position(value: float, length: int) -> float:
+        if length <= 0:
+            return value
+        minimum = -0.5
+        maximum = length - 0.5
+        return max(minimum, min(maximum, value))
+
+    def _resolve_mirror_x_position(self) -> float | None:
+        width = self._document_size.width()
+        if width <= 0:
+            return None
+        position = self.drawing_context.mirror_x_position
+        if position is None:
+            return self._default_mirror_position(width)
+        return self._clamp_mirror_position(position, width)
+
+    def _resolve_mirror_y_position(self) -> float | None:
+        height = self._document_size.height()
+        if height <= 0:
+            return None
+        position = self.drawing_context.mirror_y_position
+        if position is None:
+            return self._default_mirror_position(height)
+        return self._clamp_mirror_position(position, height)
+
+    def _mirror_handle_rects(self) -> dict[str, QRect]:
+        rects: dict[str, QRect] = {}
+        target_rect = self.get_target_rect()
+        zoom = self.zoom
+        if zoom <= 0:
+            return rects
+
+        radius = self._mirror_handle_radius
+        diameter = radius * 2
+        margin = self._mirror_handle_margin
+
+        if self.drawing_context.mirror_x:
+            axis_x = self._resolve_mirror_x_position()
+            if axis_x is not None:
+                center_x = target_rect.x() + (axis_x + 0.5) * zoom
+                center_y = target_rect.y() - margin
+                rects["x"] = QRect(
+                    int(round(center_x - radius)),
+                    int(round(center_y - radius)),
+                    diameter,
+                    diameter,
+                )
+
+        if self.drawing_context.mirror_y:
+            axis_y = self._resolve_mirror_y_position()
+            if axis_y is not None:
+                center_y = target_rect.y() + (axis_y + 0.5) * zoom
+                center_x = target_rect.x() - margin
+                rects["y"] = QRect(
+                    int(round(center_x - radius)),
+                    int(round(center_y - radius)),
+                    diameter,
+                    diameter,
+                )
+
+        return rects
+
+    def _hit_test_mirror_handles(self, pos: QPoint) -> str | None:
+        for axis, rect in self._mirror_handle_rects().items():
+            if rect.contains(pos):
+                return axis
+        return None
+
+    def _update_mirror_axis_from_position(self, pos: QPoint, axis: str):
+        target_rect = self.get_target_rect()
+        zoom = self.zoom
+        if zoom <= 0:
+            return
+
+        if axis == "x":
+            length = self._document_size.width()
+            if length <= 0:
+                return
+            relative = (pos.x() - target_rect.x()) / zoom - 0.5
+            clamped = self._clamp_mirror_position(relative, length)
+            self.drawing_context.set_mirror_x_position(clamped)
+        elif axis == "y":
+            length = self._document_size.height()
+            if length <= 0:
+                return
+            relative = (pos.y() - target_rect.y()) / zoom - 0.5
+            clamped = self._clamp_mirror_position(relative, length)
+            self.drawing_context.set_mirror_y_position(clamped)
+
+    def _update_cursor_position_from_event(self, event: QMouseEvent):
+        pos = event.position().toPoint()
+        self.cursor_doc_pos = self.get_doc_coords(pos, wrap=False)
+        self.cursor_pos_changed.emit(self.cursor_doc_pos)
 
     def set_document(self, document):
         self.document = document

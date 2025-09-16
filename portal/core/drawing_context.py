@@ -9,6 +9,8 @@ class DrawingContext(QObject):
     brush_type_changed = Signal(str)
     mirror_x_changed = Signal(bool)
     mirror_y_changed = Signal(bool)
+    mirror_x_position_changed = Signal(float)
+    mirror_y_position_changed = Signal(float)
     pattern_brush_changed = Signal(object)
 
     def __init__(self):
@@ -21,6 +23,8 @@ class DrawingContext(QObject):
         self.pattern_brush: QImage | None = None
         self.mirror_x = False
         self.mirror_y = False
+        self.mirror_x_position: float | None = None
+        self.mirror_y_position: float | None = None
 
     @Slot(bool)
     def set_mirror_x(self, enabled):
@@ -31,6 +35,20 @@ class DrawingContext(QObject):
     def set_mirror_y(self, enabled):
         self.mirror_y = enabled
         self.mirror_y_changed.emit(self.mirror_y)
+
+    @Slot(float)
+    def set_mirror_x_position(self, position):
+        if position == self.mirror_x_position:
+            return
+        self.mirror_x_position = position
+        self.mirror_x_position_changed.emit(position)
+
+    @Slot(float)
+    def set_mirror_y_position(self, position):
+        if position == self.mirror_y_position:
+            return
+        self.mirror_y_position = position
+        self.mirror_y_position_changed.emit(position)
 
     @Slot(int)
     def set_pen_width(self, width):

@@ -30,6 +30,8 @@ class BucketTool(BaseTool):
             selection_shape=self.canvas.selection_shape,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
         )
         self.command_generated.emit(command)
         self.canvas.update()
