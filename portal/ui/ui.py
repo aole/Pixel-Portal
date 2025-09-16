@@ -2,7 +2,7 @@ import functools
 import os
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout, QFileDialog
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
 try:
@@ -319,15 +319,29 @@ class MainWindow(QMainWindow):
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.app.settings_controller, self)
-        if dialog.exec():
-            self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
-            self.canvas.set_background_image_alpha(
-                self.app.settings_controller.background_image_alpha
-            )
-            self.canvas.set_background_image_mode(
-                self.app.settings_controller.background_image_mode
-            )
-            self.app.save_settings()
+        dialog.settings_applied.connect(self.apply_settings_from_controller)
+        dialog.exec()
+
+    @Slot()
+    def apply_settings_from_controller(self):
+        self.apply_grid_settings_from_settings()
+
+        controller = self.app.settings_controller
+        new_alpha = controller.background_image_alpha
+        new_mode = controller.background_image_mode
+
+        blocker = QSignalBlocker(self.canvas)
+        try:
+            self.canvas.set_background_image_alpha(new_alpha)
+            self.canvas.set_background_image_mode(new_mode)
+        finally:
+            del blocker
+
+        controller.update_background_settings(
+            image_mode=self.canvas.background_mode,
+            image_alpha=self.canvas.background_image_alpha,
+        )
+        self.app.save_settings()
 
     def open_background_color_dialog(self):
         color = QColorDialog.getColor(self.canvas.background_color, self)
