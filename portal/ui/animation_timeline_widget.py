@@ -33,7 +33,7 @@ class AnimationTimelineWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._base_total_frames = 120
+        self._base_total_frames = 0
         self._keys: Set[int] = {0}
         self._current_frame = 0
         self._margin = 24
@@ -53,14 +53,14 @@ class AnimationTimelineWidget(QWidget):
         return QSize(800, 120)
 
     def total_frames(self) -> int:
-        """Return the number of frames represented on the timeline."""
+        """Return the highest frame index currently represented."""
 
-        return self._base_total_frames
+        return self._calculate_layout().max_frame
 
     def set_total_frames(self, frame_count: int) -> None:
-        """Define the nominal number of frames displayed by the timeline."""
+        """Define the minimum highest frame index displayed by the timeline."""
 
-        frame_count = max(1, int(frame_count))
+        frame_count = max(0, int(frame_count))
         if frame_count == self._base_total_frames:
             return
         self._base_total_frames = frame_count
@@ -139,6 +139,7 @@ class AnimationTimelineWidget(QWidget):
         layout = self._calculate_layout()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        font_metrics = painter.fontMetrics()
 
         palette = self.palette()
         guide_color = palette.color(QPalette.Mid)
@@ -170,14 +171,15 @@ class AnimationTimelineWidget(QWidget):
                 QPointF(x, layout.track_y + tick_height / 2),
             )
             if is_major_tick and layout.spacing >= 8:
+                label_height = font_metrics.height()
                 number_rect = QRectF(
                     x - layout.spacing / 2,
-                    layout.track_y + tick_height / 2 + 4,
+                    layout.track_y - tick_height / 2 - label_height - 4,
                     layout.spacing,
-                    20,
+                    label_height,
                 )
                 painter.setPen(QPen(frame_color))
-                painter.drawText(number_rect, Qt.AlignHCenter | Qt.AlignTop, str(frame))
+                painter.drawText(number_rect, Qt.AlignHCenter | Qt.AlignBottom, str(frame))
 
         # Draw keyed frames as circles.
         painter.setPen(QPen(key_border, 1.5))
@@ -267,9 +269,11 @@ class AnimationTimelineWidget(QWidget):
     def _calculate_layout(self) -> _TimelineLayout:
         width = max(1, self.width())
         height = max(1, self.height())
-        usable_width = max(1, width - 2 * self._margin)
+        usable_width = max(1.0, width - 2 * self._margin)
+        dynamic_frames = max(1, int(usable_width // self._preferred_frame_spacing))
         max_key = max(self._keys) if self._keys else 0
-        max_frame = max(self._base_total_frames, max_key, self._current_frame)
+        max_hint = max(self._base_total_frames, max_key, self._current_frame)
+        max_frame = max(dynamic_frames, max_hint)
         spacing = usable_width / max(1, max_frame)
         spacing = max(1.0, min(spacing, self._preferred_frame_spacing))
         track_y = height / 2
