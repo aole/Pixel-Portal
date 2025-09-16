@@ -24,7 +24,8 @@ generation. Use the notes below to orient yourself quickly before making changes
   - `frame.py` and `frame_manager.py` wrap layer stacks in animation-friendly frames. The active
     frame is exposed on `Document.layer_manager` for backwards compatibility. Use
     `Document.add_layer_manager_listener` when you need to rebind UI callbacks
-    after switching frames.
+    after switching frames. Renderer and painting code should prefer
+    `Document.frame_manager.active_layer_manager` to avoid stale references.
   - `document_controller.py` handles clipboard imports, palette quantisation, and smart cropping.
   - `drawing.py` contains flood fill, pixel-perfect brushes, symmetry helpers, and wrap-around logic.
   - `renderer.py` draws the canvas, background, grid, and tile preview mosaics.
@@ -49,6 +50,11 @@ generation. Use the notes below to orient yourself quickly before making changes
 - **Tile preview:** `Canvas.toggle_tile_preview` toggles repetition. Drawing tools respect the
   `canvas.tile_preview_enabled` flag and call `Drawing.paint_*` with `wrap=True`. Updates to wrapping
   logic typically touch both `portal/tools/*tool.py` and `portal/core/drawing.py`.
+- **Frame-aware drawing:** When mutating pixels or building previews, prefer
+  `portal.core.frame_manager.resolve_active_layer_manager(document)` (or
+  `Document.frame_manager.active_layer_manager` when you have a concrete
+  `Document`) so edits stay scoped to the selected frame and legacy tests keep
+  working.
 - **Grid:** `CanvasRenderer` draws the major/minor grid lines based on `Canvas.grid_*` settings.
   UI actions for toggling these live in `commands/action_manager.py`.
 - **Palette & color picking:** Palette JSON files feed into `portal/ui/color_panel.py`. The picker

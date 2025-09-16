@@ -23,7 +23,11 @@ class MoveTool(BaseTool):
         self.start_point = doc_pos
         self.canvas.temp_image_replaces_active_layer = False
 
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer:
             return
         self.before_image = active_layer.image.copy()
@@ -56,7 +60,11 @@ class MoveTool(BaseTool):
 
         delta = doc_pos - self.start_point
 
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer:
             return
 

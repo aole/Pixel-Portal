@@ -76,7 +76,16 @@ class LineTool(BaseTool):
         if self.canvas.original_image is None:
             return
 
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            self.canvas.temp_image = None
+            self.canvas.original_image = None
+            self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.tile_preview_image = None
+            self.canvas.update()
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer:
             return
 

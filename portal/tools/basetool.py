@@ -1,6 +1,8 @@
 from PySide6.QtCore import QPoint, Qt, QObject, Signal
 from PySide6.QtGui import QMouseEvent, QCursor
 
+from portal.core.frame_manager import resolve_active_layer_manager
+
 
 class BaseTool(QObject):
     """Abstract base class for all drawing tools."""
@@ -39,3 +41,9 @@ class BaseTool(QObject):
     def draw_overlay(self, painter):
         """Called when the canvas is being painted."""
         pass
+
+    def _get_active_layer_manager(self):
+        document = getattr(self.canvas, "document", None)
+        if document is None:
+            return None
+        return resolve_active_layer_manager(document)
