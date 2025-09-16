@@ -1,10 +1,27 @@
 import functools
 import os
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout, QFileDialog
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QDockWidget,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QPushButton,
+    QSizePolicy,
+    QSlider,
+    QToolBar,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
 from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
+from portal.ui.animation_timeline_widget import AnimationTimelineWidget
 try:
     from portal.ui.ai_panel import AIPanel
 except Exception:  # Optional dependency may be missing or heavy to load
@@ -21,7 +38,7 @@ from portal.ui.flip_dialog import FlipDialog
 from portal.ui.settings_dialog import SettingsDialog
 
 
-from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QColorDialog
+from PySide6.QtWidgets import QColorDialog
 from portal.ui.color_button import ColorButton, ActiveColorButton
 
 
@@ -43,7 +60,47 @@ class MainWindow(QMainWindow):
         self.canvas.set_background_image_mode(
             self.app.settings_controller.background_image_mode
         )
-        self.setCentralWidget(self.canvas)
+
+        self.timeline_widget = AnimationTimelineWidget(self)
+
+        self.timeline_panel = QFrame(self)
+        self.timeline_panel.setObjectName("animationTimelinePanel")
+        self.timeline_panel.setFrameShape(QFrame.StyledPanel)
+        self.timeline_panel.setFrameShadow(QFrame.Plain)
+        self.timeline_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        timeline_layout = QVBoxLayout(self.timeline_panel)
+        timeline_layout.setContentsMargins(12, 8, 12, 12)
+        timeline_layout.setSpacing(6)
+
+        timeline_header_layout = QHBoxLayout()
+        timeline_header_layout.setContentsMargins(0, 0, 0, 0)
+        timeline_header_layout.setSpacing(8)
+
+        timeline_label = QLabel("Timeline", self.timeline_panel)
+        timeline_label.setObjectName("animationTimelineLabel")
+        timeline_header_layout.addWidget(timeline_label, 0)
+        timeline_header_layout.addStretch()
+
+        self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
+        self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
+        self.timeline_current_frame_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
+
+        timeline_layout.addLayout(timeline_header_layout)
+        timeline_layout.addWidget(self.timeline_widget)
+
+        self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
+        self._update_current_frame_label(self.timeline_widget.current_frame())
+
+        central_container = QWidget(self)
+        central_layout = QVBoxLayout(central_container)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.canvas, 1)
+        central_layout.addWidget(self.timeline_panel, 0)
+
+        self.setCentralWidget(central_container)
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
 
@@ -150,6 +207,9 @@ class MainWindow(QMainWindow):
             toolbar_builder.left_toolbar,
             self.color_toolbar
         ])
+
+    def _update_current_frame_label(self, frame: int) -> None:
+        self.timeline_current_frame_label.setText(f"Frame {frame}")
 
     @Slot(object)
     def handle_canvas_message(self, data):
