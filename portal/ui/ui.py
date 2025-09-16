@@ -2,7 +2,7 @@ import functools
 import os
 from PySide6.QtWidgets import QMainWindow, QLabel, QToolBar, QPushButton, QWidget, QGridLayout, QDockWidget, QSlider, QMenu, QToolButton, QVBoxLayout, QFileDialog
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
 try:
@@ -325,11 +325,21 @@ class MainWindow(QMainWindow):
     @Slot()
     def apply_settings_from_controller(self):
         self.apply_grid_settings_from_settings()
-        self.canvas.set_background_image_alpha(
-            self.app.settings_controller.background_image_alpha
-        )
-        self.canvas.set_background_image_mode(
-            self.app.settings_controller.background_image_mode
+
+        controller = self.app.settings_controller
+        new_alpha = controller.background_image_alpha
+        new_mode = controller.background_image_mode
+
+        blocker = QSignalBlocker(self.canvas)
+        try:
+            self.canvas.set_background_image_alpha(new_alpha)
+            self.canvas.set_background_image_mode(new_mode)
+        finally:
+            del blocker
+
+        controller.update_background_settings(
+            image_mode=self.canvas.background_mode,
+            image_alpha=self.canvas.background_image_alpha,
         )
         self.app.save_settings()
 
