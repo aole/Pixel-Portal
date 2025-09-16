@@ -1,6 +1,9 @@
+from configparser import ConfigParser
+
 from PySide6.QtGui import QColor
 
 from portal.core.document import Document
+from portal.core.document_controller import DocumentController
 
 
 def test_document_initializes_with_single_frame():
@@ -88,3 +91,81 @@ def test_clone_copies_frames_and_layers():
         assert cloned_frame is not original_frame
         assert cloned_frame.layer_manager is not original_frame.layer_manager
         assert len(cloned_frame.layer_manager.layers) == len(original_frame.layer_manager.layers)
+
+
+class _StubSettings:
+    def __init__(self):
+        self.config = ConfigParser()
+        if not self.config.has_section("General"):
+            self.config.add_section("General")
+        self._last_directory = ""
+
+    @property
+    def last_directory(self):
+        return self._last_directory
+
+    @last_directory.setter
+    def last_directory(self, value):
+        self._last_directory = value
+
+
+class _StubDocumentService:
+    def __init__(self):
+        self.app = None
+
+
+class _StubClipboardService:
+    def __init__(self, document_service):
+        self.document_service = document_service
+        self.app = None
+
+
+def _make_controller():
+    settings = _StubSettings()
+    document_service = _StubDocumentService()
+    clipboard_service = _StubClipboardService(document_service)
+    return DocumentController(
+        settings,
+        document_service=document_service,
+        clipboard_service=clipboard_service,
+    )
+
+
+def test_undo_removes_added_frame():
+    controller = _make_controller()
+    original_frame = controller.document.frame_manager.frames[0]
+
+    controller.add_frame()
+    assert len(controller.document.frame_manager.frames) == 2
+    assert controller.document.frame_manager.active_frame_index == 1
+    new_frame = controller.document.frame_manager.frames[1]
+
+    controller.undo()
+    assert len(controller.document.frame_manager.frames) == 1
+    assert controller.document.frame_manager.frames[0] is original_frame
+    assert controller.document.frame_manager.active_frame_index == 0
+
+    controller.redo()
+    assert len(controller.document.frame_manager.frames) == 2
+    assert controller.document.frame_manager.frames[1] is new_frame
+    assert controller.document.frame_manager.active_frame_index == 1
+
+
+def test_undo_removes_duplicate_frame():
+    controller = _make_controller()
+    original_frame = controller.document.frame_manager.frames[0]
+
+    controller.duplicate_frame()
+    assert len(controller.document.frame_manager.frames) == 2
+    assert controller.document.frame_manager.active_frame_index == 1
+    duplicate_frame = controller.document.frame_manager.frames[1]
+
+    controller.undo()
+    assert len(controller.document.frame_manager.frames) == 1
+    assert controller.document.frame_manager.frames[0] is original_frame
+    assert controller.document.frame_manager.active_frame_index == 0
+
+    controller.redo()
+    assert len(controller.document.frame_manager.frames) == 2
+    assert controller.document.frame_manager.frames[1] is duplicate_frame
+    assert controller.document.frame_manager.active_frame_index == 1

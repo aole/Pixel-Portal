@@ -407,6 +407,150 @@ class CropCommand(Command):
         current_manager.layer_structure_changed.emit()
 
 
+class AddFrameCommand(Command):
+    """Add a new frame to the document and select it."""
+
+    def __init__(self, document: 'Document'):
+        from portal.core.document import Document
+
+        self.document = document
+        self.added_frame = None
+        self.insertion_index = None
+        self.previous_active_index = document.frame_manager.active_frame_index
+
+    def execute(self):
+        manager = self.document.frame_manager
+        self.previous_active_index = manager.active_frame_index
+
+        if self.added_frame is None:
+            frame = self.document.add_frame()
+            self.added_frame = frame
+            self.insertion_index = manager.active_frame_index
+        else:
+            index = self.insertion_index if self.insertion_index is not None else len(manager.frames)
+            index = max(0, min(index, len(manager.frames)))
+            self.document.insert_frame(index, self.added_frame)
+            self.insertion_index = index
+
+    def undo(self):
+        if self.added_frame is None:
+            return
+
+        manager = self.document.frame_manager
+        try:
+            index = manager.frames.index(self.added_frame)
+        except ValueError:
+            return
+
+        if len(manager.frames) <= 1:
+            return
+
+        self.document.remove_frame(index)
+
+        if manager.frames and self.previous_active_index is not None and self.previous_active_index >= 0:
+            restore_index = min(self.previous_active_index, len(manager.frames) - 1)
+            self.document.select_frame(restore_index)
+
+
+class DuplicateFrameCommand(Command):
+    """Duplicate an existing frame and select the copy."""
+
+    def __init__(self, document: 'Document', index: int | None = None):
+        from portal.core.document import Document
+
+        self.document = document
+        self.requested_index = index
+        self.previous_active_index = document.frame_manager.active_frame_index
+        self.duplicated_frame = None
+        self.insertion_index = None
+
+    def execute(self):
+        manager = self.document.frame_manager
+        if not manager.frames:
+            return
+
+        self.previous_active_index = manager.active_frame_index
+
+        source_index = self.requested_index
+        if source_index is None or not (0 <= source_index < len(manager.frames)):
+            source_index = manager.active_frame_index
+
+        if self.duplicated_frame is None:
+            frame = self.document.duplicate_frame(source_index)
+            self.duplicated_frame = frame
+            self.insertion_index = manager.active_frame_index
+        elif self.duplicated_frame in manager.frames:
+            self.insertion_index = manager.frames.index(self.duplicated_frame)
+            self.document.select_frame(self.insertion_index)
+        else:
+            index = self.insertion_index if self.insertion_index is not None else source_index + 1
+            index = max(0, min(index, len(manager.frames)))
+            self.document.insert_frame(index, self.duplicated_frame)
+            self.insertion_index = index
+
+    def undo(self):
+        if self.duplicated_frame is None:
+            return
+
+        manager = self.document.frame_manager
+        try:
+            index = manager.frames.index(self.duplicated_frame)
+        except ValueError:
+            return
+
+        self.document.remove_frame(index)
+
+        if manager.frames and self.previous_active_index is not None and self.previous_active_index >= 0:
+            restore_index = min(self.previous_active_index, len(manager.frames) - 1)
+            self.document.select_frame(restore_index)
+
+
+class RemoveFrameCommand(Command):
+    """Remove a frame while preserving undo data."""
+
+    def __init__(self, document: 'Document', index: int | None = None):
+        from portal.core.document import Document
+
+        self.document = document
+        self.requested_index = index
+        self.removed_frame = None
+        self.removed_index = None
+        self.previous_active_index = document.frame_manager.active_frame_index
+
+    def execute(self):
+        manager = self.document.frame_manager
+        if len(manager.frames) <= 1:
+            return
+
+        self.previous_active_index = manager.active_frame_index
+
+        if self.removed_frame is None or self.removed_frame not in manager.frames:
+            index = self.requested_index
+            if index is None or not (0 <= index < len(manager.frames)):
+                index = manager.active_frame_index
+            self.removed_frame = manager.frames[index]
+            self.removed_index = index
+        else:
+            try:
+                self.removed_index = manager.frames.index(self.removed_frame)
+            except ValueError:
+                return
+
+        self.document.remove_frame(self.removed_index)
+
+    def undo(self):
+        if self.removed_frame is None or self.removed_index is None:
+            return
+
+        manager = self.document.frame_manager
+        index = max(0, min(self.removed_index, len(manager.frames)))
+        self.document.insert_frame(index, self.removed_frame, make_active=False)
+
+        if manager.frames and self.previous_active_index is not None and self.previous_active_index >= 0:
+            restore_index = min(self.previous_active_index, len(manager.frames) - 1)
+            self.document.select_frame(restore_index)
+
+
 class AddLayerCommand(Command):
     def __init__(self, document: 'Document', image: QImage = None, name: str = None):
         from portal.core.document import Document

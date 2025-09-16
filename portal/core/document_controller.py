@@ -6,10 +6,13 @@ from portal.core.document import Document
 from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
 from portal.core.command import (
-    FlipCommand,
-    ResizeCommand,
-    CropCommand,
+    AddFrameCommand,
     AddLayerCommand,
+    CropCommand,
+    DuplicateFrameCommand,
+    FlipCommand,
+    RemoveFrameCommand,
+    ResizeCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.core.color_utils import find_closest_color
@@ -115,37 +118,38 @@ class DocumentController(QObject):
     def add_frame(self):
         if not self.document:
             return
-        self.document.add_frame()
-        self.is_dirty = True
-        self.document_changed.emit()
+        command = AddFrameCommand(self.document)
+        self.execute_command(command)
 
     @Slot()
     @Slot(int)
     def remove_frame(self, index: int | None = None):
         if not self.document:
             return
-        if index is None:
-            index = self.document.frame_manager.active_frame_index
-        try:
-            self.document.remove_frame(index)
-        except (ValueError, IndexError):
+        manager = self.document.frame_manager
+        if len(manager.frames) <= 1:
             return
-        self.is_dirty = True
-        self.document_changed.emit()
+        if index is None:
+            index = manager.active_frame_index
+        if not (0 <= index < len(manager.frames)):
+            return
+        command = RemoveFrameCommand(self.document, index)
+        self.execute_command(command)
 
     @Slot()
     @Slot(int)
     def duplicate_frame(self, index: int | None = None):
         if not self.document:
             return
-        if index is None:
-            index = self.document.frame_manager.active_frame_index
-        try:
-            self.document.duplicate_frame(index)
-        except (ValueError, IndexError):
+        manager = self.document.frame_manager
+        if not manager.frames:
             return
-        self.is_dirty = True
-        self.document_changed.emit()
+        if index is None:
+            index = manager.active_frame_index
+        if not (0 <= index < len(manager.frames)):
+            return
+        command = DuplicateFrameCommand(self.document, index)
+        self.execute_command(command)
 
     @Slot(int)
     def select_frame(self, index):

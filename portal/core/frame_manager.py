@@ -76,6 +76,23 @@ class FrameManager:
         self.active_frame_index = index + 1
         return duplicated
 
+    def insert_frame(
+        self, index: int, frame: Frame, *, make_active: bool = True
+    ) -> Frame:
+        if not (0 <= index <= len(self.frames)):
+            raise IndexError("Frame index out of range.")
+
+        frame.layer_manager.width = self.width
+        frame.layer_manager.height = self.height
+        self.frames.insert(index, frame)
+
+        if make_active:
+            self.active_frame_index = index
+        elif self.active_frame_index >= index:
+            self.active_frame_index += 1
+
+        return frame
+
     def select_frame(self, index: int) -> None:
         if not (0 <= index < len(self.frames)):
             raise IndexError("Frame index out of range.")

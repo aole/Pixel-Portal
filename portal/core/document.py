@@ -84,6 +84,11 @@ class Document:
         self._notify_layer_manager_changed()
         return frame
 
+    def insert_frame(self, index: int, frame, *, make_active: bool = True):
+        inserted = self.frame_manager.insert_frame(index, frame, make_active=make_active)
+        self._notify_layer_manager_changed()
+        return inserted
+
     def render_current_frame(self) -> QImage:
         return self.frame_manager.render_current_frame()
 
