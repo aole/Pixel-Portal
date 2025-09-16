@@ -1,4 +1,15 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QDialogButtonBox, QLineEdit, QSpinBox, QComboBox, QPushButton, QColorDialog
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QFormLayout,
+    QDialogButtonBox,
+    QLineEdit,
+    QSpinBox,
+    QComboBox,
+    QPushButton,
+    QColorDialog,
+    QCheckBox,
+)
 from PySide6.QtGui import QColor
 
 class ColorButton(QPushButton):
@@ -56,6 +67,9 @@ class ScriptDialog(QDialog):
                     widget.addItems(param['choices'])
                 if default is not None:
                     widget.setCurrentText(default)
+            elif param_type == 'checkbox':
+                widget = QCheckBox()
+                widget.setChecked(bool(default))
 
             self.form_layout.addRow(label, widget)
             self.widgets[name] = (param_type, widget)
@@ -78,4 +92,6 @@ class ScriptDialog(QDialog):
                 values[name] = widget.color
             elif param_type == 'choice':
                 values[name] = widget.currentText()
+            elif param_type == 'checkbox':
+                values[name] = widget.isChecked()
         return values
