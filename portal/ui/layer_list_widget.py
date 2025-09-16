@@ -35,6 +35,21 @@ class LayerListWidget(QListWidget):
         elif action == remove_bg_action:
             self.remove_background_requested.emit(index)
 
+    def mousePressEvent(self, event):
+        if (
+            event.button() == Qt.LeftButton
+            and event.modifiers() & Qt.ControlModifier
+        ):
+            # Ctrl+click selects opaque pixels on the clicked layer without
+            # changing which layer is active.
+            item = self.itemAt(event.position().toPoint())
+            if item:
+                self.select_opaque_requested.emit(self.row(item))
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
     def startDrag(self, supportedActions):
         if QApplication.keyboardModifiers() & Qt.ControlModifier:
             # Ctrl is pressed, so don't start the drag.
