@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 
+from portal.core.frame_manager import resolve_active_layer_manager
 from portal.ui.background import BackgroundImageMode
 
 
@@ -40,14 +41,16 @@ class CanvasRenderer:
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
             image_painter = QPainter(final_image)
-            active_layer = document.layer_manager.active_layer
-            for layer in document.layer_manager.layers:
-                if layer.visible:
-                    image_to_draw = layer.image
-                    if layer is active_layer:
-                        image_to_draw = self.canvas.temp_image
-                    image_painter.setOpacity(layer.opacity)
-                    image_painter.drawImage(0, 0, image_to_draw)
+            layer_manager = resolve_active_layer_manager(document)
+            if layer_manager is not None:
+                active_layer = layer_manager.active_layer
+                for layer in layer_manager.layers:
+                    if layer.visible:
+                        image_to_draw = layer.image
+                        if layer is active_layer:
+                            image_to_draw = self.canvas.temp_image
+                        image_painter.setOpacity(layer.opacity)
+                        image_painter.drawImage(0, 0, image_to_draw)
             image_painter.end()
             painter.drawImage(target_rect, final_image)
             image_to_draw_on = final_image
@@ -233,6 +236,13 @@ class CanvasRenderer:
             painter.fillRect(target_rect, self.canvas.background.color)
 
     def _draw_document(self, painter, target_rect, document):
+        layer_manager = resolve_active_layer_manager(document)
+        if layer_manager is None:
+            empty_image = QImage(document.width, document.height, QImage.Format_ARGB32)
+            empty_image.fill(Qt.transparent)
+            painter.drawImage(target_rect, empty_image)
+            return empty_image
+
         if self.canvas.temp_image and self.canvas.temp_image_replaces_active_layer:
             # This path is for tools like the Eraser, which operate on a copy of the active layer.
             # The `temp_image` is a full replacement for the active layer's image.
@@ -246,8 +256,8 @@ class CanvasRenderer:
             final_image.fill(QColor("transparent"))
             image_painter = QPainter(final_image)
 
-            active_layer = document.layer_manager.active_layer
-            for layer in document.layer_manager.layers:
+            active_layer = layer_manager.active_layer
+            for layer in layer_manager.layers:
                 if layer.visible:
                     image_to_draw = layer.image
                     if layer is active_layer:
@@ -265,8 +275,8 @@ class CanvasRenderer:
             final_image.fill(Qt.transparent)
             p = QPainter(final_image)
 
-            active_layer = document.layer_manager.active_layer
-            for layer in document.layer_manager.layers:
+            active_layer = layer_manager.active_layer
+            for layer in layer_manager.layers:
                 if not layer.visible:
                     continue
 
@@ -418,7 +428,8 @@ class CanvasRenderer:
             )
 
     def draw_cursor(self, painter, target_rect, doc_image):
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = resolve_active_layer_manager(self.canvas.document)
+        active_layer = layer_manager.active_layer if layer_manager else None
         if (
             not self.canvas.mouse_over_canvas
             or (active_layer and not active_layer.visible)

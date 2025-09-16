@@ -5,6 +5,7 @@ from typing import List, Optional
 from PySide6.QtGui import QImage
 
 from portal.core.frame import Frame
+from portal.core.layer_manager import LayerManager
 
 
 class FrameManager:
@@ -29,6 +30,11 @@ class FrameManager:
     def current_layer_manager(self):
         frame = self.current_frame
         return frame.layer_manager if frame else None
+
+    @property
+    def active_layer_manager(self):
+        """Alias for the active frame's layer manager."""
+        return self.current_layer_manager
 
     def add_frame(self, frame: Optional[Frame] = None) -> Frame:
         if frame is None:
@@ -71,3 +77,18 @@ class FrameManager:
         cloned_manager.frames = [frame.clone() for frame in self.frames]
         cloned_manager.active_frame_index = self.active_frame_index
         return cloned_manager
+
+
+def resolve_active_layer_manager(document) -> LayerManager | None:
+    """Return the active layer manager for ``document`` with compatibility fallbacks."""
+
+    frame_manager = getattr(document, "frame_manager", None)
+    if isinstance(frame_manager, FrameManager):
+        manager = frame_manager.active_layer_manager
+        if manager is not None:
+            return manager
+
+    try:
+        return document.layer_manager
+    except Exception:
+        return getattr(document, "layer_manager", None)

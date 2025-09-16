@@ -12,7 +12,11 @@ class BucketTool(BaseTool):
     category = "draw"
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer:
             return
 

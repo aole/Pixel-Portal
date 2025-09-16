@@ -31,9 +31,9 @@ class RotateTool(BaseTool):
         if self.canvas.selection_shape:
             return self.canvas.selection_shape.boundingRect().center().toPoint()
 
-        document = self.canvas.document
-        if document and document.layer_manager and document.layer_manager.active_layer:
-            return document.layer_manager.active_layer.image.rect().center()
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager and layer_manager.active_layer:
+            return layer_manager.active_layer.image.rect().center()
 
         return QPoint(0, 0)  # Fallback
 
@@ -53,7 +53,11 @@ class RotateTool(BaseTool):
     def mousePressEvent(self, event, doc_pos):
         if self.is_hovering_handle:
             self.drag_mode = 'rotate'
-            active_layer = self.canvas.document.layer_manager.active_layer
+            layer_manager = self._get_active_layer_manager()
+            if layer_manager is None:
+                return
+
+            active_layer = layer_manager.active_layer
             if active_layer:
                 self.original_image = active_layer.image.copy()
                 self.canvas.temp_image_replaces_active_layer = True
@@ -132,7 +136,11 @@ class RotateTool(BaseTool):
             self.canvas.temp_image = None
             self.canvas.temp_image_replaces_active_layer = False
 
-            active_layer = self.canvas.document.layer_manager.active_layer
+            layer_manager = self._get_active_layer_manager()
+            if layer_manager is None:
+                return
+
+            active_layer = layer_manager.active_layer
             if active_layer:
                 center_doc = self.get_rotation_center_doc()
                 selection_shape = self.canvas.selection_shape
@@ -149,9 +157,10 @@ class RotateTool(BaseTool):
         if self.drag_mode == 'rotate':
             self.canvas.temp_image = None
             self.canvas.temp_image_replaces_active_layer = False
-            if self.original_image and self.canvas.document.layer_manager.active_layer:
-                self.canvas.document.layer_manager.active_layer.image = self.original_image
-                self.canvas.document.layer_manager.active_layer.on_image_change.emit()
+            layer_manager = self._get_active_layer_manager()
+            if self.original_image and layer_manager and layer_manager.active_layer:
+                layer_manager.active_layer.image = self.original_image
+                layer_manager.active_layer.on_image_change.emit()
             self.original_image = None
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))

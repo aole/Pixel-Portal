@@ -17,7 +17,11 @@ class EraserTool(BaseTool):
         self.cursor = QCursor(Qt.BlankCursor)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer or not active_layer.visible:
             return
 
@@ -44,7 +48,11 @@ class EraserTool(BaseTool):
         if not self.points:
             return
 
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer or not active_layer.visible:
             return
 
@@ -64,7 +72,18 @@ class EraserTool(BaseTool):
             self.canvas.update()
             return
 
-        active_layer = self.canvas.document.layer_manager.active_layer
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            # Clean up preview and return
+            self.points = []
+            self.canvas.temp_image = None
+            self.canvas.original_image = None
+            self.canvas.temp_image_replaces_active_layer = False
+            self.canvas.tile_preview_image = None
+            self.canvas.update()
+            return
+
+        active_layer = layer_manager.active_layer
         if not active_layer:
             # Clean up preview and return
             self.points = []
