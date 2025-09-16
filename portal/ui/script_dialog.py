@@ -1,4 +1,20 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QDialogButtonBox, QLineEdit, QSpinBox, QComboBox, QPushButton, QColorDialog
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QFormLayout,
+    QDialogButtonBox,
+    QLineEdit,
+    QSpinBox,
+    QComboBox,
+    QPushButton,
+    QColorDialog,
+    QCheckBox,
+    QWidget,
+    QSlider,
+    QHBoxLayout,
+    QLabel,
+)
 from PySide6.QtGui import QColor
 
 class ColorButton(QPushButton):
@@ -22,6 +38,32 @@ class ColorButton(QPushButton):
         color = QColorDialog.getColor(self._color, self)
         if color.isValid():
             self.color = color
+
+class SliderWithLabel(QWidget):
+    """Slider widget that displays its current percentage value."""
+
+    def __init__(self, minimum, maximum, default, step=1):
+        super().__init__()
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(minimum, maximum)
+        self.slider.setSingleStep(step)
+        self.slider.setPageStep(step)
+        self.value_label = QLabel()
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.slider)
+        layout.addWidget(self.value_label)
+
+        self.slider.valueChanged.connect(self._update_label)
+        self.slider.setValue(default)
+        self._update_label(self.slider.value())
+
+    def _update_label(self, value):
+        self.value_label.setText(f"{value}%")
+
+    def value(self):
+        return self.slider.value()
 
 class ScriptDialog(QDialog):
     def __init__(self, params, parent=None):
@@ -56,6 +98,20 @@ class ScriptDialog(QDialog):
                     widget.addItems(param['choices'])
                 if default is not None:
                     widget.setCurrentText(default)
+            elif param_type == 'checkbox':
+                widget = QCheckBox()
+                if default is not None:
+                    widget.setChecked(bool(default))
+                else:
+                    widget.setChecked(False)
+            elif param_type == 'slider':
+                minimum = param.get('min', 0)
+                maximum = param.get('max', 100)
+                step = param.get('step', 1)
+                if default is None:
+                    default = minimum
+                default = max(minimum, min(maximum, default))
+                widget = SliderWithLabel(minimum, maximum, default, step)
 
             self.form_layout.addRow(label, widget)
             self.widgets[name] = (param_type, widget)
@@ -78,4 +134,8 @@ class ScriptDialog(QDialog):
                 values[name] = widget.color
             elif param_type == 'choice':
                 values[name] = widget.currentText()
+            elif param_type == 'checkbox':
+                values[name] = widget.isChecked()
+            elif param_type == 'slider':
+                values[name] = widget.value()
         return values
