@@ -182,6 +182,25 @@ def test_set_layer_opacity_command(document):
     assert rendered_after.pixelColor(50, 50) == blended_before
 
 
+def test_make_layer_opaque_command(document):
+    """Partially transparent pixels become fully opaque while empty pixels stay clear."""
+    layer = document.layer_manager.layers[0]
+    layer.image.fill(QColor(10, 20, 30, 64))
+    layer.image.setPixelColor(5, 5, QColor(100, 110, 120, 0))
+
+    from portal.commands.layer_commands import MakeLayerOpaqueCommand
+
+    command = MakeLayerOpaqueCommand(layer)
+    command.execute()
+
+    assert layer.image.pixelColor(0, 0).alpha() == 255
+    assert layer.image.pixelColor(5, 5).alpha() == 0
+
+    command.undo()
+    assert layer.image.pixelColor(0, 0).alpha() == 64
+    assert layer.image.pixelColor(5, 5).alpha() == 0
+
+
 def test_layer_manager_opacity_preview_and_commit():
     """Layer opacity previews while dragging and commits with undo support."""
     from PySide6.QtWidgets import QApplication

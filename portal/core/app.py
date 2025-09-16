@@ -208,6 +208,10 @@ class App(QObject):
     def remove_background_from_layer(self):
         self.document_controller.remove_background_from_layer()
 
+    @Slot()
+    def make_active_layer_opaque(self):
+        self.document_controller.make_active_layer_opaque()
+
     def run_script(self, script_path):
         """Runs a script with optional parameters and undo support."""
         try:

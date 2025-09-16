@@ -11,7 +11,7 @@ from portal.core.command import (
     CropCommand,
     AddLayerCommand,
 )
-from portal.commands.layer_commands import RemoveBackgroundCommand
+from portal.commands.layer_commands import RemoveBackgroundCommand, MakeLayerOpaqueCommand
 from portal.core.color_utils import find_closest_color
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
@@ -181,6 +181,13 @@ class DocumentController(QObject):
         if not layer:
             return
         command = RemoveBackgroundCommand(layer)
+        self.execute_command(command)
+
+    def make_active_layer_opaque(self):
+        layer = self.document.layer_manager.active_layer
+        if not layer:
+            return
+        command = MakeLayerOpaqueCommand(layer)
         self.execute_command(command)
 
     def check_for_unsaved_changes(self):

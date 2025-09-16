@@ -6,6 +6,7 @@ class LayerListWidget(QListWidget):
     select_opaque_requested = Signal(int)
     duplicate_requested = Signal(int)
     remove_background_requested = Signal(int)
+    make_layer_opaque_requested = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -23,6 +24,7 @@ class LayerListWidget(QListWidget):
         select_opaque_action = menu.addAction("Select Opaque")
         duplicate_action = menu.addAction("Duplicate")
         remove_bg_action = menu.addAction("Remove Background")
+        make_opaque_action = menu.addAction("Make Fully Opaque")
 
         action = menu.exec(self.mapToGlobal(pos))
 
@@ -34,6 +36,8 @@ class LayerListWidget(QListWidget):
             self.duplicate_requested.emit(index)
         elif action == remove_bg_action:
             self.remove_background_requested.emit(index)
+        elif action == make_opaque_action:
+            self.make_layer_opaque_requested.emit(index)
 
     def mousePressEvent(self, event):
         if (

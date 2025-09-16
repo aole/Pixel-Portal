@@ -61,6 +61,7 @@ class MenuBarBuilder:
         layer_menu = menu_bar.addMenu("&Layer")
         layer_menu.addAction(self.action_manager.conform_to_palette_action)
         layer_menu.addAction(self.action_manager.remove_background_action)
+        layer_menu.addAction(self.action_manager.make_layer_opaque_action)
 
         view_menu = menu_bar.addMenu("&View")
         background_menu = view_menu.addMenu("&Background")

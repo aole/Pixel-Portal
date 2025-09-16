@@ -128,6 +128,9 @@ class ActionManager:
                 "Background removal unavailable: install rembg and onnxruntime"
             )
 
+        self.make_layer_opaque_action = QAction("Make Fully Opaque", self.main_window)
+        self.make_layer_opaque_action.triggered.connect(self.app.make_active_layer_opaque)
+
     def _build_view_actions(self, canvas):
         """Create actions that affect the canvas view."""
         self.checkered_action = QAction("Checkered Background", self.main_window)

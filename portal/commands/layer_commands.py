@@ -138,3 +138,37 @@ class RemoveBackgroundCommand(Command):
     def undo(self):
         self.layer.image = self.before_image.copy()
         self.layer.on_image_change.emit()
+
+
+class MakeLayerOpaqueCommand(Command):
+    """Ensure every non-transparent pixel on a layer is fully opaque."""
+
+    def __init__(self, layer):
+        self.layer = layer
+        self.before_image = layer.image.copy()
+        self.after_image: QImage | None = None
+
+    def _solidify_alpha(self) -> QImage:
+        processed_image = self.before_image.copy()
+        width = processed_image.width()
+        height = processed_image.height()
+        for y in range(height):
+            for x in range(width):
+                color = processed_image.pixelColor(x, y)
+                alpha = color.alpha()
+                if alpha == 0:
+                    continue
+                if alpha < 255:
+                    color.setAlpha(255)
+                    processed_image.setPixelColor(x, y, color)
+        return processed_image
+
+    def execute(self):
+        if self.after_image is None:
+            self.after_image = self._solidify_alpha()
+        self.layer.image = self.after_image.copy()
+        self.layer.on_image_change.emit()
+
+    def undo(self):
+        self.layer.image = self.before_image.copy()
+        self.layer.on_image_change.emit()

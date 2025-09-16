@@ -10,6 +10,9 @@ generation. Use the notes below to orient yourself quickly before making changes
   for anything that should stay crisp.
 - Tile preview controls and palette switching live on the `Canvas` and `CanvasRenderer`
   classes—check there for drawing behaviour changes.
+- The Layer menu now exposes **Make Fully Opaque**, which runs the
+  `MakeLayerOpaqueCommand` to snap partially transparent pixels to full alpha without
+  affecting fully transparent areas.
 - Optional AI features depend on heavyweight libraries that are **not** installed in this
   environment. Code touching `portal.ai` must gracefully handle missing imports (follow the existing
   `try`/`except ImportError` patterns).

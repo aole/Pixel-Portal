@@ -34,6 +34,7 @@ class LayerManagerWidget(QWidget):
         self.layer_list.select_opaque_requested.connect(self.select_opaque)
         self.layer_list.duplicate_requested.connect(self.duplicate_layer_from_menu)
         self.layer_list.remove_background_requested.connect(self.remove_background_from_menu)
+        self.layer_list.make_layer_opaque_requested.connect(self.make_layer_opaque_from_menu)
         self.layout.addWidget(self.layer_list)
 
         # Toolbar
@@ -253,3 +254,8 @@ class LayerManagerWidget(QWidget):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
         self.app.document.layer_manager.select_layer(actual_index)
         self.app.remove_background_from_layer()
+
+    def make_layer_opaque_from_menu(self, index_in_list):
+        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
+        self.app.document.layer_manager.select_layer(actual_index)
+        self.app.make_active_layer_opaque()
