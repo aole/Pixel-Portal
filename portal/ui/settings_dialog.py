@@ -34,10 +34,16 @@ class SettingsDialog(QDialog):
         self._build_canvas_tab()
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self
+            QDialogButtonBox.Ok
+            | QDialogButtonBox.Cancel
+            | QDialogButtonBox.Apply,
+            parent=self,
         )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
+        self.button_box.button(QDialogButtonBox.Apply).clicked.connect(
+            self._apply_settings
+        )
         layout.addWidget(self.button_box)
 
         self._apply_settings_to_widgets()
@@ -159,10 +165,13 @@ class SettingsDialog(QDialog):
             "minor_spacing": self.minor_grid_spacing.value(),
         }
 
-    def accept(self):
+    def _apply_settings(self):
         self.settings_controller.update_grid_settings(**self.get_grid_settings())
         self.settings_controller.update_background_settings(
             image_mode=self.get_background_image_mode(),
             image_alpha=self.get_background_image_alpha(),
         )
+
+    def accept(self):
+        self._apply_settings()
         super().accept()
