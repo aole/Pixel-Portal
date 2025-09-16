@@ -86,6 +86,8 @@ class EraserTool(BaseTool):
             erase=True,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             wrap=self.canvas.tile_preview_enabled,
         )
         self.command_generated.emit(command)
@@ -128,6 +130,8 @@ class EraserTool(BaseTool):
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
                 wrap=self.canvas.tile_preview_enabled,
+                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             )
         else:
             for i in range(len(self.points) - 1):
@@ -142,6 +146,8 @@ class EraserTool(BaseTool):
                     self.canvas.drawing_context.mirror_y,
                     wrap=self.canvas.tile_preview_enabled,
                     erase=False,
+                    mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                    mirror_y_position=self.canvas.drawing_context.mirror_y_position,
                 )
 
         painter.end()
@@ -161,6 +167,8 @@ class EraserTool(BaseTool):
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
                     wrap=True,
+                    mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                    mirror_y_position=self.canvas.drawing_context.mirror_y_position,
                 )
             else:
                 for i in range(len(self.points) - 1):
@@ -175,6 +183,8 @@ class EraserTool(BaseTool):
                         self.canvas.drawing_context.mirror_y,
                         wrap=True,
                         erase=False,
+                        mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                        mirror_y_position=self.canvas.drawing_context.mirror_y_position,
                     )
             preview_painter.end()
         

@@ -73,6 +73,8 @@ class DrawCommand(Command):
         erase: bool = False,
         mirror_x: bool = False,
         mirror_y: bool = False,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
         wrap: bool = False,
         pattern_image: QImage | None = None,
     ):
@@ -86,6 +88,8 @@ class DrawCommand(Command):
         self.document = document
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
+        self.mirror_x_position = mirror_x_position
+        self.mirror_y_position = mirror_y_position
         self.selection_shape = selection_shape
         self.wrap = wrap
         self.pattern_image = pattern_image
@@ -104,6 +108,8 @@ class DrawCommand(Command):
         doc_height = self.document.height
         mirror_x = self.mirror_x
         mirror_y = self.mirror_y
+        axis_x = self._resolve_axis(self.mirror_x_position, doc_width)
+        axis_y = self._resolve_axis(self.mirror_y_position, doc_height)
 
         # Create the original path
         original_path = QPainterPath(self.points[0])
@@ -114,25 +120,41 @@ class DrawCommand(Command):
         combined_path = QPainterPath()
         combined_path.addPath(original_path)
 
-        if mirror_x:
+        if mirror_x and axis_x is not None:
             mirrored_path_x = QPainterPath()
-            mirrored_path_x.moveTo(doc_width - 1 - self.points[0].x(), self.points[0].y())
+            mirrored_path_x.moveTo(
+                int(round(2 * axis_x - self.points[0].x())), self.points[0].y()
+            )
             for i in range(1, len(self.points)):
-                mirrored_path_x.lineTo(doc_width - 1 - self.points[i].x(), self.points[i].y())
+                mirrored_path_x.lineTo(
+                    int(round(2 * axis_x - self.points[i].x())),
+                    self.points[i].y(),
+                )
             combined_path.addPath(mirrored_path_x)
 
-        if mirror_y:
+        if mirror_y and axis_y is not None:
             mirrored_path_y = QPainterPath()
-            mirrored_path_y.moveTo(self.points[0].x(), doc_height - 1 - self.points[0].y())
+            mirrored_path_y.moveTo(
+                self.points[0].x(), int(round(2 * axis_y - self.points[0].y()))
+            )
             for i in range(1, len(self.points)):
-                mirrored_path_y.lineTo(self.points[i].x(), doc_height - 1 - self.points[i].y())
+                mirrored_path_y.lineTo(
+                    self.points[i].x(),
+                    int(round(2 * axis_y - self.points[i].y())),
+                )
             combined_path.addPath(mirrored_path_y)
 
-        if mirror_x and mirror_y:
+        if mirror_x and mirror_y and axis_x is not None and axis_y is not None:
             mirrored_path_xy = QPainterPath()
-            mirrored_path_xy.moveTo(doc_width - 1 - self.points[0].x(), doc_height - 1 - self.points[0].y())
+            mirrored_path_xy.moveTo(
+                int(round(2 * axis_x - self.points[0].x())),
+                int(round(2 * axis_y - self.points[0].y())),
+            )
             for i in range(1, len(self.points)):
-                mirrored_path_xy.lineTo(doc_width - 1 - self.points[i].x(), doc_height - 1 - self.points[i].y())
+                mirrored_path_xy.lineTo(
+                    int(round(2 * axis_x - self.points[i].x())),
+                    int(round(2 * axis_y - self.points[i].y())),
+                )
             combined_path.addPath(mirrored_path_xy)
 
 
@@ -154,6 +176,14 @@ class DrawCommand(Command):
         # Intersect with layer bounds to stay within the image
         layer_rect = self.layer.image.rect()
         return rect.intersected(layer_rect)
+
+    @staticmethod
+    def _resolve_axis(position: float | None, size: int) -> float | None:
+        if size <= 0:
+            return None
+        if position is None:
+            return (size - 1) / 2.0
+        return position
 
     def execute(self):
         if not self.bounding_rect.isValid():
@@ -195,6 +225,8 @@ class DrawCommand(Command):
                         self.mirror_y,
                         wrap=self.wrap,
                         pattern=self.pattern_image,
+                        mirror_x_position=self.mirror_x_position,
+                        mirror_y_position=self.mirror_y_position,
                     )
                 else:
                     for i in range(len(self.points) - 1):
@@ -210,6 +242,8 @@ class DrawCommand(Command):
                             wrap=self.wrap,
                             erase=False,  # We are drawing the mask, not erasing
                             pattern=self.pattern_image,
+                            mirror_x_position=self.mirror_x_position,
+                            mirror_y_position=self.mirror_y_position,
                         )
                 mask_painter.end()
 
@@ -231,6 +265,8 @@ class DrawCommand(Command):
                         self.mirror_y,
                         wrap=self.wrap,
                         pattern=self.pattern_image,
+                        mirror_x_position=self.mirror_x_position,
+                        mirror_y_position=self.mirror_y_position,
                     )
                 else:
                     for i in range(len(self.points) - 1):
@@ -246,6 +282,8 @@ class DrawCommand(Command):
                             wrap=self.wrap,
                             erase=False,
                             pattern=self.pattern_image,
+                            mirror_x_position=self.mirror_x_position,
+                            mirror_y_position=self.mirror_y_position,
                         )
         finally:
             painter.end()
@@ -493,7 +531,18 @@ class PasteInSelectionCommand(Command):
 
 
 class FillCommand(Command):
-    def __init__(self, document: 'Document', layer: Layer, fill_pos: QPoint, fill_color: QColor, selection_shape: QPainterPath | None, mirror_x: bool, mirror_y: bool):
+    def __init__(
+        self,
+        document: 'Document',
+        layer: Layer,
+        fill_pos: QPoint,
+        fill_color: QColor,
+        selection_shape: QPainterPath | None,
+        mirror_x: bool,
+        mirror_y: bool,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
+    ):
         from portal.core.document import Document
         self.document = document
         self.layer = layer
@@ -503,6 +552,8 @@ class FillCommand(Command):
         self.drawing = Drawing()
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
+        self.mirror_x_position = mirror_x_position
+        self.mirror_y_position = mirror_y_position
         self.before_image = None
 
     def execute(self):
@@ -511,15 +562,24 @@ class FillCommand(Command):
 
         doc_width = self.document.width
         doc_height = self.document.height
+        axis_x = self._resolve_axis(self.mirror_x_position, doc_width)
+        axis_y = self._resolve_axis(self.mirror_y_position, doc_height)
         processed_points = set()
         points_to_fill = [self.fill_pos]
 
-        if self.mirror_x:
-            points_to_fill.append(QPoint(doc_width - 1 - self.fill_pos.x(), self.fill_pos.y()))
-        if self.mirror_y:
-            points_to_fill.append(QPoint(self.fill_pos.x(), doc_height - 1 - self.fill_pos.y()))
-        if self.mirror_x and self.mirror_y:
-            points_to_fill.append(QPoint(doc_width - 1 - self.fill_pos.x(), doc_height - 1 - self.fill_pos.y()))
+        if self.mirror_x and axis_x is not None:
+            mirrored_x = int(round(2 * axis_x - self.fill_pos.x()))
+            if 0 <= mirrored_x < doc_width:
+                points_to_fill.append(QPoint(mirrored_x, self.fill_pos.y()))
+        if self.mirror_y and axis_y is not None:
+            mirrored_y = int(round(2 * axis_y - self.fill_pos.y()))
+            if 0 <= mirrored_y < doc_height:
+                points_to_fill.append(QPoint(self.fill_pos.x(), mirrored_y))
+        if self.mirror_x and self.mirror_y and axis_x is not None and axis_y is not None:
+            mirrored_x = int(round(2 * axis_x - self.fill_pos.x()))
+            mirrored_y = int(round(2 * axis_y - self.fill_pos.y()))
+            if 0 <= mirrored_x < doc_width and 0 <= mirrored_y < doc_height:
+                points_to_fill.append(QPoint(mirrored_x, mirrored_y))
 
         for point in points_to_fill:
             if tuple(point.toTuple()) not in processed_points:
@@ -535,6 +595,14 @@ class FillCommand(Command):
             painter.drawImage(0, 0, self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
+
+    @staticmethod
+    def _resolve_axis(position: float | None, size: int) -> float | None:
+        if size <= 0:
+            return None
+        if position is None:
+            return (size - 1) / 2.0
+        return position
 
 
 class ShapeCommand(Command):
@@ -552,6 +620,8 @@ class ShapeCommand(Command):
         wrap: bool = False,
         brush_type: str = "Circular",
         pattern_image: QImage | None = None,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
     ):
         from portal.core.document import Document
         self.layer = layer
@@ -566,6 +636,8 @@ class ShapeCommand(Command):
         self.wrap = wrap
         self.brush_type = brush_type
         self.pattern_image = pattern_image
+        self.mirror_x_position = mirror_x_position
+        self.mirror_y_position = mirror_y_position
         self.drawing = Drawing()
         self.before_image = None
 
@@ -599,6 +671,8 @@ class ShapeCommand(Command):
                     self.mirror_y,
                     wrap=self.wrap,
                     pattern=self.pattern_image,
+                    mirror_x_position=self.mirror_x_position,
+                    mirror_y_position=self.mirror_y_position,
                 )
             elif self.shape_type == 'rectangle':
                 self.drawing.draw_rect(
@@ -611,6 +685,8 @@ class ShapeCommand(Command):
                     self.mirror_y,
                     wrap=self.wrap,
                     pattern=self.pattern_image,
+                    mirror_x_position=self.mirror_x_position,
+                    mirror_y_position=self.mirror_y_position,
                 )
         finally:
             painter.end()

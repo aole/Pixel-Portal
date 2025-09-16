@@ -106,19 +106,36 @@ class CanvasRenderer:
         pen.setCosmetic(True)
         pen.setStyle(Qt.DashLine)
         painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
 
-        doc_width = document.width
-        doc_height = document.height
+        zoom = self.canvas.zoom
 
         if self.drawing_context.mirror_x:
-            center_x = target_rect.x() + (doc_width / 2) * self.canvas.zoom
-            painter.drawLine(int(center_x), 0, int(center_x), self.canvas.height())
+            axis_x = self.canvas._resolve_mirror_x_position()
+            if axis_x is not None:
+                line_x = target_rect.x() + (axis_x + 0.5) * zoom
+                painter.drawLine(
+                    int(round(line_x)), 0, int(round(line_x)), self.canvas.height()
+                )
 
         if self.drawing_context.mirror_y:
-            center_y = target_rect.y() + (doc_height / 2) * self.canvas.zoom
-            painter.drawLine(0, int(center_y), self.canvas.width(), int(center_y))
+            axis_y = self.canvas._resolve_mirror_y_position()
+            if axis_y is not None:
+                line_y = target_rect.y() + (axis_y + 0.5) * zoom
+                painter.drawLine(
+                    0, int(round(line_y)), self.canvas.width(), int(round(line_y))
+                )
 
         painter.restore()
+
+        handle_rects = self.canvas._mirror_handle_rects()
+        if handle_rects:
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(255, 0, 0, 180))
+            for rect in handle_rects.values():
+                painter.drawEllipse(rect)
+            painter.restore()
 
     def _draw_background(self, painter, target_rect):
         background_image = self.canvas.background_image

@@ -45,6 +45,8 @@ class LineTool(BaseTool):
             self.canvas.drawing_context.mirror_y,
             wrap=self.canvas.tile_preview_enabled,
             pattern=self.canvas.drawing_context.pattern_brush,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
         )
         painter.end()
         if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
@@ -64,6 +66,8 @@ class LineTool(BaseTool):
                 self.canvas.drawing_context.mirror_y,
                 wrap=True,
                 pattern=self.canvas.drawing_context.pattern_brush,
+                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             )
             preview_painter.end()
         self.canvas.update()
@@ -87,6 +91,8 @@ class LineTool(BaseTool):
             erase=False,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             wrap=self.canvas.tile_preview_enabled,
             pattern_image=self.canvas.drawing_context.pattern_brush,
         )

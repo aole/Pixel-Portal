@@ -15,35 +15,29 @@ class Drawing:
         mirror_y,
         wrap=False,
         pattern: QImage | None = None,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
     ):
         doc_width = document_size.width()
         doc_height = document_size.height()
 
         base_x = point.x()
         base_y = point.y()
-        if wrap:
+        if wrap and doc_width:
             base_x %= doc_width
+        if wrap and doc_height:
             base_y %= doc_height
         base_point = QPoint(base_x, base_y)
 
-        points_to_draw = {base_point}
-        if mirror_x:
-            mx = doc_width - 1 - base_point.x()
-            if wrap:
-                mx %= doc_width
-            points_to_draw.add(QPoint(mx, base_point.y()))
-        if mirror_y:
-            my = doc_height - 1 - base_point.y()
-            if wrap:
-                my %= doc_height
-            points_to_draw.add(QPoint(base_point.x(), my))
-        if mirror_x and mirror_y:
-            mx = doc_width - 1 - base_point.x()
-            my = doc_height - 1 - base_point.y()
-            if wrap:
-                mx %= doc_width
-                my %= doc_height
-            points_to_draw.add(QPoint(mx, my))
+        points_to_draw = self._calculate_mirror_points(
+            base_point,
+            document_size,
+            mirror_x,
+            mirror_y,
+            wrap,
+            mirror_x_position,
+            mirror_y_position,
+        )
 
         for p in points_to_draw:
             if brush_type == "Pattern" and pattern is not None and not pattern.isNull():
@@ -57,35 +51,38 @@ class Drawing:
             elif brush_type == "Square":
                 self.draw_square_brush(painter, p, pen_width)
 
-    def erase_brush(self, painter, point, document_size, pen_width, mirror_x, mirror_y, wrap=False):
+    def erase_brush(
+        self,
+        painter,
+        point,
+        document_size,
+        pen_width,
+        mirror_x,
+        mirror_y,
+        wrap=False,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
+    ):
         doc_width = document_size.width()
         doc_height = document_size.height()
 
         base_x = point.x()
         base_y = point.y()
-        if wrap:
+        if wrap and doc_width:
             base_x %= doc_width
+        if wrap and doc_height:
             base_y %= doc_height
         base_point = QPoint(base_x, base_y)
 
-        points_to_erase = {base_point}
-        if mirror_x:
-            mx = doc_width - 1 - base_point.x()
-            if wrap:
-                mx %= doc_width
-            points_to_erase.add(QPoint(mx, base_point.y()))
-        if mirror_y:
-            my = doc_height - 1 - base_point.y()
-            if wrap:
-                my %= doc_height
-            points_to_erase.add(QPoint(base_point.x(), my))
-        if mirror_x and mirror_y:
-            mx = doc_width - 1 - base_point.x()
-            my = doc_height - 1 - base_point.y()
-            if wrap:
-                mx %= doc_width
-                my %= doc_height
-            points_to_erase.add(QPoint(mx, my))
+        points_to_erase = self._calculate_mirror_points(
+            base_point,
+            document_size,
+            mirror_x,
+            mirror_y,
+            wrap,
+            mirror_x_position,
+            mirror_y_position,
+        )
 
         painter.save()
         painter.setCompositionMode(QPainter.CompositionMode_Clear)
@@ -112,6 +109,54 @@ class Drawing:
                 if dist_x * dist_x + dist_y * dist_y <= radius * radius:
                     painter.drawPoint(x, y)
 
+    def _calculate_mirror_points(
+        self,
+        base_point: QPoint,
+        document_size: QSize,
+        mirror_x: bool,
+        mirror_y: bool,
+        wrap: bool,
+        mirror_x_position: float | None,
+        mirror_y_position: float | None,
+    ) -> set[QPoint]:
+        width = document_size.width()
+        height = document_size.height()
+
+        points = {QPoint(base_point)}
+
+        axis_x = mirror_x_position
+        if axis_x is None and width:
+            axis_x = (width - 1) / 2.0
+        axis_y = mirror_y_position
+        if axis_y is None and height:
+            axis_y = (height - 1) / 2.0
+
+        def add_point(x: int, y: int):
+            if wrap:
+                if width:
+                    x %= width
+                if height:
+                    y %= height
+                points.add(QPoint(int(x), int(y)))
+            else:
+                if 0 <= x < width and 0 <= y < height:
+                    points.add(QPoint(int(x), int(y)))
+
+        if mirror_x and axis_x is not None:
+            mirrored_x = int(round(2 * axis_x - base_point.x()))
+            add_point(mirrored_x, base_point.y())
+
+        if mirror_y and axis_y is not None:
+            mirrored_y = int(round(2 * axis_y - base_point.y()))
+            add_point(base_point.x(), mirrored_y)
+
+        if mirror_x and mirror_y and axis_x is not None and axis_y is not None:
+            mirrored_x = int(round(2 * axis_x - base_point.x()))
+            mirrored_y = int(round(2 * axis_y - base_point.y()))
+            add_point(mirrored_x, mirrored_y)
+
+        return points
+
     def draw_line_with_brush(
         self,
         painter,
@@ -125,6 +170,8 @@ class Drawing:
         wrap=False,
         erase=False,
         pattern: QImage | None = None,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
     ):
         width = document_size.width()
         height = document_size.height()
@@ -134,7 +181,15 @@ class Drawing:
 
         if erase:
             brush_func = lambda p: self.erase_brush(
-                painter, p, document_size, pen_width, mirror_x, mirror_y, wrap
+                painter,
+                p,
+                document_size,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
         else:
             brush_func = lambda p: self.draw_brush(
@@ -147,6 +202,8 @@ class Drawing:
                 mirror_y,
                 wrap,
                 pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
 
         if dx == 0 and dy == 0:
@@ -190,6 +247,8 @@ class Drawing:
         mirror_y,
         wrap=False,
         pattern: QImage | None = None,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
     ):
         self.draw_line_with_brush(
             painter,
@@ -202,6 +261,8 @@ class Drawing:
             mirror_y,
             wrap=wrap,
             pattern=pattern,
+            mirror_x_position=mirror_x_position,
+            mirror_y_position=mirror_y_position,
         )
         self.draw_line_with_brush(
             painter,
@@ -214,6 +275,8 @@ class Drawing:
             mirror_y,
             wrap=wrap,
             pattern=pattern,
+            mirror_x_position=mirror_x_position,
+            mirror_y_position=mirror_y_position,
         )
         self.draw_line_with_brush(
             painter,
@@ -226,6 +289,8 @@ class Drawing:
             mirror_y,
             wrap=wrap,
             pattern=pattern,
+            mirror_x_position=mirror_x_position,
+            mirror_y_position=mirror_y_position,
         )
         self.draw_line_with_brush(
             painter,
@@ -238,6 +303,8 @@ class Drawing:
             mirror_y,
             wrap=wrap,
             pattern=pattern,
+            mirror_x_position=mirror_x_position,
+            mirror_y_position=mirror_y_position,
         )
 
     def draw_ellipse(
@@ -251,6 +318,8 @@ class Drawing:
         mirror_y,
         wrap=False,
         pattern: QImage | None = None,
+        mirror_x_position: float | None = None,
+        mirror_y_position: float | None = None,
     ):
         center = rect.center()
         rx = rect.width() / 2
@@ -272,6 +341,8 @@ class Drawing:
                 mirror_y,
                 wrap=wrap,
                 pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
             self.draw_brush(
                 painter,
@@ -283,6 +354,8 @@ class Drawing:
                 mirror_y,
                 wrap=wrap,
                 pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
 
         for y in range(rect.top(), rect.bottom() + 1):
@@ -298,6 +371,8 @@ class Drawing:
                 mirror_y,
                 wrap=wrap,
                 pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
             self.draw_brush(
                 painter,
@@ -309,6 +384,8 @@ class Drawing:
                 mirror_y,
                 wrap=wrap,
                 pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
             )
 
     def flood_fill(self, layer, start_pos, fill_color, selection_shape=None):

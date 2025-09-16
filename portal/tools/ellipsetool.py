@@ -66,6 +66,8 @@ class EllipseTool(BaseTool):
             self.canvas.drawing_context.mirror_y,
             wrap=self.canvas.tile_preview_enabled,
             pattern=self.canvas.drawing_context.pattern_brush,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
         )
         painter.end()
         if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
@@ -84,6 +86,8 @@ class EllipseTool(BaseTool):
                 self.canvas.drawing_context.mirror_y,
                 wrap=True,
                 pattern=self.canvas.drawing_context.pattern_brush,
+                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             )
             preview_painter.end()
         self.canvas.update()
@@ -121,6 +125,8 @@ class EllipseTool(BaseTool):
             wrap=self.canvas.tile_preview_enabled,
             brush_type=self.canvas.drawing_context.brush_type,
             pattern_image=self.canvas.drawing_context.pattern_brush,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
         )
         self.command_generated.emit(command)
 
