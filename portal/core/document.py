@@ -1,36 +1,86 @@
-from portal.core.layer_manager import LayerManager
-from portal.core.layer import Layer
-from PySide6.QtGui import QImage, QPainter, QTransform
-from PySide6.QtCore import QSize, QBuffer, Qt
-from PIL import Image, ImageSequence, ImageQt
+from __future__ import annotations
+
+from collections.abc import Callable
 import io
 import json
+
+from PySide6.QtCore import QBuffer, QSize, Qt
+from PySide6.QtGui import QImage, QPainter
+from PIL import Image, ImageSequence, ImageQt
+
+from portal.core.frame_manager import FrameManager
+from portal.core.layer import Layer
+from portal.core.layer_manager import LayerManager
 
 
 class Document:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.layer_manager = LayerManager(width, height)
+        self.frame_manager = FrameManager(width, height)
+        self._layer_manager_listeners: list[Callable[[LayerManager], None]] = []
+        self._notify_layer_manager_changed()
+
+    @property
+    def layer_manager(self) -> LayerManager:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            raise ValueError("Document has no active frame.")
+        return layer_manager
+
+    def add_layer_manager_listener(
+        self,
+        callback: Callable[[LayerManager], None],
+        *,
+        invoke_immediately: bool = True,
+    ) -> Callable[[], None]:
+        """Register a callback that fires whenever the active layer manager changes."""
+
+        self._layer_manager_listeners.append(callback)
+        if invoke_immediately:
+            callback(self.layer_manager)
+
+        def remove() -> None:
+            try:
+                self._layer_manager_listeners.remove(callback)
+            except ValueError:
+                pass
+
+        return remove
+
+    def remove_layer_manager_listener(self, callback: Callable[[LayerManager], None]) -> None:
+        """Unregister a previously registered layer manager listener."""
+
+        try:
+            self._layer_manager_listeners.remove(callback)
+        except ValueError:
+            pass
 
     def clone(self):
         new_doc = Document(self.width, self.height)
-        new_doc.layer_manager = self.layer_manager.clone()
+        new_doc.frame_manager = self.frame_manager.clone()
+        new_doc._notify_layer_manager_changed()
         return new_doc
 
     def render(self) -> QImage:
         """Composites all visible layers into a single image."""
-        final_image = QImage(QSize(self.width, self.height), QImage.Format_ARGB32)
-        final_image.fill("transparent")
+        return self.render_current_frame()
 
-        painter = QPainter(final_image)
-        for layer in self.layer_manager.layers:
-            if layer.visible:
-                painter.setOpacity(layer.opacity)
-                painter.drawImage(0, 0, layer.image)
-        painter.end()
+    def add_frame(self):
+        frame = self.frame_manager.add_frame()
+        self._notify_layer_manager_changed()
+        return frame
 
-        return final_image
+    def remove_frame(self, index: int):
+        self.frame_manager.remove_frame(index)
+        self._notify_layer_manager_changed()
+
+    def select_frame(self, index: int):
+        self.frame_manager.select_frame(index)
+        self._notify_layer_manager_changed()
+
+    def render_current_frame(self) -> QImage:
+        return self.frame_manager.render_current_frame()
 
     @staticmethod
     def qimage_to_pil(qimage):
@@ -93,17 +143,21 @@ class Document:
     def resize(self, width, height, interpolation):
         self.width = width
         self.height = height
-        self.layer_manager.width = width
-        self.layer_manager.height = height
+        self.frame_manager.width = width
+        self.frame_manager.height = height
 
         if interpolation == "Smooth":
             mode = Qt.SmoothTransformation
         else:
             mode = Qt.FastTransformation
 
-        for layer in self.layer_manager.layers:
-            layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
-            layer.on_image_change.emit()
+        for frame in self.frame_manager.frames:
+            layer_manager = frame.layer_manager
+            layer_manager.width = width
+            layer_manager.height = height
+            for layer in layer_manager.layers:
+                layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
+                layer.on_image_change.emit()
 
     def crop(self, rect):
         rect = rect.normalized()
@@ -115,12 +169,23 @@ class Document:
 
         self.width = new_width
         self.height = new_height
-        self.layer_manager.width = new_width
-        self.layer_manager.height = new_height
+        self.frame_manager.width = new_width
+        self.frame_manager.height = new_height
 
-        for layer in self.layer_manager.layers:
-            layer.image = layer.image.copy(rect)
-            layer.on_image_change.emit()
+        for frame in self.frame_manager.frames:
+            layer_manager = frame.layer_manager
+            layer_manager.width = new_width
+            layer_manager.height = new_height
+            for layer in layer_manager.layers:
+                layer.image = layer.image.copy(rect)
+                layer.on_image_change.emit()
+
+    def _notify_layer_manager_changed(self) -> None:
+        manager = self.frame_manager.current_layer_manager
+        if manager is None:
+            return
+        for callback in list(self._layer_manager_listeners):
+            callback(manager)
 
     def get_current_image_for_ai(self):
         q_image = self.render()

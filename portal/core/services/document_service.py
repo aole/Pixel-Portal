@@ -25,16 +25,15 @@ class DocumentService:
             app.config.set('General', 'last_directory', app.last_directory)
 
             if file_path.lower().endswith(('.tif', '.tiff')):
-                app.document = Document.load_tiff(file_path)
+                document = Document.load_tiff(file_path)
             else:
                 image = QImage(file_path)
-                if not image.isNull():
-                    app.document = Document(image.width(), image.height())
-                    app.document.layer_manager.layers[0].image = image
+                if image.isNull():
+                    return
+                document = Document(image.width(), image.height())
+                document.layer_manager.layers[0].image = image
 
-            app.document.layer_manager.layer_visibility_changed.connect(app.on_layer_visibility_changed)
-            app.document.layer_manager.layer_structure_changed.connect(app.on_layer_structure_changed)
-            app.document.layer_manager.command_generated.connect(app.handle_command)
+            app.attach_document(document)
             app.undo_manager.clear()
             app.is_dirty = False
             app.undo_stack_changed.emit()

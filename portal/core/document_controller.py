@@ -27,11 +27,9 @@ class DocumentController(QObject):
     def __init__(self, settings: SettingsController, document_service: DocumentService | None = None, clipboard_service: ClipboardService | None = None):
         super().__init__()
         self.settings = settings
-        self.document = Document(64, 64)
-        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
-        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.document.layer_manager.command_generated.connect(self.handle_command)
-
+        self.document: Document | None = None
+        self._layer_manager = None
+        self._layer_manager_unsubscribe = None
         self.drawing_context = DrawingContext()
         self.undo_manager = UndoManager()
 
@@ -39,6 +37,8 @@ class DocumentController(QObject):
         self.clipboard_service = clipboard_service or ClipboardService(self.document_service)
         self.document_service.app = self
         self.clipboard_service.app = self
+
+        self.attach_document(Document(64, 64))
 
         self.is_recording = False
         self.recorded_commands = []
@@ -73,10 +73,7 @@ class DocumentController(QObject):
     def new_document(self, width, height):
         if not self.check_for_unsaved_changes():
             return
-        self.document = Document(width, height)
-        self.document.layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
-        self.document.layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
-        self.document.layer_manager.command_generated.connect(self.handle_command)
+        self.attach_document(Document(width, height))
         self.undo_manager.clear()
         self.is_dirty = False
         self.undo_stack_changed.emit()
@@ -130,6 +127,41 @@ class DocumentController(QObject):
             return
         if command:
             self.execute_command(command)
+
+    def attach_document(self, document: Document) -> None:
+        """Swap to a new document and bind to its layer manager lifecycle."""
+
+        self.document = document
+        if self._layer_manager_unsubscribe:
+            self._layer_manager_unsubscribe()
+            self._layer_manager_unsubscribe = None
+        self._disconnect_layer_manager()
+        self._layer_manager_unsubscribe = self.document.add_layer_manager_listener(
+            self._bind_layer_manager
+        )
+
+    def _bind_layer_manager(self, layer_manager):
+        if layer_manager is self._layer_manager:
+            return
+        self._disconnect_layer_manager()
+        self._layer_manager = layer_manager
+        layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+        layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
+        layer_manager.command_generated.connect(self.handle_command)
+
+    def _disconnect_layer_manager(self):
+        if not self._layer_manager:
+            return
+        for signal, slot in (
+            (self._layer_manager.layer_visibility_changed, self.on_layer_visibility_changed),
+            (self._layer_manager.layer_structure_changed, self.on_layer_structure_changed),
+            (self._layer_manager.command_generated, self.handle_command),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+        self._layer_manager = None
 
     def conform_to_palette(self, palette_hex):
         if not self.document or not palette_hex:
