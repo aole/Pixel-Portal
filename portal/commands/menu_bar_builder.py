@@ -52,6 +52,7 @@ class MenuBarBuilder:
         select_menu.addAction(self.action_manager.select_all_action)
         select_menu.addAction(self.action_manager.select_none_action)
         select_menu.addAction(self.action_manager.invert_selection_action)
+        select_menu.addAction(self.action_manager.select_opaque_action)
 
         image_menu = menu_bar.addMenu("&Image")
         image_menu.addAction(self.action_manager.resize_action)

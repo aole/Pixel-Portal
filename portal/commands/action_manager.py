@@ -99,6 +99,9 @@ class ActionManager:
         self.invert_selection_action.setShortcut("Ctrl+I")
         self.invert_selection_action.triggered.connect(self.app.invert_selection)
 
+        self.select_opaque_action = QAction("Select &Opaque", self.main_window)
+        self.select_opaque_action.triggered.connect(self.app.select_opaque)
+
     def _build_image_actions(self):
         """Create actions that modify the current image."""
         self.resize_action = QAction(QIcon("icons/resize.png"), "&Resize", self.main_window)

@@ -143,6 +143,32 @@ class App(QObject):
         self.invert_selection_triggered.emit()
 
     @Slot()
+    def select_opaque(self):
+        if not self.main_window:
+            return
+
+        document = getattr(self, "document", None)
+        if document is None:
+            return
+
+        layer_manager = getattr(document, "layer_manager", None)
+        if layer_manager is None:
+            return
+
+        layer = layer_manager.active_layer
+        if layer is None:
+            return
+
+        canvas = getattr(self.main_window, "canvas", None)
+        if canvas is None:
+            return
+
+        from portal.commands.selection_commands import SelectOpaqueCommand
+
+        command = SelectOpaqueCommand(layer, canvas)
+        self.execute_command(command)
+
+    @Slot()
     def clear_layer(self):
         self.clear_layer_triggered.emit()
 
