@@ -100,6 +100,7 @@ class ScriptDialog(QDialog):
                     widget.setCurrentText(default)
             elif param_type == 'checkbox':
                 widget = QCheckBox()
+                widget.setChecked(bool(default))
                 if default is not None:
                     widget.setChecked(bool(default))
                 else:

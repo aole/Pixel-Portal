@@ -35,6 +35,12 @@ class ScriptingAPI:
             return self.app.document.layer_manager.active_layer
         return None
 
+    def get_active_layer(self):
+        """Returns the currently active layer."""
+        if self.app.document:
+            return self.app.document.layer_manager.active_layer
+        return None
+
     def modify_layer(self, layer, drawing_func):
         """Modifies a layer's image using a drawing function."""
         if layer:
