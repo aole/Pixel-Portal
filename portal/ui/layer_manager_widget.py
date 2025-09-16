@@ -60,33 +60,43 @@ class LayerManagerWidget(QWidget):
         self.move_down_button.clicked.connect(self.move_layer_down)
         self.toolbar.addWidget(self.move_down_button)
 
+        self._updating_layers = False
+
         self.refresh_layers()
 
     def refresh_layers(self):
         """Refreshes the layer list from the document's layer manager."""
+        self._updating_layers = True
         self.layer_list.blockSignals(True)
-        self.layer_list.clear()
-        for layer in reversed(self.app.document.layer_manager.layers):
-            item = QListWidgetItem()
-            self.layer_list.addItem(item)
+        try:
+            self.layer_list.clear()
+            for layer in reversed(self.app.document.layer_manager.layers):
+                item = QListWidgetItem()
+                self.layer_list.addItem(item)
 
-            item_widget = LayerItemWidget(layer)
-            item_widget.visibility_toggled.connect(
-                lambda widget=item_widget: self.on_visibility_toggled(widget)
-            )
-            item_widget.opacity_preview_changed.connect(
-                lambda value, widget=item_widget: self.on_opacity_preview_changed(widget, value)
-            )
-            item_widget.opacity_changed.connect(
-                lambda old, new, widget=item_widget: self.on_opacity_changed(widget, old, new)
-            )
-            item.setSizeHint(item_widget.sizeHint())
-            self.layer_list.setItemWidget(item, item_widget)
+                item_widget = LayerItemWidget(layer)
+                item_widget.visibility_toggled.connect(
+                    lambda widget=item_widget: self.on_visibility_toggled(widget)
+                )
+                item_widget.opacity_preview_changed.connect(
+                    lambda value, widget=item_widget: self.on_opacity_preview_changed(widget, value)
+                )
+                item_widget.opacity_changed.connect(
+                    lambda old, new, widget=item_widget: self.on_opacity_changed(widget, old, new)
+                )
+                item.setSizeHint(item_widget.sizeHint())
+                self.layer_list.setItemWidget(item, item_widget)
 
-        if self.app.document.layer_manager.active_layer:
-            active_index = len(self.app.document.layer_manager.layers) - 1 - self.app.document.layer_manager.active_layer_index
-            self.layer_list.setCurrentRow(active_index)
-        self.layer_list.blockSignals(False)
+            if self.app.document.layer_manager.active_layer:
+                active_index = (
+                    len(self.app.document.layer_manager.layers)
+                    - 1
+                    - self.app.document.layer_manager.active_layer_index
+                )
+                self.layer_list.setCurrentRow(active_index)
+        finally:
+            self.layer_list.blockSignals(False)
+            self._updating_layers = False
 
     def on_selection_changed(self):
         """Handles changing the active layer."""
@@ -124,12 +134,46 @@ class LayerManagerWidget(QWidget):
         self.app.execute_command(command)
         self.layer_changed.emit()
 
-    def on_layers_moved(self, parent, start, end, destination, row):
+    def on_layers_moved(self, _parent, start, end, _destination, row):
         """Handles reordering layers via drag-and-drop."""
-        # This is complex to map back to the LayerManager.
-        # For now, we will use buttons for moving layers.
-        # A more robust implementation would handle this.
-        self.refresh_layers() # Simple refresh for now
+        if self._updating_layers:
+            return
+
+        move_count = end - start + 1
+        if move_count != 1:
+            # QListWidget is configured for single selection, but guard just in case.
+            self.refresh_layers()
+            return
+
+        final_row = row
+        if row > start:
+            final_row -= move_count
+
+        total_rows = self.layer_list.count()
+        if total_rows == 0:
+            return
+
+        final_row = max(0, min(final_row, total_rows - move_count))
+
+        if final_row == start:
+            # No effective change.
+            return
+
+        layer_manager = self.app.document.layer_manager
+        total_layers = len(layer_manager.layers)
+
+        from_index = total_layers - 1 - start
+        to_index = total_layers - 1 - final_row
+
+        if from_index == to_index:
+            return
+
+        from portal.core.command import MoveLayerCommand
+
+        command = MoveLayerCommand(layer_manager, from_index, to_index)
+        self.app.execute_command(command)
+
+        # Ensure the canvas reflects the new layer order immediately.
         self.layer_changed.emit()
 
     def clear_layer(self):
