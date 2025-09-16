@@ -1,0 +1,65 @@
+{
+  "left_toolbar": [
+    {
+      "name": "Pen",
+      "icon": "icons/toolpen.png",
+      "tools": [
+        {"name": "Pen", "icon": "icons/toolpen.png"}
+      ]
+    },
+    {
+      "name": "Eraser",
+      "icon": "icons/brush.png",
+      "tools": [
+        {"name": "Eraser", "icon": "icons/brush.png"}
+      ]
+    },
+    {
+      "name": "Bucket",
+      "icon": "icons/toolbucket.png",
+      "tools": [
+        {"name": "Bucket", "icon": "icons/toolbucket.png"}
+      ]
+    },
+    {
+      "name": "Picker",
+      "icon": "icons/toolpicker.png",
+      "tools": [
+        {"name": "Picker", "icon": "icons/toolpicker.png"}
+      ]
+    },
+    {
+      "name": "Move",
+      "icon": "icons/toolmove.png",
+      "tools": [
+        {"name": "Move", "icon": "icons/toolmove.png"}
+      ]
+    },
+    {
+      "name": "Rotate",
+      "icon": "icons/toolrotate.png",
+      "tools": [
+        {"name": "Rotate", "icon": "icons/toolrotate.png"}
+      ]
+    },
+    {
+      "name": "Shape Tools",
+      "icon": "icons/toolrect.png",
+      "tools": [
+        {"name": "Rectangle", "icon": "icons/toolrect.png"},
+        {"name": "Ellipse", "icon": "icons/toolellipse.png"},
+        {"name": "Line", "icon": "icons/toolline.png"}
+      ]
+    },
+    {
+      "name": "Selection Tools",
+      "icon": "icons/toolselectrect.png",
+      "tools": [
+        {"name": "Select Rectangle", "icon": "icons/toolselectrect.png"},
+        {"name": "Select Circle", "icon": "icons/toolselectcircle.png"},
+        {"name": "Select Lasso", "icon": "icons/toolselectlasso.png"},
+        {"name": "Select Color", "icon": "icons/toolselectcolor.png"}
+      ]
+    }
+  ]
+}
