@@ -144,19 +144,17 @@ class App(QObject):
 
     @Slot()
     def select_opaque(self):
-        if not self.main_window:
-            return
-
         document = getattr(self, "document", None)
-        if document is None:
-            return
-
         layer_manager = getattr(document, "layer_manager", None)
-        if layer_manager is None:
-            return
+        active_layer = getattr(layer_manager, "active_layer", None)
+        self._select_opaque_for_layer(active_layer)
 
-        layer = layer_manager.active_layer
-        if layer is None:
+    def select_opaque_for_layer(self, layer):
+        """Select opaque pixels for a specific layer without changing state."""
+        self._select_opaque_for_layer(layer)
+
+    def _select_opaque_for_layer(self, layer):
+        if not self.main_window or layer is None:
             return
 
         canvas = getattr(self.main_window, "canvas", None)

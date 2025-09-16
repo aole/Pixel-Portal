@@ -197,9 +197,7 @@ class LayerManagerWidget(QWidget):
     def select_opaque(self, index_in_list):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
         layer = self.app.document.layer_manager.layers[actual_index]
-        from portal.commands.selection_commands import SelectOpaqueCommand
-        command = SelectOpaqueCommand(layer, self.canvas)
-        self.app.execute_command(command)
+        self.app.select_opaque_for_layer(layer)
 
     def duplicate_layer_from_menu(self, index_in_list):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
