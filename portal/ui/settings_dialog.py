@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,6 +18,8 @@ from portal.ui.background import BackgroundImageMode
 
 class SettingsDialog(QDialog):
     """Dialog for configuring application settings."""
+
+    settings_applied = Signal()
 
     def __init__(self, settings_controller, parent=None):
         super().__init__(parent)
@@ -41,9 +43,9 @@ class SettingsDialog(QDialog):
         )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
-        self.button_box.button(QDialogButtonBox.Apply).clicked.connect(
-            self._apply_settings
-        )
+        apply_button = self.button_box.button(QDialogButtonBox.Apply)
+        if apply_button is not None:
+            apply_button.clicked.connect(self._apply_and_emit)
         layout.addWidget(self.button_box)
 
         self._apply_settings_to_widgets()
@@ -172,6 +174,10 @@ class SettingsDialog(QDialog):
             image_alpha=self.get_background_image_alpha(),
         )
 
-    def accept(self):
+    def _apply_and_emit(self):
         self._apply_settings()
+        self.settings_applied.emit()
+
+    def accept(self):
+        self._apply_and_emit()
         super().accept()

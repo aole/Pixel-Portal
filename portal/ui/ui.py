@@ -319,15 +319,19 @@ class MainWindow(QMainWindow):
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.app.settings_controller, self)
-        if dialog.exec():
-            self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
-            self.canvas.set_background_image_alpha(
-                self.app.settings_controller.background_image_alpha
-            )
-            self.canvas.set_background_image_mode(
-                self.app.settings_controller.background_image_mode
-            )
-            self.app.save_settings()
+        dialog.settings_applied.connect(self.apply_settings_from_controller)
+        dialog.exec()
+
+    @Slot()
+    def apply_settings_from_controller(self):
+        self.apply_grid_settings_from_settings()
+        self.canvas.set_background_image_alpha(
+            self.app.settings_controller.background_image_alpha
+        )
+        self.canvas.set_background_image_mode(
+            self.app.settings_controller.background_image_mode
+        )
+        self.app.save_settings()
 
     def open_background_color_dialog(self):
         color = QColorDialog.getColor(self.canvas.background_color, self)
