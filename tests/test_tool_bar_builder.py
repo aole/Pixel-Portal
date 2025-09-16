@@ -7,7 +7,7 @@ from portal.core.drawing_context import DrawingContext
 from portal.tools.basetool import BaseTool
 
 
-def test_toolbar_groups_tools_by_category(qapp, monkeypatch):
+def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
     main_window = QMainWindow()
     main_window.action_manager = types.SimpleNamespace()
     main_window.add_color_to_palette = lambda *args, **kwargs: None
@@ -21,61 +21,136 @@ def test_toolbar_groups_tools_by_category(qapp, monkeypatch):
         shortcut = "1"
         category = "draw"
 
-    class DummyShapeTool(BaseTool):
-        name = "DummyShape"
+    class DummyShapeOneTool(BaseTool):
+        name = "DummyShapeOne"
         icon = "icons/toolline.png"
         shortcut = "2"
+        category = "shape"
+
+    class DummyShapeTwoTool(BaseTool):
+        name = "DummyShapeTwo"
+        icon = "icons/toolellipse.png"
+        shortcut = "3"
         category = "shape"
 
     class DummySelectTool(BaseTool):
         name = "DummySelect"
         icon = "icons/toolselectrect.png"
-        shortcut = "3"
+        shortcut = "4"
         category = "select"
+
+    class DummySelectTwoTool(BaseTool):
+        name = "DummySelectTwo"
+        icon = "icons/toolselectcircle.png"
+        shortcut = "5"
+        category = "select"
+
+    class DummyExtraTool(BaseTool):
+        name = "DummyExtra"
+        icon = "icons/toolbucket.png"
+        shortcut = "6"
+        category = "draw"
 
     from portal.tools import registry as tool_registry
 
-    real_get_tools = tool_registry.get_tools
-
     def fake_get_tools():
-        tools = real_get_tools()
-        tools.extend(
-            [
-                {
-                    "class": DummyDrawTool,
-                    "name": DummyDrawTool.name,
-                    "icon": DummyDrawTool.icon,
-                    "shortcut": DummyDrawTool.shortcut,
-                    "category": DummyDrawTool.category,
-                },
-                {
-                    "class": DummyShapeTool,
-                    "name": DummyShapeTool.name,
-                    "icon": DummyShapeTool.icon,
-                    "shortcut": DummyShapeTool.shortcut,
-                    "category": DummyShapeTool.category,
-                },
-                {
-                    "class": DummySelectTool,
-                    "name": DummySelectTool.name,
-                    "icon": DummySelectTool.icon,
-                    "shortcut": DummySelectTool.shortcut,
-                    "category": DummySelectTool.category,
-                },
-            ]
-        )
-        return tools
+        return [
+            {
+                "class": DummyDrawTool,
+                "name": DummyDrawTool.name,
+                "icon": DummyDrawTool.icon,
+                "shortcut": DummyDrawTool.shortcut,
+                "category": DummyDrawTool.category,
+            },
+            {
+                "class": DummyShapeOneTool,
+                "name": DummyShapeOneTool.name,
+                "icon": DummyShapeOneTool.icon,
+                "shortcut": DummyShapeOneTool.shortcut,
+                "category": DummyShapeOneTool.category,
+            },
+            {
+                "class": DummyShapeTwoTool,
+                "name": DummyShapeTwoTool.name,
+                "icon": DummyShapeTwoTool.icon,
+                "shortcut": DummyShapeTwoTool.shortcut,
+                "category": DummyShapeTwoTool.category,
+            },
+            {
+                "class": DummySelectTool,
+                "name": DummySelectTool.name,
+                "icon": DummySelectTool.icon,
+                "shortcut": DummySelectTool.shortcut,
+                "category": DummySelectTool.category,
+            },
+            {
+                "class": DummySelectTwoTool,
+                "name": DummySelectTwoTool.name,
+                "icon": DummySelectTwoTool.icon,
+                "shortcut": DummySelectTwoTool.shortcut,
+                "category": DummySelectTwoTool.category,
+            },
+            {
+                "class": DummyExtraTool,
+                "name": DummyExtraTool.name,
+                "icon": DummyExtraTool.icon,
+                "shortcut": DummyExtraTool.shortcut,
+                "category": DummyExtraTool.category,
+            },
+        ]
 
     monkeypatch.setattr(tool_registry, "get_tools", fake_get_tools)
 
+    layout = [
+        {
+            "name": "Shape Tools",
+            "icon": "icons/toolrect.png",
+            "tools": [
+                {"name": DummyShapeOneTool.name, "icon": DummyShapeOneTool.icon},
+                {"name": DummyShapeTwoTool.name, "icon": DummyShapeTwoTool.icon},
+            ],
+        },
+        {
+            "name": "Selection Tools",
+            "icon": "icons/toolselectrect.png",
+            "tools": [
+                {"name": DummySelectTool.name, "icon": DummySelectTool.icon},
+                {"name": DummySelectTwoTool.name, "icon": DummySelectTwoTool.icon},
+            ],
+        },
+        {
+            "name": "Dummy Draw",
+            "icon": DummyDrawTool.icon,
+            "tools": [
+                {"name": DummyDrawTool.name, "icon": DummyDrawTool.icon},
+            ],
+        },
+    ]
+
+    def fake_load_layout(self, tools_by_name):
+        return layout
+
+    monkeypatch.setattr(ToolBarBuilder, "_load_toolbar_layout", fake_load_layout)
+
     builder._setup_left_toolbar()
 
-    # Direct tools are added as actions on the toolbar
     assert DummyDrawTool.name in builder.tool_actions
 
-    shape_actions = [a.text() for a in builder.main_window.shape_button.menu().actions()]
-    selection_actions = [a.text() for a in builder.main_window.selection_button.menu().actions()]
+    shape_button = builder.tool_buttons[DummyShapeOneTool.name]
+    assert shape_button is builder.tool_buttons[DummyShapeTwoTool.name]
+    shape_action_names = [action.text() for action in shape_button.menu().actions()]
+    assert shape_action_names == [DummyShapeOneTool.name, DummyShapeTwoTool.name]
 
-    assert DummyShapeTool.name in shape_actions
-    assert DummySelectTool.name in selection_actions
-    assert DummyDrawTool.name not in shape_actions + selection_actions
+    selection_button = builder.tool_buttons[DummySelectTool.name]
+    assert selection_button is builder.tool_buttons[DummySelectTwoTool.name]
+    selection_action_names = [action.text() for action in selection_button.menu().actions()]
+    assert selection_action_names == [DummySelectTool.name, DummySelectTwoTool.name]
+
+    direct_button = builder.tool_buttons[DummyDrawTool.name]
+    assert direct_button.menu() is None
+
+    extra_button = builder.tool_buttons[DummyExtraTool.name]
+    assert extra_button.menu() is None
+
+    builder.update_tool_buttons(DummyShapeTwoTool.name)
+    assert shape_button.defaultAction().text() == DummyShapeTwoTool.name

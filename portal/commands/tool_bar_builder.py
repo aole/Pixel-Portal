@@ -1,4 +1,8 @@
 import functools
+import json
+from importlib import resources
+from pathlib import Path
+
 from PySide6.QtWidgets import QToolBar, QLabel, QSlider, QToolButton, QMenu
 from PySide6.QtGui import QPixmap, QIcon, QAction, QActionGroup
 from PySide6.QtCore import Qt
@@ -11,6 +15,10 @@ class ToolBarBuilder:
         self.action_manager = main_window.action_manager
         self.top_toolbar = None
         self.left_toolbar = None
+        self.tool_actions = {}
+        self.tool_action_group = None
+        self.tool_buttons = {}
+        self._button_fallback_icons = {}
 
     def setup_toolbars(self):
         self._setup_top_toolbar()
@@ -78,78 +86,224 @@ class ToolBarBuilder:
         from portal.tools import registry
 
         tools = registry.get_tools()
+        tools_by_name = {tool["name"]: tool for tool in tools}
+
         self.tool_actions = {}
+        self.tool_buttons = {}
+        self._button_fallback_icons = {}
         self.tool_action_group = QActionGroup(self.main_window)
+        self.tool_action_group.setExclusive(True)
 
-        # Direct access tools (not shape or select)
-        for tool in [t for t in tools if t["category"] not in ("shape", "select")]:
-            action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
-            action.setCheckable(True)
-            action.triggered.connect(
-                functools.partial(self.app.drawing_context.set_tool, tool["name"])
-            )
-            button = QToolButton()
+        configured_tools = set()
+        toolbar_layout = self._load_toolbar_layout(tools_by_name)
+
+        for entry in toolbar_layout:
+            normalized_tools = []
+            for tool_spec in entry.get("tools", []):
+                if isinstance(tool_spec, str):
+                    tool_name = tool_spec
+                    icon_path = None
+                else:
+                    tool_name = tool_spec.get("name")
+                    icon_path = tool_spec.get("icon")
+                tool = tools_by_name.get(tool_name)
+                if not tool:
+                    continue
+                action = self._get_or_create_tool_action(tool)
+                normalized_tools.append(
+                    {
+                        "name": tool_name,
+                        "action": action,
+                        "icon": icon_path,
+                    }
+                )
+
+            if not normalized_tools:
+                continue
+
+            entry_name = entry.get("name") or normalized_tools[0]["name"]
+            entry_icon = entry.get("icon")
+
+            if len(normalized_tools) == 1:
+                tool_info = normalized_tools[0]
+                button = QToolButton(self.main_window)
+                button.setToolTip(entry_name)
+                action = tool_info["action"]
+                button.setDefaultAction(action)
+
+                fallback_icon = entry_icon or tool_info.get("icon")
+                icon = action.icon()
+                if icon.isNull():
+                    if fallback_icon:
+                        button.setIcon(QIcon(fallback_icon))
+                else:
+                    button.setIcon(icon)
+                if fallback_icon:
+                    self._button_fallback_icons[button] = fallback_icon
+
+                self.left_toolbar.addWidget(button)
+                self.tool_buttons[tool_info["name"]] = button
+                configured_tools.add(tool_info["name"])
+            else:
+                button = QToolButton(self.main_window)
+                button.setToolTip(entry_name)
+                button.setPopupMode(QToolButton.MenuButtonPopup)
+                menu = QMenu(button)
+                button.setMenu(menu)
+
+                first_action = None
+                for tool_info in normalized_tools:
+                    action = tool_info["action"]
+                    menu.addAction(action)
+                    if first_action is None:
+                        first_action = action
+                    self.tool_buttons[tool_info["name"]] = button
+                    configured_tools.add(tool_info["name"])
+
+                if not first_action:
+                    continue
+
+                button.setDefaultAction(first_action)
+
+                fallback_icon = entry_icon or normalized_tools[0].get("icon")
+                icon = first_action.icon()
+                if icon.isNull():
+                    if fallback_icon:
+                        button.setIcon(QIcon(fallback_icon))
+                else:
+                    button.setIcon(icon)
+                if fallback_icon:
+                    self._button_fallback_icons[button] = fallback_icon
+
+                self.left_toolbar.addWidget(button)
+
+        for tool in tools:
+            tool_name = tool["name"]
+            if tool_name in configured_tools:
+                continue
+
+            action = self._get_or_create_tool_action(tool)
+            button = QToolButton(self.main_window)
+            button.setToolTip(tool_name)
             button.setDefaultAction(action)
+
+            fallback_icon = tool.get("icon")
+            icon = action.icon()
+            if icon.isNull():
+                if fallback_icon:
+                    button.setIcon(QIcon(fallback_icon))
+            else:
+                button.setIcon(icon)
+            if fallback_icon:
+                self._button_fallback_icons[button] = fallback_icon
+
             self.left_toolbar.addWidget(button)
-            self.tool_actions[tool["name"]] = action
-            self.tool_action_group.addAction(action)
-            if tool["name"] == "Pen":
-                action.setChecked(True)
+            self.tool_buttons[tool_name] = button
+            configured_tools.add(tool_name)
 
-        # Shape Tools
-        shape_tools = [t for t in tools if t["category"] == "shape"]
-        if shape_tools:
-            self.main_window.shape_button = QToolButton(self.main_window)
-            self.main_window.shape_button.setPopupMode(QToolButton.MenuButtonPopup)
-            shape_menu = QMenu(self.main_window.shape_button)
-            self.main_window.shape_button.setMenu(shape_menu)
+        current_tool = getattr(self.app.drawing_context, "tool", None)
+        if current_tool:
+            self.update_tool_buttons(current_tool)
 
-            for idx, tool in enumerate(shape_tools):
-                action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
-                action.setCheckable(True)
-                action.triggered.connect(
-                    functools.partial(self.app.drawing_context.set_tool, tool["name"])
-                )
-                shape_menu.addAction(action)
-                self.tool_actions[tool["name"]] = action
-                self.tool_action_group.addAction(action)
-                if idx == 0:
-                    self.main_window.shape_button.setDefaultAction(action)
+    def _get_or_create_tool_action(self, tool):
+        tool_name = tool["name"]
+        if tool_name in self.tool_actions:
+            return self.tool_actions[tool_name]
 
-            self.left_toolbar.addWidget(self.main_window.shape_button)
-
-        # Selection Tools
-        selection_tools = [t for t in tools if t["category"] == "select"]
-        if selection_tools:
-            self.main_window.selection_button = QToolButton(self.main_window)
-            self.main_window.selection_button.setPopupMode(QToolButton.MenuButtonPopup)
-            selection_menu = QMenu(self.main_window.selection_button)
-            self.main_window.selection_button.setMenu(selection_menu)
-
-            for idx, tool in enumerate(selection_tools):
-                action = QAction(QIcon(tool["icon"]), tool["name"], self.main_window)
-                action.setCheckable(True)
-                action.triggered.connect(
-                    functools.partial(self.app.drawing_context.set_tool, tool["name"])
-                )
-                selection_menu.addAction(action)
-                self.tool_actions[tool["name"]] = action
-                self.tool_action_group.addAction(action)
-                if idx == 0:
-                    self.main_window.selection_button.setDefaultAction(action)
-
-            self.left_toolbar.addWidget(self.main_window.selection_button)
+        icon_path = tool.get("icon") or ""
+        action = QAction(QIcon(icon_path), tool_name, self.main_window)
+        action.setCheckable(True)
+        action.triggered.connect(
+            functools.partial(self.app.drawing_context.set_tool, tool_name)
+        )
+        self.tool_actions[tool_name] = action
+        self.tool_action_group.addAction(action)
+        if getattr(self.app.drawing_context, "tool", None) == tool_name:
+            action.setChecked(True)
+        return action
 
     def update_tool_buttons(self, tool_name):
-        if tool_name in self.tool_actions:
-            self.tool_actions[tool_name].setChecked(True)
+        action = self.tool_actions.get(tool_name)
+        if action:
+            action.setChecked(True)
 
-        for action in self.main_window.shape_button.menu().actions():
-            if action.text() == tool_name:
-                self.main_window.shape_button.setDefaultAction(action)
-                return
+        button = self.tool_buttons.get(tool_name)
+        if not action or not button:
+            return
 
-        for action in self.main_window.selection_button.menu().actions():
-            if action.text() == tool_name:
-                self.main_window.selection_button.setDefaultAction(action)
-                return
+        button.setDefaultAction(action)
+
+        icon = action.icon()
+        if icon.isNull():
+            icon_path = self._button_fallback_icons.get(button)
+            if icon_path:
+                button.setIcon(QIcon(icon_path))
+        else:
+            button.setIcon(icon)
+
+    def _load_toolbar_layout(self, tools_by_name):
+        config = self._read_toolbar_config()
+        if not config:
+            return []
+
+        layout_entries = config.get("left_toolbar", [])
+        if not isinstance(layout_entries, list):
+            return []
+
+        normalized_entries = []
+        for entry in layout_entries:
+            if not isinstance(entry, dict):
+                continue
+
+            entry_copy = {
+                "name": entry.get("name"),
+                "icon": entry.get("icon"),
+                "tools": [],
+            }
+
+            raw_tools = entry.get("tools", [])
+            if not isinstance(raw_tools, list):
+                continue
+
+            for tool_spec in raw_tools:
+                if isinstance(tool_spec, str):
+                    tool_name = tool_spec
+                    icon_path = None
+                elif isinstance(tool_spec, dict):
+                    tool_name = tool_spec.get("name")
+                    icon_path = tool_spec.get("icon")
+                else:
+                    continue
+
+                if not tool_name or tool_name not in tools_by_name:
+                    continue
+
+                entry_copy["tools"].append({"name": tool_name, "icon": icon_path})
+
+            if not entry_copy["tools"]:
+                continue
+
+            normalized_entries.append(entry_copy)
+
+        return normalized_entries
+
+    def _read_toolbar_config(self):
+        config_text = None
+
+        try:
+            resource_path = resources.files("portal").joinpath("config/toolbar_tools.json")
+            config_text = resource_path.read_text(encoding="utf-8")
+        except (FileNotFoundError, ModuleNotFoundError, AttributeError, OSError):
+            pass
+
+        if config_text is None:
+            local_path = Path(__file__).resolve().parents[1] / "config" / "toolbar_tools.json"
+            try:
+                config_text = local_path.read_text(encoding="utf-8")
+            except (FileNotFoundError, OSError):
+                return None
+
+        try:
+            return json.loads(config_text)
+        except json.JSONDecodeError:
+            return None
