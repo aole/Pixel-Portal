@@ -1,8 +1,13 @@
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath, QCursor
 
+from portal.commands.selection_commands import (
+    SelectionChangeCommand,
+    clone_selection_path,
+    selection_paths_equal,
+)
 from portal.tools.basetool import BaseTool
-from portal.core.command import MoveCommand
+from portal.core.command import CompositeCommand, MoveCommand
 
 
 class MoveTool(BaseTool):
@@ -34,7 +39,7 @@ class MoveTool(BaseTool):
 
         if self.canvas.selection_shape:
             self.moving_selection = True
-            self.original_selection_shape = self.canvas.selection_shape
+            self.original_selection_shape = QPainterPath(self.canvas.selection_shape)
             self.command_generated.emit(("cut_selection", "move_tool_start"))
         else:
             self.command_generated.emit(("cut_selection", "move_tool_start_no_selection"))
@@ -68,7 +73,7 @@ class MoveTool(BaseTool):
         if not active_layer:
             return
 
-        command = MoveCommand(
+        move_command = MoveCommand(
             layer=active_layer,
             before_move_image=self.before_image,
             after_cut_image=active_layer.image.copy(),
@@ -76,7 +81,22 @@ class MoveTool(BaseTool):
             delta=delta,
             original_selection_shape=self.original_selection_shape,
         )
-        self.command_generated.emit(command)
+        command_to_emit: MoveCommand | CompositeCommand = move_command
+        if self.moving_selection and self.original_selection_shape is not None:
+            final_selection = getattr(self.canvas, "selection_shape", None)
+            previous_selection = clone_selection_path(self.original_selection_shape)
+            current_selection = clone_selection_path(final_selection)
+            if not selection_paths_equal(previous_selection, current_selection):
+                selection_command = SelectionChangeCommand(
+                    self.canvas,
+                    previous_selection,
+                    current_selection,
+                )
+                command_to_emit = CompositeCommand(
+                    [move_command, selection_command], name="Move Selection"
+                )
+
+        self.command_generated.emit(command_to_emit)
 
         if self.moving_selection:
             self.moving_selection = False
