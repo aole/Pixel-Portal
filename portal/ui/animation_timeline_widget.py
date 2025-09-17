@@ -7,7 +7,16 @@ from math import ceil
 from typing import Iterable, List, Set
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QBrush, QMouseEvent, QPaintEvent, QPainter, QPen, QPalette
+from PySide6.QtGui import (
+    QColor,
+    QBrush,
+    QMouseEvent,
+    QPaintEvent,
+    QPainter,
+    QPen,
+    QPalette,
+    QPolygonF,
+)
 from PySide6.QtWidgets import QMenu, QSizePolicy, QWidget
 
 from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
@@ -22,17 +31,21 @@ class _TimelineLayout:
     track_y: float
     usable_width: float
     max_offset: float
+    scrub_top: float
+    scrub_bottom: float
 
 
 class AnimationTimelineWidget(QWidget):
     """A minimal animation timeline widget displaying frames and keyed positions.
 
     The widget renders a horizontal scale with equally spaced frame markers. Keys
-    are shown as dots aligned to their frame while a vertical line indicates the
-    currently selected frame. Context menu actions allow basic key management.
+    are shown as dots aligned to their frame while a triangular scrub indicator
+    beneath the scale highlights the currently selected frame. Context menu
+    actions allow basic key management.
     """
 
     keys_changed = Signal(list)
+    selected_keys_changed = Signal(list)
     current_frame_changed = Signal(int)
     key_add_requested = Signal(int)
     key_remove_requested = Signal(int)
@@ -44,6 +57,8 @@ class AnimationTimelineWidget(QWidget):
         self._base_total_frames = 0
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
         self._keys: Set[int] = {0}
+        self._selected_keys: Set[int] = set()
+        self._selection_anchor: int | None = None
         self._current_frame = 0
         self._margin = 24
         self._tick_height = 36
@@ -53,6 +68,11 @@ class AnimationTimelineWidget(QWidget):
         self._has_copied_key = False
         self._scroll_offset = 0.0
         self._last_pan_x = 0.0
+        self._scrub_gap = 10.0
+        self._scrub_channel_height = 12.0
+        self._scrub_triangle_half_width = 8.0
+        self._scrub_tolerance = 4.0
+        self._key_hit_padding = 4.0
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -100,18 +120,34 @@ class AnimationTimelineWidget(QWidget):
 
         return sorted(self._keys)
 
+    def selected_keys(self) -> List[int]:
+        """Return the currently selected keyed frames sorted ascending."""
+
+        return sorted(self._selected_keys)
+
     def set_keys(self, frames: Iterable[int]) -> None:
         """Replace the existing keyed frames with *frames*."""
 
         new_keys = {max(0, int(frame)) for frame in frames}
         if not new_keys:
             new_keys = {0}
+        added_keys = new_keys - self._keys
         if new_keys == self._keys:
             return
         self._keys = new_keys
         self._ensure_base_frame(max(self._keys))
+        if added_keys:
+            self._set_selection(set(), anchor=None)
+        else:
+            self._sync_selection_with_keys()
         self.keys_changed.emit(self.keys())
         self.update()
+
+    def set_selected_keys(self, frames: Iterable[int]) -> None:
+        """Replace the selected keyed frames with *frames*."""
+
+        requested = {int(frame) for frame in frames}
+        self._set_selection(requested)
 
     def has_copied_key(self) -> bool:
         return self._has_copied_key
@@ -141,6 +177,7 @@ class AnimationTimelineWidget(QWidget):
             return
         self._keys.add(frame)
         self._ensure_base_frame(frame)
+        self._set_selection(set(), anchor=None)
         self.keys_changed.emit(self.keys())
         self.update()
 
@@ -151,6 +188,7 @@ class AnimationTimelineWidget(QWidget):
         if len(self._keys) == 1:
             return
         self._keys.remove(frame)
+        self._sync_selection_with_keys()
         self.keys_changed.emit(self.keys())
         self.update()
 
@@ -169,6 +207,7 @@ class AnimationTimelineWidget(QWidget):
         frame_color = palette.color(QPalette.WindowText)
         key_color = palette.color(QPalette.Highlight)
         key_border = key_color.darker(130)
+        selection_ring_color = QColor(key_color).lighter(140)
         current_color = palette.color(QPalette.Highlight)
 
         def muted(color: QColor) -> QColor:
@@ -183,6 +222,7 @@ class AnimationTimelineWidget(QWidget):
         muted_frame_color = muted(frame_color)
         muted_key_color = muted(key_color)
         muted_key_border = muted(key_border)
+        muted_selection_color = muted(selection_ring_color)
 
         active_tick_pen = QPen(frame_color, 1.5)
         inactive_tick_pen = QPen(muted_frame_color, 1.5)
@@ -192,6 +232,8 @@ class AnimationTimelineWidget(QWidget):
         inactive_key_pen = QPen(muted_key_border, 1.5)
         active_key_brush = QBrush(key_color)
         inactive_key_brush = QBrush(muted_key_color)
+        active_selection_pen = QPen(selection_ring_color, 2)
+        inactive_selection_pen = QPen(muted_selection_color, 2)
 
         playback_last_index = max(0, self._playback_total_frames - 1)
 
@@ -239,23 +281,65 @@ class AnimationTimelineWidget(QWidget):
             if frame == self._current_frame:
                 radius = 8
             is_within_playback = frame <= playback_last_index
+            if frame in self._selected_keys:
+                painter.setPen(
+                    active_selection_pen if is_within_playback else inactive_selection_pen
+                )
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(QPointF(x, layout.track_y), radius + 4, radius + 4)
             painter.setPen(active_key_pen if is_within_playback else inactive_key_pen)
             painter.setBrush(active_key_brush if is_within_playback else inactive_key_brush)
             painter.drawEllipse(QPointF(x, layout.track_y), radius, radius)
 
-        # Draw the current frame indicator.
+        # Draw the scrub lines.
+        painter.setPen(QPen(guide_color, 2))
+        painter.drawLine(
+            QPointF(visible_start_x, layout.scrub_top),
+            QPointF(visible_end_x, layout.scrub_top),
+        )
+        painter.drawLine(
+            QPointF(visible_start_x, layout.scrub_bottom),
+            QPointF(visible_end_x, layout.scrub_bottom),
+        )
+
+        # Draw the current frame indicator as a triangle.
         current_x = self._margin + self._current_frame * layout.spacing - self._scroll_offset
         current_x = max(visible_start_x, min(current_x, visible_end_x))
-        painter.setPen(QPen(current_color, 2, Qt.SolidLine))
-        painter.drawLine(QPointF(current_x, 0), QPointF(current_x, self.height()))
+        triangle = QPolygonF(
+            [
+                QPointF(current_x, layout.scrub_top),
+                QPointF(current_x - self._scrub_triangle_half_width, layout.scrub_bottom),
+                QPointF(current_x + self._scrub_triangle_half_width, layout.scrub_bottom),
+            ]
+        )
+        painter.setPen(QPen(current_color, 1.5))
+        painter.setBrush(QBrush(current_color))
+        painter.drawPolygon(triangle)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
-            self._is_dragging = True
-            frame = self._frame_at_point(event)
-            self.set_current_frame(frame)
-            event.accept()
-            return
+            modifiers = event.modifiers()
+            ctrl_down = self._is_control_modifier(modifiers)
+            shift_down = bool(modifiers & Qt.ShiftModifier)
+            key_frame = self._key_at_point(event)
+            if key_frame is not None:
+                self._is_dragging = False
+                self._handle_key_click(key_frame, modifiers)
+                if not ctrl_down and not shift_down:
+                    self.set_current_frame(key_frame)
+                event.accept()
+                return
+            if self._is_point_in_scrub_area(event):
+                self._is_dragging = True
+                frame = self._frame_at_point(event)
+                self.set_current_frame(frame)
+                event.accept()
+                return
+            if not ctrl_down and not shift_down:
+                self._set_selection(set(), anchor=None)
+                event.accept()
+                return
+            self._is_dragging = False
         if event.button() == Qt.MiddleButton:
             self._is_panning = True
             self._last_pan_x = self._event_x(event)
@@ -273,9 +357,7 @@ class AnimationTimelineWidget(QWidget):
             self._is_panning = False
             self._last_pan_x = 0.0
             self.unsetCursor()
-        if event.buttons() & Qt.LeftButton:
-            self._is_dragging = True
-        else:
+        if not (event.buttons() & Qt.LeftButton):
             self._is_dragging = False
         if self._is_dragging:
             frame = self._frame_at_point(event)
@@ -286,10 +368,11 @@ class AnimationTimelineWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
-            frame = self._frame_at_point(event)
-            self.set_current_frame(frame)
+            if self._is_dragging:
+                frame = self._frame_at_point(event)
+                self.set_current_frame(frame)
+                event.accept()
             self._is_dragging = False
-            event.accept()
             return
         if event.button() == Qt.MiddleButton:
             self._is_panning = False
@@ -340,6 +423,96 @@ class AnimationTimelineWidget(QWidget):
         frame = max(0, min(frame, layout.max_frame))
         return frame
 
+    def _key_at_point(self, event: QMouseEvent) -> int | None:
+        layout = self._calculate_layout()
+        if layout.spacing <= 0:
+            return None
+        event_x = self._event_x(event)
+        event_y = self._event_y(event)
+        closest_frame: int | None = None
+        closest_distance_sq = float("inf")
+        for frame in self._keys:
+            x = self._margin + frame * layout.spacing - self._scroll_offset
+            radius = 6
+            if frame == self._current_frame:
+                radius = 8
+            radius += self._key_hit_padding
+            dx = event_x - x
+            dy = event_y - layout.track_y
+            if abs(dx) > radius or abs(dy) > radius:
+                continue
+            distance_sq = dx * dx + dy * dy
+            if distance_sq <= radius * radius and distance_sq < closest_distance_sq:
+                closest_distance_sq = distance_sq
+                closest_frame = frame
+        return closest_frame
+
+    def _handle_key_click(self, frame: int, modifiers: Qt.KeyboardModifiers) -> None:
+        ctrl = self._is_control_modifier(modifiers)
+        shift = bool(modifiers & Qt.ShiftModifier)
+        if shift:
+            anchor = self._selection_anchor
+            if anchor is None or anchor not in self._keys:
+                anchor = frame
+            start = min(anchor, frame)
+            end = max(anchor, frame)
+            range_keys = {key for key in self._keys if start <= key <= end}
+            if ctrl:
+                new_selection = set(self._selected_keys) | range_keys
+            else:
+                new_selection = range_keys
+            self._set_selection(new_selection, anchor=anchor)
+            return
+        if ctrl:
+            new_selection = set(self._selected_keys)
+            anchor = self._selection_anchor
+            if frame in new_selection:
+                new_selection.remove(frame)
+                if anchor == frame:
+                    anchor = min(new_selection) if new_selection else None
+            else:
+                new_selection.add(frame)
+                anchor = frame
+            self._set_selection(new_selection, anchor=anchor)
+            return
+        self._set_selection({frame}, anchor=frame)
+
+    def _sync_selection_with_keys(self) -> None:
+        if not self._keys:
+            self._set_selection(set(), anchor=None)
+            return
+        current_selection = set(self._selected_keys)
+        self._set_selection(current_selection, prefer_existing_anchor=True)
+
+    def _set_selection(
+        self,
+        frames: Set[int],
+        anchor: int | None = None,
+        *,
+        prefer_existing_anchor: bool = False,
+    ) -> None:
+        valid_frames = {frame for frame in frames if frame in self._keys}
+        new_anchor = anchor
+        if prefer_existing_anchor and self._selection_anchor in valid_frames:
+            new_anchor = self._selection_anchor
+        if new_anchor is None and valid_frames:
+            new_anchor = min(valid_frames)
+        if new_anchor is not None and new_anchor not in valid_frames:
+            new_anchor = min(valid_frames) if valid_frames else None
+        selection_changed = valid_frames != self._selected_keys
+        if selection_changed:
+            self._selected_keys = valid_frames
+            self.selected_keys_changed.emit(self.selected_keys())
+            self.update()
+        else:
+            self._selected_keys = valid_frames
+        if not valid_frames:
+            new_anchor = None
+        self._selection_anchor = new_anchor
+
+    def _is_control_modifier(self, modifiers: Qt.KeyboardModifiers) -> bool:
+        return bool(modifiers & (Qt.ControlModifier | Qt.MetaModifier))
+
     def _calculate_layout(self) -> _TimelineLayout:
         width = max(1, self.width())
         height = max(1, self.height())
@@ -353,6 +526,16 @@ class AnimationTimelineWidget(QWidget):
         visible_capacity = max(1, int(ceil(usable_width / spacing)))
         max_frame = max(visible_capacity, max_hint)
         track_y = height / 2
+        track_bottom = track_y + self._tick_height / 2
+        scrub_top_limit = height - self._scrub_channel_height - 6
+        scrub_top = track_bottom + self._scrub_gap
+        scrub_top = min(scrub_top, scrub_top_limit)
+        min_scrub_top = track_bottom + 2
+        if scrub_top < min_scrub_top:
+            scrub_top = min_scrub_top
+        scrub_bottom = min(height - 4, scrub_top + self._scrub_channel_height)
+        if scrub_bottom < scrub_top:
+            scrub_bottom = scrub_top
         content_end = self._margin + max_frame * spacing
         max_offset = max(0.0, content_end - (width - self._margin))
         if self._scroll_offset < 0:
@@ -365,6 +548,8 @@ class AnimationTimelineWidget(QWidget):
             track_y=track_y,
             usable_width=usable_width,
             max_offset=max_offset,
+            scrub_top=scrub_top,
+            scrub_bottom=scrub_bottom,
         )
 
     def _ensure_base_frame(self, frame: int) -> None:
@@ -411,4 +596,15 @@ class AnimationTimelineWidget(QWidget):
     def _event_x(self, event: QMouseEvent) -> float:
         pos = event.position() if hasattr(event, "position") else event.pos()
         return float(pos.x())
+
+    def _event_y(self, event: QMouseEvent) -> float:
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        return float(pos.y())
+
+    def _is_point_in_scrub_area(self, event: QMouseEvent) -> bool:
+        layout = self._calculate_layout()
+        y = self._event_y(event)
+        top = layout.scrub_top - self._scrub_tolerance
+        bottom = layout.scrub_bottom + self._scrub_tolerance
+        return top <= y <= bottom
 
