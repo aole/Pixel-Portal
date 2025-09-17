@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtGui import QImage, QColor
+from PySide6.QtGui import QImage, QColor, QPainterPath
 from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QCursor
 from portal.core.document import Document
@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QMouseEvent
 from unittest.mock import MagicMock, patch, Mock
 import os
+from portal.commands.layer_commands import RotateLayerCommand
 
 @pytest.fixture
 def drawing_context():
@@ -717,6 +718,26 @@ def test_toggle_grid(canvas):
         canvas.toggle_grid()
         assert not canvas.grid_visible
         mock_update.assert_called_once()
+
+
+def test_rotate_layer_command_rotates_selection_and_clears_vacated_pixels():
+    layer = Layer(4, 4, "Layer")
+    layer.image.fill(Qt.transparent)
+    layer.image.setPixelColor(0, 0, QColor("red"))
+    layer.image.setPixelColor(1, 0, QColor("green"))
+    layer.image.setPixelColor(0, 1, QColor("magenta"))
+    layer.image.setPixelColor(3, 3, QColor("blue"))
+
+    selection = QPainterPath()
+    selection.addRect(QRect(0, 0, 2, 2))
+
+    command = RotateLayerCommand(layer, 90, QPoint(0, 0), selection)
+    command.execute()
+
+    assert layer.image.pixelColor(0, 0) == QColor("red")
+    assert layer.image.pixelColor(0, 1) == QColor("green")
+    assert layer.image.pixelColor(1, 0).alpha() == 0
+    assert layer.image.pixelColor(3, 3) == QColor("blue")
 
 
 @pytest.fixture

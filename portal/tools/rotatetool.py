@@ -1,5 +1,5 @@
 import math
-from PySide6.QtGui import QCursor, QPen, QColor, QTransform, QImage, QPainter
+from PySide6.QtGui import QCursor, QPen, QColor, QTransform, QImage, QPainter, QPainterPath
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
@@ -23,6 +23,8 @@ class RotateTool(BaseTool):
         self.drag_mode = None  # None, 'rotate', or 'pivot'
         self.original_image = None
         self.pivot_doc = QPoint(0, 0)
+        self.original_selection_shape: QPainterPath | None = None
+        self.selection_source_image: QImage | None = None
 
     def activate(self):
         self.pivot_doc = self.calculate_default_pivot_doc()
@@ -61,6 +63,22 @@ class RotateTool(BaseTool):
             if active_layer:
                 self.original_image = active_layer.image.copy()
                 self.canvas.temp_image_replaces_active_layer = True
+                self.original_selection_shape = None
+                self.selection_source_image = None
+                if self.canvas.selection_shape:
+                    self.original_selection_shape = QPainterPath(self.canvas.selection_shape)
+                    self.selection_source_image = QImage(
+                        self.original_image.size(),
+                        self.original_image.format(),
+                    )
+                    self.selection_source_image.fill(Qt.transparent)
+
+                    selection_painter = QPainter(self.selection_source_image)
+                    selection_painter.setRenderHint(QPainter.Antialiasing, False)
+                    selection_painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+                    selection_painter.setClipPath(self.original_selection_shape)
+                    selection_painter.drawImage(0, 0, self.original_image)
+                    selection_painter.end()
         elif self.is_hovering_center:
             self.drag_mode = 'pivot'
 
@@ -104,18 +122,41 @@ class RotateTool(BaseTool):
                 painter.setRenderHint(QPainter.Antialiasing, False)
                 painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
 
-                center = self.get_rotation_center_doc()
-                transform = QTransform().translate(center.x(), center.y()).rotate(math.degrees(self.angle)).translate(-center.x(), -center.y())
+                center_doc = self.get_rotation_center_doc()
+                angle_degrees = math.degrees(self.angle)
+                transform = (
+                    QTransform()
+                    .translate(center_doc.x(), center_doc.y())
+                    .rotate(angle_degrees)
+                    .translate(-center_doc.x(), -center_doc.y())
+                )
 
-                selection_shape = self.canvas.selection_shape
-                if selection_shape:
-                    painter.setClipPath(selection_shape)
+                if self.original_selection_shape:
+                    source_image = self.selection_source_image or self.original_image
+                    painter.setClipPath(self.original_selection_shape)
                     painter.setCompositionMode(QPainter.CompositionMode_Clear)
-                    painter.fillRect(self.original_image.rect(), Qt.transparent)
-                    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                    painter.fillPath(self.original_selection_shape, Qt.transparent)
+                    painter.end()
 
-                    painter.setTransform(transform)
-                    painter.drawImage(0, 0, self.original_image)
+                    inverse_transform, invertible = transform.inverted()
+                    if not invertible:
+                        self.canvas.temp_image = image_to_modify
+                        self.canvas.update()
+                        return
+
+                    width = source_image.width()
+                    height = source_image.height()
+
+                    for y in range(image_to_modify.height()):
+                        for x in range(image_to_modify.width()):
+                            source_point = inverse_transform.map(QPointF(x, y))
+                            sx = int(source_point.x())
+                            sy = int(source_point.y())
+                            if 0 <= sx < width and 0 <= sy < height:
+                                color = source_image.pixelColor(sx, sy)
+                                if color.alpha() > 0:
+                                    image_to_modify.setPixelColor(x, y, color)
+                    painter = None
                 else:
                     painter.setCompositionMode(QPainter.CompositionMode_Clear)
                     painter.fillRect(self.original_image.rect(), Qt.transparent)
@@ -123,8 +164,13 @@ class RotateTool(BaseTool):
                     painter.setTransform(transform)
                     painter.drawImage(0, 0, self.original_image)
 
-                painter.end()
+                if painter is not None:
+                    painter.end()
                 self.canvas.temp_image = image_to_modify
+
+                if self.original_selection_shape:
+                    rotated_shape = transform.map(self.original_selection_shape)
+                    self.canvas._update_selection_and_emit_size(rotated_shape)
 
             self.canvas.update()
         elif self.drag_mode == 'pivot':
@@ -143,11 +189,29 @@ class RotateTool(BaseTool):
             active_layer = layer_manager.active_layer
             if active_layer:
                 center_doc = self.get_rotation_center_doc()
-                selection_shape = self.canvas.selection_shape
-                command = RotateLayerCommand(active_layer, math.degrees(self.angle), center_doc, selection_shape)
+                angle_degrees = math.degrees(self.angle)
+                selection_shape = (
+                    QPainterPath(self.original_selection_shape)
+                    if self.original_selection_shape is not None
+                    else None
+                )
+
+                if self.original_selection_shape:
+                    transform = (
+                        QTransform()
+                        .translate(center_doc.x(), center_doc.y())
+                        .rotate(angle_degrees)
+                        .translate(-center_doc.x(), -center_doc.y())
+                    )
+                    rotated_shape = transform.map(self.original_selection_shape)
+                    self.canvas._update_selection_and_emit_size(rotated_shape)
+
+                command = RotateLayerCommand(active_layer, angle_degrees, center_doc, selection_shape)
                 self.command_generated.emit(command)
 
             self.original_image = None
+            self.selection_source_image = None
+            self.original_selection_shape = None
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))
 
@@ -161,7 +225,13 @@ class RotateTool(BaseTool):
             if self.original_image and layer_manager and layer_manager.active_layer:
                 layer_manager.active_layer.image = self.original_image
                 layer_manager.active_layer.on_image_change.emit()
+            if self.original_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(
+                    QPainterPath(self.original_selection_shape)
+                )
             self.original_image = None
+            self.selection_source_image = None
+            self.original_selection_shape = None
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))
         self.drag_mode = None
