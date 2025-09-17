@@ -76,6 +76,9 @@ class Document:
         self._notify_layer_manager_changed()
 
     def select_frame(self, index: int):
+        if index < 0:
+            index = 0
+        self.frame_manager.ensure_frame(index)
         self.frame_manager.select_frame(index)
         self._notify_layer_manager_changed()
 

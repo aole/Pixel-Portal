@@ -1,6 +1,7 @@
 from PySide6.QtGui import QColor
 
 from portal.core.document import Document
+from portal.core.frame_manager import FrameManager
 from portal.commands.timeline_commands import (
     AddKeyframeCommand,
     DuplicateKeyframeCommand,
@@ -16,6 +17,22 @@ def test_document_initializes_with_single_frame():
     assert document.layer_manager is document.frame_manager.current_layer_manager
 
 
+def test_frame_manager_ensure_frame_extends_sequence():
+    manager = FrameManager(2, 2, frame_count=1)
+    manager.frames[0].layer_manager.active_layer.image.fill(QColor("red"))
+
+    manager.ensure_frame(3)
+
+    assert len(manager.frames) == 4
+    assert manager.frames[0].render().pixelColor(0, 0) == QColor("red")
+    for index in range(1, 4):
+        frame = manager.frames[index]
+        assert frame is not manager.frames[0]
+        assert frame.layer_manager is not manager.frames[0].layer_manager
+        assert frame.render().pixelColor(0, 0) == QColor("red")
+    assert manager.resolve_key_frame_index(3) == 0
+
+
 def test_document_add_and_select_frames():
     document = Document(4, 4)
     first_manager = document.layer_manager
@@ -29,6 +46,27 @@ def test_document_add_and_select_frames():
 
     document.select_frame(0)
     assert document.layer_manager is first_manager
+
+
+def test_document_add_keyframe_extends_frames_without_manual_add():
+    document = Document(3, 3)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+
+    added = document.add_key_frame(4)
+
+    assert added is True
+    assert len(document.frame_manager.frames) >= 5
+    assert 4 in document.key_frames
+
+    document.select_frame(4)
+    assert document.frame_manager.resolve_key_frame_index() == 4
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(4)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
 
 def test_render_current_frame_tracks_active_frame():

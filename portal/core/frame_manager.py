@@ -39,6 +39,28 @@ class FrameManager:
         """Alias for the active frame's layer manager."""
         return self.current_layer_manager
 
+    # ------------------------------------------------------------------
+    # Capacity helpers
+    # ------------------------------------------------------------------
+    def ensure_frame(self, index: int) -> None:
+        """Ensure ``index`` is a valid frame position, extending the list if needed."""
+
+        if index < 0:
+            return
+
+        if not self.frames:
+            self.frames.append(Frame(self.width, self.height))
+            self.active_frame_index = 0
+            if not self.key_frames:
+                self.key_frames = {0}
+
+        while len(self.frames) <= index:
+            source_index = self.resolve_key_frame_index(len(self.frames))
+            if source_index is None or not (0 <= source_index < len(self.frames)):
+                source_index = len(self.frames) - 1
+            source_frame = self.frames[source_index]
+            self.frames.append(source_frame.clone())
+
     def add_frame(self, frame: Optional[Frame] = None) -> Frame:
         if frame is None:
             frame = Frame(self.width, self.height)
@@ -110,10 +132,17 @@ class FrameManager:
         Returns ``True`` if the set changed.
         """
 
-        normalized = {
-            frame for frame in (int(value) for value in frames)
-            if 0 <= frame < len(self.frames)
-        }
+        normalized: Set[int] = set()
+        for value in frames:
+            try:
+                frame = int(value)
+            except (TypeError, ValueError):
+                continue
+            if frame < 0:
+                continue
+            self.ensure_frame(frame)
+            if frame < len(self.frames):
+                normalized.add(frame)
         if not normalized and self.frames:
             fallback = min(self.active_frame_index, len(self.frames) - 1)
             normalized = {max(0, fallback)}
@@ -144,6 +173,9 @@ class FrameManager:
         return True
 
     def add_key_frame(self, index: int) -> bool:
+        if index < 0:
+            return False
+        self.ensure_frame(index)
         if not (0 <= index < len(self.frames)):
             return False
         if index in self.key_frames:
@@ -196,7 +228,10 @@ class FrameManager:
                 candidate += 1
             target_index = candidate
 
-        if target_index is None or not (0 <= target_index < len(self.frames)):
+        if target_index is None or target_index < 0:
+            return None
+        self.ensure_frame(target_index)
+        if not (0 <= target_index < len(self.frames)):
             return None
         if target_index in self.key_frames:
             return None

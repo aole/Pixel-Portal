@@ -43,7 +43,6 @@ class AnimationTimelineWidget(QWidget):
         self._tick_height = 36
         self._preferred_frame_spacing = 16.0
         self._is_dragging = False
-        self._max_allowed_frame = 0
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -59,14 +58,13 @@ class AnimationTimelineWidget(QWidget):
     def total_frames(self) -> int:
         """Return the highest frame index currently represented."""
 
-        return self._max_allowed_frame
+        highest_key = max(self._keys) if self._keys else 0
+        return max(self._base_total_frames, highest_key)
 
     def set_total_frames(self, frame_count: int) -> None:
         """Define the minimum highest frame index displayed by the timeline."""
 
         frame_count = max(0, int(frame_count))
-        highest_key = max(self._keys) if self._keys else 0
-        self._max_allowed_frame = max(frame_count, highest_key)
         if frame_count == self._base_total_frames:
             return
         self._base_total_frames = frame_count
@@ -132,8 +130,6 @@ class AnimationTimelineWidget(QWidget):
                 new_frame += 1
         else:
             new_frame = max(0, int(target_frame))
-        if new_frame > self._max_allowed_frame:
-            return
         if new_frame in self._keys:
             return
         self.add_key(new_frame)
@@ -241,21 +237,15 @@ class AnimationTimelineWidget(QWidget):
         frame = self._frame_at_point(event)
         menu = QMenu(self)
 
-        is_valid_frame = 0 <= frame <= self._max_allowed_frame
-
         add_action = menu.addAction(f"Add Key @ Frame {frame}")
-        add_action.setEnabled(is_valid_frame and frame not in self._keys)
+        add_action.setEnabled(frame not in self._keys)
 
         remove_action = menu.addAction(f"Remove Key @ Frame {frame}")
-        remove_action.setEnabled(
-            is_valid_frame and frame in self._keys and len(self._keys) > 1
-        )
+        remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
 
         menu.addSeparator()
         duplicate_action = menu.addAction(f"Duplicate Last Key @ Frame {frame}")
-        duplicate_action.setEnabled(
-            is_valid_frame and bool(self._keys) and frame not in self._keys
-        )
+        duplicate_action.setEnabled(bool(self._keys) and frame not in self._keys)
 
         chosen = menu.exec(event.globalPos())
         if chosen == add_action:
@@ -277,8 +267,7 @@ class AnimationTimelineWidget(QWidget):
         if layout.spacing <= 0:
             return 0
         frame = round((x - self._margin) / layout.spacing)
-        max_frame = min(layout.max_frame, self._max_allowed_frame)
-        frame = max(0, min(frame, max_frame))
+        frame = max(0, min(frame, layout.max_frame))
         return frame
 
     def _calculate_layout(self) -> _TimelineLayout:

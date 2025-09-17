@@ -128,9 +128,11 @@ class DocumentController(QObject):
         document = self.document
         if document is None:
             return
-        if frame_index in document.key_frames:
+        if frame_index < 0:
             return
-        if frame_index < 0 or frame_index >= len(document.frame_manager.frames):
+        frame_manager = document.frame_manager
+        frame_manager.ensure_frame(frame_index)
+        if frame_index in document.key_frames:
             return
         command = AddKeyframeCommand(document, frame_index)
         self.execute_command(command)
@@ -156,13 +158,11 @@ class DocumentController(QObject):
             return None
         if not document.key_frames:
             return None
-        frame_count = len(document.frame_manager.frames)
-        if frame_count <= 0:
+        frame_manager = document.frame_manager
+        if target_frame is not None and target_frame < 0:
             return None
-        if target_frame is not None and not (0 <= target_frame < frame_count):
-            return None
-        if target_frame is None and len(document.key_frames) >= frame_count:
-            return None
+        if target_frame is not None:
+            frame_manager.ensure_frame(target_frame)
 
         command = DuplicateKeyframeCommand(document, source_frame, target_frame)
         self.execute_command(command)
@@ -239,8 +239,9 @@ class DocumentController(QObject):
         if document is None:
             return
         frame_manager = document.frame_manager
-        if not (0 <= index < len(frame_manager.frames)):
+        if index < 0:
             return
+        frame_manager.ensure_frame(index)
         if frame_manager.active_frame_index == index:
             return
         document.select_frame(index)
