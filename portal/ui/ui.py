@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
 from PySide6.QtCore import Qt, Slot, QSignalBlocker
+from portal.core.animation_player import AnimationPlayer
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
 from portal.ui.animation_timeline_widget import AnimationTimelineWidget
@@ -61,6 +62,8 @@ class MainWindow(QMainWindow):
             self.app.settings_controller.background_image_mode
         )
 
+        self.animation_player = AnimationPlayer(self)
+
         self.timeline_widget = AnimationTimelineWidget(self)
 
         self.timeline_panel = QFrame(self)
@@ -93,15 +96,55 @@ class MainWindow(QMainWindow):
         timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
 
         timeline_layout.addLayout(timeline_header_layout)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(6)
+
+        self.timeline_play_button = QToolButton(self.timeline_panel)
+        self.timeline_play_button.setText("Play")
+        self.timeline_play_button.setCheckable(True)
+        controls_layout.addWidget(self.timeline_play_button)
+
+        self.timeline_stop_button = QToolButton(self.timeline_panel)
+        self.timeline_stop_button.setText("Stop")
+        controls_layout.addWidget(self.timeline_stop_button)
+
+        controls_layout.addStretch(1)
+
+        fps_label = QLabel("FPS", self.timeline_panel)
+        controls_layout.addWidget(fps_label)
+
+        self.timeline_fps_slider = QSlider(Qt.Horizontal, self.timeline_panel)
+        self.timeline_fps_slider.setRange(1, 60)
+        self.timeline_fps_slider.setValue(int(round(self.animation_player.fps)))
+        self.timeline_fps_slider.setFixedWidth(120)
+        controls_layout.addWidget(self.timeline_fps_slider)
+
+        self.timeline_fps_value_label = QLabel(self.timeline_panel)
+        controls_layout.addWidget(self.timeline_fps_value_label)
+
+        timeline_layout.addLayout(controls_layout)
         timeline_layout.addWidget(self.timeline_widget)
+
+        self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
+        self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
+        self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
 
         self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
         self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
         self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
         self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
         self.timeline_widget.key_duplicate_requested.connect(self.on_timeline_duplicate_key)
+
+        self.animation_player.frame_changed.connect(self.timeline_widget.set_current_frame)
+        self.animation_player.playing_changed.connect(self._on_player_state_changed)
+        self.animation_player.fps_changed.connect(self._update_timeline_fps_label)
+
         self._update_current_frame_label(self.timeline_widget.current_frame())
         self._update_timeline_layer_label(None)
+        self._on_player_state_changed(self.animation_player.is_playing)
+        self._update_timeline_fps_label(self.animation_player.fps)
         self.sync_timeline_from_document()
 
         central_container = QWidget(self)
@@ -114,6 +157,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_container)
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
+        self._current_document_id = id(self.app.document)
 
         # Connect DrawingContext signals to Canvas slots
         self.app.drawing_context.tool_changed.connect(self.canvas.on_tool_changed)
@@ -223,6 +267,7 @@ class MainWindow(QMainWindow):
 
     def _update_current_frame_label(self, frame: int) -> None:
         self.timeline_current_frame_label.setText(f"Frame {frame}")
+        self._update_stop_button_state()
 
     def _update_timeline_layer_label(self, layer_name: str | None) -> None:
         if layer_name:
@@ -230,6 +275,42 @@ class MainWindow(QMainWindow):
         else:
             text = "Layer: (none)"
         self.timeline_layer_label.setText(text)
+
+    def _update_timeline_fps_label(self, value: float) -> None:
+        if isinstance(value, (int, float)):
+            text = f"{value:.0f}"
+            slider_value = int(round(value))
+            with QSignalBlocker(self.timeline_fps_slider):
+                self.timeline_fps_slider.setValue(slider_value)
+        else:
+            text = ""
+        self.timeline_fps_value_label.setText(text)
+
+    def _update_stop_button_state(self) -> None:
+        should_enable = self.animation_player.is_playing or self.animation_player.current_frame != 0
+        self.timeline_stop_button.setEnabled(should_enable)
+
+    @Slot(bool)
+    def _on_timeline_play_toggled(self, checked: bool) -> None:
+        if checked:
+            self.animation_player.play()
+        else:
+            self.animation_player.pause()
+
+    @Slot()
+    def _on_timeline_stop_clicked(self) -> None:
+        self.animation_player.stop()
+
+    @Slot(int)
+    def _on_timeline_fps_changed(self, value: int) -> None:
+        self.animation_player.set_fps(value)
+
+    @Slot(bool)
+    def _on_player_state_changed(self, playing: bool) -> None:
+        with QSignalBlocker(self.timeline_play_button):
+            self.timeline_play_button.setChecked(playing)
+        self.timeline_play_button.setText("Pause" if playing else "Play")
+        self._update_stop_button_state()
 
     @Slot(object)
     def handle_canvas_message(self, data):
@@ -301,11 +382,19 @@ class MainWindow(QMainWindow):
         finally:
             self.timeline_widget.blockSignals(previous_state)
         self._update_current_frame_label(self.timeline_widget.current_frame())
+        self.animation_player.set_total_frames(max(frame_count, 1))
+        if self.animation_player.current_frame != current_frame:
+            self.animation_player.set_current_frame(current_frame)
 
     @Slot()
     def on_document_changed(self):
+        document = self.app.document
+        document_id = id(document)
+        if getattr(self, "_current_document_id", None) != document_id:
+            self._current_document_id = document_id
+            self.animation_player.stop()
         self.layer_manager_widget.refresh_layers()
-        self.canvas.set_document(self.app.document)
+        self.canvas.set_document(document)
         self.canvas.update()
 
     @Slot(int)
@@ -335,6 +424,8 @@ class MainWindow(QMainWindow):
             return
         if frame_manager.active_frame_index == frame:
             return
+        if self.animation_player.current_frame != frame:
+            self.animation_player.set_current_frame(frame)
         self.app.select_frame(frame)
 
     @Slot()
