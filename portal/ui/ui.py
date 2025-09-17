@@ -350,6 +350,19 @@ class MainWindow(QMainWindow):
             self.animation_player.set_current_frame(current_frame)
         self._update_stop_button_state()
 
+    def apply_imported_animation_metadata(self, frame_count: int, fps: float) -> None:
+        frame_total = max(1, int(frame_count))
+        with QSignalBlocker(self.timeline_total_frames_spinbox):
+            self.timeline_total_frames_spinbox.setValue(frame_total)
+        self._on_timeline_total_frames_changed(frame_total)
+
+        if isinstance(fps, (int, float)):
+            fps_value = float(fps)
+        else:
+            fps_value = self.animation_player.fps
+        fps_value = max(1.0, min(60.0, fps_value))
+        self.animation_player.set_fps(fps_value)
+
     @Slot(bool)
     def _on_player_state_changed(self, playing: bool) -> None:
         with QSignalBlocker(self.timeline_play_button):
