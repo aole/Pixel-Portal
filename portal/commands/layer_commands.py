@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from portal.core.command import Command
 from PySide6.QtGui import QTransform, QImage, QPainter, QPainterPath
 from PySide6.QtCore import Qt, QPoint, QPointF, QBuffer
@@ -5,41 +7,131 @@ from PIL import Image
 from PIL.ImageQt import ImageQt
 import io
 
+if TYPE_CHECKING:
+    from portal.core.document import Document
+
 # Importing `rembg` at module load time pulls in heavy dependencies and can
 # significantly slow down or even hang test collection.  To keep the import
 # lightweight, defer it until background removal is actually requested.
 rembg_remove = None
 
 
+def _find_layer_with_uid(layer_manager, layer_uid):
+    for layer in layer_manager.layers:
+        if getattr(layer, "uid", None) == layer_uid:
+            return layer
+    return None
+
+
+def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool:
+    layer_manager = document.layer_manager
+    if not (0 < layer_index < len(layer_manager.layers)):
+        return False
+
+    top_layer = layer_manager.layers[layer_index]
+    bottom_layer = layer_manager.layers[layer_index - 1]
+
+    top_uid = getattr(top_layer, "uid", None)
+    bottom_uid = getattr(bottom_layer, "uid", None)
+    if top_uid is None or bottom_uid is None:
+        return False
+
+    frame_manager = document.frame_manager
+
+    top_keys = set(frame_manager.layer_keys.get(top_uid, {0}))
+    bottom_keys = set(frame_manager.layer_keys.get(bottom_uid, {0}))
+    union_keys = sorted(top_keys | bottom_keys)
+
+    bottom_keys_set = frame_manager.layer_keys.get(bottom_uid)
+    if bottom_keys_set is None:
+        bottom_keys_set = frame_manager.layer_keys[bottom_uid] = {0}
+
+    for frame_index in union_keys:
+        frame_manager.ensure_frame(frame_index)
+        if frame_index not in bottom_keys_set:
+            frame_manager.add_layer_key(bottom_uid, frame_index)
+            bottom_keys_set = frame_manager.layer_keys.get(bottom_uid, bottom_keys_set)
+
+        top_source_index = frame_manager.resolve_layer_key_frame_index(top_uid, frame_index)
+        if top_source_index is None:
+            continue
+        if not (0 <= top_source_index < len(frame_manager.frames)):
+            continue
+
+        top_manager = frame_manager.frames[top_source_index].layer_manager
+        target_manager = frame_manager.frames[frame_index].layer_manager
+
+        top_source_layer = _find_layer_with_uid(top_manager, top_uid)
+        bottom_target_layer = _find_layer_with_uid(target_manager, bottom_uid)
+
+        if top_source_layer is None or bottom_target_layer is None:
+            continue
+
+        painter = QPainter(bottom_target_layer.image)
+        painter.setOpacity(top_source_layer.opacity)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.drawImage(0, 0, top_source_layer.image)
+        painter.end()
+
+        bottom_target_layer.on_image_change.emit()
+
+    layer_manager.remove_layer(layer_index)
+    document.unregister_layer(top_uid)
+    return True
+
+
 class MergeLayerDownCommand(Command):
-    def __init__(self, layer_manager, layer_index):
-        self.layer_manager = layer_manager
+    def __init__(self, document: 'Document', layer_index: int):
+        self.document = document
         self.layer_index = layer_index
-        self.removed_layer = None
-        self.original_bottom_image = None
+        self._before_state = None
+        self._after_state = None
 
     def execute(self):
-        if not (0 < self.layer_index < len(self.layer_manager.layers)):
-            return
-
-        self.removed_layer = self.layer_manager.layers[self.layer_index]
-        self.original_bottom_image = self.layer_manager.layers[self.layer_index - 1].image.copy()
-        self.layer_manager.merge_layer_down(self.layer_index)
+        if self._before_state is None:
+            if not (0 < self.layer_index < len(self.document.layer_manager.layers)):
+                return
+            self._before_state = self.document.frame_manager.clone()
+            if not _merge_layer_down_with_union(self.document, self.layer_index):
+                self._before_state = None
+                return
+            self._after_state = self.document.frame_manager.clone()
+        else:
+            if self._after_state is None:
+                return
+            self.document.apply_frame_manager_snapshot(self._after_state)
 
     def undo(self):
-        if self.removed_layer is None or self.original_bottom_image is None:
+        if self._before_state is None:
+            return
+        self.document.apply_frame_manager_snapshot(self._before_state)
+
+
+class CollapseLayersCommand(Command):
+    def __init__(self, document: 'Document'):
+        self.document = document
+        self._before_state = None
+        self._after_state = None
+
+    def execute(self):
+        layer_count = len(self.document.layer_manager.layers)
+        if layer_count <= 1:
             return
 
-        # Restore the bottom layer's image
-        self.layer_manager.layers[self.layer_index - 1].image = self.original_bottom_image
+        if self._before_state is None:
+            self._before_state = self.document.frame_manager.clone()
+            for index in range(layer_count - 1, 0, -1):
+                _merge_layer_down_with_union(self.document, index)
+            self._after_state = self.document.frame_manager.clone()
+        else:
+            if self._after_state is None:
+                return
+            self.document.apply_frame_manager_snapshot(self._after_state)
 
-        # Re-insert the removed layer
-        self.layer_manager.layers.insert(self.layer_index, self.removed_layer)
-
-        # Adjust active layer and emit signals
-        if self.layer_manager.active_layer_index >= self.layer_index - 1:
-            self.layer_manager.active_layer_index += 1
-        self.layer_manager.layer_structure_changed.emit()
+    def undo(self):
+        if self._before_state is None:
+            return
+        self.document.apply_frame_manager_snapshot(self._before_state)
 
 
 class SetLayerVisibleCommand(Command):
