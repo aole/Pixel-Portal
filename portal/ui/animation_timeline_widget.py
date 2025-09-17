@@ -314,11 +314,15 @@ class AnimationTimelineWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            modifiers = event.modifiers()
             key_frame = self._key_at_point(event)
             if key_frame is not None:
                 self._is_dragging = False
-                self._handle_key_click(key_frame, event.modifiers())
-                self.set_current_frame(key_frame)
+                self._handle_key_click(key_frame, modifiers)
+                ctrl_down = self._is_control_modifier(modifiers)
+                shift_down = bool(modifiers & Qt.ShiftModifier)
+                if not ctrl_down and not shift_down:
+                    self.set_current_frame(key_frame)
                 event.accept()
                 return
             if self._is_point_in_scrub_area(event):
