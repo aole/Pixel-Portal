@@ -15,10 +15,11 @@ class SelectCircleTool(BaseSelectTool):
         self.start_point = QPoint()
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if not self.is_on_selection_border(doc_pos):
-            self.start_point = doc_pos
-            self.canvas._update_selection_and_emit_size(QPainterPath(self.start_point))
         super().mousePressEvent(event, doc_pos)
+        if self.moving_selection:
+            return
+        self.start_point = doc_pos
+        self.canvas._update_selection_and_emit_size(QPainterPath(self.start_point))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:

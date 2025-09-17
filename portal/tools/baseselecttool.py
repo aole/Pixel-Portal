@@ -1,5 +1,11 @@
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QMouseEvent, QPainterPathStroker, Qt
+
+from portal.commands.selection_commands import (
+    SelectionChangeCommand,
+    clone_selection_path,
+    selection_paths_equal,
+)
 from portal.tools.basetool import BaseTool
 
 
@@ -9,6 +15,9 @@ class BaseSelectTool(BaseTool):
         super().__init__(canvas)
         self.moving_selection = False
         self.selection_move_start_point = QPoint()
+        self._selection_before_edit = None
+        if not hasattr(self.canvas, "selection_shape"):
+            self.canvas.selection_shape = None
 
     def is_on_selection_border(self, doc_pos):
         if self.canvas.selection_shape is None:
@@ -20,11 +29,14 @@ class BaseSelectTool(BaseTool):
         return border.contains(doc_pos)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        self._selection_before_edit = clone_selection_path(
+            getattr(self.canvas, "selection_shape", None)
+        )
         if self.is_on_selection_border(doc_pos):
             self.moving_selection = True
             self.selection_move_start_point = doc_pos
         else:
-            super().mousePressEvent(event, doc_pos)
+            self.moving_selection = False
 
     def mouseHoverEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.is_on_selection_border(doc_pos):
@@ -48,3 +60,13 @@ class BaseSelectTool(BaseTool):
                 self.canvas.setCursor(Qt.CrossCursor)
         else:
             super().mouseReleaseEvent(event, doc_pos)
+        self._finalize_selection_change()
+
+    def _finalize_selection_change(self):
+        new_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
+        previous_selection = clone_selection_path(self._selection_before_edit)
+        self._selection_before_edit = None
+        if selection_paths_equal(previous_selection, new_selection):
+            return
+        command = SelectionChangeCommand(self.canvas, previous_selection, new_selection)
+        self.command_generated.emit(command)

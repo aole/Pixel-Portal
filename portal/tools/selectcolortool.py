@@ -1,6 +1,12 @@
-from portal.tools.basetool import BaseTool
-from PySide6.QtGui import QMouseEvent, QPainterPath
 from PySide6.QtCore import QPoint, QRect
+from PySide6.QtGui import QMouseEvent, QPainterPath
+
+from portal.commands.selection_commands import (
+    SelectionChangeCommand,
+    clone_selection_path,
+    selection_paths_equal,
+)
+from portal.tools.basetool import BaseTool
 
 
 class SelectColorTool(BaseTool):
@@ -24,8 +30,21 @@ class SelectColorTool(BaseTool):
             for y in range(rendered_image.height()):
                 if rendered_image.pixelColor(x, y) == target_color:
                     path.addRect(QRect(x, y, 1, 1))
+        new_selection = path.simplified()
+        if new_selection.isEmpty():
+            new_selection = None
+        previous_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
 
-        self.canvas._update_selection_and_emit_size(path.simplified())
+        if selection_paths_equal(previous_selection, new_selection):
+            self.canvas._update_selection_and_emit_size(
+                clone_selection_path(new_selection)
+            )
+            return
+
+        command = SelectionChangeCommand(
+            self.canvas, previous_selection, new_selection
+        )
+        self.command_generated.emit(command)
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         pass

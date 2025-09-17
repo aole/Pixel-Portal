@@ -20,6 +20,11 @@ from portal.core.renderer import CanvasRenderer
 from portal.ui.background import Background, BackgroundImageMode
 from portal.tools import get_tools
 from portal.commands.canvas_input_handler import CanvasInputHandler
+from portal.commands.selection_commands import (
+    SelectionChangeCommand,
+    clone_selection_path,
+    selection_paths_equal,
+)
 from PIL import Image, ImageQt
 
 
@@ -201,25 +206,52 @@ class Canvas(QWidget):
         self.update()
         self.selection_changed.emit(True)
 
+    def _emit_selection_command(
+        self,
+        previous_shape: QPainterPath | None,
+        new_shape: QPainterPath | None,
+    ) -> None:
+        previous = clone_selection_path(previous_shape)
+        new = clone_selection_path(new_shape)
+        if selection_paths_equal(previous, new):
+            self._update_selection_and_emit_size(clone_selection_path(new))
+            return
+        command = SelectionChangeCommand(self, previous, new)
+        self.command_generated.emit(command)
+
     def select_all(self):
         qpp = QPainterPath()
-        qpp.addRect(QRect(0, 0, self._document_size.width(), self._document_size.height()).normalized())
-        self._update_selection_and_emit_size(qpp)
+        qpp.addRect(
+            QRect(
+                0,
+                0,
+                self._document_size.width(),
+                self._document_size.height(),
+            ).normalized()
+        )
+        self._emit_selection_command(self.selection_shape, qpp)
 
     def select_none(self):
-        self._update_selection_and_emit_size(None)
+        self._emit_selection_command(self.selection_shape, None)
 
     def invert_selection(self):
-        if self.selection_shape is None:
+        current_selection = clone_selection_path(self.selection_shape)
+        if current_selection is None:
             return
         qpp = QPainterPath()
-        qpp.addRect(QRect(0, 0, self._document_size.width(), self._document_size.height()).normalized())
-        if self.selection_shape:
-            self.selection_shape = qpp.subtracted(self.selection_shape)
+        qpp.addRect(
+            QRect(
+                0,
+                0,
+                self._document_size.width(),
+                self._document_size.height(),
+            ).normalized()
+        )
+        if not current_selection.isEmpty():
+            new_shape = qpp.subtracted(current_selection)
         else:
-            self.selection_shape = qpp
-        self.update()
-        self._update_selection_and_emit_size(self.selection_shape)
+            new_shape = qpp
+        self._emit_selection_command(current_selection, new_shape)
 
     def get_selection_mask_pil(self) -> Image.Image:
         if self.selection_shape is None:
