@@ -5,6 +5,7 @@ from typing import Optional
 from portal.core.command import Command
 from portal.core.document import Document
 from portal.core.frame_manager import FrameManager
+from portal.core.layer import Layer
 
 
 class _KeyframeCommand(Command):
@@ -68,3 +69,17 @@ class DuplicateKeyframeCommand(_KeyframeCommand):
         result = self.document.duplicate_key_frame(self.source_frame, target)
         if result is not None:
             self.created_frame = result
+
+
+class PasteKeyframeCommand(_KeyframeCommand):
+    """Paste copied keyframe data onto ``frame_index``."""
+
+    def __init__(self, document: Document, frame_index: int, key_state: Layer) -> None:
+        super().__init__(document)
+        self.frame_index = frame_index
+        self.key_state = key_state
+        self.applied = False
+
+    def execute(self) -> None:
+        self._capture_before()
+        self.applied = self.document.paste_key_frame(self.frame_index, self.key_state)

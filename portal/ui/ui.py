@@ -144,11 +144,14 @@ class MainWindow(QMainWindow):
         self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
         self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
         self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
-        self.timeline_widget.key_duplicate_requested.connect(self.on_timeline_duplicate_key)
+        self.timeline_widget.key_copy_requested.connect(self.on_timeline_copy_key)
+        self.timeline_widget.key_paste_requested.connect(self.on_timeline_paste_key)
 
         self.animation_player.frame_changed.connect(self.timeline_widget.set_current_frame)
         self.animation_player.playing_changed.connect(self._on_player_state_changed)
         self.animation_player.fps_changed.connect(self._update_timeline_fps_label)
+
+        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
 
         self._update_current_frame_label(self.timeline_widget.current_frame())
         self._update_timeline_layer_label(None)
@@ -479,11 +482,16 @@ class MainWindow(QMainWindow):
         self.app.remove_keyframe(frame)
 
     @Slot(int)
-    def on_timeline_duplicate_key(self, frame: int) -> None:
-        created = self.app.duplicate_keyframe(target_frame=frame)
-        if created is None:
-            return
-        self.timeline_widget.set_current_frame(created)
+    def on_timeline_copy_key(self, frame: int) -> None:
+        self.app.copy_keyframe(frame)
+        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
+
+    @Slot(int)
+    def on_timeline_paste_key(self, frame: int) -> None:
+        pasted = self.app.paste_keyframe(frame)
+        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
+        if pasted:
+            self.timeline_widget.set_current_frame(frame)
 
     @Slot(int)
     def on_timeline_frame_changed(self, frame: int) -> None:

@@ -379,6 +379,36 @@ class FrameManager:
         self._rebind_layer_fallbacks(layer_uid)
         return target_index
 
+    def clone_layer_key_state(self, layer_uid: int, frame_index: int) -> Optional[Layer]:
+        keys = self.layer_keys.get(layer_uid)
+        if not keys or frame_index not in keys:
+            return None
+        if not (0 <= frame_index < len(self.frames)):
+            return None
+        manager = self.frames[frame_index].layer_manager
+        layer = self._find_layer(manager, layer_uid)
+        if layer is None:
+            return None
+        return layer.clone(preserve_identity=False)
+
+    def paste_layer_key(self, layer_uid: int, frame_index: int, key_state: Layer) -> bool:
+        if frame_index < 0:
+            return False
+        self.ensure_frame(frame_index)
+        if not (0 <= frame_index < len(self.frames)):
+            return False
+        keys = self.layer_keys.setdefault(layer_uid, {0})
+        if frame_index not in keys:
+            self.add_layer_key(layer_uid, frame_index)
+        manager = self.frames[frame_index].layer_manager
+        layer = self._find_layer(manager, layer_uid)
+        if layer is None:
+            return False
+        layer.apply_key_state_from(key_state)
+        self._rebind_layer_fallbacks(layer_uid)
+        self._refresh_frame_markers()
+        return True
+
     def register_new_layer(
         self,
         layer: Layer,

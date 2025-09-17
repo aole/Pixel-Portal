@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil
 from typing import Iterable, List, Set
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
@@ -20,6 +21,7 @@ class _TimelineLayout:
     spacing: float
     track_y: float
     usable_width: float
+    max_offset: float
 
 
 class AnimationTimelineWidget(QWidget):
@@ -34,7 +36,8 @@ class AnimationTimelineWidget(QWidget):
     current_frame_changed = Signal(int)
     key_add_requested = Signal(int)
     key_remove_requested = Signal(int)
-    key_duplicate_requested = Signal(int)
+    key_copy_requested = Signal(int)
+    key_paste_requested = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -46,6 +49,10 @@ class AnimationTimelineWidget(QWidget):
         self._tick_height = 36
         self._preferred_frame_spacing = 16.0
         self._is_dragging = False
+        self._is_panning = False
+        self._has_copied_key = False
+        self._scroll_offset = 0.0
+        self._last_pan_x = 0.0
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -106,6 +113,15 @@ class AnimationTimelineWidget(QWidget):
         self.keys_changed.emit(self.keys())
         self.update()
 
+    def has_copied_key(self) -> bool:
+        return self._has_copied_key
+
+    def set_has_copied_key(self, has_key: bool) -> None:
+        has_key = bool(has_key)
+        if has_key == self._has_copied_key:
+            return
+        self._has_copied_key = has_key
+
     def current_frame(self) -> int:
         return self._current_frame
 
@@ -115,6 +131,7 @@ class AnimationTimelineWidget(QWidget):
             return
         self._current_frame = frame
         self._ensure_base_frame(frame)
+        self._ensure_frame_visible(frame)
         self.current_frame_changed.emit(self._current_frame)
         self.update()
 
@@ -136,21 +153,6 @@ class AnimationTimelineWidget(QWidget):
         self._keys.remove(frame)
         self.keys_changed.emit(self.keys())
         self.update()
-
-    def duplicate_last_key(self, target_frame: int | None = None) -> None:
-        if not self._keys:
-            return
-        last_key = max(self._keys)
-        if target_frame is None:
-            new_frame = last_key + 1
-            while new_frame in self._keys:
-                new_frame += 1
-        else:
-            new_frame = max(0, int(target_frame))
-        if new_frame in self._keys:
-            return
-        self.add_key(new_frame)
-        self.set_current_frame(new_frame)
 
     # ------------------------------------------------------------------
     # Qt events
@@ -193,17 +195,19 @@ class AnimationTimelineWidget(QWidget):
 
         playback_last_index = max(0, self._playback_total_frames - 1)
 
-        start_x = self._margin
-        end_x = self.width() - self._margin
+        visible_start_x = self._margin
+        visible_end_x = self.width() - self._margin
 
         # Draw the main timeline bar.
         painter.setPen(QPen(guide_color, 2))
-        painter.drawLine(start_x, layout.track_y, end_x, layout.track_y)
+        painter.drawLine(visible_start_x, layout.track_y, visible_end_x, layout.track_y)
 
         # Draw frame ticks.
         for frame in range(layout.max_frame + 1):
-            x = start_x + frame * layout.spacing
-            if x > end_x + 1:
+            x = self._margin + frame * layout.spacing - self._scroll_offset
+            if x < visible_start_x - layout.spacing:
+                continue
+            if x > visible_end_x + layout.spacing:
                 break
             tick_height = self._tick_height
             is_major_tick = frame % 5 == 0
@@ -228,8 +232,8 @@ class AnimationTimelineWidget(QWidget):
 
         # Draw keyed frames as circles.
         for frame in self.keys():
-            x = start_x + frame * layout.spacing
-            if x < start_x - 1 or x > end_x + 1:
+            x = self._margin + frame * layout.spacing - self._scroll_offset
+            if x < visible_start_x - 1 or x > visible_end_x + 1:
                 continue
             radius = 6
             if frame == self._current_frame:
@@ -240,8 +244,8 @@ class AnimationTimelineWidget(QWidget):
             painter.drawEllipse(QPointF(x, layout.track_y), radius, radius)
 
         # Draw the current frame indicator.
-        current_x = start_x + self._current_frame * layout.spacing
-        current_x = max(start_x, min(current_x, end_x))
+        current_x = self._margin + self._current_frame * layout.spacing - self._scroll_offset
+        current_x = max(visible_start_x, min(current_x, visible_end_x))
         painter.setPen(QPen(current_color, 2, Qt.SolidLine))
         painter.drawLine(QPointF(current_x, 0), QPointF(current_x, self.height()))
 
@@ -252,9 +256,23 @@ class AnimationTimelineWidget(QWidget):
             self.set_current_frame(frame)
             event.accept()
             return
+        if event.button() == Qt.MiddleButton:
+            self._is_panning = True
+            self._last_pan_x = self._event_x(event)
+            self.setCursor(Qt.ClosedHandCursor)
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if self._is_panning:
+            if event.buttons() & Qt.MiddleButton:
+                self._update_pan(event)
+                event.accept()
+                return
+            self._is_panning = False
+            self._last_pan_x = 0.0
+            self.unsetCursor()
         if event.buttons() & Qt.LeftButton:
             self._is_dragging = True
         else:
@@ -273,6 +291,12 @@ class AnimationTimelineWidget(QWidget):
             self._is_dragging = False
             event.accept()
             return
+        if event.button() == Qt.MiddleButton:
+            self._is_panning = False
+            self._last_pan_x = 0.0
+            self.unsetCursor()
+            event.accept()
+            return
         super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):  # noqa: N802 - Qt naming
@@ -286,29 +310,33 @@ class AnimationTimelineWidget(QWidget):
         remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
 
         menu.addSeparator()
-        duplicate_action = menu.addAction(f"Duplicate Last Key @ Frame {frame}")
-        duplicate_action.setEnabled(bool(self._keys) and frame not in self._keys)
+        copy_frame = frame
+        copy_action = menu.addAction(f"Copy Key @ Frame {copy_frame}")
+        copy_action.setEnabled(copy_frame in self._keys)
+
+        paste_action = menu.addAction(f"Paste Key @ Frame {frame}")
+        paste_action.setEnabled(self._has_copied_key)
 
         chosen = menu.exec(event.globalPos())
         if chosen == add_action:
             self.key_add_requested.emit(frame)
         elif chosen == remove_action:
             self.key_remove_requested.emit(frame)
-        elif chosen == duplicate_action:
-            self.key_duplicate_requested.emit(frame)
+        elif chosen == copy_action:
+            self.key_copy_requested.emit(copy_frame)
+        elif chosen == paste_action:
+            self.key_paste_requested.emit(frame)
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
     def _frame_at_point(self, event) -> int:
-        pos = event.position() if hasattr(event, "position") else event.pos()
-        if hasattr(pos, "toPoint"):
-            pos = pos.toPoint()
-        x = max(self._margin, min(pos.x(), self.width() - self._margin))
+        x = self._event_x(event)
+        x = max(self._margin, min(x, self.width() - self._margin))
         layout = self._calculate_layout()
         if layout.spacing <= 0:
             return 0
-        frame = round((x - self._margin) / layout.spacing)
+        frame = round((x + self._scroll_offset - self._margin) / layout.spacing)
         frame = max(0, min(frame, layout.max_frame))
         return frame
 
@@ -316,18 +344,71 @@ class AnimationTimelineWidget(QWidget):
         width = max(1, self.width())
         height = max(1, self.height())
         usable_width = max(1.0, width - 2 * self._margin)
-        dynamic_frames = max(1, int(usable_width // self._preferred_frame_spacing))
         max_key = max(self._keys) if self._keys else 0
         playback_max = max(0, self._playback_total_frames - 1)
         max_hint = max(self._base_total_frames, max_key, self._current_frame, playback_max)
-        max_frame = max(dynamic_frames, max_hint)
-        spacing = usable_width / max(1, max_frame)
-        spacing = max(1.0, min(spacing, self._preferred_frame_spacing))
+        spacing = self._preferred_frame_spacing
+        if usable_width < spacing:
+            spacing = max(1.0, usable_width)
+        visible_capacity = max(1, int(ceil(usable_width / spacing)))
+        max_frame = max(visible_capacity, max_hint)
         track_y = height / 2
-        return _TimelineLayout(max_frame=max_frame, spacing=spacing, track_y=track_y, usable_width=usable_width)
+        content_end = self._margin + max_frame * spacing
+        max_offset = max(0.0, content_end - (width - self._margin))
+        if self._scroll_offset < 0:
+            self._scroll_offset = 0.0
+        elif self._scroll_offset > max_offset:
+            self._scroll_offset = max_offset
+        return _TimelineLayout(
+            max_frame=max_frame,
+            spacing=spacing,
+            track_y=track_y,
+            usable_width=usable_width,
+            max_offset=max_offset,
+        )
 
     def _ensure_base_frame(self, frame: int) -> None:
         if frame > self._base_total_frames:
             self._base_total_frames = frame
             self.updateGeometry()
+
+    def _ensure_frame_visible(self, frame: int) -> None:
+        layout = self._calculate_layout()
+        if layout.spacing <= 0:
+            return
+        left_bound = self._margin
+        right_bound = self.width() - self._margin
+        frame_world_x = self._margin + frame * layout.spacing
+        frame_visible_x = frame_world_x - self._scroll_offset
+        if frame_visible_x < left_bound:
+            new_offset = frame_world_x - left_bound
+            new_offset = max(0.0, min(new_offset, layout.max_offset))
+            if new_offset != self._scroll_offset:
+                self._scroll_offset = new_offset
+                self.update()
+        elif frame_visible_x > right_bound:
+            new_offset = frame_world_x - right_bound
+            new_offset = max(0.0, min(new_offset, layout.max_offset))
+            if new_offset != self._scroll_offset:
+                self._scroll_offset = new_offset
+                self.update()
+
+    def _update_pan(self, event: QMouseEvent) -> None:
+        layout = self._calculate_layout()
+        if layout.spacing <= 0:
+            return
+        x = self._event_x(event)
+        delta = x - self._last_pan_x
+        if delta == 0:
+            return
+        self._last_pan_x = x
+        new_offset = self._scroll_offset - delta
+        new_offset = max(0.0, min(new_offset, layout.max_offset))
+        if new_offset != self._scroll_offset:
+            self._scroll_offset = new_offset
+            self.update()
+
+    def _event_x(self, event: QMouseEvent) -> float:
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        return float(pos.x())
 
