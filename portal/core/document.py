@@ -158,6 +158,27 @@ class Document:
             self._notify_layer_manager_changed()
         return created
 
+    def copy_active_layer_key(self, frame: int) -> Layer | None:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return None
+        layer = layer_manager.active_layer
+        if layer is None:
+            return None
+        return self.frame_manager.clone_layer_key_state(layer.uid, frame)
+
+    def paste_key_frame(self, frame: int, key_state: Layer) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.paste_layer_key(layer.uid, frame, key_state)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
+
     def key_frames_for_layer(self, layer: Layer) -> list[int]:
         return self.frame_manager.layer_key_frames(layer.uid)
 

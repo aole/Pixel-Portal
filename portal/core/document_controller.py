@@ -17,6 +17,7 @@ from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.commands.timeline_commands import (
     AddKeyframeCommand,
     DuplicateKeyframeCommand,
+    PasteKeyframeCommand,
     RemoveKeyframeCommand,
 )
 from portal.core.color_utils import find_closest_color
@@ -52,6 +53,7 @@ class DocumentController(QObject):
         self.is_dirty = False
 
         self.main_window = None
+        self._copied_key_state = None
 
     # expose settings-backed properties
     @property
@@ -168,6 +170,49 @@ class DocumentController(QObject):
         command = DuplicateKeyframeCommand(document, source_frame, target_frame)
         self.execute_command(command)
         return command.created_frame
+
+    def has_copied_keyframe(self) -> bool:
+        return self._copied_key_state is not None
+
+    def copy_keyframe(self, frame_index: int) -> bool:
+        document = self.document
+        if document is None:
+            return False
+        if frame_index < 0:
+            return False
+        key_state = document.copy_active_layer_key(frame_index)
+        if key_state is None:
+            return False
+        self._copied_key_state = key_state
+        return True
+
+    def paste_keyframe(self, frame_index: int) -> bool:
+        if self._copied_key_state is None:
+            return False
+        document = self.document
+        if document is None:
+            return False
+        if frame_index < 0:
+            return False
+        frame_manager = document.frame_manager
+        layer_manager = frame_manager.current_layer_manager
+        if layer_manager is None or layer_manager.active_layer is None:
+            return False
+        existing_keys = set(document.key_frames)
+        if frame_index in existing_keys:
+            parent = getattr(self, "main_window", None)
+            response = QMessageBox.question(
+                parent,
+                "Replace Keyframe?",
+                f"Frame {frame_index} already has a key. Replace it with the copied key?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if response != QMessageBox.Yes:
+                return False
+        command = PasteKeyframeCommand(document, frame_index, self._copied_key_state)
+        self.execute_command(command)
+        return command.applied
 
     def add_new_layer_with_image(self, image):
         command = AddLayerCommand(self.document, image, "AI Generated Layer")

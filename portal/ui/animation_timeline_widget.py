@@ -34,7 +34,8 @@ class AnimationTimelineWidget(QWidget):
     current_frame_changed = Signal(int)
     key_add_requested = Signal(int)
     key_remove_requested = Signal(int)
-    key_duplicate_requested = Signal(int)
+    key_copy_requested = Signal(int)
+    key_paste_requested = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -46,6 +47,7 @@ class AnimationTimelineWidget(QWidget):
         self._tick_height = 36
         self._preferred_frame_spacing = 16.0
         self._is_dragging = False
+        self._has_copied_key = False
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -106,6 +108,15 @@ class AnimationTimelineWidget(QWidget):
         self.keys_changed.emit(self.keys())
         self.update()
 
+    def has_copied_key(self) -> bool:
+        return self._has_copied_key
+
+    def set_has_copied_key(self, has_key: bool) -> None:
+        has_key = bool(has_key)
+        if has_key == self._has_copied_key:
+            return
+        self._has_copied_key = has_key
+
     def current_frame(self) -> int:
         return self._current_frame
 
@@ -136,21 +147,6 @@ class AnimationTimelineWidget(QWidget):
         self._keys.remove(frame)
         self.keys_changed.emit(self.keys())
         self.update()
-
-    def duplicate_last_key(self, target_frame: int | None = None) -> None:
-        if not self._keys:
-            return
-        last_key = max(self._keys)
-        if target_frame is None:
-            new_frame = last_key + 1
-            while new_frame in self._keys:
-                new_frame += 1
-        else:
-            new_frame = max(0, int(target_frame))
-        if new_frame in self._keys:
-            return
-        self.add_key(new_frame)
-        self.set_current_frame(new_frame)
 
     # ------------------------------------------------------------------
     # Qt events
@@ -286,16 +282,22 @@ class AnimationTimelineWidget(QWidget):
         remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
 
         menu.addSeparator()
-        duplicate_action = menu.addAction(f"Duplicate Last Key @ Frame {frame}")
-        duplicate_action.setEnabled(bool(self._keys) and frame not in self._keys)
+        copy_frame = self._current_frame
+        copy_action = menu.addAction(f"Copy Key @ Frame {copy_frame}")
+        copy_action.setEnabled(copy_frame in self._keys)
+
+        paste_action = menu.addAction(f"Paste Key @ Frame {frame}")
+        paste_action.setEnabled(self._has_copied_key)
 
         chosen = menu.exec(event.globalPos())
         if chosen == add_action:
             self.key_add_requested.emit(frame)
         elif chosen == remove_action:
             self.key_remove_requested.emit(frame)
-        elif chosen == duplicate_action:
-            self.key_duplicate_requested.emit(frame)
+        elif chosen == copy_action:
+            self.key_copy_requested.emit(copy_frame)
+        elif chosen == paste_action:
+            self.key_paste_requested.emit(frame)
 
     # ------------------------------------------------------------------
     # Internal helpers
