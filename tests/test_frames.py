@@ -1,6 +1,12 @@
 from PySide6.QtGui import QColor
 
 from portal.core.document import Document
+from portal.core.frame_manager import FrameManager
+from portal.commands.timeline_commands import (
+    AddKeyframeCommand,
+    DuplicateKeyframeCommand,
+    RemoveKeyframeCommand,
+)
 
 
 def test_document_initializes_with_single_frame():
@@ -11,6 +17,22 @@ def test_document_initializes_with_single_frame():
     assert document.layer_manager is document.frame_manager.current_layer_manager
 
 
+def test_frame_manager_ensure_frame_extends_sequence():
+    manager = FrameManager(2, 2, frame_count=1)
+    manager.frames[0].layer_manager.active_layer.image.fill(QColor("red"))
+
+    manager.ensure_frame(3)
+
+    assert len(manager.frames) == 4
+    assert manager.frames[0].render().pixelColor(0, 0) == QColor("red")
+    for index in range(1, 4):
+        frame = manager.frames[index]
+        assert frame is not manager.frames[0]
+        assert frame.layer_manager is not manager.frames[0].layer_manager
+        assert frame.render().pixelColor(0, 0) == QColor("red")
+    assert manager.resolve_key_frame_index(3) == 0
+
+
 def test_document_add_and_select_frames():
     document = Document(4, 4)
     first_manager = document.layer_manager
@@ -19,10 +41,32 @@ def test_document_add_and_select_frames():
 
     assert len(document.frame_manager.frames) == 2
     assert document.frame_manager.active_frame_index == 1
-    assert document.layer_manager is document.frame_manager.frames[1].layer_manager
+    assert document.layer_manager is first_manager
+    assert document.frame_manager.resolve_key_frame_index() == 0
 
     document.select_frame(0)
     assert document.layer_manager is first_manager
+
+
+def test_document_add_keyframe_extends_frames_without_manual_add():
+    document = Document(3, 3)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+
+    added = document.add_key_frame(4)
+
+    assert added is True
+    assert len(document.frame_manager.frames) >= 5
+    assert 4 in document.key_frames
+
+    document.select_frame(4)
+    assert document.frame_manager.resolve_key_frame_index() == 4
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(4)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
 
 def test_render_current_frame_tracks_active_frame():
@@ -39,8 +83,37 @@ def test_render_current_frame_tracks_active_frame():
     assert blue_pixel == QColor("blue")
 
     document.select_frame(0)
-    red_again = document.render().pixelColor(0, 0)
-    assert red_again == QColor("red")
+    blue_again = document.render().pixelColor(0, 0)
+    assert blue_again == QColor("blue")
+
+
+def test_scrubbing_uses_previous_keyframe_state():
+    document = Document(2, 2)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+
+    for _ in range(6):
+        document.add_frame()
+
+    document.select_frame(3)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(5)
+    document.add_key_frame(5)
+    key_layer_manager = document.layer_manager
+    assert key_layer_manager is document.frame_manager.frames[5].layer_manager
+    assert key_layer_manager is not document.frame_manager.frames[0].layer_manager
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    key_layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(6)
+    assert document.frame_manager.resolve_key_frame_index() == 5
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    document.select_frame(2)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
 
 def test_remove_frame_updates_active_index():
@@ -75,9 +148,17 @@ def test_layer_manager_listener_notified_on_frame_change():
 def test_clone_copies_frames_and_layers():
     document = Document(2, 2)
     document.layer_manager.add_layer("Foreground")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
     document.layer_manager.active_layer.image.fill(QColor("green"))
     document.add_frame()
     document.layer_manager.add_layer("Second Frame Layer")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
 
     clone = document.clone()
 
@@ -88,3 +169,177 @@ def test_clone_copies_frames_and_layers():
         assert cloned_frame is not original_frame
         assert cloned_frame.layer_manager is not original_frame.layer_manager
         assert len(cloned_frame.layer_manager.layers) == len(original_frame.layer_manager.layers)
+
+
+def test_document_key_frames_follow_frame_removal():
+    document = Document(4, 4)
+    document.add_frame()
+    document.add_key_frame(1)
+
+    assert document.key_frames == [0, 1]
+
+    document.remove_frame(0)
+
+    assert document.key_frames == [0]
+
+
+def test_new_layer_starts_with_base_key_only():
+    document = Document(4, 4)
+    base_layer = document.layer_manager.active_layer
+    document.add_key_frame(3)
+
+    document.layer_manager.add_layer("Second")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
+    new_layer = document.layer_manager.active_layer
+
+    assert document.key_frames_for_layer(new_layer) == [0]
+
+    document.layer_manager.select_layer(0)
+    assert document.key_frames_for_layer(base_layer) == [0, 3]
+
+
+def test_new_layer_added_on_future_frame_has_single_key_and_selection():
+    document = Document(4, 4)
+    document.add_key_frame(8)
+    document.select_frame(8)
+
+    document.layer_manager.add_layer("Future Layer")
+    new_layer = document.layer_manager.active_layer
+    insertion_index = document.layer_manager.active_layer_index
+
+    document.register_layer(new_layer, insertion_index)
+
+    assert document.key_frames_for_layer(new_layer) == [0]
+    assert document.key_frames == [0]
+
+    target_index = document.layer_manager.active_layer_index
+    for frame in document.frame_manager.frames:
+        manager = frame.layer_manager
+        assert manager.layers[target_index].uid == new_layer.uid
+        assert manager.active_layer_index == target_index
+
+    document.select_frame(0)
+
+    assert document.layer_manager.active_layer.uid == new_layer.uid
+    assert document.key_frames == [0]
+
+
+def test_add_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+    document.add_frame()
+
+    command = AddKeyframeCommand(document, 1)
+    command.execute()
+
+    assert document.key_frames == [0, 1]
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(1)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    command.undo()
+    assert document.key_frames == [0]
+    document.select_frame(1)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    command.execute()
+    assert document.key_frames == [0, 1]
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+
+def test_remove_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+    document.add_frame()
+    document.add_key_frame(1)
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    command = RemoveKeyframeCommand(document, 1)
+    command.execute()
+
+    assert document.key_frames == [0]
+    document.select_frame(1)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    command.undo()
+
+    assert document.key_frames == [0, 1]
+    document.select_frame(1)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+
+def test_duplicate_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+    for _ in range(3):
+        document.add_frame()
+    document.add_key_frame(2)
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    command = DuplicateKeyframeCommand(document, source_frame=2, target_frame=3)
+    command.execute()
+
+    assert document.key_frames == [0, 2, 3]
+    document.select_frame(3)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    document.layer_manager.active_layer.image.fill(QColor("green"))
+    document.select_frame(2)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    command.undo()
+    assert document.key_frames == [0, 2]
+    document.select_frame(3)
+    assert document.frame_manager.resolve_key_frame_index() == 2
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    command.execute()
+    assert document.key_frames == [0, 2, 3]
+    document.select_frame(3)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+
+def test_editing_layer_without_key_updates_base_state():
+    document = Document(4, 4)
+    document.add_key_frame(8)
+    document.select_frame(8)
+
+    document.layer_manager.add_layer("Overlay")
+    new_layer = document.layer_manager.active_layer
+    index = document.layer_manager.active_layer_index
+    document.register_layer(new_layer, index)
+
+    # Painting without a dedicated key should affect the base key frame.
+    new_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.layer_manager.active_layer.uid == new_layer.uid
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("blue")
+    assert document.key_frames_for_layer(new_layer) == [0]
+
+    # Verify that the layer object is shared between frames without a key.
+    base_manager = document.frame_manager.frames[0].layer_manager
+    future_manager = document.frame_manager.frames[8].layer_manager
+    assert base_manager.layers[index] is future_manager.layers[index]
+
+    # Once a key is added, edits should be isolated to that key frame.
+    document.select_frame(8)
+    document.add_key_frame(8)
+    keyed_layer = document.layer_manager.active_layer
+    keyed_layer.image.fill(QColor("green"))
+
+    document.select_frame(0)
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("blue")
+    document.select_frame(8)
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("green")

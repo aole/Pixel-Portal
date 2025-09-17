@@ -30,6 +30,9 @@ class AnimationTimelineWidget(QWidget):
 
     keys_changed = Signal(list)
     current_frame_changed = Signal(int)
+    key_add_requested = Signal(int)
+    key_remove_requested = Signal(int)
+    key_duplicate_requested = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -55,7 +58,8 @@ class AnimationTimelineWidget(QWidget):
     def total_frames(self) -> int:
         """Return the highest frame index currently represented."""
 
-        return self._calculate_layout().max_frame
+        highest_key = max(self._keys) if self._keys else 0
+        return max(self._base_total_frames, highest_key)
 
     def set_total_frames(self, frame_count: int) -> None:
         """Define the minimum highest frame index displayed by the timeline."""
@@ -245,11 +249,11 @@ class AnimationTimelineWidget(QWidget):
 
         chosen = menu.exec(event.globalPos())
         if chosen == add_action:
-            self.add_key(frame)
+            self.key_add_requested.emit(frame)
         elif chosen == remove_action:
-            self.remove_key(frame)
+            self.key_remove_requested.emit(frame)
         elif chosen == duplicate_action:
-            self.duplicate_last_key(frame)
+            self.key_duplicate_requested.emit(frame)
 
     # ------------------------------------------------------------------
     # Internal helpers

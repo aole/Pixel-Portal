@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PySide6.QtCore import QObject, Signal, Slot
 import os
 
@@ -125,6 +127,20 @@ class App(QObject):
     @Slot()
     def redo(self):
         self.document_controller.redo()
+
+    def add_keyframe(self, frame_index: int) -> None:
+        self.document_controller.add_keyframe(frame_index)
+
+    def remove_keyframe(self, frame_index: int) -> None:
+        self.document_controller.remove_keyframe(frame_index)
+
+    def duplicate_keyframe(
+        self, source_frame: Optional[int] = None, target_frame: Optional[int] = None
+    ) -> Optional[int]:
+        return self.document_controller.duplicate_keyframe(source_frame, target_frame)
+
+    def select_frame(self, index: int) -> None:
+        self.document_controller.select_frame(index)
 
     @Slot()
     def select_all(self):

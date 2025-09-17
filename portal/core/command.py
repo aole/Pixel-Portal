@@ -426,11 +426,14 @@ class AddLayerCommand(Command):
                 self.document.layer_manager.add_layer(self.name)
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
+            if self.added_layer is not None:
+                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo: re-insert the existing layer object
             self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
             self.document.layer_manager.select_layer(self.insertion_index)
             self.document.layer_manager.layer_structure_changed.emit()
+            self.document.register_layer(self.added_layer, self.insertion_index)
 
     def undo(self):
         if self.added_layer:
@@ -438,6 +441,7 @@ class AddLayerCommand(Command):
                 # `remove_layer` needs an index, and it's safer to find it dynamically
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
+                self.document.unregister_layer(self.added_layer.uid)
 
                 # Restore the previously active layer
                 if self.old_active_layer in self.document.layer_manager.layers:
@@ -467,17 +471,21 @@ class PasteCommand(Command):
             self.document.layer_manager.add_layer_with_image(scaled_image, name="Pasted Layer")
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
+            if self.added_layer is not None:
+                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo
             self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
             self.document.layer_manager.select_layer(self.insertion_index)
             self.document.layer_manager.layer_structure_changed.emit()
+            self.document.register_layer(self.added_layer, self.insertion_index)
 
     def undo(self):
         if self.added_layer:
             try:
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
+                self.document.unregister_layer(self.added_layer.uid)
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
                     self.document.layer_manager.select_layer(old_active_index)
@@ -512,17 +520,21 @@ class PasteInSelectionCommand(Command):
             self.document.layer_manager.add_layer_with_image(pasted_content_image, name="Pasted Layer")
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
+            if self.added_layer is not None:
+                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo
             self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
             self.document.layer_manager.select_layer(self.insertion_index)
             self.document.layer_manager.layer_structure_changed.emit()
+            self.document.register_layer(self.added_layer, self.insertion_index)
 
     def undo(self):
         if self.added_layer:
             try:
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
+                self.document.unregister_layer(self.added_layer.uid)
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
                     self.document.layer_manager.select_layer(old_active_index)
@@ -740,24 +752,27 @@ class MoveCommand(Command):
         self.layer.on_image_change.emit()
 
 class DuplicateLayerCommand(Command):
-    def __init__(self, layer_manager, index: int):
-        self.layer_manager = layer_manager
+    def __init__(self, document: 'Document', index: int):
+        self.document = document
+        self.layer_manager = document.layer_manager
         self.index = index
         self.duplicated_layer = None
         self.added_index = -1
-        self.old_active_layer_index = layer_manager.active_layer_index
+        self.old_active_layer_index = self.layer_manager.active_layer_index
 
     def execute(self):
         if self.duplicated_layer is None:
             # First execution
             original_layer = self.layer_manager.layers[self.index]
-            self.duplicated_layer = original_layer.clone()
+            self.duplicated_layer = original_layer.clone(preserve_identity=False)
             self.duplicated_layer.name = f"{original_layer.name} copy"
             self.added_index = self.index + 1
 
         self.layer_manager.layers.insert(self.added_index, self.duplicated_layer)
         self.layer_manager.select_layer(self.added_index)
         self.layer_manager.layer_structure_changed.emit()
+        original_layer = self.layer_manager.layers[self.index]
+        self.document.duplicate_layer_keys(original_layer, self.duplicated_layer)
 
     def undo(self):
         if self.duplicated_layer:
@@ -766,6 +781,7 @@ class DuplicateLayerCommand(Command):
                 current_index = self.layer_manager.layers.index(self.duplicated_layer)
                 self.layer_manager.remove_layer(current_index) # remove_layer handles signals and active layer adjustment
                 self.layer_manager.select_layer(self.old_active_layer_index) # Explicitly set active layer back
+                self.document.unregister_layer(self.duplicated_layer.uid)
             except ValueError:
                 # Layer not found, maybe already removed.
                 pass
@@ -790,21 +806,24 @@ class ClearLayerCommand(Command):
             self.layer.on_image_change.emit()
             
 class RemoveLayerCommand(Command):
-    def __init__(self, layer_manager, index: int):
-        self.layer_manager = layer_manager
+    def __init__(self, document: 'Document', index: int):
+        self.document = document
+        self.layer_manager = document.layer_manager
         self.index = index
         self.removed_layer = None
-        self.old_active_layer_index = layer_manager.active_layer_index
+        self.old_active_layer_index = self.layer_manager.active_layer_index
 
     def execute(self):
         self.removed_layer = self.layer_manager.layers[self.index]
         self.layer_manager.remove_layer(self.index)
+        self.document.unregister_layer(self.removed_layer.uid)
 
     def undo(self):
         if self.removed_layer:
             self.layer_manager.layers.insert(self.index, self.removed_layer)
             self.layer_manager.select_layer(self.old_active_layer_index)
             self.layer_manager.layer_structure_changed.emit()
+            self.document.register_layer(self.removed_layer, self.index)
 
 class MoveLayerCommand(Command):
     def __init__(self, layer_manager, from_index: int, to_index: int):

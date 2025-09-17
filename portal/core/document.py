@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import io
 import json
 
@@ -76,11 +76,96 @@ class Document:
         self._notify_layer_manager_changed()
 
     def select_frame(self, index: int):
+        if index < 0:
+            index = 0
+        self.frame_manager.ensure_frame(index)
         self.frame_manager.select_frame(index)
         self._notify_layer_manager_changed()
 
     def render_current_frame(self) -> QImage:
         return self.frame_manager.render_current_frame()
+
+    @property
+    def key_frames(self) -> list[int]:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return [0]
+        layer = layer_manager.active_layer
+        if layer is None:
+            return [0]
+        return self.frame_manager.layer_key_frames(layer.uid)
+
+    def set_key_frames(self, frames: Iterable[int]) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.set_layer_key_frames(layer.uid, frames)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
+
+    def add_key_frame(self, frame: int) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.add_layer_key(layer.uid, frame)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
+
+    def remove_key_frame(self, frame: int) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.remove_layer_key(layer.uid, frame)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
+
+    def duplicate_key_frame(
+        self, source_frame: int | None = None, target_frame: int | None = None
+    ) -> int | None:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return None
+        layer = layer_manager.active_layer
+        if layer is None:
+            return None
+        created = self.frame_manager.duplicate_layer_key(
+            layer.uid, source_frame, target_frame
+        )
+        if created is not None:
+            self._notify_layer_manager_changed()
+        return created
+
+    def key_frames_for_layer(self, layer: Layer) -> list[int]:
+        return self.frame_manager.layer_key_frames(layer.uid)
+
+    def register_layer(
+        self, layer: Layer, index: int | None = None, *, key_frames: Iterable[int] | None = None
+    ) -> None:
+        self.frame_manager.register_new_layer(layer, index, key_frames=key_frames)
+
+    def unregister_layer(self, layer_uid: int) -> None:
+        self.frame_manager.unregister_layer(layer_uid)
+
+    def duplicate_layer_keys(self, source_layer: Layer, new_layer: Layer) -> None:
+        self.frame_manager.duplicate_layer_keys(source_layer.uid, new_layer)
+
+    def apply_frame_manager_snapshot(self, snapshot: FrameManager) -> None:
+        self.frame_manager = snapshot.clone()
+        self.width = self.frame_manager.width
+        self.height = self.frame_manager.height
+        self._notify_layer_manager_changed()
 
     @staticmethod
     def qimage_to_pil(qimage):
@@ -137,7 +222,8 @@ class Document:
                 else:
                     layer = Layer.from_qimage(qimage, f"Layer {i+1}")
                 doc.layer_manager.layers.append(layer)
-        
+                doc.register_layer(layer, len(doc.layer_manager.layers) - 1)
+
         return doc
 
     def resize(self, width, height, interpolation):
