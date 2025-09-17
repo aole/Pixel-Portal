@@ -26,18 +26,8 @@ class PenTool(BaseTool):
 
         self.points = [doc_pos]
 
-        # Use a transparent temp image for the preview overlay
-        self.canvas.temp_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
-        self.canvas.temp_image.fill(Qt.transparent)
-
-        if self.canvas.tile_preview_enabled:
-            self.canvas.tile_preview_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
-            self.canvas.tile_preview_image.fill(Qt.transparent)
-        else:
-            self.canvas.tile_preview_image = None
-
-        # This flag tells the renderer to draw our temp_image ON TOP of the document, not instead of it.
-        self.canvas.temp_image_replaces_active_layer = False
+        # Prepare transparent overlays for the live preview.
+        self._allocate_preview_images(replace_active_layer=False, allocate_temp=True)
 
         self.draw_path_on_temp_image()
         self.canvas.update()
@@ -62,10 +52,7 @@ class PenTool(BaseTool):
         if not self.points:
             # Clean up preview and return
             self.points = []
-            self.canvas.temp_image = None
-            self.canvas.original_image = None
-            self.canvas.temp_image_replaces_active_layer = False
-            self.canvas.tile_preview_image = None
+            self._clear_preview_images()
             self.canvas.update()
             return
 
@@ -73,10 +60,7 @@ class PenTool(BaseTool):
         if layer_manager is None:
             # Clean up preview and return
             self.points = []
-            self.canvas.temp_image = None
-            self.canvas.original_image = None
-            self.canvas.temp_image_replaces_active_layer = False
-            self.canvas.tile_preview_image = None
+            self._clear_preview_images()
             self.canvas.update()
             return
 
@@ -84,10 +68,7 @@ class PenTool(BaseTool):
         if not active_layer:
             # Clean up preview and return
             self.points = []
-            self.canvas.temp_image = None
-            self.canvas.original_image = None
-            self.canvas.temp_image_replaces_active_layer = False
-            self.canvas.tile_preview_image = None
+            self._clear_preview_images()
             self.canvas.update()
             return
 
@@ -111,31 +92,27 @@ class PenTool(BaseTool):
 
         # Clean up preview
         self.points = []
-        self.canvas.temp_image = None
-        self.canvas.original_image = None
-        self.canvas.temp_image_replaces_active_layer = False
-        self.canvas.tile_preview_image = None
+        self._clear_preview_images()
         self.canvas.update()
 
     def draw_path_on_temp_image(self):
         if not self.points or self.canvas.temp_image is None:
             return
 
-        # Clear the temp image before redrawing the path
-        self.canvas.temp_image.fill(Qt.transparent)
-        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
-            self.canvas.tile_preview_image.fill(Qt.transparent)
+        self._refresh_preview_images()
 
-        painter = QPainter(self.canvas.temp_image)
+        self._paint_preview_path(self.canvas.temp_image, wrap=self.canvas.tile_preview_enabled)
 
-        # Handle selection mask
+        tile_preview = self.canvas.tile_preview_image
+        if tile_preview is not None:
+            self._paint_preview_path(tile_preview, wrap=True)
+
+    def _paint_preview_path(self, image: QImage, *, wrap: bool):
+        painter = QPainter(image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        
-        # Set the pen for the live preview
         painter.setPen(QPen(self.canvas.drawing_context.pen_color))
-        
-        # Use the drawing class to handle mirroring and brush styles
+
         if len(self.points) == 1:
             self.canvas.drawing.draw_brush(
                 painter,
@@ -145,66 +122,27 @@ class PenTool(BaseTool):
                 self.canvas.drawing_context.pen_width,
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
-                wrap=self.canvas.tile_preview_enabled,
+                wrap=wrap,
                 pattern=self.canvas.drawing_context.pattern_brush,
                 mirror_x_position=self.canvas.drawing_context.mirror_x_position,
                 mirror_y_position=self.canvas.drawing_context.mirror_y_position,
             )
         else:
-            for i in range(len(self.points) - 1):
+            for start, end in zip(self.points, self.points[1:]):
                 self.canvas.drawing.draw_line_with_brush(
                     painter,
-                    self.points[i],
-                    self.points[i+1],
+                    start,
+                    end,
                     self.canvas._document_size,
                     self.canvas.drawing_context.brush_type,
                     self.canvas.drawing_context.pen_width,
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
-                    wrap=self.canvas.tile_preview_enabled,
+                    wrap=wrap,
                     erase=False,
                     pattern=self.canvas.drawing_context.pattern_brush,
                     mirror_x_position=self.canvas.drawing_context.mirror_x_position,
                     mirror_y_position=self.canvas.drawing_context.mirror_y_position,
                 )
-
         painter.end()
 
-        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
-            preview_painter = QPainter(self.canvas.tile_preview_image)
-            if self.canvas.selection_shape:
-                preview_painter.setClipPath(self.canvas.selection_shape)
-            preview_painter.setPen(QPen(self.canvas.drawing_context.pen_color))
-            if len(self.points) == 1:
-                self.canvas.drawing.draw_brush(
-                    preview_painter,
-                    self.points[0],
-                    self.canvas._document_size,
-                    self.canvas.drawing_context.brush_type,
-                    self.canvas.drawing_context.pen_width,
-                    self.canvas.drawing_context.mirror_x,
-                    self.canvas.drawing_context.mirror_y,
-                    wrap=True,
-                    pattern=self.canvas.drawing_context.pattern_brush,
-                    mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-                    mirror_y_position=self.canvas.drawing_context.mirror_y_position,
-                )
-            else:
-                for i in range(len(self.points) - 1):
-                    self.canvas.drawing.draw_line_with_brush(
-                        preview_painter,
-                        self.points[i],
-                        self.points[i + 1],
-                        self.canvas._document_size,
-                        self.canvas.drawing_context.brush_type,
-                        self.canvas.drawing_context.pen_width,
-                        self.canvas.drawing_context.mirror_x,
-                        self.canvas.drawing_context.mirror_y,
-                        wrap=True,
-                        erase=False,
-                        pattern=self.canvas.drawing_context.pattern_brush,
-                        mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-                        mirror_y_position=self.canvas.drawing_context.mirror_y_position,
-                    )
-            preview_painter.end()
-        

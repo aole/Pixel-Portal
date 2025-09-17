@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 from PySide6.QtCore import QPoint, Qt, QRect, QSize
 from PySide6.QtGui import QMouseEvent, QColor, QImage
-from portal.core.command import DrawCommand, ShapeCommand, FillCommand, MoveCommand
+from portal.core.command import DrawCommand, ShapeCommand, FillCommand, MoveCommand, CompositeCommand
 from portal.core.drawing import Drawing
 from portal.tools.pentool import PenTool
 from portal.tools.linetool import LineTool
@@ -42,20 +42,26 @@ def pen_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
     mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.visible = True
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
-    mock_canvas.drawing_context.brush_type = "SolidPattern"
+    mock_canvas.drawing_context.brush_type = "Square"
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
+    mock_canvas.drawing_context.pattern_brush = None
+    mock_canvas.drawing_context.mirror_x_position = None
+    mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
     mock_canvas.temp_image = None
     mock_canvas.original_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
+    mock_canvas.drawing = Drawing()
+    mock_canvas.is_erasing_preview = False
     tool = PenTool(mock_canvas)
     return tool
 
@@ -92,19 +98,70 @@ def test_pen_mouse_events(pen_tool, qtbot):
     assert canvas.original_image is None
 
 
+def test_pen_tile_preview_overlay(pen_tool, qtbot):
+    tool = pen_tool
+    canvas = tool.canvas
+    canvas.tile_preview_enabled = True
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    assert canvas.tile_preview_image is not None
+    assert canvas.tile_preview_image.pixelColor(start_point).alpha() > 0
+    assert canvas.is_erasing_preview is False
+
+    end_point = QPoint(20, 20)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, end_point)
+
+    assert canvas.tile_preview_image.pixelColor(end_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mouseReleaseEvent(release_event, end_point)
+
+    assert canvas.tile_preview_image is None
+
+
 @pytest.fixture
 def eraser_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
     mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.visible = True
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
-    mock_canvas.drawing_context.brush_type = "SolidPattern"
+    mock_canvas.drawing_context.brush_type = "Square"
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
+    mock_canvas.drawing_context.pattern_brush = None
+    mock_canvas.drawing_context.mirror_x_position = None
+    mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
     mock_canvas.is_erasing_preview = False
@@ -112,6 +169,7 @@ def eraser_tool(qtbot):
     mock_canvas.original_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
+    mock_canvas.drawing = Drawing()
     tool = EraserTool(mock_canvas)
     return tool
 
@@ -149,25 +207,79 @@ def test_eraser_mouse_events(eraser_tool, qtbot):
     assert canvas.original_image is None
 
 
+def test_eraser_tile_preview_overlay(eraser_tool, qtbot):
+    tool = eraser_tool
+    canvas = tool.canvas
+    canvas.tile_preview_enabled = True
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    assert canvas.is_erasing_preview is True
+    assert canvas.tile_preview_image is not None
+    assert canvas.tile_preview_image.pixelColor(start_point).alpha() > 0
+
+    end_point = QPoint(20, 20)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, end_point)
+
+    assert canvas.tile_preview_image.pixelColor(end_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mouseReleaseEvent(release_event, end_point)
+
+    assert canvas.tile_preview_image is None
+    assert canvas.is_erasing_preview is False
+
+
 @pytest.fixture
 def line_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
     mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.visible = True
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
-    mock_canvas.drawing_context.brush_type = "SolidPattern"
+    mock_canvas.drawing_context.brush_type = "Square"
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
+    mock_canvas.drawing_context.pattern_brush = None
+    mock_canvas.drawing_context.mirror_x_position = None
+    mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_canvas.original_image.fill(Qt.transparent)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
+    mock_canvas.drawing = Drawing()
     tool = LineTool(mock_canvas)
     return tool
 
@@ -207,6 +319,52 @@ def test_line_mouse_events(line_tool, qtbot):
     assert canvas.temp_image is None
     assert canvas.original_image is None
     assert canvas.temp_image_replaces_active_layer is False
+
+
+def test_line_tile_preview_overlay(line_tool, qtbot):
+    tool = line_tool
+    canvas = tool.canvas
+    canvas.tile_preview_enabled = True
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    move_point = QPoint(20, 20)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    assert canvas.tile_preview_image is not None
+    assert canvas.tile_preview_image.pixelColor(start_point).alpha() > 0
+    assert canvas.tile_preview_image.pixelColor(move_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert canvas.tile_preview_image is None
 
 
 @pytest.fixture
@@ -320,9 +478,14 @@ def test_move_mouse_events_with_selection(move_tool, qtbot):
         tool.mouseReleaseEvent(release_event, QPoint(20, 30))
     assert blocker.signal_triggered
     command = blocker.args[0]
-    assert isinstance(command, MoveCommand)
-    assert command.delta == QPoint(10, 20)
-    assert command.original_selection_shape == selection_path
+    if isinstance(command, CompositeCommand):
+        move_commands = [cmd for cmd in command.commands if isinstance(cmd, MoveCommand)]
+        assert move_commands, "Composite command should include a MoveCommand"
+        move_command = move_commands[0]
+    else:
+        move_command = command
+    assert move_command.delta == QPoint(10, 20)
+    assert move_command.original_selection_shape == selection_path
 
 
 @pytest.fixture
@@ -357,17 +520,23 @@ def test_bucket_mouse_press_event(bucket_tool, qtbot):
 def ellipse_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.document.layer_manager.active_layer = Mock()
+    mock_canvas.document.layer_manager.active_layer.visible = True
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
-    mock_canvas.drawing_context.brush_type = "SolidPattern"
+    mock_canvas.drawing_context.brush_type = "Square"
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
+    mock_canvas.drawing_context.pattern_brush = None
+    mock_canvas.drawing_context.mirror_x_position = None
+    mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
     mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_canvas.original_image.fill(Qt.transparent)
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
+    mock_canvas.drawing = Drawing()
     tool = EllipseTool(mock_canvas)
     return tool
 
@@ -410,6 +579,99 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert canvas.temp_image_replaces_active_layer is False
 
 
+def test_ellipse_tile_preview_overlay(ellipse_tool, qtbot):
+    tool = ellipse_tool
+    canvas = tool.canvas
+    canvas.tile_preview_enabled = True
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    move_point = QPoint(30, 40)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    assert canvas.tile_preview_image is not None
+    top_center = QPoint((start_point.x() + move_point.x()) // 2, start_point.y())
+    assert canvas.tile_preview_image.pixelColor(top_center).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert canvas.tile_preview_image is None
+
+
+def test_rectangle_tile_preview_overlay(rectangle_tool, qtbot):
+    tool = rectangle_tool
+    canvas = tool.canvas
+    canvas.tile_preview_enabled = True
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    move_point = QPoint(30, 40)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    assert canvas.tile_preview_image is not None
+    assert canvas.tile_preview_image.pixelColor(start_point).alpha() > 0
+    top_edge_point = QPoint(move_point.x(), start_point.y())
+    assert canvas.tile_preview_image.pixelColor(top_edge_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert canvas.tile_preview_image is None
+
+
 from portal.ui.canvas import Canvas
 from portal.core.drawing_context import DrawingContext
 from portal.core.document import Document
@@ -424,13 +686,16 @@ def rectangle_tool(qtbot):
     canvas.set_document(document)
     drawing_context.pen_color = QColor("red")
     drawing_context.pen_width = 1
-    drawing_context.brush_type = "SolidPattern"
+    drawing_context.brush_type = "Square"
     drawing_context.mirror_x = False
     drawing_context.mirror_y = False
+    drawing_context.pattern_brush = None
     canvas.selection_shape = None
     canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
+    canvas.original_image.fill(Qt.transparent)
     canvas.temp_image = None
     canvas.temp_image_replaces_active_layer = False
+    canvas.tile_preview_enabled = False
     tool = RectangleTool(canvas)
     return tool
 
