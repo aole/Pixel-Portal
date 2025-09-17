@@ -4,6 +4,7 @@ from typing import Optional
 
 from portal.core.command import Command
 from portal.core.document import Document
+from portal.core.frame_manager import FrameManager
 
 
 class _KeyframeCommand(Command):
@@ -11,16 +12,16 @@ class _KeyframeCommand(Command):
 
     def __init__(self, document: Document):
         self.document = document
-        self._previous_keys: list[int] | None = None
+        self._previous_state: FrameManager | None = None
 
     def _capture_before(self) -> None:
-        if self._previous_keys is None:
-            self._previous_keys = list(self.document.key_frames)
+        if self._previous_state is None:
+            self._previous_state = self.document.frame_manager.clone()
 
     def undo(self) -> None:
-        if self._previous_keys is None:
+        if self._previous_state is None:
             return
-        self.document.set_key_frames(self._previous_keys)
+        self.document.apply_frame_manager_snapshot(self._previous_state)
 
 
 class AddKeyframeCommand(_KeyframeCommand):

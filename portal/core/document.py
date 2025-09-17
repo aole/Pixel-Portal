@@ -87,18 +87,36 @@ class Document:
         return sorted(self.frame_manager.key_frames)
 
     def set_key_frames(self, frames: Iterable[int]) -> bool:
-        return self.frame_manager.set_key_frames(frames)
+        changed = self.frame_manager.set_key_frames(frames)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
 
     def add_key_frame(self, frame: int) -> bool:
-        return self.frame_manager.add_key_frame(frame)
+        changed = self.frame_manager.add_key_frame(frame)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
 
     def remove_key_frame(self, frame: int) -> bool:
-        return self.frame_manager.remove_key_frame(frame)
+        changed = self.frame_manager.remove_key_frame(frame)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
 
     def duplicate_key_frame(
         self, source_frame: int | None = None, target_frame: int | None = None
     ) -> int | None:
-        return self.frame_manager.duplicate_key_frame(source_frame, target_frame)
+        created = self.frame_manager.duplicate_key_frame(source_frame, target_frame)
+        if created is not None:
+            self._notify_layer_manager_changed()
+        return created
+
+    def apply_frame_manager_snapshot(self, snapshot: FrameManager) -> None:
+        self.frame_manager = snapshot.clone()
+        self.width = self.frame_manager.width
+        self.height = self.frame_manager.height
+        self._notify_layer_manager_changed()
 
     @staticmethod
     def qimage_to_pil(qimage):

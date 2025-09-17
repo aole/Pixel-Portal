@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bisect import bisect_right
 from typing import Iterable, List, Optional, Set
 
 from PySide6.QtGui import QImage
@@ -23,9 +24,10 @@ class FrameManager:
 
     @property
     def current_frame(self) -> Optional[Frame]:
-        if 0 <= self.active_frame_index < len(self.frames):
-            return self.frames[self.active_frame_index]
-        return None
+        key_index = self.resolve_key_frame_index(self.active_frame_index)
+        if key_index is None:
+            return None
+        return self.frames[key_index]
 
     @property
     def current_layer_manager(self):
@@ -77,6 +79,10 @@ class FrameManager:
             fallback = max(0, fallback)
             self.key_frames.add(fallback)
 
+        resolved = self.resolve_key_frame_index(self.active_frame_index)
+        if resolved is None and self.key_frames:
+            self.active_frame_index = min(self.key_frames)
+
     def select_frame(self, index: int) -> None:
         if not (0 <= index < len(self.frames)):
             raise IndexError("Frame index out of range.")
@@ -113,7 +119,28 @@ class FrameManager:
             normalized = {max(0, fallback)}
         if normalized == self.key_frames:
             return False
+
+        previous_keys = sorted(self.key_frames)
         self.key_frames = normalized
+
+        # Ensure frames corresponding to the new key set contain data by
+        # cloning from their nearest predecessors in the previous state.
+        for key in sorted(self.key_frames):
+            if key >= len(self.frames) or key in previous_keys:
+                continue
+            source_index: Optional[int] = None
+            if previous_keys:
+                position = bisect_right(previous_keys, key)
+                if position:
+                    source_index = previous_keys[position - 1]
+                else:
+                    source_index = previous_keys[0]
+            else:
+                source_index = key
+            if source_index is None:
+                continue
+            if 0 <= source_index < len(self.frames):
+                self.frames[key] = self.frames[source_index].clone()
         return True
 
     def add_key_frame(self, index: int) -> bool:
@@ -121,6 +148,10 @@ class FrameManager:
             return False
         if index in self.key_frames:
             return False
+        source_index = self.resolve_key_frame_index(index)
+        if source_index is None:
+            source_index = 0
+        self.frames[index] = self.frames[source_index].clone()
         self.key_frames.add(index)
         return True
 
@@ -135,6 +166,11 @@ class FrameManager:
         if not self.key_frames and self.frames:
             fallback = min(self.active_frame_index, len(self.frames) - 1)
             self.key_frames.add(max(0, fallback))
+        fallback_index = self.resolve_key_frame_index(index)
+        if fallback_index is None and self.key_frames:
+            fallback_index = min(self.key_frames)
+        if fallback_index is not None and 0 <= fallback_index < len(self.frames):
+            self.frames[index] = self.frames[fallback_index].clone()
         return True
 
     def duplicate_key_frame(
@@ -165,8 +201,28 @@ class FrameManager:
         if target_index in self.key_frames:
             return None
 
+        self.frames[target_index] = self.frames[source_index].clone()
         self.key_frames.add(target_index)
         return target_index
+
+    # ------------------------------------------------------------------
+    # Resolution helpers
+    # ------------------------------------------------------------------
+    def resolve_key_frame_index(self, frame_index: Optional[int] = None) -> Optional[int]:
+        if not self.frames or not self.key_frames:
+            return None
+        if frame_index is None:
+            frame_index = self.active_frame_index
+        if frame_index < 0:
+            frame_index = 0
+        if frame_index >= len(self.frames):
+            frame_index = len(self.frames) - 1
+
+        sorted_keys = sorted(self.key_frames)
+        position = bisect_right(sorted_keys, frame_index)
+        if position:
+            return sorted_keys[position - 1]
+        return sorted_keys[0]
 
 
 def resolve_active_layer_manager(document) -> LayerManager | None:

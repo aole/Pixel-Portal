@@ -24,7 +24,8 @@ def test_document_add_and_select_frames():
 
     assert len(document.frame_manager.frames) == 2
     assert document.frame_manager.active_frame_index == 1
-    assert document.layer_manager is document.frame_manager.frames[1].layer_manager
+    assert document.layer_manager is first_manager
+    assert document.frame_manager.resolve_key_frame_index() == 0
 
     document.select_frame(0)
     assert document.layer_manager is first_manager
@@ -44,8 +45,37 @@ def test_render_current_frame_tracks_active_frame():
     assert blue_pixel == QColor("blue")
 
     document.select_frame(0)
-    red_again = document.render().pixelColor(0, 0)
-    assert red_again == QColor("red")
+    blue_again = document.render().pixelColor(0, 0)
+    assert blue_again == QColor("blue")
+
+
+def test_scrubbing_uses_previous_keyframe_state():
+    document = Document(2, 2)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+
+    for _ in range(6):
+        document.add_frame()
+
+    document.select_frame(3)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(5)
+    document.add_key_frame(5)
+    key_layer_manager = document.layer_manager
+    assert key_layer_manager is document.frame_manager.frames[5].layer_manager
+    assert key_layer_manager is not document.frame_manager.frames[0].layer_manager
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    key_layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(6)
+    assert document.frame_manager.resolve_key_frame_index() == 5
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    document.select_frame(2)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
 
 def test_remove_frame_updates_active_index():
@@ -109,48 +139,82 @@ def test_document_key_frames_follow_frame_removal():
 
 def test_add_keyframe_command_supports_undo_redo():
     document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
     document.add_frame()
 
     command = AddKeyframeCommand(document, 1)
     command.execute()
 
     assert document.key_frames == [0, 1]
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(1)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
     command.undo()
     assert document.key_frames == [0]
+    document.select_frame(1)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
     command.execute()
     assert document.key_frames == [0, 1]
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
 
 def test_remove_keyframe_command_supports_undo_redo():
     document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
     document.add_frame()
     document.add_key_frame(1)
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
 
     command = RemoveKeyframeCommand(document, 1)
     command.execute()
 
     assert document.key_frames == [0]
+    document.select_frame(1)
+    assert document.frame_manager.resolve_key_frame_index() == 0
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
     command.undo()
 
     assert document.key_frames == [0, 1]
+    document.select_frame(1)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
 
 def test_duplicate_keyframe_command_supports_undo_redo():
     document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
     for _ in range(3):
         document.add_frame()
     document.add_key_frame(2)
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
 
     command = DuplicateKeyframeCommand(document, source_frame=2, target_frame=3)
     command.execute()
 
     assert document.key_frames == [0, 2, 3]
+    document.select_frame(3)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+    document.layer_manager.active_layer.image.fill(QColor("green"))
+    document.select_frame(2)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
     command.undo()
     assert document.key_frames == [0, 2]
+    document.select_frame(3)
+    assert document.frame_manager.resolve_key_frame_index() == 2
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
     command.execute()
     assert document.key_frames == [0, 2, 3]
+    document.select_frame(3)
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
