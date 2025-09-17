@@ -91,7 +91,12 @@ class MainWindow(QMainWindow):
         timeline_layout.addWidget(self.timeline_widget)
 
         self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
+        self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
+        self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
+        self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
+        self.timeline_widget.key_duplicate_requested.connect(self.on_timeline_duplicate_key)
         self._update_current_frame_label(self.timeline_widget.current_frame())
+        self.sync_timeline_from_document()
 
         central_container = QWidget(self)
         central_layout = QVBoxLayout(central_container)
@@ -194,6 +199,7 @@ class MainWindow(QMainWindow):
         self.app.drawing_context.mirror_y_changed.connect(self.on_mirror_changed)
 
         self.app.document_changed.connect(self.on_document_changed)
+        self.app.document_changed.connect(self.sync_timeline_from_document)
         self.app.select_all_triggered.connect(self.canvas.select_all)
         self.app.select_none_triggered.connect(self.canvas.select_none)
         self.app.invert_selection_triggered.connect(self.canvas.invert_selection)
@@ -252,10 +258,64 @@ class MainWindow(QMainWindow):
 
 
     @Slot()
+    def sync_timeline_from_document(self):
+        document = self.app.document
+        if not document:
+            return
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return
+        frame_count = len(frame_manager.frames)
+        max_frame_index = max(0, frame_count - 1) if frame_count else 0
+        current_frame = frame_manager.active_frame_index
+        if current_frame < 0 and frame_count:
+            current_frame = 0
+        current_frame = max(0, min(current_frame, max_frame_index))
+        keys = document.key_frames
+
+        previous_state = self.timeline_widget.blockSignals(True)
+        try:
+            self.timeline_widget.set_total_frames(max_frame_index)
+            self.timeline_widget.set_keys(keys)
+            self.timeline_widget.set_current_frame(current_frame)
+        finally:
+            self.timeline_widget.blockSignals(previous_state)
+        self._update_current_frame_label(self.timeline_widget.current_frame())
+
+    @Slot()
     def on_document_changed(self):
         self.layer_manager_widget.refresh_layers()
         self.canvas.set_document(self.app.document)
         self.canvas.update()
+
+    @Slot(int)
+    def on_timeline_add_key(self, frame: int) -> None:
+        self.app.add_keyframe(frame)
+
+    @Slot(int)
+    def on_timeline_remove_key(self, frame: int) -> None:
+        self.app.remove_keyframe(frame)
+
+    @Slot(int)
+    def on_timeline_duplicate_key(self, frame: int) -> None:
+        created = self.app.duplicate_keyframe(target_frame=frame)
+        if created is None:
+            return
+        self.timeline_widget.set_current_frame(created)
+
+    @Slot(int)
+    def on_timeline_frame_changed(self, frame: int) -> None:
+        document = self.app.document
+        if not document:
+            return
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return
+        if not (0 <= frame < len(frame_manager.frames)):
+            return
+        if frame_manager.active_frame_index == frame:
+            return
+        self.app.select_frame(frame)
 
     @Slot()
     def on_crop_to_selection(self):

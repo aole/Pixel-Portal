@@ -1,6 +1,11 @@
 from PySide6.QtGui import QColor
 
 from portal.core.document import Document
+from portal.commands.timeline_commands import (
+    AddKeyframeCommand,
+    DuplicateKeyframeCommand,
+    RemoveKeyframeCommand,
+)
 
 
 def test_document_initializes_with_single_frame():
@@ -88,3 +93,64 @@ def test_clone_copies_frames_and_layers():
         assert cloned_frame is not original_frame
         assert cloned_frame.layer_manager is not original_frame.layer_manager
         assert len(cloned_frame.layer_manager.layers) == len(original_frame.layer_manager.layers)
+
+
+def test_document_key_frames_follow_frame_removal():
+    document = Document(4, 4)
+    document.add_frame()
+    document.add_key_frame(1)
+
+    assert document.key_frames == [0, 1]
+
+    document.remove_frame(0)
+
+    assert document.key_frames == [0]
+
+
+def test_add_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.add_frame()
+
+    command = AddKeyframeCommand(document, 1)
+    command.execute()
+
+    assert document.key_frames == [0, 1]
+
+    command.undo()
+    assert document.key_frames == [0]
+
+    command.execute()
+    assert document.key_frames == [0, 1]
+
+
+def test_remove_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.add_frame()
+    document.add_key_frame(1)
+
+    command = RemoveKeyframeCommand(document, 1)
+    command.execute()
+
+    assert document.key_frames == [0]
+
+    command.undo()
+
+    assert document.key_frames == [0, 1]
+
+
+def test_duplicate_keyframe_command_supports_undo_redo():
+    document = Document(4, 4)
+    for _ in range(3):
+        document.add_frame()
+    document.add_key_frame(2)
+
+    command = DuplicateKeyframeCommand(document, source_frame=2, target_frame=3)
+    command.execute()
+
+    assert document.key_frames == [0, 2, 3]
+
+    command.undo()
+    assert document.key_frames == [0, 2]
+
+    command.execute()
+    assert document.key_frames == [0, 2, 3]

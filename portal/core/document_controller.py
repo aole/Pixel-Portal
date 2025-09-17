@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PySide6.QtCore import QObject, Signal, Slot, QRect
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QMessageBox
@@ -12,6 +14,11 @@ from portal.core.command import (
     AddLayerCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
+from portal.commands.timeline_commands import (
+    AddKeyframeCommand,
+    DuplicateKeyframeCommand,
+    RemoveKeyframeCommand,
+)
 from portal.core.color_utils import find_closest_color
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
@@ -117,6 +124,50 @@ class DocumentController(QObject):
             command = FlipCommand(self.document, horizontal, vertical, all_layers)
             self.execute_command(command)
 
+    def add_keyframe(self, frame_index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        if frame_index in document.key_frames:
+            return
+        if frame_index < 0 or frame_index >= len(document.frame_manager.frames):
+            return
+        command = AddKeyframeCommand(document, frame_index)
+        self.execute_command(command)
+
+    def remove_keyframe(self, frame_index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        if frame_index not in document.key_frames:
+            return
+        if len(document.key_frames) <= 1:
+            return
+        command = RemoveKeyframeCommand(document, frame_index)
+        self.execute_command(command)
+
+    def duplicate_keyframe(
+        self,
+        source_frame: Optional[int],
+        target_frame: Optional[int],
+    ) -> Optional[int]:
+        document = self.document
+        if document is None:
+            return None
+        if not document.key_frames:
+            return None
+        frame_count = len(document.frame_manager.frames)
+        if frame_count <= 0:
+            return None
+        if target_frame is not None and not (0 <= target_frame < frame_count):
+            return None
+        if target_frame is None and len(document.key_frames) >= frame_count:
+            return None
+
+        command = DuplicateKeyframeCommand(document, source_frame, target_frame)
+        self.execute_command(command)
+        return command.created_frame
+
     def add_new_layer_with_image(self, image):
         command = AddLayerCommand(self.document, image, "AI Generated Layer")
         self.execute_command(command)
@@ -182,6 +233,18 @@ class DocumentController(QObject):
             return
         command = RemoveBackgroundCommand(layer)
         self.execute_command(command)
+
+    def select_frame(self, index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        if not (0 <= index < len(frame_manager.frames)):
+            return
+        if frame_manager.active_frame_index == index:
+            return
+        document.select_frame(index)
+        self.document_changed.emit()
 
     def check_for_unsaved_changes(self):
         if not self.is_dirty:

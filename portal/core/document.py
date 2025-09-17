@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import io
 import json
 
@@ -81,6 +81,24 @@ class Document:
 
     def render_current_frame(self) -> QImage:
         return self.frame_manager.render_current_frame()
+
+    @property
+    def key_frames(self) -> list[int]:
+        return sorted(self.frame_manager.key_frames)
+
+    def set_key_frames(self, frames: Iterable[int]) -> bool:
+        return self.frame_manager.set_key_frames(frames)
+
+    def add_key_frame(self, frame: int) -> bool:
+        return self.frame_manager.add_key_frame(frame)
+
+    def remove_key_frame(self, frame: int) -> bool:
+        return self.frame_manager.remove_key_frame(frame)
+
+    def duplicate_key_frame(
+        self, source_frame: int | None = None, target_frame: int | None = None
+    ) -> int | None:
+        return self.frame_manager.duplicate_key_frame(source_frame, target_frame)
 
     @staticmethod
     def qimage_to_pil(qimage):
