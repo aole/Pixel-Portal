@@ -124,7 +124,9 @@ class ActionManager:
         self.conform_to_palette_action.triggered.connect(self.app.conform_to_palette)
 
         self.remove_background_action = QAction("Remove Background", self.main_window)
-        self.remove_background_action.triggered.connect(self.app.remove_background_from_layer)
+        self.remove_background_action.triggered.connect(
+            self.main_window.open_remove_background_dialog
+        )
         self.remove_background_action.setEnabled(REMBG_AVAILABLE)
         if not REMBG_AVAILABLE:
             self.remove_background_action.setToolTip(

@@ -256,7 +256,9 @@ class LayerManagerWidget(QWidget):
     def remove_background_from_menu(self, index_in_list):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
         self.app.document.layer_manager.select_layer(actual_index)
-        self.app.remove_background_from_layer()
+        main_window = getattr(self.app, "main_window", None)
+        if main_window is not None:
+            main_window.open_remove_background_dialog()
 
     def collapse_layers_from_menu(self):
         document = self.app.document

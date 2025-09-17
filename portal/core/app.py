@@ -3,7 +3,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot
 import os
 
-from portal.core.document_controller import DocumentController
+from portal.core.document_controller import DocumentController, BackgroundRemovalScope
 from portal.core.settings_controller import SettingsController
 from portal.core.scripting import ScriptingAPI
 from portal.ui.script_dialog import ScriptDialog
@@ -230,8 +230,13 @@ class App(QObject):
         palette_hex = self.main_window.get_palette()
         self.document_controller.conform_to_palette(palette_hex)
 
-    def remove_background_from_layer(self):
-        self.document_controller.remove_background_from_layer()
+    def remove_background_from_layer(
+        self, scope: BackgroundRemovalScope | None = None
+    ):
+        if scope is None:
+            self.document_controller.remove_background_from_layer()
+        else:
+            self.document_controller.remove_background_from_layer(scope)
 
     def run_script(self, script_path):
         """Runs a script with optional parameters and undo support."""

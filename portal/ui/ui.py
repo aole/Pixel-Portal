@@ -38,6 +38,7 @@ from portal.commands.tool_bar_builder import ToolBarBuilder
 from portal.commands.status_bar_manager import StatusBarManager
 from portal.ui.flip_dialog import FlipDialog
 from portal.ui.settings_dialog import SettingsDialog
+from portal.ui.remove_background_dialog import RemoveBackgroundDialog
 
 
 from PySide6.QtWidgets import QColorDialog
@@ -54,6 +55,8 @@ class MainWindow(QMainWindow):
         self.action_manager = ActionManager(self)
 
         self.main_palette_buttons = []
+
+        self.remove_background_dialog = None
 
         self.canvas = Canvas(self.app.drawing_context)
         self.canvas.set_background_image_alpha(
@@ -649,6 +652,13 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.app.settings_controller, self)
         dialog.settings_applied.connect(self.apply_settings_from_controller)
         dialog.exec()
+
+    def open_remove_background_dialog(self):
+        if self.remove_background_dialog is None:
+            self.remove_background_dialog = RemoveBackgroundDialog(self.app, self)
+        self.remove_background_dialog.show()
+        self.remove_background_dialog.raise_()
+        self.remove_background_dialog.activateWindow()
 
     @Slot()
     def apply_settings_from_controller(self):
