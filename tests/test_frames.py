@@ -308,3 +308,38 @@ def test_duplicate_keyframe_command_supports_undo_redo():
     assert document.key_frames == [0, 2, 3]
     document.select_frame(3)
     assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+
+def test_editing_layer_without_key_updates_base_state():
+    document = Document(4, 4)
+    document.add_key_frame(8)
+    document.select_frame(8)
+
+    document.layer_manager.add_layer("Overlay")
+    new_layer = document.layer_manager.active_layer
+    index = document.layer_manager.active_layer_index
+    document.register_layer(new_layer, index)
+
+    # Painting without a dedicated key should affect the base key frame.
+    new_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    assert document.layer_manager.active_layer.uid == new_layer.uid
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("blue")
+    assert document.key_frames_for_layer(new_layer) == [0]
+
+    # Verify that the layer object is shared between frames without a key.
+    base_manager = document.frame_manager.frames[0].layer_manager
+    future_manager = document.frame_manager.frames[8].layer_manager
+    assert base_manager.layers[index] is future_manager.layers[index]
+
+    # Once a key is added, edits should be isolated to that key frame.
+    document.select_frame(8)
+    document.add_key_frame(8)
+    keyed_layer = document.layer_manager.active_layer
+    keyed_layer.image.fill(QColor("green"))
+
+    document.select_frame(0)
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("blue")
+    document.select_frame(8)
+    assert document.layer_manager.active_layer.image.pixelColor(0, 0) == QColor("green")

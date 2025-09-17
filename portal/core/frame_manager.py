@@ -87,6 +87,13 @@ class FrameManager:
             clone = source_layer.clone()
             target_manager.layers.insert(index, clone)
             target_layer = clone
+        elif target_layer is source_layer:
+            index = self._find_layer_index(source_manager, layer_uid)
+            if index is None:
+                return
+            clone = source_layer.clone()
+            target_manager.layers[index] = clone
+            target_layer = clone
         if target_layer is source_layer:
             return
         target_layer.apply_key_state_from(source_layer)
@@ -111,6 +118,44 @@ class FrameManager:
         if position:
             return keys[position - 1]
         return keys[0]
+
+    def _rebind_layer_fallbacks(self, layer_uid: int) -> None:
+        if not self.frames:
+            return
+        keys = self.layer_keys.get(layer_uid)
+        if not keys:
+            return
+        for frame_index, frame in enumerate(self.frames):
+            fallback_index = self.resolve_layer_key_frame_index(layer_uid, frame_index)
+            if fallback_index is None:
+                continue
+            if not (0 <= fallback_index < len(self.frames)):
+                continue
+            source_manager = self.frames[fallback_index].layer_manager
+            target_manager = frame.layer_manager
+            source_layer = self._find_layer(source_manager, layer_uid)
+            if source_layer is None:
+                continue
+            source_index = self._find_layer_index(source_manager, layer_uid)
+            if source_index is None:
+                continue
+            if frame_index == fallback_index:
+                # Ensure the keyed frame hosts the layer entry.
+                if self._find_layer(target_manager, layer_uid) is None:
+                    clone = source_layer.clone()
+                    target_manager.layers.insert(source_index, clone)
+                continue
+            target_layer = self._find_layer(target_manager, layer_uid)
+            if target_layer is source_layer:
+                continue
+            if target_layer is None:
+                target_manager.layers.insert(source_index, source_layer)
+            else:
+                target_manager.layers[source_index] = source_layer
+
+    def _rebind_all_layers(self) -> None:
+        for layer_uid in list(self.layer_keys.keys()):
+            self._rebind_layer_fallbacks(layer_uid)
 
     # ------------------------------------------------------------------
     # Public API
@@ -154,6 +199,7 @@ class FrameManager:
                 source_index = len(self.frames) - 1
             source_frame = self.frames[source_index]
             self.frames.append(source_frame.clone())
+        self._rebind_all_layers()
 
     def add_frame(self, frame: Optional[Frame] = None) -> Frame:
         if frame is None:
@@ -165,6 +211,7 @@ class FrameManager:
         self.active_frame_index = len(self.frames) - 1
         if not self.frame_markers:
             self.frame_markers.add(self.active_frame_index)
+        self._rebind_all_layers()
         return frame
 
     def remove_frame(self, index: int) -> None:
@@ -197,6 +244,7 @@ class FrameManager:
             updated_keys[layer_uid] = shifted
         self.layer_keys = updated_keys
         self._refresh_frame_markers()
+        self._rebind_all_layers()
 
         resolved = self.resolve_key_frame_index(self.active_frame_index)
         if resolved is None and self.frame_markers:
@@ -262,6 +310,7 @@ class FrameManager:
                 fallback = key
             self._clone_layer_state(layer_uid, fallback, key)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
         return True
 
     def add_layer_key(self, layer_uid: int, index: int) -> bool:
@@ -279,6 +328,7 @@ class FrameManager:
         self._clone_layer_state(layer_uid, source_index, index)
         keys.add(index)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
         return True
 
     def remove_layer_key(self, layer_uid: int, index: int) -> bool:
@@ -293,6 +343,7 @@ class FrameManager:
         if fallback is not None:
             self._clone_layer_state(layer_uid, fallback, index)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
         return True
 
     def duplicate_layer_key(
@@ -325,6 +376,7 @@ class FrameManager:
         self._clone_layer_state(layer_uid, source_index, target_index)
         keys.add(target_index)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
         return target_index
 
     def register_new_layer(
@@ -366,10 +418,22 @@ class FrameManager:
         if not keys:
             keys = {0}
         self.layer_keys[layer.uid] = keys
+        primary_key = min(keys)
+        if 0 <= primary_key < len(self.frames):
+            primary_manager = self.frames[primary_key].layer_manager
+            base_index = self._find_layer_index(base_manager, layer.uid)
+            if base_index is not None:
+                if self._find_layer(primary_manager, layer.uid) is None:
+                    primary_manager.layers.insert(base_index, layer)
+                else:
+                    primary_manager.layers[base_index] = layer
         for key in sorted(keys):
             self.ensure_frame(key)
+            if key == primary_key:
+                continue
             self._clone_layer_state(layer.uid, base_frame_index, key)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer.uid)
 
     def unregister_layer(self, layer_uid: int) -> None:
         for frame in self.frames:
@@ -397,6 +461,7 @@ class FrameManager:
             self.ensure_frame(frame_index)
             self._copy_layer_between_layers(source_uid, new_layer.uid, frame_index)
         self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(new_layer.uid)
 
     # ------------------------------------------------------------------
     # Resolution helpers
