@@ -709,18 +709,30 @@ def test_move_layer_command(document):
         layer_manager.active_layer_index,
     )
 
+    # Ensure an additional frame exists so the command must propagate ordering changes.
+    document.frame_manager.ensure_frame(1)
+    second_manager = document.frame_manager.frames[1].layer_manager
+
     original_layers = list(layer_manager.layers)
+    original_second_order = list(second_manager.layers)
+
     from_index = 0
     to_index = 2
 
-    command = MoveLayerCommand(layer_manager, from_index, to_index)
+    command = MoveLayerCommand(document, from_index, to_index)
     command.execute()
 
     assert layer_manager.layers[to_index] == original_layers[from_index]
+    assert [layer.uid for layer in second_manager.layers] == [
+        layer.uid for layer in layer_manager.layers
+    ]
 
     command.undo()
 
     assert layer_manager.layers == original_layers
+    assert [layer.uid for layer in second_manager.layers] == [
+        layer.uid for layer in original_second_order
+    ]
 
 def test_fill_command(document, layer):
     """Test that the FillCommand correctly fills an area and that undo restores the previous state."""

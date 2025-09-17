@@ -1,8 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, TYPE_CHECKING
+
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from portal.core.layer import Layer
 from portal.core.drawing import Drawing
+
+if TYPE_CHECKING:
+    from portal.core.document import Document
 
 
 class Command(ABC):
@@ -826,26 +831,145 @@ class RemoveLayerCommand(Command):
             self.document.register_layer(self.removed_layer, self.index)
 
 class MoveLayerCommand(Command):
-    def __init__(self, layer_manager, from_index: int, to_index: int):
-        self.layer_manager = layer_manager
+    def __init__(self, document: 'Document', from_index: int, to_index: int):
+        self.document = document
         self.from_index = from_index
         self.to_index = to_index
+        self._before_orders: Dict[int, List[int]] | None = None
+        self._before_active: Dict[int, Optional[int]] | None = None
+        self._after_orders: Dict[int, List[int]] | None = None
+        self._after_active: Dict[int, Optional[int]] | None = None
 
     def execute(self):
-        layer = self.layer_manager.layers.pop(self.from_index)
-        self.layer_manager.layers.insert(self.to_index, layer)
-        # Adjust active layer index
-        if self.layer_manager.active_layer_index == self.from_index:
-            self.layer_manager.active_layer_index = self.to_index
-        self.layer_manager.layer_structure_changed.emit()
+        document = self.document
+        if document is None:
+            return
+
+        frame_manager = document.frame_manager
+        if not frame_manager.frames:
+            return
+
+        layer_manager = document.layer_manager
+        layers = layer_manager.layers
+        if not layers:
+            return
+
+        if self._before_orders is None:
+            if not self._has_index(layers, self.from_index):
+                return
+
+            self._before_orders = self._capture_orders(frame_manager)
+            self._before_active = self._capture_active_uids(frame_manager)
+
+            layer = layers.pop(self.from_index)
+            layers.insert(self.to_index, layer)
+
+            new_order = [getattr(item, "uid", None) for item in layers]
+            orders_after = {
+                frame_index: list(new_order)
+                for frame_index in range(len(frame_manager.frames))
+            }
+            self._apply_orders(frame_manager, orders_after, self._before_active)
+
+            self._after_orders = self._capture_orders(frame_manager)
+            self._after_active = self._capture_active_uids(frame_manager)
+        else:
+            if self._after_orders is None or self._after_active is None:
+                return
+            self._apply_orders(frame_manager, self._after_orders, self._after_active)
+
+        document.layer_manager.layer_structure_changed.emit()
 
     def undo(self):
-        layer = self.layer_manager.layers.pop(self.to_index)
-        self.layer_manager.layers.insert(self.from_index, layer)
-        # Adjust active layer index
-        if self.layer_manager.active_layer_index == self.to_index:
-            self.layer_manager.active_layer_index = self.from_index
-        self.layer_manager.layer_structure_changed.emit()
+        if self._before_orders is None or self._before_active is None:
+            return
+
+        frame_manager = self.document.frame_manager
+        self._apply_orders(frame_manager, self._before_orders, self._before_active)
+        self.document.layer_manager.layer_structure_changed.emit()
+
+    @staticmethod
+    def _has_index(layers: List[Layer], index: int) -> bool:
+        try:
+            layers[index]
+        except IndexError:
+            return False
+        return True
+
+    def _capture_orders(self, frame_manager) -> Dict[int, List[int]]:
+        orders: Dict[int, List[int]] = {}
+        for frame_index, frame in enumerate(frame_manager.frames):
+            manager = frame.layer_manager
+            orders[frame_index] = [
+                getattr(layer, "uid", None) for layer in manager.layers
+            ]
+        return orders
+
+    def _capture_active_uids(self, frame_manager) -> Dict[int, Optional[int]]:
+        active_map: Dict[int, Optional[int]] = {}
+        for frame_index, frame in enumerate(frame_manager.frames):
+            manager = frame.layer_manager
+            active_layer = manager.active_layer
+            active_map[frame_index] = getattr(active_layer, "uid", None)
+        return active_map
+
+    def _apply_orders(
+        self,
+        frame_manager,
+        orders_by_frame: Dict[int, List[int]],
+        active_uids: Dict[int, Optional[int]] | None,
+    ) -> None:
+        for frame_index, frame in enumerate(frame_manager.frames):
+            target_order = orders_by_frame.get(frame_index)
+            if target_order is None:
+                continue
+            manager = frame.layer_manager
+            self._reorder_manager(manager, target_order)
+            if active_uids is None:
+                continue
+            self._restore_active_layer(manager, active_uids.get(frame_index))
+
+    @staticmethod
+    def _reorder_manager(manager, target_order: List[int]) -> None:
+        existing_layers = list(manager.layers)
+        by_uid = {getattr(layer, "uid", None): layer for layer in existing_layers}
+        reordered: List[Layer] = []
+        seen = set()
+        for uid in target_order:
+            layer = by_uid.get(uid)
+            if layer is None:
+                continue
+            reordered.append(layer)
+            seen.add(uid)
+        if len(reordered) != len(existing_layers):
+            for layer in existing_layers:
+                uid = getattr(layer, "uid", None)
+                if uid not in seen:
+                    reordered.append(layer)
+        manager.layers = reordered
+
+    @staticmethod
+    def _restore_active_layer(manager, active_uid: Optional[int]) -> None:
+        if active_uid is None:
+            if manager.layers:
+                manager.active_layer_index = min(
+                    manager.active_layer_index, len(manager.layers) - 1
+                )
+            else:
+                manager.active_layer_index = -1
+            return
+
+        for index, layer in enumerate(manager.layers):
+            if getattr(layer, "uid", None) == active_uid:
+                manager.active_layer_index = index
+                return
+
+        if manager.layers:
+            manager.active_layer_index = min(
+                manager.active_layer_index, len(manager.layers) - 1
+            )
+        else:
+            manager.active_layer_index = -1
 
 
 class SetLayerOpacityCommand(Command):
