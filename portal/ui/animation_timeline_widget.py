@@ -282,7 +282,7 @@ class AnimationTimelineWidget(QWidget):
         remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
 
         menu.addSeparator()
-        copy_frame = self._current_frame
+        copy_frame = frame
         copy_action = menu.addAction(f"Copy Key @ Frame {copy_frame}")
         copy_action.setEnabled(copy_frame in self._keys)
 
