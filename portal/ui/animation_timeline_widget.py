@@ -57,8 +57,8 @@ class AnimationTimelineWidget(QWidget):
         self._base_total_frames = 0
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
         self._keys: Set[int] = {0}
-        self._selected_keys: Set[int] = {0}
-        self._selection_anchor: int | None = 0
+        self._selected_keys: Set[int] = set()
+        self._selection_anchor: int | None = None
         self._current_frame = 0
         self._margin = 24
         self._tick_height = 36
@@ -131,11 +131,15 @@ class AnimationTimelineWidget(QWidget):
         new_keys = {max(0, int(frame)) for frame in frames}
         if not new_keys:
             new_keys = {0}
+        added_keys = new_keys - self._keys
         if new_keys == self._keys:
             return
         self._keys = new_keys
         self._ensure_base_frame(max(self._keys))
-        self._sync_selection_with_keys()
+        if added_keys:
+            self._set_selection(set(), anchor=None)
+        else:
+            self._sync_selection_with_keys()
         self.keys_changed.emit(self.keys())
         self.update()
 
@@ -173,7 +177,7 @@ class AnimationTimelineWidget(QWidget):
             return
         self._keys.add(frame)
         self._ensure_base_frame(frame)
-        self._sync_selection_with_keys()
+        self._set_selection(set(), anchor=None)
         self.keys_changed.emit(self.keys())
         self.update()
 
@@ -479,9 +483,6 @@ class AnimationTimelineWidget(QWidget):
             return
         current_selection = set(self._selected_keys)
         self._set_selection(current_selection, prefer_existing_anchor=True)
-        if not self._selected_keys:
-            default_key = min(self._keys)
-            self._set_selection({default_key}, anchor=default_key)
 
     def _set_selection(
         self,
