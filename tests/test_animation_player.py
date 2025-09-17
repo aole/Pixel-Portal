@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEventLoop, QTimer
 
-from portal.core.animation_player import AnimationPlayer
+from portal.core.animation_player import AnimationPlayer, DEFAULT_TOTAL_FRAMES
+
+
+def test_animation_player_default_total_frames():
+    player = AnimationPlayer()
+    assert player.total_frames == DEFAULT_TOTAL_FRAMES
 
 
 def test_animation_player_advances_and_loops(qapp):

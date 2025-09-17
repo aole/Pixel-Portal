@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSlider,
+    QSpinBox,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -65,6 +66,8 @@ class MainWindow(QMainWindow):
         self.animation_player = AnimationPlayer(self)
 
         self.timeline_widget = AnimationTimelineWidget(self)
+        self.timeline_widget.set_playback_total_frames(self.animation_player.total_frames)
+        self.timeline_widget.set_total_frames(max(0, self.animation_player.total_frames - 1))
 
         self.timeline_panel = QFrame(self)
         self.timeline_panel.setObjectName("animationTimelinePanel")
@@ -94,10 +97,19 @@ class MainWindow(QMainWindow):
         self.timeline_current_frame_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
 
-        self.timeline_total_frames_label = QLabel("Total: 0", self.timeline_panel)
-        self.timeline_total_frames_label.setObjectName("animationTimelineTotalFramesLabel")
-        self.timeline_total_frames_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        timeline_header_layout.addWidget(self.timeline_total_frames_label, 0)
+        total_frames_text_label = QLabel("Total", self.timeline_panel)
+        total_frames_text_label.setObjectName("animationTimelineTotalFramesLabel")
+        total_frames_text_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(total_frames_text_label, 0)
+
+        self.timeline_total_frames_spinbox = QSpinBox(self.timeline_panel)
+        self.timeline_total_frames_spinbox.setObjectName("animationTimelineTotalFramesSpinBox")
+        self.timeline_total_frames_spinbox.setRange(1, 9999)
+        self.timeline_total_frames_spinbox.setAccelerated(True)
+        self.timeline_total_frames_spinbox.setKeyboardTracking(False)
+        self.timeline_total_frames_spinbox.setFixedWidth(80)
+        self.timeline_total_frames_spinbox.setValue(self.animation_player.total_frames)
+        timeline_header_layout.addWidget(self.timeline_total_frames_spinbox, 0)
 
         timeline_header_layout.addStretch()
 
@@ -126,6 +138,7 @@ class MainWindow(QMainWindow):
         self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
+        self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
 
         self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
         self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
@@ -265,10 +278,6 @@ class MainWindow(QMainWindow):
         self.timeline_current_frame_label.setText(f"Frame {frame}")
         self._update_stop_button_state()
 
-    def _update_total_frames_label(self, frame_count: int) -> None:
-        frame_count = max(0, int(frame_count))
-        self.timeline_total_frames_label.setText(f"Total: {frame_count}")
-
     def _update_timeline_layer_label(self, layer_name: str | None) -> None:
         if layer_name:
             text = f"Layer: {layer_name}"
@@ -287,7 +296,10 @@ class MainWindow(QMainWindow):
         self.timeline_fps_value_label.setText(text)
 
     def _update_stop_button_state(self) -> None:
-        should_enable = self.animation_player.is_playing or self.animation_player.current_frame != 0
+        should_enable = (
+            self.animation_player.is_playing
+            or self.timeline_widget.current_frame() != 0
+        )
         self.timeline_stop_button.setEnabled(should_enable)
 
     @Slot(bool)
@@ -304,6 +316,36 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_timeline_fps_changed(self, value: int) -> None:
         self.animation_player.set_fps(value)
+
+    @Slot(int)
+    def _on_timeline_total_frames_changed(self, value: int) -> None:
+        value = max(1, int(value))
+        document = self.app.document
+        doc_max_index = 0
+        if document:
+            frame_manager = getattr(document, "frame_manager", None)
+            if frame_manager is not None:
+                frame_count = len(frame_manager.frames)
+                doc_max_index = max(0, frame_count - 1) if frame_count else 0
+        keys = self.timeline_widget.keys()
+        highest_key = max(keys) if keys else 0
+        target_base = max(doc_max_index, highest_key, value - 1)
+        self.timeline_widget.set_total_frames(target_base)
+        self.timeline_widget.set_playback_total_frames(value)
+        timeline_blocker = QSignalBlocker(self.timeline_widget)
+        player_blocker = QSignalBlocker(self.animation_player)
+        try:
+            self.animation_player.set_total_frames(value)
+        finally:
+            del player_blocker
+            del timeline_blocker
+        current_frame = self.timeline_widget.current_frame()
+        if (
+            current_frame < self.animation_player.total_frames
+            and self.animation_player.current_frame != current_frame
+        ):
+            self.animation_player.set_current_frame(current_frame)
+        self._update_stop_button_state()
 
     @Slot(bool)
     def _on_player_state_changed(self, playing: bool) -> None:
@@ -354,40 +396,68 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def sync_timeline_from_document(self):
+        playback_total = max(1, self.timeline_total_frames_spinbox.value())
+        self.timeline_widget.set_playback_total_frames(playback_total)
+
         document = self.app.document
-        if not document:
+        frame_manager = getattr(document, "frame_manager", None) if document else None
+        if not document or frame_manager is None:
             self._update_timeline_layer_label(None)
-            self._update_total_frames_label(0)
+            timeline_blocker = QSignalBlocker(self.timeline_widget)
+            try:
+                self.timeline_widget.set_total_frames(max(0, playback_total - 1))
+                self.timeline_widget.set_keys([0])
+                self.timeline_widget.set_current_frame(0)
+            finally:
+                del timeline_blocker
+            player_blocker = QSignalBlocker(self.animation_player)
+            try:
+                self.animation_player.set_total_frames(playback_total)
+                if self.animation_player.current_frame != 0:
+                    self.animation_player.set_current_frame(0)
+            finally:
+                del player_blocker
+            self._update_current_frame_label(self.timeline_widget.current_frame())
+            self._update_stop_button_state()
             return
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            self._update_timeline_layer_label(None)
-            self._update_total_frames_label(0)
-            return
+
         layer_manager = getattr(frame_manager, "current_layer_manager", None)
         active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
         layer_name = getattr(active_layer, "name", None)
         self._update_timeline_layer_label(layer_name)
+
         frame_count = len(frame_manager.frames)
-        max_frame_index = max(0, frame_count - 1) if frame_count else 0
+        doc_max_index = max(0, frame_count - 1) if frame_count else 0
         current_frame = frame_manager.active_frame_index
         if current_frame < 0 and frame_count:
             current_frame = 0
-        current_frame = max(0, min(current_frame, max_frame_index))
-        keys = document.key_frames
+        current_frame = max(0, min(current_frame, doc_max_index))
+        keys = list(document.key_frames)
+        highest_key = max(keys) if keys else 0
+        base_target = max(doc_max_index, highest_key, playback_total - 1)
 
-        previous_state = self.timeline_widget.blockSignals(True)
+        timeline_blocker = QSignalBlocker(self.timeline_widget)
         try:
-            self.timeline_widget.set_total_frames(max_frame_index)
+            self.timeline_widget.set_total_frames(base_target)
             self.timeline_widget.set_keys(keys)
             self.timeline_widget.set_current_frame(current_frame)
         finally:
-            self.timeline_widget.blockSignals(previous_state)
-        self._update_current_frame_label(self.timeline_widget.current_frame())
-        self._update_total_frames_label(frame_count)
-        self.animation_player.set_total_frames(max(frame_count, 1))
-        if self.animation_player.current_frame != current_frame:
+            del timeline_blocker
+
+        player_blocker = QSignalBlocker(self.animation_player)
+        try:
+            self.animation_player.set_total_frames(playback_total)
+        finally:
+            del player_blocker
+
+        if (
+            current_frame < self.animation_player.total_frames
+            and self.animation_player.current_frame != current_frame
+        ):
             self.animation_player.set_current_frame(current_frame)
+
+        self._update_current_frame_label(self.timeline_widget.current_frame())
+        self._update_stop_button_state()
 
     @Slot()
     def on_document_changed(self):
@@ -427,7 +497,10 @@ class MainWindow(QMainWindow):
             return
         if frame_manager.active_frame_index == frame:
             return
-        if self.animation_player.current_frame != frame:
+        if (
+            frame < self.animation_player.total_frames
+            and self.animation_player.current_frame != frame
+        ):
             self.animation_player.set_current_frame(frame)
         self.app.select_frame(frame)
 

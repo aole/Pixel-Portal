@@ -5,6 +5,9 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QTimer, Signal
 
 
+DEFAULT_TOTAL_FRAMES = 24
+
+
 class AnimationPlayer(QObject):
     """Advance frames at a fixed rate and emit updates for listeners."""
 
@@ -15,7 +18,7 @@ class AnimationPlayer(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._fps = 12.0
-        self._total_frames = 1
+        self._total_frames = DEFAULT_TOTAL_FRAMES
         self._current_frame = 0
         self._is_playing = False
         self._timer = QTimer(self)
