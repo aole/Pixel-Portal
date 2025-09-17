@@ -82,6 +82,11 @@ class MainWindow(QMainWindow):
         timeline_header_layout.addWidget(timeline_label, 0)
         timeline_header_layout.addStretch()
 
+        self.timeline_layer_label = QLabel("", self.timeline_panel)
+        self.timeline_layer_label.setObjectName("animationTimelineLayerLabel")
+        self.timeline_layer_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(self.timeline_layer_label, 0)
+
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
         self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
         self.timeline_current_frame_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -96,6 +101,7 @@ class MainWindow(QMainWindow):
         self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
         self.timeline_widget.key_duplicate_requested.connect(self.on_timeline_duplicate_key)
         self._update_current_frame_label(self.timeline_widget.current_frame())
+        self._update_timeline_layer_label(None)
         self.sync_timeline_from_document()
 
         central_container = QWidget(self)
@@ -218,6 +224,13 @@ class MainWindow(QMainWindow):
     def _update_current_frame_label(self, frame: int) -> None:
         self.timeline_current_frame_label.setText(f"Frame {frame}")
 
+    def _update_timeline_layer_label(self, layer_name: str | None) -> None:
+        if layer_name:
+            text = f"Layer: {layer_name}"
+        else:
+            text = "Layer: (none)"
+        self.timeline_layer_label.setText(text)
+
     @Slot(object)
     def handle_canvas_message(self, data):
         if not isinstance(data, tuple):
@@ -262,10 +275,16 @@ class MainWindow(QMainWindow):
     def sync_timeline_from_document(self):
         document = self.app.document
         if not document:
+            self._update_timeline_layer_label(None)
             return
         frame_manager = getattr(document, "frame_manager", None)
         if frame_manager is None:
+            self._update_timeline_layer_label(None)
             return
+        layer_manager = getattr(frame_manager, "current_layer_manager", None)
+        active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
+        layer_name = getattr(active_layer, "name", None)
+        self._update_timeline_layer_label(layer_name)
         frame_count = len(frame_manager.frames)
         max_frame_index = max(0, frame_count - 1) if frame_count else 0
         current_frame = frame_manager.active_frame_index
