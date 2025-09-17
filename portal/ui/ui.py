@@ -80,9 +80,39 @@ class MainWindow(QMainWindow):
         timeline_header_layout.setContentsMargins(0, 0, 0, 0)
         timeline_header_layout.setSpacing(8)
 
-        timeline_label = QLabel("Timeline", self.timeline_panel)
-        timeline_label.setObjectName("animationTimelineLabel")
-        timeline_header_layout.addWidget(timeline_label, 0)
+        self.timeline_play_button = QToolButton(self.timeline_panel)
+        self.timeline_play_button.setText("Play")
+        self.timeline_play_button.setCheckable(True)
+        timeline_header_layout.addWidget(self.timeline_play_button)
+
+        self.timeline_stop_button = QToolButton(self.timeline_panel)
+        self.timeline_stop_button.setText("Stop")
+        timeline_header_layout.addWidget(self.timeline_stop_button)
+
+        self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
+        self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
+        self.timeline_current_frame_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
+
+        self.timeline_total_frames_label = QLabel("Total: 0", self.timeline_panel)
+        self.timeline_total_frames_label.setObjectName("animationTimelineTotalFramesLabel")
+        self.timeline_total_frames_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        timeline_header_layout.addWidget(self.timeline_total_frames_label, 0)
+
+        timeline_header_layout.addStretch()
+
+        fps_label = QLabel("FPS", self.timeline_panel)
+        timeline_header_layout.addWidget(fps_label)
+
+        self.timeline_fps_slider = QSlider(Qt.Horizontal, self.timeline_panel)
+        self.timeline_fps_slider.setRange(1, 60)
+        self.timeline_fps_slider.setValue(int(round(self.animation_player.fps)))
+        self.timeline_fps_slider.setFixedWidth(120)
+        timeline_header_layout.addWidget(self.timeline_fps_slider)
+
+        self.timeline_fps_value_label = QLabel(self.timeline_panel)
+        timeline_header_layout.addWidget(self.timeline_fps_value_label)
+
         timeline_header_layout.addStretch()
 
         self.timeline_layer_label = QLabel("", self.timeline_panel)
@@ -90,41 +120,7 @@ class MainWindow(QMainWindow):
         self.timeline_layer_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         timeline_header_layout.addWidget(self.timeline_layer_label, 0)
 
-        self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
-        self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
-        self.timeline_current_frame_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
-
         timeline_layout.addLayout(timeline_header_layout)
-
-        controls_layout = QHBoxLayout()
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(6)
-
-        self.timeline_play_button = QToolButton(self.timeline_panel)
-        self.timeline_play_button.setText("Play")
-        self.timeline_play_button.setCheckable(True)
-        controls_layout.addWidget(self.timeline_play_button)
-
-        self.timeline_stop_button = QToolButton(self.timeline_panel)
-        self.timeline_stop_button.setText("Stop")
-        controls_layout.addWidget(self.timeline_stop_button)
-
-        controls_layout.addStretch(1)
-
-        fps_label = QLabel("FPS", self.timeline_panel)
-        controls_layout.addWidget(fps_label)
-
-        self.timeline_fps_slider = QSlider(Qt.Horizontal, self.timeline_panel)
-        self.timeline_fps_slider.setRange(1, 60)
-        self.timeline_fps_slider.setValue(int(round(self.animation_player.fps)))
-        self.timeline_fps_slider.setFixedWidth(120)
-        controls_layout.addWidget(self.timeline_fps_slider)
-
-        self.timeline_fps_value_label = QLabel(self.timeline_panel)
-        controls_layout.addWidget(self.timeline_fps_value_label)
-
-        timeline_layout.addLayout(controls_layout)
         timeline_layout.addWidget(self.timeline_widget)
 
         self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
@@ -269,6 +265,10 @@ class MainWindow(QMainWindow):
         self.timeline_current_frame_label.setText(f"Frame {frame}")
         self._update_stop_button_state()
 
+    def _update_total_frames_label(self, frame_count: int) -> None:
+        frame_count = max(0, int(frame_count))
+        self.timeline_total_frames_label.setText(f"Total: {frame_count}")
+
     def _update_timeline_layer_label(self, layer_name: str | None) -> None:
         if layer_name:
             text = f"Layer: {layer_name}"
@@ -357,10 +357,12 @@ class MainWindow(QMainWindow):
         document = self.app.document
         if not document:
             self._update_timeline_layer_label(None)
+            self._update_total_frames_label(0)
             return
         frame_manager = getattr(document, "frame_manager", None)
         if frame_manager is None:
             self._update_timeline_layer_label(None)
+            self._update_total_frames_label(0)
             return
         layer_manager = getattr(frame_manager, "current_layer_manager", None)
         active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
@@ -382,6 +384,7 @@ class MainWindow(QMainWindow):
         finally:
             self.timeline_widget.blockSignals(previous_state)
         self._update_current_frame_label(self.timeline_widget.current_frame())
+        self._update_total_frames_label(frame_count)
         self.animation_player.set_total_frames(max(frame_count, 1))
         if self.animation_player.current_frame != current_frame:
             self.animation_player.set_current_frame(current_frame)
