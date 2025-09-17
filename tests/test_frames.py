@@ -201,6 +201,32 @@ def test_new_layer_starts_with_base_key_only():
     assert document.key_frames_for_layer(base_layer) == [0, 3]
 
 
+def test_new_layer_added_on_future_frame_has_single_key_and_selection():
+    document = Document(4, 4)
+    document.add_key_frame(8)
+    document.select_frame(8)
+
+    document.layer_manager.add_layer("Future Layer")
+    new_layer = document.layer_manager.active_layer
+    insertion_index = document.layer_manager.active_layer_index
+
+    document.register_layer(new_layer, insertion_index)
+
+    assert document.key_frames_for_layer(new_layer) == [0]
+    assert document.key_frames == [0]
+
+    target_index = document.layer_manager.active_layer_index
+    for frame in document.frame_manager.frames:
+        manager = frame.layer_manager
+        assert manager.layers[target_index].uid == new_layer.uid
+        assert manager.active_layer_index == target_index
+
+    document.select_frame(0)
+
+    assert document.layer_manager.active_layer.uid == new_layer.uid
+    assert document.key_frames == [0]
+
+
 def test_add_keyframe_command_supports_undo_redo():
     document = Document(4, 4)
     document.layer_manager.active_layer.image.fill(QColor("red"))

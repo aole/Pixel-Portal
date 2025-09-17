@@ -347,12 +347,21 @@ class FrameManager:
                 index = base_manager.layers.index(layer)
             except ValueError:
                 index = len(base_manager.layers)
+        target_active_index = max(0, index if index is not None else 0)
         for frame in self.frames:
             manager = frame.layer_manager
-            if self._find_layer(manager, layer.uid) is not None:
-                continue
-            clone = layer.clone()
-            manager.layers.insert(index, clone)
+            insertion_index = index if index is not None else len(manager.layers)
+            if insertion_index < 0:
+                insertion_index = 0
+            if insertion_index > len(manager.layers):
+                insertion_index = len(manager.layers)
+            if self._find_layer(manager, layer.uid) is None:
+                clone = layer.clone()
+                manager.layers.insert(insertion_index, clone)
+            if manager.layers:
+                manager.active_layer_index = min(
+                    target_active_index, len(manager.layers) - 1
+                )
         keys = {0} if key_frames is None else {max(0, int(value)) for value in key_frames}
         if not keys:
             keys = {0}
