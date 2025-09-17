@@ -26,14 +26,9 @@ class EllipseTool(BaseTool):
             return
 
         self.start_point = doc_pos
-        self.canvas.temp_image_replaces_active_layer = True
+        self._allocate_preview_images(replace_active_layer=True, allocate_temp=False)
         # The command will need the original image state
         self.command_generated.emit(("get_active_layer_image", "ellipse_tool_start"))
-        if self.canvas.tile_preview_enabled:
-            self.canvas.tile_preview_image = QImage(self.canvas._document_size, QImage.Format_ARGB32)
-            self.canvas.tile_preview_image.fill(Qt.transparent)
-        else:
-            self.canvas.tile_preview_image = None
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if self.canvas.original_image is None:
@@ -48,10 +43,7 @@ class EllipseTool(BaseTool):
             return
 
         self.canvas.temp_image = self.canvas.original_image.copy()
-        painter = QPainter(self.canvas.temp_image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+        self._refresh_preview_images(clear_temp=False)
 
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
@@ -64,40 +56,15 @@ class EllipseTool(BaseTool):
             )
 
         rect = QRect(self.start_point, end_point).normalized()
-        self.canvas.drawing.draw_ellipse(
-            painter,
-            rect,
-            self.canvas._document_size,
-            self.canvas.drawing_context.brush_type,
-            self.canvas.drawing_context.pen_width,
-            self.canvas.drawing_context.mirror_x,
-            self.canvas.drawing_context.mirror_y,
+        self._paint_preview_ellipse(
+            self.canvas.temp_image,
+            rect=rect,
             wrap=self.canvas.tile_preview_enabled,
-            pattern=self.canvas.drawing_context.pattern_brush,
-            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
         )
-        painter.end()
-        if self.canvas.tile_preview_enabled and self.canvas.tile_preview_image is not None:
-            self.canvas.tile_preview_image.fill(Qt.transparent)
-            preview_painter = QPainter(self.canvas.tile_preview_image)
-            if self.canvas.selection_shape:
-                preview_painter.setClipPath(self.canvas.selection_shape)
-            preview_painter.setPen(QPen(self.canvas.drawing_context.pen_color))
-            self.canvas.drawing.draw_ellipse(
-                preview_painter,
-                rect,
-                self.canvas._document_size,
-                self.canvas.drawing_context.brush_type,
-                self.canvas.drawing_context.pen_width,
-                self.canvas.drawing_context.mirror_x,
-                self.canvas.drawing_context.mirror_y,
-                wrap=True,
-                pattern=self.canvas.drawing_context.pattern_brush,
-                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
-            )
-            preview_painter.end()
+
+        tile_preview = self.canvas.tile_preview_image
+        if tile_preview is not None:
+            self._paint_preview_ellipse(tile_preview, rect=rect, wrap=True)
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
@@ -118,10 +85,7 @@ class EllipseTool(BaseTool):
 
         layer_manager = self._get_active_layer_manager()
         if layer_manager is None:
-            self.canvas.temp_image = None
-            self.canvas.original_image = None
-            self.canvas.temp_image_replaces_active_layer = False
-            self.canvas.tile_preview_image = None
+            self._clear_preview_images()
             self.canvas.update()
             return
 
@@ -147,8 +111,25 @@ class EllipseTool(BaseTool):
         )
         self.command_generated.emit(command)
 
-        self.canvas.temp_image = None
-        self.canvas.original_image = None
-        self.canvas.temp_image_replaces_active_layer = False
-        self.canvas.tile_preview_image = None
+        self._clear_preview_images()
         self.canvas.update()
+
+    def _paint_preview_ellipse(self, image: QImage, *, rect: QRect, wrap: bool):
+        painter = QPainter(image)
+        if self.canvas.selection_shape:
+            painter.setClipPath(self.canvas.selection_shape)
+        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+        self.canvas.drawing.draw_ellipse(
+            painter,
+            rect,
+            self.canvas._document_size,
+            self.canvas.drawing_context.brush_type,
+            self.canvas.drawing_context.pen_width,
+            self.canvas.drawing_context.mirror_x,
+            self.canvas.drawing_context.mirror_y,
+            wrap=wrap,
+            pattern=self.canvas.drawing_context.pattern_brush,
+            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
+        )
+        painter.end()
