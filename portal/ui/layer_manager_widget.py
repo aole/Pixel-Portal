@@ -160,7 +160,8 @@ class LayerManagerWidget(QWidget):
             # No effective change.
             return
 
-        layer_manager = self.app.document.layer_manager
+        document = self.app.document
+        layer_manager = document.layer_manager
         total_layers = len(layer_manager.layers)
 
         from_index = total_layers - 1 - start
@@ -171,7 +172,7 @@ class LayerManagerWidget(QWidget):
 
         from portal.core.command import MoveLayerCommand
 
-        command = MoveLayerCommand(layer_manager, from_index, to_index)
+        command = MoveLayerCommand(document, from_index, to_index)
         self.app.execute_command(command)
 
         # Ensure the canvas reflects the new layer order immediately.
@@ -221,7 +222,7 @@ class LayerManagerWidget(QWidget):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
         from portal.core.command import MoveLayerCommand
-        command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index + 1)
+        command = MoveLayerCommand(self.app.document, actual_index, actual_index + 1)
         self.app.execute_command(command)
 
     def move_layer_down(self):
@@ -230,7 +231,7 @@ class LayerManagerWidget(QWidget):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - current_row
         
         from portal.core.command import MoveLayerCommand
-        command = MoveLayerCommand(self.app.document.layer_manager, actual_index, actual_index - 1)
+        command = MoveLayerCommand(self.app.document, actual_index, actual_index - 1)
         self.app.execute_command(command)
 
     def merge_layer_down(self, index_in_list):
