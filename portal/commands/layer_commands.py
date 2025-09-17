@@ -122,9 +122,11 @@ class RotateLayerCommand(Command):
             for y in range(image_to_modify.height()):
                 for x in range(image_to_modify.width()):
                     source_point = inverse_transform.map(QPointF(x, y))
-                    sx = int(source_point.x())
-                    sy = int(source_point.y())
-                    if 0 <= sx < width and 0 <= sy < height:
+                    sx_float = source_point.x()
+                    sy_float = source_point.y()
+                    if 0 <= sx_float < width and 0 <= sy_float < height:
+                        sx = int(sx_float)
+                        sy = int(sy_float)
                         color = selected_pixels.pixelColor(sx, sy)
                         if color.alpha() > 0:
                             image_to_modify.setPixelColor(x, y, color)
