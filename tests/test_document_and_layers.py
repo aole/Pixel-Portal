@@ -15,7 +15,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QMouseEvent
 from unittest.mock import MagicMock, patch, Mock
 import os
-from portal.commands.layer_commands import RotateLayerCommand
+from portal.commands.layer_commands import (
+    RotateLayerCommand,
+    MergeLayerDownCommand,
+    CollapseLayersCommand,
+)
 
 @pytest.fixture
 def drawing_context():
@@ -1000,3 +1004,115 @@ class TestClipboard:
         # Check that the image is cropped. The image is 12x12, pasted at 5,5, so it ends at 16,16.
         # The selection is 10x10, so it ends at 14,14. The pixel at 15,15 should be transparent.
         assert new_layer.image.pixelColor(15, 15) == QColor(0, 0, 0, 0)
+
+
+def test_merge_layer_down_unifies_keyframes():
+    document = Document(2, 2)
+    frame_manager = document.frame_manager
+    layer_manager = document.layer_manager
+
+    bottom_layer = layer_manager.layers[0]
+    layer_manager.add_layer("Top")
+    top_layer = layer_manager.active_layer
+    document.register_layer(top_layer, layer_manager.active_layer_index)
+
+    frame_manager.ensure_frame(2)
+    frame_manager.add_layer_key(bottom_layer.uid, 2)
+    frame_manager.add_layer_key(top_layer.uid, 1)
+
+    def layer_at(frame_index: int, layer_uid: int):
+        manager = document.frame_manager.frames[frame_index].layer_manager
+        for layer in manager.layers:
+            if layer.uid == layer_uid:
+                return layer
+        raise AssertionError("Layer not found")
+
+    layer_at(0, top_layer.uid).image.setPixelColor(0, 0, QColor("red"))
+    layer_at(1, top_layer.uid).image.setPixelColor(1, 0, QColor("green"))
+    layer_at(2, bottom_layer.uid).image.setPixelColor(0, 1, QColor("blue"))
+
+    command = MergeLayerDownCommand(document, layer_manager.active_layer_index)
+    command.execute()
+
+    final_manager = document.layer_manager
+    assert len(final_manager.layers) == 1
+
+    bottom_uid = bottom_layer.uid
+    assert document.frame_manager.layer_key_frames(bottom_uid) == [0, 1, 2]
+    assert top_layer.uid not in document.frame_manager.layer_keys
+
+    bottom_frame0 = layer_at(0, bottom_uid)
+    assert bottom_frame0.image.pixelColor(0, 0) == QColor("red")
+
+    bottom_frame1 = layer_at(1, bottom_uid)
+    assert bottom_frame1.image.pixelColor(1, 0) == QColor("green")
+
+    bottom_frame2 = layer_at(2, bottom_uid)
+    assert bottom_frame2.image.pixelColor(0, 1) == QColor("blue")
+    assert bottom_frame2.image.pixelColor(1, 0) == QColor("green")
+
+
+def test_collapse_layers_merges_entire_stack():
+    document = Document(4, 4)
+    frame_manager = document.frame_manager
+    layer_manager = document.layer_manager
+
+    bottom_layer = layer_manager.layers[0]
+    frame_manager.ensure_frame(3)
+
+    layer_manager.add_layer("Middle")
+    middle_layer = layer_manager.active_layer
+    document.register_layer(middle_layer, layer_manager.active_layer_index)
+
+    layer_manager.add_layer("Top")
+    top_layer = layer_manager.active_layer
+    document.register_layer(top_layer, layer_manager.active_layer_index)
+
+    bottom_uid = bottom_layer.uid
+    middle_uid = middle_layer.uid
+    top_uid = top_layer.uid
+
+    frame_manager.add_layer_key(bottom_uid, 2)
+    frame_manager.add_layer_key(middle_uid, 1)
+    frame_manager.add_layer_key(top_uid, 3)
+
+    def set_pixel(layer_uid: int, frame_index: int, x: int, y: int, color: QColor):
+        manager = document.frame_manager.frames[frame_index].layer_manager
+        for layer in manager.layers:
+            if layer.uid == layer_uid:
+                layer.image.setPixelColor(x, y, color)
+                return
+        raise AssertionError("Layer not found")
+
+    set_pixel(bottom_uid, 0, 0, 0, QColor("blue"))
+    set_pixel(bottom_uid, 2, 0, 1, QColor("green"))
+    set_pixel(middle_uid, 0, 1, 0, QColor("red"))
+    set_pixel(middle_uid, 1, 1, 1, QColor("yellow"))
+    set_pixel(top_uid, 0, 2, 0, QColor("magenta"))
+    set_pixel(top_uid, 3, 2, 1, QColor("cyan"))
+
+    command = CollapseLayersCommand(document)
+    command.execute()
+
+    final_manager = document.layer_manager
+    assert len(final_manager.layers) == 1
+    final_layer = final_manager.layers[0]
+    assert final_layer.uid == bottom_uid
+
+    assert document.frame_manager.layer_key_frames(bottom_uid) == [0, 1, 2, 3]
+    assert middle_uid not in document.frame_manager.layer_keys
+    assert top_uid not in document.frame_manager.layer_keys
+
+    def pixel_color(layer_uid: int, frame_index: int, x: int, y: int) -> QColor:
+        manager = document.frame_manager.frames[frame_index].layer_manager
+        for layer in manager.layers:
+            if layer.uid == layer_uid:
+                return layer.image.pixelColor(x, y)
+        raise AssertionError("Layer not found")
+
+    assert pixel_color(bottom_uid, 0, 0, 0) == QColor("blue")
+    assert pixel_color(bottom_uid, 0, 1, 0) == QColor("red")
+    assert pixel_color(bottom_uid, 0, 2, 0) == QColor("magenta")
+    assert pixel_color(bottom_uid, 1, 1, 1) == QColor("yellow")
+    assert pixel_color(bottom_uid, 2, 0, 1) == QColor("green")
+    assert pixel_color(bottom_uid, 3, 2, 1) == QColor("cyan")
