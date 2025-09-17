@@ -1,6 +1,6 @@
 from portal.core.command import Command
 from PySide6.QtGui import QTransform, QImage, QPainter, QPainterPath
-from PySide6.QtCore import Qt, QPoint, QBuffer
+from PySide6.QtCore import Qt, QPoint, QPointF, QBuffer
 from PIL import Image
 from PIL.ImageQt import ImageQt
 import io
@@ -59,11 +59,27 @@ class SetLayerVisibleCommand(Command):
 
 
 class RotateLayerCommand(Command):
-    def __init__(self, layer: 'Layer', angle_degrees: float, center_point: QPoint, selection_shape: QPainterPath | None):
+    def __init__(
+        self,
+        layer: 'Layer',
+        angle_degrees: float,
+        center_point: QPoint,
+        selection_shape: QPainterPath | None,
+        *,
+        canvas=None,
+        rotated_selection_shape: QPainterPath | None = None,
+    ):
         self.layer = layer
         self.angle_degrees = angle_degrees
         self.center_point = center_point
-        self.selection_shape = selection_shape
+        self.selection_shape = QPainterPath(selection_shape) if selection_shape is not None else None
+        self.before_selection_shape = QPainterPath(selection_shape) if selection_shape is not None else None
+        self.after_selection_shape = (
+            QPainterPath(rotated_selection_shape)
+            if rotated_selection_shape is not None
+            else None
+        )
+        self.canvas = canvas
         self.before_image = None
 
     def execute(self):
@@ -79,32 +95,75 @@ class RotateLayerCommand(Command):
         transform = QTransform().translate(center.x(), center.y()).rotate(self.angle_degrees).translate(-center.x(), -center.y())
 
         if self.selection_shape:
-            # Clear the area within the selection
+            selected_pixels = QImage(self.before_image.size(), self.before_image.format())
+            selected_pixels.fill(Qt.transparent)
+
+            selection_painter = QPainter(selected_pixels)
+            selection_painter.setRenderHint(QPainter.Antialiasing, False)
+            selection_painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+            selection_painter.setClipPath(self.selection_shape)
+            selection_painter.drawImage(0, 0, self.before_image)
+            selection_painter.end()
+
             painter.setClipPath(self.selection_shape)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.fillRect(self.layer.image.rect(), Qt.transparent)
-            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            painter.fillPath(self.selection_shape, Qt.transparent)
+            painter.end()
 
-            # Draw the rotated original image, clipped to the selection
-            painter.setTransform(transform)
-            painter.drawImage(0, 0, self.before_image)
+            inverse_transform, invertible = transform.inverted()
+            if not invertible:
+                self.layer.image = image_to_modify
+                self.layer.on_image_change.emit()
+                return
+
+            width = selected_pixels.width()
+            height = selected_pixels.height()
+
+            for y in range(image_to_modify.height()):
+                for x in range(image_to_modify.width()):
+                    source_point = inverse_transform.map(QPointF(x, y))
+                    sx_float = source_point.x()
+                    sy_float = source_point.y()
+                    if 0 <= sx_float < width and 0 <= sy_float < height:
+                        sx = int(sx_float)
+                        sy = int(sy_float)
+                        color = selected_pixels.pixelColor(sx, sy)
+                        if color.alpha() > 0:
+                            image_to_modify.setPixelColor(x, y, color)
+            if self.after_selection_shape is None:
+                self.after_selection_shape = transform.map(self.selection_shape)
         else:
             # If no selection, rotate the whole image
             # We need to clear the painter's own background before drawing
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.fillRect(self.layer.image.rect(), Qt.transparent)
+            painter.fillRect(image_to_modify.rect(), Qt.transparent)
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
             painter.setTransform(transform)
             painter.drawImage(0, 0, self.before_image)
+            painter.end()
+            self.layer.image = image_to_modify
+            self.layer.on_image_change.emit()
+            return
 
-        painter.end()
         self.layer.image = image_to_modify
         self.layer.on_image_change.emit()
+
+        if self.canvas and (self.before_selection_shape is not None or self.after_selection_shape is not None):
+            if self.after_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(QPainterPath(self.after_selection_shape))
+            else:
+                self.canvas._update_selection_and_emit_size(None)
 
     def undo(self):
         if self.before_image:
             self.layer.image = self.before_image.copy()
             self.layer.on_image_change.emit()
+
+        if self.canvas and (self.before_selection_shape is not None or self.after_selection_shape is not None):
+            if self.before_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(QPainterPath(self.before_selection_shape))
+            else:
+                self.canvas._update_selection_and_emit_size(None)
 
 
 class RemoveBackgroundCommand(Command):
