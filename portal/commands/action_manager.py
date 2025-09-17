@@ -124,10 +124,20 @@ class ActionManager:
         self.conform_to_palette_action.triggered.connect(self.app.conform_to_palette)
 
         self.remove_background_action = QAction("Remove Background", self.main_window)
-        self.remove_background_action.triggered.connect(
-            self.main_window.open_remove_background_dialog
+
+        if hasattr(self.main_window, "open_remove_background_dialog"):
+            self.remove_background_action.triggered.connect(
+                self.main_window.open_remove_background_dialog
+            )
+        else:
+            # Tests and lightweight host windows may not expose the optional
+            # dialog. Skip wiring the signal in that case so setup can
+            # complete without raising an AttributeError.
+            self.remove_background_action.setEnabled(False)
+
+        self.remove_background_action.setEnabled(
+            self.remove_background_action.isEnabled() and REMBG_AVAILABLE
         )
-        self.remove_background_action.setEnabled(REMBG_AVAILABLE)
         if not REMBG_AVAILABLE:
             self.remove_background_action.setToolTip(
                 "Background removal unavailable: install rembg and onnxruntime"

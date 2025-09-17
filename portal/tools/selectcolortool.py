@@ -44,6 +44,9 @@ class SelectColorTool(BaseTool):
         command = SelectionChangeCommand(
             self.canvas, previous_selection, new_selection
         )
+        self.canvas._update_selection_and_emit_size(
+            clone_selection_path(new_selection)
+        )
         self.command_generated.emit(command)
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
