@@ -5,6 +5,8 @@ from PySide6.QtGui import QPainterPath, QImage, qAlpha
 def clone_selection_path(path: QPainterPath | None) -> QPainterPath | None:
     if path is None:
         return None
+    if not isinstance(path, QPainterPath):
+        return None
     return QPainterPath(path)
 
 

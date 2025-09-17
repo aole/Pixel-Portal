@@ -217,6 +217,10 @@ class Canvas(QWidget):
             self._update_selection_and_emit_size(clone_selection_path(new))
             return
         command = SelectionChangeCommand(self, previous, new)
+        # Update immediately so the UI reflects the new selection even when no
+        # command handler is connected (e.g., in tests). The command is still
+        # emitted for undo/redo bookkeeping.
+        self._update_selection_and_emit_size(clone_selection_path(new))
         self.command_generated.emit(command)
 
     def select_all(self):
