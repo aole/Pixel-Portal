@@ -136,6 +136,7 @@ class DocumentController(QObject):
             return
         command = AddKeyframeCommand(document, frame_index)
         self.execute_command(command)
+        self.select_frame(frame_index)
 
     def remove_keyframe(self, frame_index: int) -> None:
         document = self.document

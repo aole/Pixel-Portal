@@ -78,8 +78,19 @@ class Document:
     def select_frame(self, index: int):
         if index < 0:
             index = 0
+        previous_manager = self.frame_manager.current_layer_manager
+        previous_active_uid = None
+        if previous_manager is not None and previous_manager.active_layer is not None:
+            previous_active_uid = previous_manager.active_layer.uid
         self.frame_manager.ensure_frame(index)
         self.frame_manager.select_frame(index)
+        if previous_active_uid is not None:
+            new_manager = self.frame_manager.current_layer_manager
+            if new_manager is not None:
+                for position, layer in enumerate(new_manager.layers):
+                    if layer.uid == previous_active_uid:
+                        new_manager.select_layer(position)
+                        break
         self._notify_layer_manager_changed()
 
     def render_current_frame(self) -> QImage:
