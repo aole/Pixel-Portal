@@ -196,6 +196,7 @@ class RotateTool(BaseTool):
                     else None
                 )
 
+                rotated_shape = None
                 if self.original_selection_shape:
                     transform = (
                         QTransform()
@@ -206,7 +207,14 @@ class RotateTool(BaseTool):
                     rotated_shape = transform.map(self.original_selection_shape)
                     self.canvas._update_selection_and_emit_size(rotated_shape)
 
-                command = RotateLayerCommand(active_layer, angle_degrees, center_doc, selection_shape)
+                command = RotateLayerCommand(
+                    active_layer,
+                    angle_degrees,
+                    center_doc,
+                    selection_shape,
+                    canvas=self.canvas,
+                    rotated_selection_shape=rotated_shape,
+                )
                 self.command_generated.emit(command)
 
             self.original_image = None

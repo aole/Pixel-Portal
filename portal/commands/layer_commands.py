@@ -59,11 +59,27 @@ class SetLayerVisibleCommand(Command):
 
 
 class RotateLayerCommand(Command):
-    def __init__(self, layer: 'Layer', angle_degrees: float, center_point: QPoint, selection_shape: QPainterPath | None):
+    def __init__(
+        self,
+        layer: 'Layer',
+        angle_degrees: float,
+        center_point: QPoint,
+        selection_shape: QPainterPath | None,
+        *,
+        canvas=None,
+        rotated_selection_shape: QPainterPath | None = None,
+    ):
         self.layer = layer
         self.angle_degrees = angle_degrees
         self.center_point = center_point
         self.selection_shape = QPainterPath(selection_shape) if selection_shape is not None else None
+        self.before_selection_shape = QPainterPath(selection_shape) if selection_shape is not None else None
+        self.after_selection_shape = (
+            QPainterPath(rotated_selection_shape)
+            if rotated_selection_shape is not None
+            else None
+        )
+        self.canvas = canvas
         self.before_image = None
 
     def execute(self):
@@ -112,6 +128,8 @@ class RotateLayerCommand(Command):
                         color = selected_pixels.pixelColor(sx, sy)
                         if color.alpha() > 0:
                             image_to_modify.setPixelColor(x, y, color)
+            if self.after_selection_shape is None:
+                self.after_selection_shape = transform.map(self.selection_shape)
         else:
             # If no selection, rotate the whole image
             # We need to clear the painter's own background before drawing
@@ -128,10 +146,22 @@ class RotateLayerCommand(Command):
         self.layer.image = image_to_modify
         self.layer.on_image_change.emit()
 
+        if self.canvas and (self.before_selection_shape is not None or self.after_selection_shape is not None):
+            if self.after_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(QPainterPath(self.after_selection_shape))
+            else:
+                self.canvas._update_selection_and_emit_size(None)
+
     def undo(self):
         if self.before_image:
             self.layer.image = self.before_image.copy()
             self.layer.on_image_change.emit()
+
+        if self.canvas and (self.before_selection_shape is not None or self.after_selection_shape is not None):
+            if self.before_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(QPainterPath(self.before_selection_shape))
+            else:
+                self.canvas._update_selection_and_emit_size(None)
 
 
 class RemoveBackgroundCommand(Command):

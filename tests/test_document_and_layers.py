@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtGui import QImage, QColor, QPainterPath
+from PySide6.QtGui import QImage, QColor, QPainterPath, QTransform
 from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QCursor
 from portal.core.document import Document
@@ -731,13 +731,43 @@ def test_rotate_layer_command_rotates_selection_and_clears_vacated_pixels():
     selection = QPainterPath()
     selection.addRect(QRect(0, 0, 2, 2))
 
-    command = RotateLayerCommand(layer, 90, QPoint(0, 0), selection)
+    class DummyCanvas:
+        def __init__(self, shape):
+            self.selection_shape = QPainterPath(shape) if shape is not None else None
+            self.calls = []
+
+        def _update_selection_and_emit_size(self, shape):
+            self.calls.append(shape)
+            self.selection_shape = shape
+
+    canvas = DummyCanvas(selection)
+
+    command = RotateLayerCommand(layer, 90, QPoint(0, 0), selection, canvas=canvas)
     command.execute()
 
     assert layer.image.pixelColor(0, 0) == QColor("red")
     assert layer.image.pixelColor(0, 1) == QColor("green")
     assert layer.image.pixelColor(1, 0).alpha() == 0
     assert layer.image.pixelColor(3, 3) == QColor("blue")
+
+    assert canvas.selection_shape is not None
+    expected_transform = QTransform().translate(0, 0).rotate(90).translate(0, 0)
+    expected_shape = expected_transform.map(selection)
+    expected_bounds = expected_shape.boundingRect()
+    rotated_bounds = canvas.selection_shape.boundingRect()
+    assert rotated_bounds.left() == pytest.approx(expected_bounds.left())
+    assert rotated_bounds.top() == pytest.approx(expected_bounds.top())
+    assert rotated_bounds.width() == pytest.approx(expected_bounds.width())
+    assert rotated_bounds.height() == pytest.approx(expected_bounds.height())
+
+    command.undo()
+    assert canvas.selection_shape is not None
+    original_bounds = selection.boundingRect()
+    restored_bounds = canvas.selection_shape.boundingRect()
+    assert restored_bounds.left() == pytest.approx(original_bounds.left())
+    assert restored_bounds.top() == pytest.approx(original_bounds.top())
+    assert restored_bounds.width() == pytest.approx(original_bounds.width())
+    assert restored_bounds.height() == pytest.approx(original_bounds.height())
 
 
 @pytest.fixture
