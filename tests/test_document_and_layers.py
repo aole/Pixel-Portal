@@ -25,6 +25,10 @@ def document():
     """Returns a Document with two layers."""
     doc = Document(100, 100)
     doc.layer_manager.add_layer("Layer 2")
+    doc.register_layer(
+        doc.layer_manager.active_layer,
+        doc.layer_manager.active_layer_index,
+    )
     # Fill layers with some content for rendering tests
     layer1 = doc.layer_manager.layers[0]
     layer2 = doc.layer_manager.layers[1]
@@ -157,6 +161,10 @@ def test_crop_expands_document_when_selection_is_larger():
     assert base_layer.image.pixelColor(5, 3) == QColor("red")
 
     doc.layer_manager.add_layer("Post Crop")
+    doc.register_layer(
+        doc.layer_manager.active_layer,
+        doc.layer_manager.active_layer_index,
+    )
     new_layer = doc.layer_manager.active_layer
     assert new_layer.image.width() == selection_rect.width()
     assert new_layer.image.height() == selection_rect.height()
@@ -496,10 +504,18 @@ def test_eraser_preview_layer_order(qtbot):
 
     # Layer 2 (middle): Green
     document.layer_manager.add_layer("Middle Layer")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
     document.layer_manager.active_layer.image.fill(QColor("green"))
 
     # Layer 3 (top): Blue
     document.layer_manager.add_layer("Top Layer")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
     document.layer_manager.active_layer.image.fill(QColor("blue"))
 
     # Set active layer to the middle layer

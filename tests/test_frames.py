@@ -148,9 +148,17 @@ def test_layer_manager_listener_notified_on_frame_change():
 def test_clone_copies_frames_and_layers():
     document = Document(2, 2)
     document.layer_manager.add_layer("Foreground")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
     document.layer_manager.active_layer.image.fill(QColor("green"))
     document.add_frame()
     document.layer_manager.add_layer("Second Frame Layer")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
 
     clone = document.clone()
 
@@ -173,6 +181,24 @@ def test_document_key_frames_follow_frame_removal():
     document.remove_frame(0)
 
     assert document.key_frames == [0]
+
+
+def test_new_layer_starts_with_base_key_only():
+    document = Document(4, 4)
+    base_layer = document.layer_manager.active_layer
+    document.add_key_frame(3)
+
+    document.layer_manager.add_layer("Second")
+    document.register_layer(
+        document.layer_manager.active_layer,
+        document.layer_manager.active_layer_index,
+    )
+    new_layer = document.layer_manager.active_layer
+
+    assert document.key_frames_for_layer(new_layer) == [0]
+
+    document.layer_manager.select_layer(0)
+    assert document.key_frames_for_layer(base_layer) == [0, 3]
 
 
 def test_add_keyframe_command_supports_undo_redo():

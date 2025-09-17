@@ -175,6 +175,7 @@ class MainWindow(QMainWindow):
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
+        self.layer_manager_widget.layer_changed.connect(self.sync_timeline_from_document)
         self.layer_manager_dock = QDockWidget("Layers", self)
         self.layer_manager_dock.setWidget(self.layer_manager_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, self.layer_manager_dock)

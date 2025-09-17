@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from PySide6.QtGui import QImage, QColor, QPainter
 from PySide6.QtCore import QSize, QObject, Signal, Qt
 
@@ -8,6 +10,13 @@ class Layer(QObject):
     on_image_change = Signal()
     visibility_changed = Signal()
     name_changed = Signal(str)
+
+    _uid_counter = 0
+
+    @classmethod
+    def _next_uid(cls) -> int:
+        cls._uid_counter += 1
+        return cls._uid_counter
 
     def __init__(self, width: int, height: int, name: str):
         super().__init__()
@@ -20,6 +29,7 @@ class Layer(QObject):
 
         self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
         self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
+        self.uid = self._next_uid()
 
     @property
     def name(self):
@@ -55,13 +65,24 @@ class Layer(QObject):
             
         self.on_image_change.emit()
 
-    def clone(self):
+    def clone(self, *, preserve_identity: bool = True) -> "Layer":
         """Creates a deep copy of this layer."""
+
         new_layer = Layer(self.image.width(), self.image.height(), self.name)
+        if preserve_identity:
+            new_layer.uid = self.uid
         new_layer.visible = self.visible
         new_layer.opacity = self.opacity
         new_layer.image = self.image.copy()  # Use QImage's copy method
         return new_layer
+
+    def apply_key_state_from(self, other: "Layer") -> None:
+        """Copy image, visibility, and opacity from *other* without changing identity."""
+
+        self.image = other.image.copy()
+        self.visible = other.visible
+        self.opacity = other.opacity
+        self.on_image_change.emit()
 
     def get_properties(self):
         """Returns a dictionary of layer properties."""

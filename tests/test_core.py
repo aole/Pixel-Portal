@@ -640,7 +640,7 @@ def test_duplicate_layer_command(document):
     initial_layer_count = len(layer_manager.layers)
     layer_to_duplicate_index = layer_manager.active_layer_index
 
-    command = DuplicateLayerCommand(layer_manager, layer_to_duplicate_index)
+    command = DuplicateLayerCommand(document, layer_to_duplicate_index)
     command.execute()
 
     assert len(layer_manager.layers) == initial_layer_count + 1
@@ -648,6 +648,7 @@ def test_duplicate_layer_command(document):
     duplicated_layer = layer_manager.layers[layer_to_duplicate_index + 1]
     assert duplicated_layer.name == f"{original_layer.name} copy"
     assert duplicated_layer.image.constBits() == original_layer.image.constBits()
+    assert document.key_frames_for_layer(duplicated_layer) == document.key_frames_for_layer(original_layer)
 
     command.undo()
 
@@ -676,10 +677,14 @@ def test_remove_layer_command(document):
     """Test that the RemoveLayerCommand removes the layer and that undo restores it."""
     layer_manager = document.layer_manager
     layer_manager.add_layer("Layer 2")
+    document.register_layer(
+        layer_manager.active_layer,
+        layer_manager.active_layer_index,
+    )
     initial_layer_count = len(layer_manager.layers)
     layer_to_remove_index = 1
 
-    command = RemoveLayerCommand(layer_manager, layer_to_remove_index)
+    command = RemoveLayerCommand(document, layer_to_remove_index)
     command.execute()
 
     assert len(layer_manager.layers) == initial_layer_count - 1
@@ -694,7 +699,15 @@ def test_move_layer_command(document):
     """Test that the MoveLayerCommand moves the layer and that undo moves it back."""
     layer_manager = document.layer_manager
     layer_manager.add_layer("Layer 2")
+    document.register_layer(
+        layer_manager.active_layer,
+        layer_manager.active_layer_index,
+    )
     layer_manager.add_layer("Layer 3")
+    document.register_layer(
+        layer_manager.active_layer,
+        layer_manager.active_layer_index,
+    )
 
     original_layers = list(layer_manager.layers)
     from_index = 0

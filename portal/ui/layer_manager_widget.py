@@ -211,7 +211,7 @@ class LayerManagerWidget(QWidget):
                 self.app.execute_command(command)
         else:
             from portal.core.command import RemoveLayerCommand
-            command = RemoveLayerCommand(layer_manager, actual_index)
+            command = RemoveLayerCommand(self.app.document, actual_index)
             self.app.execute_command(command)
 
     def move_layer_up(self):
@@ -246,7 +246,7 @@ class LayerManagerWidget(QWidget):
     def duplicate_layer_from_menu(self, index_in_list):
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
         from portal.core.command import DuplicateLayerCommand
-        command = DuplicateLayerCommand(self.app.document.layer_manager, actual_index)
+        command = DuplicateLayerCommand(self.app.document, actual_index)
         self.app.execute_command(command)
 
     def remove_background_from_menu(self, index_in_list):
