@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, QRect
@@ -12,6 +13,7 @@ from portal.core.command import (
     ResizeCommand,
     CropCommand,
     AddLayerCommand,
+    CompositeCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.commands.timeline_commands import (
@@ -24,6 +26,11 @@ from portal.core.color_utils import find_closest_color
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
+
+
+class BackgroundRemovalScope(Enum):
+    THIS_KEY = auto()
+    ALL_KEYS = auto()
 
 
 class DocumentController(QObject):
@@ -273,11 +280,91 @@ class DocumentController(QObject):
                 new_image.setPixelColor(x, y, QColor.fromRgb(*closest_color_rgb))
         self.add_new_layer_with_image(new_image)
 
-    def remove_background_from_layer(self):
-        layer = self.document.layer_manager.active_layer
-        if not layer:
+    def remove_background_from_layer(
+        self, scope: BackgroundRemovalScope = BackgroundRemovalScope.ALL_KEYS
+    ):
+        document = self.document
+        if document is None:
             return
-        command = RemoveBackgroundCommand(layer)
+
+        layer_manager = getattr(document, "layer_manager", None)
+        if layer_manager is None:
+            return
+
+        layer = getattr(layer_manager, "active_layer", None)
+        if layer is None:
+            return
+
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            command = RemoveBackgroundCommand(layer)
+            self.execute_command(command)
+            return
+
+        layer_uid = getattr(layer, "uid", None)
+        if layer_uid is None:
+            return
+
+        active_frame_index = getattr(frame_manager, "active_frame_index", None)
+        if active_frame_index is None:
+            active_frame_index = 0
+
+        layer_keys_map = getattr(frame_manager, "layer_keys", {})
+        if not isinstance(layer_keys_map, dict):
+            layer_keys_map = {}
+
+        resolve_key = getattr(
+            frame_manager, "resolve_layer_key_frame_index", lambda *_, **__: None
+        )
+
+        if scope is BackgroundRemovalScope.ALL_KEYS:
+            keys = sorted(layer_keys_map.get(layer_uid, set()))
+            if not keys:
+                resolved = resolve_key(layer_uid, active_frame_index)
+                keys = [resolved] if resolved is not None else []
+        else:
+            resolved = resolve_key(layer_uid, active_frame_index)
+            keys = [resolved] if resolved is not None else []
+
+        visited_layers = set()
+        target_layers = []
+        frames = getattr(frame_manager, "frames", [])
+        for key_index in keys:
+            if key_index is None:
+                continue
+            if not (0 <= key_index < len(frames)):
+                continue
+            manager = frames[key_index].layer_manager
+            target_layer = None
+            for candidate in getattr(manager, "layers", []):
+                if getattr(candidate, "uid", None) == layer_uid:
+                    target_layer = candidate
+                    break
+            if target_layer is None:
+                continue
+            identity = id(target_layer)
+            if identity in visited_layers:
+                continue
+            visited_layers.add(identity)
+            target_layers.append(target_layer)
+
+        if not target_layers:
+            command = RemoveBackgroundCommand(layer)
+            self.execute_command(command)
+            return
+
+        commands = [RemoveBackgroundCommand(target) for target in target_layers]
+
+        if len(commands) == 1:
+            command = commands[0]
+        else:
+            name = (
+                "Remove Background (All Keys)"
+                if scope is BackgroundRemovalScope.ALL_KEYS
+                else "Remove Background"
+            )
+            command = CompositeCommand(commands, name=name)
+
         self.execute_command(command)
 
     def select_frame(self, index: int) -> None:
