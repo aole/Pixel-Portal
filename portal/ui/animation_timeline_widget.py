@@ -7,7 +7,16 @@ from math import ceil
 from typing import Iterable, List, Set
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QBrush, QMouseEvent, QPaintEvent, QPainter, QPen, QPalette
+from PySide6.QtGui import (
+    QColor,
+    QBrush,
+    QMouseEvent,
+    QPaintEvent,
+    QPainter,
+    QPen,
+    QPalette,
+    QPolygonF,
+)
 from PySide6.QtWidgets import QMenu, QSizePolicy, QWidget
 
 from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
@@ -22,14 +31,17 @@ class _TimelineLayout:
     track_y: float
     usable_width: float
     max_offset: float
+    scrub_top: float
+    scrub_bottom: float
 
 
 class AnimationTimelineWidget(QWidget):
     """A minimal animation timeline widget displaying frames and keyed positions.
 
     The widget renders a horizontal scale with equally spaced frame markers. Keys
-    are shown as dots aligned to their frame while a vertical line indicates the
-    currently selected frame. Context menu actions allow basic key management.
+    are shown as dots aligned to their frame while a triangular scrub indicator
+    beneath the scale highlights the currently selected frame. Context menu
+    actions allow basic key management.
     """
 
     keys_changed = Signal(list)
@@ -53,6 +65,10 @@ class AnimationTimelineWidget(QWidget):
         self._has_copied_key = False
         self._scroll_offset = 0.0
         self._last_pan_x = 0.0
+        self._scrub_gap = 10.0
+        self._scrub_channel_height = 12.0
+        self._scrub_triangle_half_width = 8.0
+        self._scrub_tolerance = 4.0
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -243,19 +259,40 @@ class AnimationTimelineWidget(QWidget):
             painter.setBrush(active_key_brush if is_within_playback else inactive_key_brush)
             painter.drawEllipse(QPointF(x, layout.track_y), radius, radius)
 
-        # Draw the current frame indicator.
+        # Draw the scrub lines.
+        painter.setPen(QPen(guide_color, 2))
+        painter.drawLine(
+            QPointF(visible_start_x, layout.scrub_top),
+            QPointF(visible_end_x, layout.scrub_top),
+        )
+        painter.drawLine(
+            QPointF(visible_start_x, layout.scrub_bottom),
+            QPointF(visible_end_x, layout.scrub_bottom),
+        )
+
+        # Draw the current frame indicator as a triangle.
         current_x = self._margin + self._current_frame * layout.spacing - self._scroll_offset
         current_x = max(visible_start_x, min(current_x, visible_end_x))
-        painter.setPen(QPen(current_color, 2, Qt.SolidLine))
-        painter.drawLine(QPointF(current_x, 0), QPointF(current_x, self.height()))
+        triangle = QPolygonF(
+            [
+                QPointF(current_x, layout.scrub_top),
+                QPointF(current_x - self._scrub_triangle_half_width, layout.scrub_bottom),
+                QPointF(current_x + self._scrub_triangle_half_width, layout.scrub_bottom),
+            ]
+        )
+        painter.setPen(QPen(current_color, 1.5))
+        painter.setBrush(QBrush(current_color))
+        painter.drawPolygon(triangle)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
-            self._is_dragging = True
-            frame = self._frame_at_point(event)
-            self.set_current_frame(frame)
-            event.accept()
-            return
+            if self._is_point_in_scrub_area(event):
+                self._is_dragging = True
+                frame = self._frame_at_point(event)
+                self.set_current_frame(frame)
+                event.accept()
+                return
+            self._is_dragging = False
         if event.button() == Qt.MiddleButton:
             self._is_panning = True
             self._last_pan_x = self._event_x(event)
@@ -273,9 +310,7 @@ class AnimationTimelineWidget(QWidget):
             self._is_panning = False
             self._last_pan_x = 0.0
             self.unsetCursor()
-        if event.buttons() & Qt.LeftButton:
-            self._is_dragging = True
-        else:
+        if not (event.buttons() & Qt.LeftButton):
             self._is_dragging = False
         if self._is_dragging:
             frame = self._frame_at_point(event)
@@ -286,10 +321,11 @@ class AnimationTimelineWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
-            frame = self._frame_at_point(event)
-            self.set_current_frame(frame)
+            if self._is_dragging:
+                frame = self._frame_at_point(event)
+                self.set_current_frame(frame)
+                event.accept()
             self._is_dragging = False
-            event.accept()
             return
         if event.button() == Qt.MiddleButton:
             self._is_panning = False
@@ -353,6 +389,16 @@ class AnimationTimelineWidget(QWidget):
         visible_capacity = max(1, int(ceil(usable_width / spacing)))
         max_frame = max(visible_capacity, max_hint)
         track_y = height / 2
+        track_bottom = track_y + self._tick_height / 2
+        scrub_top_limit = height - self._scrub_channel_height - 6
+        scrub_top = track_bottom + self._scrub_gap
+        scrub_top = min(scrub_top, scrub_top_limit)
+        min_scrub_top = track_bottom + 2
+        if scrub_top < min_scrub_top:
+            scrub_top = min_scrub_top
+        scrub_bottom = min(height - 4, scrub_top + self._scrub_channel_height)
+        if scrub_bottom < scrub_top:
+            scrub_bottom = scrub_top
         content_end = self._margin + max_frame * spacing
         max_offset = max(0.0, content_end - (width - self._margin))
         if self._scroll_offset < 0:
@@ -365,6 +411,8 @@ class AnimationTimelineWidget(QWidget):
             track_y=track_y,
             usable_width=usable_width,
             max_offset=max_offset,
+            scrub_top=scrub_top,
+            scrub_bottom=scrub_bottom,
         )
 
     def _ensure_base_frame(self, frame: int) -> None:
@@ -411,4 +459,15 @@ class AnimationTimelineWidget(QWidget):
     def _event_x(self, event: QMouseEvent) -> float:
         pos = event.position() if hasattr(event, "position") else event.pos()
         return float(pos.x())
+
+    def _event_y(self, event: QMouseEvent) -> float:
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        return float(pos.y())
+
+    def _is_point_in_scrub_area(self, event: QMouseEvent) -> bool:
+        layout = self._calculate_layout()
+        y = self._event_y(event)
+        top = layout.scrub_top - self._scrub_tolerance
+        bottom = layout.scrub_bottom + self._scrub_tolerance
+        return top <= y <= bottom
 
