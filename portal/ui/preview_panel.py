@@ -25,12 +25,21 @@ class PreviewPanel(QWidget):
         self.preview_play_button.setText("Play")
         self.preview_play_button.setCheckable(True)
         self.preview_play_button.toggled.connect(self._on_preview_play_toggled)
-        self.layout.addWidget(self.preview_play_button, 0, Qt.AlignmentFlag.AlignRight)
+        self.layout.addWidget(
+            self.preview_play_button,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
+        )
 
         self.preview_label = QLabel()
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_label.setStyleSheet("border: 1px solid gray;")
-        self.layout.addWidget(self.preview_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.layout.addWidget(
+            self.preview_label,
+            0,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+        )
+        self.layout.addStretch(1)
 
         self.update_preview()
 
