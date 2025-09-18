@@ -105,8 +105,18 @@ class Canvas(QWidget):
 
     @Slot(QSize)
     def set_document_size(self, size):
+        previous_width = self._document_size.width()
+        previous_height = self._document_size.height()
+
+        new_width = size.width()
+        new_height = size.height()
+
+        size_changed = (
+            new_width != previous_width or new_height != previous_height
+        )
+
         self._document_size = size
-        self._reset_mirror_axes(force_center=True)
+        self._reset_mirror_axes(force_center=size_changed)
         self.update()
 
     def keyPressEvent(self, event):
