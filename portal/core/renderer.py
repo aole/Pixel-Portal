@@ -441,6 +441,7 @@ class CanvasRenderer:
             return
 
         brush_type = self.canvas.drawing_context.brush_type
+        is_eraser = self.canvas.drawing_context.tool == "Eraser"
         pattern_image = self.canvas.drawing_context.pattern_brush
         use_pattern_cursor = (
             brush_type == "Pattern"
@@ -529,14 +530,15 @@ class CanvasRenderer:
             painter.drawImage(QRectF(cursor_screen_rect), pattern_image, source_rect)
             painter.restore()
         else:
-            # Fill the cursor rectangle with the brush color
-            painter.setBrush(self.canvas.drawing_context.pen_color)
-            painter.setPen(Qt.NoPen)  # No outline for the fill
+            if not is_eraser:
+                # Fill the cursor rectangle with the brush color when drawing.
+                painter.setBrush(self.canvas.drawing_context.pen_color)
+                painter.setPen(Qt.NoPen)  # No outline for the fill
 
-            if brush_type == "Circular":
-                painter.drawEllipse(cursor_screen_rect)
-            else:
-                painter.drawRect(cursor_screen_rect)
+                if brush_type == "Circular":
+                    painter.drawEllipse(cursor_screen_rect)
+                else:
+                    painter.drawRect(cursor_screen_rect)
 
         if not use_pattern_cursor:
             # Draw the inverted outline on top for solid brushes
