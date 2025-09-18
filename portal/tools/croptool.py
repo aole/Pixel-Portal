@@ -46,15 +46,36 @@ class CropTool(BaseTool):
         self._active_handle: str | None = None
         self._hover_handle: str | None = None
         self._handle_size = 14.0
+        self._document_dimensions: tuple[int, int] | None = None
+        self._dialog_manually_hidden = False
 
     # ------------------------------------------------------------------
     def activate(self):
         document = getattr(self.canvas, "document", None)
         if document is None:
+            self._edges = _CropEdges(0, 0, -1, -1)
+            self._document_dimensions = None
+            if self._dialog is not None:
+                self._close_dialog()
+            self.canvas.update()
             return
 
-        self._sync_edges_to_document()
-        self._show_dialog()
+        width = max(1, int(document.width))
+        height = max(1, int(document.height))
+        doc_dimensions = (width, height)
+        edges_invalid = (
+            self._edges.right < self._edges.left
+            or self._edges.bottom < self._edges.top
+        )
+
+        if self._document_dimensions != doc_dimensions or edges_invalid:
+            self._edges = _CropEdges(0, 0, width - 1, height - 1)
+        self._document_dimensions = doc_dimensions
+
+        if self._dialog is not None:
+            self._dialog.set_rect(self._edges.to_rect())
+        elif not self._dialog_manually_hidden:
+            self._show_dialog()
         self.canvas.update()
 
     # ------------------------------------------------------------------
@@ -62,6 +83,7 @@ class CropTool(BaseTool):
         self._active_handle = None
         self._hover_handle = None
         self._close_dialog()
+        self._dialog_manually_hidden = False
         self.canvas.setCursor(self.cursor)
         self.canvas.update()
 
@@ -164,6 +186,7 @@ class CropTool(BaseTool):
         self._dialog.show()
         self._dialog.raise_()
         self._dialog.activateWindow()
+        self._dialog_manually_hidden = False
 
     # ------------------------------------------------------------------
     def _close_dialog(self):
@@ -202,10 +225,12 @@ class CropTool(BaseTool):
     def _on_dialog_accepted(self):
         self._apply_crop()
         self._dialog = None
+        self._dialog_manually_hidden = False
 
     # ------------------------------------------------------------------
     def _on_dialog_rejected(self):
         self._dialog = None
+        self._dialog_manually_hidden = True
         self._sync_edges_to_document()
         self.canvas.update()
 
@@ -236,11 +261,13 @@ class CropTool(BaseTool):
         document = getattr(self.canvas, "document", None)
         if document is None:
             self._edges = _CropEdges(0, 0, -1, -1)
+            self._document_dimensions = None
             return
 
         width = max(1, int(document.width))
         height = max(1, int(document.height))
         self._edges = _CropEdges(0, 0, width - 1, height - 1)
+        self._document_dimensions = (width, height)
         self._update_dialog_rect()
 
     # ------------------------------------------------------------------
