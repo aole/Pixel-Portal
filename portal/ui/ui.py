@@ -18,7 +18,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QAction, QIcon, QColor, QPixmap, QKeySequence, QImage
+from PySide6.QtGui import (
+    QAction,
+    QIcon,
+    QColor,
+    QPixmap,
+    QKeySequence,
+    QImage,
+    QShortcut,
+)
 from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.core.animation_player import AnimationPlayer
 from portal.ui.canvas import Canvas
@@ -143,6 +151,10 @@ class MainWindow(QMainWindow):
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
 
+        self.play_pause_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self.play_pause_shortcut.setAutoRepeat(False)
+        self.play_pause_shortcut.activated.connect(self._toggle_timeline_playback)
+
         self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
         self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
         self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
@@ -237,6 +249,8 @@ class MainWindow(QMainWindow):
 
         # Preview Panel
         self.preview_panel = PreviewPanel(self.app)
+        self.preview_panel.set_playback_total_frames(self.animation_player.total_frames)
+        self.preview_panel.set_playback_fps(self.animation_player.fps)
         self.preview_dock = QDockWidget("Preview", self)
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
@@ -262,7 +276,7 @@ class MainWindow(QMainWindow):
             self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
             self.layer_manager_dock.raise_()
 
-        self.app.document_changed.connect(self.preview_panel.update_preview)
+        self.app.document_changed.connect(self.preview_panel.handle_document_changed)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
 
         self.app.drawing_context.mirror_x_changed.connect(self.on_mirror_changed)
@@ -301,6 +315,7 @@ class MainWindow(QMainWindow):
             slider_value = int(round(value))
             with QSignalBlocker(self.timeline_fps_slider):
                 self.timeline_fps_slider.setValue(slider_value)
+            self.preview_panel.set_playback_fps(value)
         else:
             text = ""
         self.timeline_fps_value_label.setText(text)
@@ -323,9 +338,16 @@ class MainWindow(QMainWindow):
     def _on_timeline_stop_clicked(self) -> None:
         self.animation_player.stop()
 
+    def _toggle_timeline_playback(self) -> None:
+        if self.animation_player.is_playing:
+            self.animation_player.pause()
+        else:
+            self.animation_player.play()
+
     @Slot(int)
     def _on_timeline_fps_changed(self, value: int) -> None:
         self.animation_player.set_fps(value)
+        self.preview_panel.set_playback_fps(value)
 
     @Slot(int)
     def _on_timeline_total_frames_changed(self, value: int) -> None:
@@ -342,6 +364,7 @@ class MainWindow(QMainWindow):
         target_base = max(doc_max_index, highest_key, value - 1)
         self.timeline_widget.set_total_frames(target_base)
         self.timeline_widget.set_playback_total_frames(value)
+        self.preview_panel.set_playback_total_frames(value)
         timeline_blocker = QSignalBlocker(self.timeline_widget)
         player_blocker = QSignalBlocker(self.animation_player)
         try:
@@ -421,6 +444,7 @@ class MainWindow(QMainWindow):
     def sync_timeline_from_document(self):
         playback_total = max(1, self.timeline_total_frames_spinbox.value())
         self.timeline_widget.set_playback_total_frames(playback_total)
+        self.preview_panel.set_playback_total_frames(playback_total)
 
         document = self.app.document
         frame_manager = getattr(document, "frame_manager", None) if document else None
@@ -489,6 +513,7 @@ class MainWindow(QMainWindow):
         if getattr(self, "_current_document_id", None) != document_id:
             self._current_document_id = document_id
             self.animation_player.stop()
+        self.preview_panel.handle_document_changed()
         self.layer_manager_widget.refresh_layers()
         self.canvas.set_document(document)
         self.canvas.update()
