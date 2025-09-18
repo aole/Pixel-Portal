@@ -76,6 +76,10 @@ class MainWindow(QMainWindow):
 
         self.animation_player = AnimationPlayer(self)
 
+        # Instantiate the preview panel early so timeline setup helpers can
+        # safely forward playback state during initialization.
+        self.preview_panel = PreviewPanel(self.app)
+
         self.timeline_widget = AnimationTimelineWidget(self)
         self.timeline_widget.set_playback_total_frames(self.animation_player.total_frames)
         self.timeline_widget.set_total_frames(max(0, self.animation_player.total_frames - 1))
@@ -248,7 +252,6 @@ class MainWindow(QMainWindow):
         self.color_toolbar.addWidget(self.color_container)
 
         # Preview Panel
-        self.preview_panel = PreviewPanel(self.app)
         self.preview_panel.set_playback_total_frames(self.animation_player.total_frames)
         self.preview_panel.set_playback_fps(self.animation_player.fps)
         self.preview_dock = QDockWidget("Preview", self)
