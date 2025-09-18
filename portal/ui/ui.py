@@ -709,6 +709,11 @@ class MainWindow(QMainWindow):
         frame_manager = getattr(document, "frame_manager", None)
         if frame_manager is None:
             return
+        if frame < 0:
+            return
+        ensure_frame = getattr(frame_manager, "ensure_frame", None)
+        if callable(ensure_frame):
+            ensure_frame(frame)
         if not (0 <= frame < len(frame_manager.frames)):
             return
         if frame_manager.active_frame_index == frame:
