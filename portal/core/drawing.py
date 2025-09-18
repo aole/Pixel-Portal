@@ -321,19 +321,90 @@ class Drawing:
         mirror_x_position: float | None = None,
         mirror_y_position: float | None = None,
     ):
-        center = rect.center()
-        rx = rect.width() / 2
-        ry = rect.height() / 2
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
 
-        if rx == 0 or ry == 0:
+        # ``QRect`` instances built from points are inclusive. Treat the ellipse
+        # centre as the midpoint between the two edges so even-sized bounding
+        # boxes remain symmetric.
+        cx = left + (rect.width() - 1) / 2.0
+        cy = top + (rect.height() - 1) / 2.0
+        rx = max((rect.width() - 1) / 2.0, 0.0)
+        ry = max((rect.height() - 1) / 2.0, 0.0)
+
+        if rx <= 0 and ry <= 0:
+            self.draw_brush(
+                painter,
+                rect.topLeft(),
+                document_size,
+                brush_type,
+                pen_width,
+                mirror_x,
+                mirror_y,
+                wrap=wrap,
+                pattern=pattern,
+                mirror_x_position=mirror_x_position,
+                mirror_y_position=mirror_y_position,
+            )
             return
 
-        for x in range(rect.left(), rect.right() + 1):
-            y1 = center.y() - ry * math.sqrt(1 - ((x - center.x()) / rx) ** 2)
-            y2 = center.y() + ry * math.sqrt(1 - ((x - center.x()) / rx) ** 2)
+        if rx <= 0:
+            x = left
+            for y in range(top, bottom + 1):
+                self.draw_brush(
+                    painter,
+                    QPoint(x, y),
+                    document_size,
+                    brush_type,
+                    pen_width,
+                    mirror_x,
+                    mirror_y,
+                    wrap=wrap,
+                    pattern=pattern,
+                    mirror_x_position=mirror_x_position,
+                    mirror_y_position=mirror_y_position,
+                )
+            return
+
+        if ry <= 0:
+            y = top
+            for x in range(left, right + 1):
+                self.draw_brush(
+                    painter,
+                    QPoint(x, y),
+                    document_size,
+                    brush_type,
+                    pen_width,
+                    mirror_x,
+                    mirror_y,
+                    wrap=wrap,
+                    pattern=pattern,
+                    mirror_x_position=mirror_x_position,
+                    mirror_y_position=mirror_y_position,
+                )
+            return
+
+        def _round_half_away_from_zero(value: float) -> int:
+            if value >= 0:
+                return int(math.floor(value + 0.5))
+            return int(math.ceil(value - 0.5))
+
+        def _clamp(value: float, minimum: int, maximum: int) -> int:
+            rounded = _round_half_away_from_zero(value)
+            return int(max(minimum, min(maximum, rounded)))
+
+        for x in range(left, right + 1):
+            nx = (x - cx) / rx
+            if abs(nx) > 1:
+                continue
+            y_offset = ry * math.sqrt(max(0.0, 1 - nx * nx))
+            y1 = _clamp(cy - y_offset, top, bottom)
+            y2 = _clamp(cy + y_offset, top, bottom)
             self.draw_brush(
                 painter,
-                QPoint(x, round(y1)),
+                QPoint(x, y1),
                 document_size,
                 brush_type,
                 pen_width,
@@ -346,7 +417,7 @@ class Drawing:
             )
             self.draw_brush(
                 painter,
-                QPoint(x, round(y2)),
+                QPoint(x, y2),
                 document_size,
                 brush_type,
                 pen_width,
@@ -358,12 +429,16 @@ class Drawing:
                 mirror_y_position=mirror_y_position,
             )
 
-        for y in range(rect.top(), rect.bottom() + 1):
-            x1 = center.x() - rx * math.sqrt(1 - ((y - center.y()) / ry) ** 2)
-            x2 = center.x() + rx * math.sqrt(1 - ((y - center.y()) / ry) ** 2)
+        for y in range(top, bottom + 1):
+            ny = (y - cy) / ry
+            if abs(ny) > 1:
+                continue
+            x_offset = rx * math.sqrt(max(0.0, 1 - ny * ny))
+            x1 = _clamp(cx - x_offset, left, right)
+            x2 = _clamp(cx + x_offset, left, right)
             self.draw_brush(
                 painter,
-                QPoint(round(x1), y),
+                QPoint(x1, y),
                 document_size,
                 brush_type,
                 pen_width,
@@ -376,7 +451,7 @@ class Drawing:
             )
             self.draw_brush(
                 painter,
-                QPoint(round(x2), y),
+                QPoint(x2, y),
                 document_size,
                 brush_type,
                 pen_width,
