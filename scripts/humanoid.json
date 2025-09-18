@@ -1,0 +1,72 @@
+{
+  "layout": {
+    "bottom_margin_ratio": 0.01,
+    "top_margin_ratio": 0.1
+  },
+  "head": {
+    "width_ratio": 0.75
+  },
+  "neck": {
+    "height_ratio": 0.25,
+    "min_height": 1.0,
+    "width_ratio_to_head": 0.45
+  },
+  "torso": {
+    "height_ratio": 2.0,
+    "width_bottom_ratio": 1.5,
+    "width_top_ratio": 1.9
+  },
+  "pelvis": {
+    "height_ratio": 1.0,
+    "width_ratio": 1.5
+  },
+  "shoulders": {
+    "horizontal_inset_ratio": 0.1,
+    "vertical_offset_ratio": 0.2
+  },
+  "hips": {
+    "horizontal_offset_ratio": 0.2,
+    "vertical_ratio": 0.65
+  },
+  "arms": {
+    "lower_length_ratio": 1.4,
+    "lower_min_thickness": 1.0,
+    "lower_thickness_ratio": 0.3,
+    "upper_length_ratio": 1.5,
+    "upper_min_thickness": 1.0,
+    "upper_thickness_ratio": 0.35
+  },
+  "legs": {
+    "foot_length_ratio": 0.65,
+    "foot_min_thickness": 2.0,
+    "foot_thickness_ratio": 0.35,
+    "lower_length_ratio": 2.0,
+    "lower_min_thickness": 1.0,
+    "lower_thickness_ratio": 0.4,
+    "upper_length_ratio": 2.0,
+    "upper_min_thickness": 1.0,
+    "upper_thickness_ratio": 0.7
+  },
+  "pose_angles": {
+    "A-Pose": {
+      "arms": [
+        30.0,
+        30.0
+      ],
+      "legs": [
+        75.0,
+        85.0
+      ]
+    },
+    "T-Pose": {
+      "arms": [
+        0.0,
+        0.0
+      ],
+      "legs": [
+        90.0,
+        90.0
+      ]
+    }
+  }
+}

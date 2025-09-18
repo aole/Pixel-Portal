@@ -1,5 +1,7 @@
+import json
 import math
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QColor, QPainter, QPolygonF
@@ -8,8 +10,71 @@ POSE_CHOICES = ["T-Pose", "A-Pose"]
 
 STRUCTURE_COLOR_HEX = "#FFC68C"
 
+CONFIG_FILE_PATH = Path(__file__).with_name("humanoid.json")
+
 TOP_MARGIN_RATIO = 0.10
 BOTTOM_MARGIN_RATIO = 0.01
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "layout": {
+        "top_margin_ratio": TOP_MARGIN_RATIO,
+        "bottom_margin_ratio": BOTTOM_MARGIN_RATIO,
+    },
+    "head": {
+        "width_ratio": 0.75,
+    },
+    "neck": {
+        "height_ratio": 0.25,
+        "min_height": 1.0,
+        "width_ratio_to_head": 0.45,
+    },
+    "torso": {
+        "height_ratio": 2.0,
+        "width_top_ratio": 1.9,
+        "width_bottom_ratio": 1.5,
+    },
+    "pelvis": {
+        "height_ratio": 1.0,
+        "width_ratio": 1.5,
+    },
+    "shoulders": {
+        "vertical_offset_ratio": 0.2,
+        "horizontal_inset_ratio": 0.1,
+    },
+    "hips": {
+        "vertical_ratio": 0.65,
+        "horizontal_offset_ratio": 0.2,
+    },
+    "arms": {
+        "upper_length_ratio": 1.5,
+        "lower_length_ratio": 1.4,
+        "upper_thickness_ratio": 0.35,
+        "upper_min_thickness": 1.0,
+        "lower_thickness_ratio": 0.3,
+        "lower_min_thickness": 1.0,
+    },
+    "legs": {
+        "upper_length_ratio": 2.0,
+        "lower_length_ratio": 2.0,
+        "upper_thickness_ratio": 0.7,
+        "upper_min_thickness": 1.0,
+        "lower_thickness_ratio": 0.4,
+        "lower_min_thickness": 1.0,
+        "foot_length_ratio": 0.65,
+        "foot_thickness_ratio": 0.35,
+        "foot_min_thickness": 2.0,
+    },
+    "pose_angles": {
+        "T-Pose": {
+            "arms": [0.0, 0.0],
+            "legs": [90.0, 90.0],
+        },
+        "A-Pose": {
+            "arms": [30.0, 30.0],
+            "legs": [75.0, 85.0],
+        },
+    },
+}
 
 params = [
     {
@@ -20,6 +85,45 @@ params = [
         'default': 'A-Pose',
     },
 ]
+
+
+def _merge_config(default: Any, override: Any) -> Any:
+    if isinstance(default, dict) and isinstance(override, dict):
+        merged: Dict[str, Any] = {}
+        for key in default:
+            if key in override:
+                merged[key] = _merge_config(default[key], override[key])
+            else:
+                merged[key] = default[key]
+        for key, value in override.items():
+            if key not in merged:
+                merged[key] = value
+        return merged
+    return override if override is not None else default
+
+
+def load_humanoid_config() -> Dict[str, Any]:
+    config: Dict[str, Any]
+    should_write = False
+    if CONFIG_FILE_PATH.exists():
+        try:
+            with CONFIG_FILE_PATH.open("r", encoding="utf-8") as file:
+                user_config = json.load(file)
+            config = _merge_config(DEFAULT_CONFIG, user_config)
+            should_write = config != user_config
+        except (OSError, ValueError, TypeError):
+            config = DEFAULT_CONFIG
+            should_write = True
+    else:
+        config = DEFAULT_CONFIG
+        should_write = True
+
+    if should_write:
+        with CONFIG_FILE_PATH.open("w", encoding="utf-8") as file:
+            json.dump(config, file, indent=2)
+            file.write("\n")
+
+    return config
 
 
 class HumanoidGeometry:
@@ -95,31 +199,53 @@ def mirror_angle(angle: float) -> float:
     return (180.0 - angle) % 360.0
 
 
-def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
+def build_humanoid_geometry(head_height: float, pose: str, config: Dict[str, Any]) -> HumanoidGeometry:
     geometry = HumanoidGeometry()
     figure_height = head_height * 8.0
     ground_y = figure_height
 
-    head_width = head_height * 0.75
-    neck_height = max(1.0, head_height * 0.25)
-    neck_width = head_width * 0.45
-    torso_height = head_height * 2.0
-    torso_width_top = head_height * 1.9
-    torso_width_bottom = head_height * 1.5
-    pelvis_height = head_height * 1.0
-    pelvis_width = head_height * 1.5
+    head_width = head_height * config["head"]["width_ratio"]
+    neck_settings = config["neck"]
+    neck_height = max(neck_settings.get("min_height", 0.0), head_height * neck_settings["height_ratio"])
+    neck_width = head_width * neck_settings["width_ratio_to_head"]
 
-    arm_thickness = max(1.0, head_height * 0.35)
-    forearm_thickness = max(1.0, head_height * 0.3)
-    upper_arm_length = head_height * 1.5
-    lower_arm_length = head_height * 1.4
+    torso_settings = config["torso"]
+    torso_height = head_height * torso_settings["height_ratio"]
+    torso_width_top = head_height * torso_settings["width_top_ratio"]
+    torso_width_bottom = head_height * torso_settings["width_bottom_ratio"]
 
-    leg_thickness = max(1.0, head_height * 0.7)
-    calf_thickness = max(1.0, head_height * 0.4)
-    upper_leg_length = head_height * 2.0
-    lower_leg_length = head_height * 2.0
-    foot_length = head_height * 0.65
-    foot_thickness = max(2.0, head_height * 0.35)
+    pelvis_settings = config["pelvis"]
+    pelvis_height = head_height * pelvis_settings["height_ratio"]
+    pelvis_width = head_height * pelvis_settings["width_ratio"]
+
+    arm_settings = config["arms"]
+    upper_arm_length = head_height * arm_settings["upper_length_ratio"]
+    lower_arm_length = head_height * arm_settings["lower_length_ratio"]
+    arm_thickness = max(
+        arm_settings.get("upper_min_thickness", 0.0),
+        head_height * arm_settings["upper_thickness_ratio"],
+    )
+    forearm_thickness = max(
+        arm_settings.get("lower_min_thickness", 0.0),
+        head_height * arm_settings["lower_thickness_ratio"],
+    )
+
+    leg_settings = config["legs"]
+    upper_leg_length = head_height * leg_settings["upper_length_ratio"]
+    lower_leg_length = head_height * leg_settings["lower_length_ratio"]
+    leg_thickness = max(
+        leg_settings.get("upper_min_thickness", 0.0),
+        head_height * leg_settings["upper_thickness_ratio"],
+    )
+    calf_thickness = max(
+        leg_settings.get("lower_min_thickness", 0.0),
+        head_height * leg_settings["lower_thickness_ratio"],
+    )
+    foot_length = head_height * leg_settings["foot_length_ratio"]
+    foot_thickness = max(
+        leg_settings.get("foot_min_thickness", 0.0),
+        head_height * leg_settings["foot_thickness_ratio"],
+    )
 
     # Core body shapes (centered on the origin, figure grows downward).
     head_rect = QRectF(-head_width / 2.0, 0.0, head_width, head_height)
@@ -141,35 +267,27 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     pelvis_rect = QRectF(-pelvis_width / 2.0, torso_bottom, pelvis_width, pelvis_height)
     geometry.add_rect(pelvis_rect)
 
-    shoulder_y = torso_top + head_height * 0.2
-    shoulder_offset = torso_width_top / 2.0 - head_height * 0.1
+    shoulder_settings = config["shoulders"]
+    shoulder_y = torso_top + head_height * shoulder_settings["vertical_offset_ratio"]
+    shoulder_offset = torso_width_top / 2.0 - head_height * shoulder_settings["horizontal_inset_ratio"]
     left_shoulder = QPointF(-shoulder_offset, shoulder_y)
     right_shoulder = QPointF(shoulder_offset, shoulder_y)
 
-    hip_y = pelvis_rect.top() + pelvis_height * 0.65
-    hip_offset = pelvis_width * 0.2
+    hip_settings = config["hips"]
+    hip_y = pelvis_rect.top() + pelvis_height * hip_settings["vertical_ratio"]
+    hip_offset = pelvis_width * hip_settings["horizontal_offset_ratio"]
     left_hip = QPointF(-hip_offset, hip_y)
     right_hip = QPointF(hip_offset, hip_y)
 
-    pose_settings: Dict[str, Dict[str, Tuple[float, float]]] = {
-        "T-Pose": {
-            'arms': (0.0, 0.0),
-            'legs': (90.0, 90.0),
-        },
-        "A-Pose": {
-            'arms': (30.0, 30.0),
-            'legs': (75.0, 85.0),
-        },
-    }
-
+    pose_settings = config["pose_angles"]
     pose_angles = pose_settings.get(pose, pose_settings["T-Pose"])
 
     arm_angles = {
-        'right': pose_angles['arms'],
+        'right': tuple(pose_angles['arms']),
         'left': tuple(mirror_angle(angle) for angle in pose_angles['arms']),
     }
     leg_angles = {
-        'right': pose_angles['legs'],
+        'right': tuple(pose_angles['legs']),
         'left': tuple(mirror_angle(angle) for angle in pose_angles['legs']),
     }
 
@@ -220,6 +338,7 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
 
 
 def main(api, values):
+    config = load_humanoid_config()
     pose = values['pose']
     structure_color = QColor(STRUCTURE_COLOR_HEX)
 
@@ -228,15 +347,19 @@ def main(api, values):
         api.show_message_box("Script Error", "Could not create the structure layer.")
         return
 
+    layout_config = config.get("layout", {})
+    top_margin_ratio = layout_config.get("top_margin_ratio", TOP_MARGIN_RATIO)
+    bottom_margin_ratio = layout_config.get("bottom_margin_ratio", BOTTOM_MARGIN_RATIO)
+
     def layout_geometry(image):
         doc_height = image.height()
-        desired_top_margin = doc_height * TOP_MARGIN_RATIO
-        desired_bottom_margin = doc_height * BOTTOM_MARGIN_RATIO
+        desired_top_margin = doc_height * top_margin_ratio
+        desired_bottom_margin = doc_height * bottom_margin_ratio
         available_height = max(0.0, doc_height - desired_top_margin - desired_bottom_margin)
 
         head_height = max(4.0, available_height / 8.0)
 
-        geometry = build_humanoid_geometry(head_height, pose)
+        geometry = build_humanoid_geometry(head_height, pose, config)
         figure_width = geometry.max_x - geometry.min_x
         figure_height = geometry.max_y - geometry.min_y
 
@@ -244,7 +367,7 @@ def main(api, values):
             figure_width > image.width() or figure_height > available_height
         ):
             head_height -= 1.0
-            geometry = build_humanoid_geometry(head_height, pose)
+            geometry = build_humanoid_geometry(head_height, pose, config)
             figure_width = geometry.max_x - geometry.min_x
             figure_height = geometry.max_y - geometry.min_y
 
