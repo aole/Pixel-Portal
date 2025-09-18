@@ -169,14 +169,53 @@ class DocumentService:
 
         frame_duration = max(1, int(round(1000.0 / fps_value)))
 
+        def _frame_has_transparency(image):
+            alpha = image.getchannel("A")
+            extrema = alpha.getextrema()
+            return extrema is not None and extrema[0] < 255
+
+        needs_transparency = any(_frame_has_transparency(frame) for frame in pil_frames)
+
         base_frame = pil_frames[0]
         append_frames = [frame.copy() for frame in pil_frames[1:]]
+        gif_transparency_index = None
 
         if format_name == "GIF":
-            base_frame = base_frame.convert("P", palette=Image.ADAPTIVE)
-            append_frames = [frame.convert("P", palette=Image.ADAPTIVE) for frame in append_frames]
+            def _convert_frame_to_gif(frame):
+                rgba_frame = frame.convert("RGBA")
+                rgb_frame = rgba_frame.convert("RGB")
+                palette_colors = 255 if needs_transparency else 256
+                pal_frame = rgb_frame.convert("P", palette=Image.ADAPTIVE, colors=palette_colors)
+
+                transparency_index = None
+                if needs_transparency:
+                    palette = pal_frame.getpalette() or []
+                    if len(palette) < 768:
+                        palette = palette + [0] * (768 - len(palette))
+                    transparency_index = 255
+                    palette[transparency_index * 3 : transparency_index * 3 + 3] = [0, 0, 0]
+                    pal_frame.putpalette(palette)
+
+                    alpha = rgba_frame.getchannel("A")
+                    transparency_mask = alpha.point(lambda value: 255 if value == 0 else 0)
+                    if transparency_mask.getbbox():
+                        pal_frame.paste(transparency_index, mask=transparency_mask)
+                    pal_frame.info["transparency"] = transparency_index
+
+                return pal_frame, transparency_index
+
+            base_frame, gif_transparency_index = _convert_frame_to_gif(base_frame)
+            converted_append_frames = []
+            for frame in append_frames:
+                converted_frame, frame_transparency_index = _convert_frame_to_gif(frame)
+                converted_append_frames.append(converted_frame)
+                if gif_transparency_index is None and frame_transparency_index is not None:
+                    gif_transparency_index = frame_transparency_index
+            append_frames = converted_append_frames
 
         save_kwargs = {}
+        if gif_transparency_index is not None:
+            save_kwargs["transparency"] = gif_transparency_index
         if append_frames:
             save_kwargs.update(
                 {
