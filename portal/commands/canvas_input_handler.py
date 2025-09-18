@@ -26,8 +26,17 @@ class CanvasInputHandler:
             self.drawing_context.set_tool(self.drawing_context.previous_tool)
 
     def mousePressEvent(self, event):
-        active_layer = self.canvas.document.layer_manager.active_layer
-        if active_layer and not active_layer.visible:
+        current_tool = getattr(self.canvas, "current_tool", None)
+        requires_visible = True
+        if current_tool is not None:
+            requires_visible = getattr(current_tool, "requires_visible_layer", True)
+
+        document = getattr(self.canvas, "document", None)
+        active_layer = None
+        if document is not None and document.layer_manager is not None:
+            active_layer = document.layer_manager.active_layer
+
+        if active_layer and not active_layer.visible and requires_visible:
             self.canvas.setCursor(Qt.ForbiddenCursor)
             return
 
@@ -55,21 +64,31 @@ class CanvasInputHandler:
             wrap=False,
         )
 
-        active_layer = self.canvas.document.layer_manager.active_layer
-        if active_layer and not active_layer.visible:
+        current_tool = getattr(self.canvas, "current_tool", None)
+        requires_visible = True
+        if current_tool is not None:
+            requires_visible = getattr(current_tool, "requires_visible_layer", True)
+
+        document = getattr(self.canvas, "document", None)
+        active_layer = None
+        if document is not None and document.layer_manager is not None:
+            active_layer = document.layer_manager.active_layer
+
+        if active_layer and not active_layer.visible and requires_visible:
             self.canvas.setCursor(Qt.ForbiddenCursor)
-        else:
-            self.canvas.setCursor(self.canvas.current_tool.cursor)
+        elif current_tool is not None:
+            self.canvas.setCursor(current_tool.cursor)
 
         if not (event.buttons() & Qt.LeftButton):
-            if hasattr(self.canvas.current_tool, "mouseHoverEvent"):
-                self.canvas.current_tool.mouseHoverEvent(event, doc_pos)
+            if current_tool is not None and hasattr(current_tool, "mouseHoverEvent"):
+                current_tool.mouseHoverEvent(event, doc_pos)
 
-        if active_layer and not active_layer.visible:
+        if active_layer and not active_layer.visible and requires_visible:
             return
 
         if event.buttons() & Qt.LeftButton:
-            self.canvas.current_tool.mouseMoveEvent(event, doc_pos)
+            if current_tool is not None:
+                current_tool.mouseMoveEvent(event, doc_pos)
             self.canvas.canvas_updated.emit()
         elif event.buttons() & Qt.RightButton:
             self.canvas.tools["Eraser"].mouseMoveEvent(event, doc_pos)
@@ -81,9 +100,19 @@ class CanvasInputHandler:
             self.canvas.update()
 
     def mouseReleaseEvent(self, event):
-        active_layer = self.canvas.document.layer_manager.active_layer
-        if active_layer and not active_layer.visible:
-            self.canvas.setCursor(self.canvas.current_tool.cursor)
+        current_tool = getattr(self.canvas, "current_tool", None)
+        requires_visible = True
+        if current_tool is not None:
+            requires_visible = getattr(current_tool, "requires_visible_layer", True)
+
+        document = getattr(self.canvas, "document", None)
+        active_layer = None
+        if document is not None and document.layer_manager is not None:
+            active_layer = document.layer_manager.active_layer
+
+        if active_layer and not active_layer.visible and requires_visible:
+            if current_tool is not None:
+                self.canvas.setCursor(current_tool.cursor)
             return
 
         doc_pos = self.canvas.get_doc_coords(
@@ -91,7 +120,8 @@ class CanvasInputHandler:
             wrap=False,
         )
         if event.button() == Qt.LeftButton:
-            self.canvas.current_tool.mouseReleaseEvent(event, doc_pos)
+            if current_tool is not None:
+                current_tool.mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:
             self.canvas.tools["Eraser"].mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.MiddleButton:

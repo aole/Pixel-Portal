@@ -43,6 +43,13 @@
       ]
     },
     {
+      "name": "Crop",
+      "icon": "icons/resize.png",
+      "tools": [
+        {"name": "Crop", "icon": "icons/resize.png"}
+      ]
+    },
+    {
       "name": "Shape Tools",
       "icon": "icons/toolrect.png",
       "tools": [
