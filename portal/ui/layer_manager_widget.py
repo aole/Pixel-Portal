@@ -180,9 +180,23 @@ class LayerManagerWidget(QWidget):
 
     def clear_layer(self):
         """Clears the active layer."""
-        active_layer = self.app.document.layer_manager.active_layer
+        document = getattr(self.app, "document", None)
+        if document is None:
+            return
+
+        ensure_auto_key = getattr(self.app, "ensure_auto_key_for_active_layer", None)
+        if callable(ensure_auto_key):
+            ensure_auto_key()
+
+        try:
+            layer_manager = document.layer_manager
+        except ValueError:
+            return
+
+        active_layer = layer_manager.active_layer
         if active_layer:
             from portal.core.command import ClearLayerCommand
+
             selection = self.canvas.selection_shape
             command = ClearLayerCommand(active_layer, selection)
             self.app.execute_command(command)
@@ -205,7 +219,17 @@ class LayerManagerWidget(QWidget):
 
         if len(layer_manager.layers) == 1:
             # Last layer. Clear it instead of removing.
+            ensure_auto_key = getattr(self.app, "ensure_auto_key_for_active_layer", None)
+            if callable(ensure_auto_key):
+                ensure_auto_key()
+
+            try:
+                layer_manager = self.app.document.layer_manager
+            except ValueError:
+                return
+
             from portal.core.command import ClearLayerCommand
+
             active_layer = layer_manager.active_layer
             if active_layer:
                 selection = self.canvas.selection_shape

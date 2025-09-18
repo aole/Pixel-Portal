@@ -14,7 +14,14 @@ class ClipboardService:
 
         self.copy()
 
-        active_layer = app.document.layer_manager.active_layer
+        ensure_auto_key = getattr(app, "ensure_auto_key_for_active_layer", None)
+        if callable(ensure_auto_key):
+            ensure_auto_key()
+
+        try:
+            active_layer = app.document.layer_manager.active_layer
+        except ValueError:
+            return
         if not active_layer:
             return
 

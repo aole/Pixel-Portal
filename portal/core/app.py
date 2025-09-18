@@ -134,6 +134,9 @@ class App(QObject):
     def set_auto_key_enabled(self, enabled: bool) -> None:
         self.document_controller.set_auto_key_enabled(enabled)
 
+    def ensure_auto_key_for_active_layer(self) -> bool:
+        return self.document_controller.ensure_auto_key_for_active_layer()
+
     def add_keyframe(self, frame_index: int) -> None:
         self.document_controller.add_keyframe(frame_index)
 

@@ -171,29 +171,10 @@ class CanvasInputHandler:
             return False
         if not canvas.is_auto_key_enabled():
             return False
-        document = getattr(canvas, "document", None)
-        if document is None:
-            return False
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return False
-        current_frame = getattr(frame_manager, "active_frame_index", None)
-        if current_frame is None or current_frame < 0:
-            return False
-        layer_manager = getattr(document, "layer_manager", None)
-        if layer_manager is None:
-            return False
-        active_layer = getattr(layer_manager, "active_layer", None)
-        if active_layer is None:
-            return False
-        layer_uid = getattr(active_layer, "uid", None)
-        if layer_uid is None:
-            return False
-        keys = frame_manager.layer_keys.get(layer_uid)
-        if keys is not None and current_frame in keys:
-            return False
         app = getattr(canvas, "app", None)
         if app is None:
             return False
-        app.add_keyframe(current_frame)
-        return True
+        ensure_method = getattr(app, "ensure_auto_key_for_active_layer", None)
+        if ensure_method is None:
+            return False
+        return bool(ensure_method())

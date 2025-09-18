@@ -87,6 +87,40 @@ class DocumentController(QObject):
             return
         self.auto_key_enabled = normalized
 
+    def ensure_auto_key_for_active_layer(self) -> bool:
+        """Create a keyframe on the active layer if auto-key is enabled."""
+
+        if not self.auto_key_enabled:
+            return False
+
+        document = self.document
+        if document is None:
+            return False
+
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return False
+
+        current_frame = getattr(frame_manager, "active_frame_index", None)
+        if current_frame is None or current_frame < 0:
+            return False
+
+        try:
+            layer_manager = document.layer_manager
+        except ValueError:
+            return False
+
+        active_layer = getattr(layer_manager, "active_layer", None)
+        if active_layer is None:
+            return False
+
+        key_frames = getattr(document, "key_frames", [])
+        if current_frame in key_frames:
+            return False
+
+        self.add_keyframe(current_frame)
+        return True
+
     def execute_command(self, command):
         command.execute()
         if self.is_recording:
