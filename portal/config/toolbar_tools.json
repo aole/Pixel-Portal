@@ -44,9 +44,9 @@
     },
     {
       "name": "Crop",
-      "icon": "icons/resize.png",
+      "icon": "icons/toolcrop.png",
       "tools": [
-        {"name": "Crop", "icon": "icons/resize.png"}
+        {"name": "Crop", "icon": "icons/toolcrop.png"}
       ]
     },
     {

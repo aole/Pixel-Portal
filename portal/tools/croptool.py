@@ -36,7 +36,7 @@ class CropTool(BaseTool):
     """Crop or expand the document by dragging side handles."""
 
     name = "Crop"
-    icon = "icons/resize.png"
+    icon = "icons/toolcrop.png"
     category = "utility"
     requires_visible_layer = False
 
