@@ -128,8 +128,8 @@ class App(QObject):
     def redo(self):
         self.document_controller.redo()
 
-    def add_keyframe(self, frame_index: int) -> None:
-        self.document_controller.add_keyframe(frame_index)
+    def add_keyframe(self, frame_index: int, *, blank: bool = False) -> None:
+        self.document_controller.add_keyframe(frame_index, blank=blank)
 
     def remove_keyframe(self, frame_index: int) -> None:
         self.document_controller.remove_keyframe(frame_index)

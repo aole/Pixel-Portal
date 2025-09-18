@@ -135,7 +135,7 @@ class DocumentController(QObject):
             command = FlipCommand(self.document, horizontal, vertical, all_layers)
             self.execute_command(command)
 
-    def add_keyframe(self, frame_index: int) -> None:
+    def add_keyframe(self, frame_index: int, *, blank: bool = False) -> None:
         document = self.document
         if document is None:
             return
@@ -143,11 +143,43 @@ class DocumentController(QObject):
             return
         frame_manager = document.frame_manager
         frame_manager.ensure_frame(frame_index)
-        if frame_index in document.key_frames:
+        layer_manager = getattr(document, "layer_manager", None)
+        active_layer = getattr(layer_manager, "active_layer", None)
+        if active_layer is None:
+            return
+        layer_uid = getattr(active_layer, "uid", None)
+        if layer_uid is None:
+            return
+        existing_keys = set(document.key_frames)
+        if frame_index in existing_keys:
+            self.select_frame(frame_index, force=True)
             return
         command = AddKeyframeCommand(document, frame_index)
         self.execute_command(command)
+        if blank and layer_uid is not None:
+            self._clear_layer_key_contents(layer_uid, frame_index)
         self.select_frame(frame_index, force=True)
+
+    def _clear_layer_key_contents(self, layer_uid: int, frame_index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        if not (0 <= frame_index < len(frame_manager.frames)):
+            return
+        frame = frame_manager.frames[frame_index]
+        layer_manager = getattr(frame, "layer_manager", None)
+        if layer_manager is None:
+            return
+        target_layer = None
+        for layer in getattr(layer_manager, "layers", []):
+            if getattr(layer, "uid", None) == layer_uid:
+                target_layer = layer
+                break
+        if target_layer is None:
+            return
+        target_layer.image.fill(QColor(0, 0, 0, 0))
+        target_layer.on_image_change.emit()
 
     def remove_keyframe(self, frame_index: int) -> None:
         document = self.document

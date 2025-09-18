@@ -211,7 +211,10 @@ class Canvas(QWidget):
     def request_auto_keyframe(self, frame_index: int) -> None:
         if self._auto_key_callback is None:
             return
-        self._auto_key_callback(int(frame_index))
+        try:
+            self._auto_key_callback(int(frame_index), blank=True)
+        except TypeError:
+            self._auto_key_callback(int(frame_index))
 
     @Slot(str)
     def on_tool_changed(self, tool):
