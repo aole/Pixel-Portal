@@ -338,17 +338,18 @@ class AnimationTimelineWidget(QWidget):
                     self.set_current_frame(key_frame)
                 event.accept()
                 return
+            frame = self._frame_at_point(event)
             if self._is_point_in_scrub_area(event):
                 self._is_dragging = True
-                frame = self._frame_at_point(event)
                 self.set_current_frame(frame)
                 event.accept()
                 return
+            self._is_dragging = False
+            self.set_current_frame(frame)
             if not ctrl_down and not shift_down:
                 self._set_selection(set(), anchor=None)
-                event.accept()
-                return
-            self._is_dragging = False
+            event.accept()
+            return
         if event.button() == Qt.MiddleButton:
             self._is_panning = True
             self._last_pan_x = self._event_x(event)
