@@ -8,6 +8,9 @@ POSE_CHOICES = ["T-Pose", "A-Pose"]
 
 STRUCTURE_COLOR_HEX = "#FFC68C"
 
+TOP_MARGIN_RATIO = 0.10
+BOTTOM_MARGIN_RATIO = 0.01
+
 params = [
     {
         'name': 'pose',
@@ -112,6 +115,10 @@ def draw_segment(painter: QPainter, start: QPointF, end: QPointF, thickness: flo
     painter.restore()
 
 
+def mirror_angle(angle: float) -> float:
+    return (180.0 - angle) % 360.0
+
+
 def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     geometry = HumanoidGeometry()
     figure_height = head_height * 8.0
@@ -174,34 +181,31 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     geometry.add_joint(left_hip, joint_diameter)
     geometry.add_joint(right_hip, joint_diameter)
 
-    pose_settings: Dict[str, Dict[str, Dict[str, Tuple[float, float]]]] = {
+    pose_settings: Dict[str, Dict[str, Tuple[float, float]]] = {
         "T-Pose": {
-            'arms': {
-                'left': (180.0, 180.0),
-                'right': (0.0, 0.0),
-            },
-            'legs': {
-                'left': (90.0, 90.0),
-                'right': (90.0, 90.0),
-            },
+            'arms': (0.0, 0.0),
+            'legs': (90.0, 90.0),
         },
         "A-Pose": {
-            'arms': {
-                'left': (150.0, 150.0),
-                'right': (30.0, 30.0),
-            },
-            'legs': {
-                'left': (105.0, 95.0),
-                'right': (75.0, 85.0),
-            },
+            'arms': (30.0, 30.0),
+            'legs': (75.0, 85.0),
         },
     }
 
     pose_angles = pose_settings.get(pose, pose_settings["T-Pose"])
 
+    arm_angles = {
+        'right': pose_angles['arms'],
+        'left': tuple(mirror_angle(angle) for angle in pose_angles['arms']),
+    }
+    leg_angles = {
+        'right': pose_angles['legs'],
+        'left': tuple(mirror_angle(angle) for angle in pose_angles['legs']),
+    }
+
     # Arms
     for side, shoulder_point in (('left', left_shoulder), ('right', right_shoulder)):
-        upper_angle, lower_angle = pose_angles['arms'][side]
+        upper_angle, lower_angle = arm_angles[side]
         elbow_point = polar_offset(shoulder_point, upper_arm_length, upper_angle)
         wrist_point = polar_offset(elbow_point, lower_arm_length, lower_angle)
 
@@ -213,7 +217,7 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
 
     # Legs
     for side, hip_point in (('left', left_hip), ('right', right_hip)):
-        upper_angle, lower_angle = pose_angles['legs'][side]
+        upper_angle, lower_angle = leg_angles[side]
         knee_point = polar_offset(hip_point, upper_leg_length, upper_angle)
         ankle_point = polar_offset(knee_point, lower_leg_length, lower_angle)
 
@@ -277,18 +281,35 @@ def main(api, values):
         return
 
     def layout_geometry(image):
-        head_height = max(4.0, image.height() / 8.0)
+        doc_height = image.height()
+        desired_top_margin = doc_height * TOP_MARGIN_RATIO
+        desired_bottom_margin = doc_height * BOTTOM_MARGIN_RATIO
+        available_height = max(0.0, doc_height - desired_top_margin - desired_bottom_margin)
+
+        head_height = max(4.0, available_height / 8.0)
 
         geometry = build_humanoid_geometry(head_height, pose)
         figure_width = geometry.max_x - geometry.min_x
+        figure_height = geometry.max_y - geometry.min_y
 
-        while head_height > 4.0 and figure_width > image.width():
+        while head_height > 4.0 and (
+            figure_width > image.width() or figure_height > available_height
+        ):
             head_height -= 1.0
             geometry = build_humanoid_geometry(head_height, pose)
             figure_width = geometry.max_x - geometry.min_x
+            figure_height = geometry.max_y - geometry.min_y
 
-        figure_height = geometry.max_y - geometry.min_y
-        vertical_offset = max(0.0, (image.height() - figure_height) / 2.0 - geometry.min_y)
+        extra_space = max(0.0, doc_height - figure_height)
+        bottom_margin = min(desired_bottom_margin, extra_space)
+        top_margin = min(desired_top_margin, max(0.0, extra_space - bottom_margin))
+
+        vertical_offset = top_margin - geometry.min_y
+        bottom_edge = geometry.max_y + vertical_offset
+        limit = doc_height - bottom_margin
+        if bottom_edge > limit:
+            vertical_offset -= bottom_edge - limit
+
         horizontal_offset = image.width() / 2.0 - (geometry.min_x + figure_width / 2.0)
 
         return geometry, horizontal_offset, vertical_offset
