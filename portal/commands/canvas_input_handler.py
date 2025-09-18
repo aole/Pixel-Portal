@@ -204,12 +204,36 @@ class CanvasInputHandler:
         if current_frame < 0:
             current_frame = 0
 
+        ensure_frame = getattr(frame_manager, "ensure_frame", None)
+        if callable(ensure_frame):
+            ensure_frame(current_frame)
+
+        resolve_layer_key = getattr(frame_manager, "resolve_layer_key_frame_index", None)
         keys = frame_manager.layer_keys.get(layer_uid)
         if not keys:
             keys = {0}
-        if current_frame in keys:
+        existing_keys = sorted(keys)
+        resolved_frame = (
+            resolve_layer_key(layer_uid, current_frame)
+            if callable(resolve_layer_key)
+            else None
+        )
+
+        print(
+            f"[AutoKey] Input handler check layer={layer_uid} frame={current_frame} "
+            f"resolved={resolved_frame} keys={existing_keys}"
+        )
+
+        if resolved_frame == current_frame:
+            print(
+                f"[AutoKey] Frame {current_frame} already has a key; no auto key needed"
+            )
             return
 
         request_auto_key = getattr(self.canvas, "request_auto_keyframe", None)
         if callable(request_auto_key):
+            print(
+                f"[AutoKey] Requesting auto key for frame {current_frame} "
+                f"(resolved {resolved_frame})"
+            )
             request_auto_key(current_frame)

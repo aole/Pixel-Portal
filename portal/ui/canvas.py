@@ -212,8 +212,14 @@ class Canvas(QWidget):
         if self._auto_key_callback is None:
             return
         try:
+            print(
+                f"[AutoKey] Canvas requesting key at frame {int(frame_index)} (blank=True)"
+            )
             self._auto_key_callback(int(frame_index), blank=True)
         except TypeError:
+            print(
+                f"[AutoKey] Canvas requesting key at frame {int(frame_index)} (blank arg unsupported)"
+            )
             self._auto_key_callback(int(frame_index))
 
     @Slot(str)

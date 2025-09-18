@@ -400,9 +400,34 @@ class MainWindow(QMainWindow):
             return
         if current_frame < 0:
             current_frame = 0
+
+        ensure_frame = getattr(frame_manager, "ensure_frame", None)
+        if callable(ensure_frame):
+            ensure_frame(current_frame)
+
+        resolve_layer_key = getattr(frame_manager, "resolve_layer_key_frame_index", None)
         keys = frame_manager.layer_keys.get(layer_uid)
-        existing_keys = keys if keys else {0}
-        if current_frame not in existing_keys:
+        if not keys:
+            keys = {0}
+        existing_keys = sorted(keys)
+        resolved_frame = (
+            resolve_layer_key(layer_uid, current_frame)
+            if callable(resolve_layer_key)
+            else None
+        )
+        print(
+            f"[AutoKey] Command check layer={layer_uid} frame={current_frame} "
+            f"resolved={resolved_frame} keys={existing_keys}"
+        )
+
+        if resolved_frame == current_frame:
+            print(
+                f"[AutoKey] Frame {current_frame} already keyed before command execution"
+            )
+        else:
+            print(
+                f"[AutoKey] Ensuring key at frame {current_frame} before command"
+            )
             self.canvas.request_auto_keyframe(current_frame)
             frame_manager = getattr(document, "frame_manager", None)
             try:
@@ -417,6 +442,15 @@ class MainWindow(QMainWindow):
             layer_uid = getattr(active_layer, "uid", None)
             if layer_uid is None:
                 return
+            resolve_layer_key = getattr(frame_manager, "resolve_layer_key_frame_index", None)
+            resolved_frame = (
+                resolve_layer_key(layer_uid, current_frame)
+                if callable(resolve_layer_key)
+                else None
+            )
+            print(
+                f"[AutoKey] Post-create resolved frame {resolved_frame} for layer {layer_uid}"
+            )
         self._retarget_command_to_layer(payload, layer_uid, active_layer)
 
     def _retarget_command_to_layer(self, command: object, layer_uid, replacement_layer) -> None:

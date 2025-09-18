@@ -138,24 +138,42 @@ class DocumentController(QObject):
     def add_keyframe(self, frame_index: int, *, blank: bool = False) -> None:
         document = self.document
         if document is None:
+            print(
+                f"[AutoKey] add_keyframe skipped: no document for frame {frame_index}"
+            )
             return
         if frame_index < 0:
+            print(f"[AutoKey] add_keyframe skipped: invalid frame {frame_index}")
             return
         frame_manager = document.frame_manager
         frame_manager.ensure_frame(frame_index)
         layer_manager = getattr(document, "layer_manager", None)
         active_layer = getattr(layer_manager, "active_layer", None)
         if active_layer is None:
+            print(
+                f"[AutoKey] add_keyframe skipped: no active layer at frame {frame_index}"
+            )
             return
         layer_uid = getattr(active_layer, "uid", None)
         if layer_uid is None:
+            print(
+                f"[AutoKey] add_keyframe skipped: active layer missing uid at frame {frame_index}"
+            )
             return
         existing_keys = set(document.key_frames)
+        print(
+            f"[AutoKey] add_keyframe request layer={layer_uid} frame={frame_index} "
+            f"blank={blank} existing={sorted(existing_keys)}"
+        )
         if frame_index in existing_keys:
+            print(
+                f"[AutoKey] Frame {frame_index} already keyed; reselecting active frame"
+            )
             self.select_frame(frame_index, force=True)
             return
         command = AddKeyframeCommand(document, frame_index)
         self.execute_command(command)
+        print(f"[AutoKey] Created key at frame {frame_index} for layer {layer_uid}")
         if blank and layer_uid is not None:
             self._clear_layer_key_contents(layer_uid, frame_index)
         self.select_frame(frame_index, force=True)
@@ -180,6 +198,9 @@ class DocumentController(QObject):
             return
         target_layer.image.fill(QColor(0, 0, 0, 0))
         target_layer.on_image_change.emit()
+        print(
+            f"[AutoKey] Cleared layer {layer_uid} contents for frame {frame_index}"
+        )
 
     def remove_keyframe(self, frame_index: int) -> None:
         document = self.document
