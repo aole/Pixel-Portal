@@ -25,12 +25,6 @@ params = [
         'label': 'Joint Color',
         'default': '#F97316',
     },
-    {
-        'name': 'guide_color',
-        'type': 'color',
-        'label': 'Guide Color',
-        'default': '#94A3B8',
-    },
 ]
 
 
@@ -43,7 +37,6 @@ class HumanoidGeometry:
         self.polygons: List[QPolygonF] = []
         self.segments: List[Tuple[QPointF, QPointF, float]] = []
         self.joints: List[Tuple[QPointF, float]] = []
-        self.guides: List[QRectF] = []
         self.min_x: float = float('inf')
         self.max_x: float = float('-inf')
         self.min_y: float = float('inf')
@@ -71,10 +64,6 @@ class HumanoidGeometry:
         radius = diameter / 2.0
         rect = QRectF(center.x() - radius, center.y() - radius, diameter, diameter)
         self.joints.append((center, diameter))
-        self._update_bounds(rect.left(), rect.top(), rect.right(), rect.bottom())
-
-    def add_guide(self, rect: QRectF) -> None:
-        self.guides.append(rect)
         self._update_bounds(rect.left(), rect.top(), rect.right(), rect.bottom())
 
     def add_polygon(self, polygon: QPolygonF) -> None:
@@ -249,14 +238,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
             )
         geometry.add_rect(foot_rect)
 
-    # Horizontal 8-head proportion guides.
-    guide_width = max(torso_width_top, torso_width_bottom, pelvis_width, head_width) * 1.4
-    guide_thickness = max(1.0, head_height * 0.05)
-    for i in range(1, 8):
-        y = head_height * i
-        guide_rect = QRectF(-guide_width / 2.0, y - guide_thickness / 2.0, guide_width, guide_thickness)
-        geometry.add_guide(guide_rect)
-
     geometry.max_y = max(geometry.max_y, ground_y)
     geometry.min_y = min(geometry.min_y, 0.0)
 
@@ -267,12 +248,11 @@ def main(api, values):
     pose = values['pose']
     structure_color = QColor(STRUCTURE_COLOR_HEX)
     joint_color = QColor(values['joint_color'])
-    guide_color = QColor(values['guide_color'])
-    guide_color.setAlpha(160)
+    joint_color.setAlpha(200)
 
-    guides_layer = api.create_layer("Humanoid Guides")
-    if not guides_layer:
-        api.show_message_box("Script Error", "Could not create the guides layer.")
+    joints_layer = api.create_layer("Humanoid Joints")
+    if not joints_layer:
+        api.show_message_box("Script Error", "Could not create the joints layer.")
         return
 
     structure_layer = api.create_layer("Humanoid Structure")
@@ -314,17 +294,13 @@ def main(api, values):
 
         return geometry, horizontal_offset, vertical_offset
 
-    def draw_guides_and_joints(image):
+    def draw_joints(image):
         geometry, horizontal_offset, vertical_offset = layout_geometry(image)
 
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing, False)
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(guide_color)
-        for rect in geometry.guides:
-            painter.drawRect(rect.translated(horizontal_offset, vertical_offset))
-
         painter.setBrush(joint_color)
         for center, diameter in geometry.joints:
             radius = diameter / 2.0
@@ -362,5 +338,5 @@ def main(api, values):
 
         painter.end()
 
-    api.modify_layer(guides_layer, draw_guides_and_joints)
+    api.modify_layer(joints_layer, draw_joints)
     api.modify_layer(structure_layer, draw_structure)
