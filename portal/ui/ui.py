@@ -98,12 +98,18 @@ class MainWindow(QMainWindow):
         timeline_header_layout.setContentsMargins(0, 0, 0, 0)
         timeline_header_layout.setSpacing(8)
 
+        self._timeline_play_icon = QIcon("icons/play.png")
+        self._timeline_pause_icon = QIcon("icons/pause.png")
+        self._timeline_stop_icon = QIcon("icons/stop.png")
+
         self.timeline_play_button = QToolButton(self.timeline_panel)
+        self.timeline_play_button.setIcon(self._timeline_play_icon)
         self.timeline_play_button.setText("Play")
         self.timeline_play_button.setCheckable(True)
         timeline_header_layout.addWidget(self.timeline_play_button)
 
         self.timeline_stop_button = QToolButton(self.timeline_panel)
+        self.timeline_stop_button.setIcon(self._timeline_stop_icon)
         self.timeline_stop_button.setText("Stop")
         timeline_header_layout.addWidget(self.timeline_stop_button)
 
@@ -401,6 +407,9 @@ class MainWindow(QMainWindow):
         with QSignalBlocker(self.timeline_play_button):
             self.timeline_play_button.setChecked(playing)
         self.timeline_play_button.setText("Pause" if playing else "Play")
+        self.timeline_play_button.setIcon(
+            self._timeline_pause_icon if playing else self._timeline_play_icon
+        )
         self._update_stop_button_state()
 
     @Slot(object)
