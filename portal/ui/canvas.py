@@ -49,6 +49,8 @@ class Canvas(QWidget):
         self.x_offset = 0
         self.y_offset = 0
         self.zoom = 1.0
+        self.min_zoom = 0.05
+        self.max_zoom = 20.0
         self.last_point = QPoint()
         self.start_point = QPoint()
         self.temp_image = None
@@ -605,6 +607,7 @@ class Canvas(QWidget):
         zoom_x = (0.8 * canvas_width) / doc_width
         zoom_y = (0.8 * canvas_height) / doc_height
         self.zoom = min(zoom_x, zoom_y)
+        self.min_zoom = min(self.min_zoom, self.zoom)
         self.zoom_changed.emit(self.zoom)
         self.update()
 

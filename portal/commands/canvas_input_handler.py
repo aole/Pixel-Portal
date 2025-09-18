@@ -139,7 +139,9 @@ class CanvasInputHandler:
             self.canvas.zoom /= 1.25
 
         # Clamp zoom level
-        self.canvas.zoom = max(1, min(self.canvas.zoom, 20.0))
+        min_zoom = getattr(self.canvas, "min_zoom", 0.05)
+        max_zoom = getattr(self.canvas, "max_zoom", 20.0)
+        self.canvas.zoom = max(min_zoom, min(self.canvas.zoom, max_zoom))
 
         # Adjust pan to keep doc_pos_before_zoom at the same mouse_pos
         doc_width_scaled = self.canvas._document_size.width() * self.canvas.zoom
