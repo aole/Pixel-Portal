@@ -19,6 +19,7 @@ from portal.commands.layer_commands import (
     RotateLayerCommand,
     MergeLayerDownCommand,
     CollapseLayersCommand,
+    ScaleLayerCommand,
 )
 
 @pytest.fixture
@@ -772,6 +773,72 @@ def test_rotate_layer_command_rotates_selection_and_clears_vacated_pixels():
     assert restored_bounds.top() == pytest.approx(original_bounds.top())
     assert restored_bounds.width() == pytest.approx(original_bounds.width())
     assert restored_bounds.height() == pytest.approx(original_bounds.height())
+
+
+def test_scale_layer_command_scales_entire_layer_with_nearest_sampling():
+    layer = Layer(6, 6, "Layer")
+    layer.image.fill(Qt.transparent)
+    layer.image.setPixelColor(1, 1, QColor("red"))
+
+    command = ScaleLayerCommand(layer, 2.0, QPoint(0, 0), None)
+    command.execute()
+
+    expected_red_pixels = {(2, 2), (3, 2), (2, 3), (3, 3)}
+    for x in range(layer.image.width()):
+        for y in range(layer.image.height()):
+            color = layer.image.pixelColor(x, y)
+            if (x, y) in expected_red_pixels:
+                assert color == QColor("red")
+            else:
+                assert color.alpha() == 0
+
+    command.undo()
+    assert layer.image.pixelColor(1, 1) == QColor("red")
+
+
+def test_scale_layer_command_scales_selection_and_updates_path():
+    layer = Layer(8, 8, "Layer")
+    layer.image.fill(Qt.transparent)
+    layer.image.setPixelColor(1, 1, QColor("red"))
+    layer.image.setPixelColor(6, 6, QColor("blue"))
+
+    selection = QPainterPath()
+    selection.addRect(QRect(1, 1, 1, 1))
+
+    class DummyCanvas:
+        def __init__(self, shape):
+            self.selection_shape = QPainterPath(shape) if shape is not None else None
+
+        def _update_selection_and_emit_size(self, shape):
+            self.selection_shape = shape
+
+    canvas = DummyCanvas(selection)
+
+    command = ScaleLayerCommand(layer, 2.0, QPoint(1, 1), selection, canvas=canvas)
+    command.execute()
+
+    scaled_positions = {(1, 1), (2, 1), (1, 2), (2, 2)}
+    for pos in scaled_positions:
+        assert layer.image.pixelColor(*pos) == QColor("red")
+    assert layer.image.pixelColor(6, 6) == QColor("blue")
+
+    assert canvas.selection_shape is not None
+    scaled_bounds = canvas.selection_shape.boundingRect()
+    assert scaled_bounds.left() == pytest.approx(1)
+    assert scaled_bounds.top() == pytest.approx(1)
+    assert scaled_bounds.width() == pytest.approx(2)
+    assert scaled_bounds.height() == pytest.approx(2)
+
+    command.undo()
+    assert canvas.selection_shape is not None
+    original_bounds = selection.boundingRect()
+    restored_bounds = canvas.selection_shape.boundingRect()
+    assert restored_bounds.left() == pytest.approx(original_bounds.left())
+    assert restored_bounds.top() == pytest.approx(original_bounds.top())
+    assert restored_bounds.width() == pytest.approx(original_bounds.width())
+    assert restored_bounds.height() == pytest.approx(original_bounds.height())
+    assert layer.image.pixelColor(1, 1) == QColor("red")
+    assert layer.image.pixelColor(6, 6) == QColor("blue")
 
 
 @pytest.fixture

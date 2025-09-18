@@ -207,6 +207,10 @@ class MainWindow(QMainWindow):
             rotate_tool = self.canvas.tools["Rotate"]
             rotate_tool.angle_changed.connect(self.status_bar_manager.update_rotation_angle_label)
 
+        if "Scale" in self.canvas.tools:
+            scale_tool = self.canvas.tools["Scale"]
+            scale_tool.scale_changed.connect(self.status_bar_manager.update_scale_factor_label)
+
         # Connect signals
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.drawing_context.tool_changed.connect(toolbar_builder.update_tool_buttons)
@@ -718,6 +722,12 @@ class MainWindow(QMainWindow):
         else:
             # When switching to the Rotate tool, display the initial angle (0)
             self.status_bar_manager.update_rotation_angle_label(0)
+
+        if tool_name != "Scale":
+            self.status_bar_manager.update_scale_factor_label(None)
+        else:
+            # Default scale factor is 1x when activating the tool
+            self.status_bar_manager.update_scale_factor_label(1.0)
 
     def on_mirror_changed(self):
         is_mirroring = self.app.drawing_context.mirror_x or self.app.drawing_context.mirror_y

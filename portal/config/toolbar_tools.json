@@ -43,6 +43,13 @@
       ]
     },
     {
+      "name": "Scale",
+      "icon": "icons/toolscale.png",
+      "tools": [
+        {"name": "Scale", "icon": "icons/toolscale.png"}
+      ]
+    },
+    {
       "name": "Crop",
       "icon": "icons/toolcrop.png",
       "tools": [
