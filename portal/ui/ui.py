@@ -132,8 +132,28 @@ class MainWindow(QMainWindow):
             autokey_icon_size = autokey_sizes[0]
         else:
             autokey_icon_size = QSize(195, 64)
-        self.timeline_autokey_button.setIconSize(autokey_icon_size)
-        self.timeline_autokey_button.setFixedSize(autokey_icon_size)
+
+        reference_height = self.timeline_stop_button.sizeHint().height()
+        if reference_height <= 0:
+            reference_height = autokey_icon_size.height()
+
+        if autokey_icon_size.height() > 0:
+            scaled_width = max(
+                1,
+                int(
+                    round(
+                        reference_height
+                        * autokey_icon_size.width()
+                        / autokey_icon_size.height()
+                    )
+                ),
+            )
+        else:
+            scaled_width = reference_height
+
+        scaled_size = QSize(scaled_width, reference_height)
+        self.timeline_autokey_button.setIconSize(scaled_size)
+        self.timeline_autokey_button.setFixedSize(scaled_size)
         timeline_header_layout.addWidget(self.timeline_autokey_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
