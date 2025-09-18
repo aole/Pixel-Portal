@@ -207,7 +207,8 @@ class AnimationTimelineWidget(QWidget):
         frame_color = palette.color(QPalette.WindowText)
         key_color = palette.color(QPalette.Highlight)
         key_border = key_color.darker(130)
-        selection_ring_color = QColor(key_color).lighter(140)
+        selected_key_color = QColor("#FFAA41")
+        selected_key_border = selected_key_color.darker(130)
         current_color = palette.color(QPalette.Highlight)
 
         def muted(color: QColor) -> QColor:
@@ -222,7 +223,8 @@ class AnimationTimelineWidget(QWidget):
         muted_frame_color = muted(frame_color)
         muted_key_color = muted(key_color)
         muted_key_border = muted(key_border)
-        muted_selection_color = muted(selection_ring_color)
+        muted_selected_key_color = muted(selected_key_color)
+        muted_selected_key_border = muted(selected_key_border)
 
         active_tick_pen = QPen(frame_color, 1.5)
         inactive_tick_pen = QPen(muted_frame_color, 1.5)
@@ -232,8 +234,10 @@ class AnimationTimelineWidget(QWidget):
         inactive_key_pen = QPen(muted_key_border, 1.5)
         active_key_brush = QBrush(key_color)
         inactive_key_brush = QBrush(muted_key_color)
-        active_selection_pen = QPen(selection_ring_color, 2)
-        inactive_selection_pen = QPen(muted_selection_color, 2)
+        active_selected_key_pen = QPen(selected_key_border, 1.5)
+        inactive_selected_key_pen = QPen(muted_selected_key_border, 1.5)
+        active_selected_key_brush = QBrush(selected_key_color)
+        inactive_selected_key_brush = QBrush(muted_selected_key_color)
 
         playback_last_index = max(0, self._playback_total_frames - 1)
 
@@ -281,14 +285,19 @@ class AnimationTimelineWidget(QWidget):
             if frame == self._current_frame:
                 radius = 8
             is_within_playback = frame <= playback_last_index
-            if frame in self._selected_keys:
+            is_selected = frame in self._selected_keys
+            if is_selected:
                 painter.setPen(
-                    active_selection_pen if is_within_playback else inactive_selection_pen
+                    active_selected_key_pen if is_within_playback else inactive_selected_key_pen
                 )
-                painter.setBrush(Qt.NoBrush)
-                painter.drawEllipse(QPointF(x, layout.track_y), radius + 4, radius + 4)
-            painter.setPen(active_key_pen if is_within_playback else inactive_key_pen)
-            painter.setBrush(active_key_brush if is_within_playback else inactive_key_brush)
+                painter.setBrush(
+                    active_selected_key_brush
+                    if is_within_playback
+                    else inactive_selected_key_brush
+                )
+            else:
+                painter.setPen(active_key_pen if is_within_playback else inactive_key_pen)
+                painter.setBrush(active_key_brush if is_within_playback else inactive_key_brush)
             painter.drawEllipse(QPointF(x, layout.track_y), radius, radius)
 
         # Draw the scrub lines.
