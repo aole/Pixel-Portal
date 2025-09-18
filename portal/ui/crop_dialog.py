@@ -27,6 +27,7 @@ class CropDialog(QDialog):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         self._updating = False
+        self._initial_rect: QRect | None = None
 
         layout = QVBoxLayout(self)
 
@@ -61,11 +62,17 @@ class CropDialog(QDialog):
         layout.addLayout(form_layout)
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Reset,
+            parent=self,
         )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
+
+        reset_button = self.button_box.button(QDialogButtonBox.Reset)
+        if reset_button is not None:
+            reset_button.clicked.connect(self._handle_reset)
+            reset_button.setEnabled(False)
 
         for spin in (self.left_spin, self.top_spin, self.width_spin, self.height_spin):
             spin.valueChanged.connect(self._emit_rect_changed)
@@ -87,6 +94,16 @@ class CropDialog(QDialog):
             self._updating = False
 
     # ------------------------------------------------------------------
+    def set_initial_rect(self, rect: QRect | None) -> None:
+        """Remember the original crop bounds for the Reset button."""
+
+        self._initial_rect = None if rect is None else QRect(rect)
+
+        button = self.button_box.button(QDialogButtonBox.Reset)
+        if button is not None:
+            button.setEnabled(self._initial_rect is not None)
+
+    # ------------------------------------------------------------------
     def _emit_rect_changed(self) -> None:
         if self._updating:
             return
@@ -98,6 +115,25 @@ class CropDialog(QDialog):
             max(1, self.height_spin.value()),
         )
         self.rect_changed.emit(rect)
+
+    # ------------------------------------------------------------------
+    def _handle_reset(self) -> None:
+        if self._initial_rect is None:
+            return
+
+        width = max(1, self._initial_rect.width())
+        height = max(1, self._initial_rect.height())
+
+        self._updating = True
+        try:
+            self.left_spin.setValue(self._initial_rect.x())
+            self.top_spin.setValue(self._initial_rect.y())
+            self.width_spin.setValue(width)
+            self.height_spin.setValue(height)
+        finally:
+            self._updating = False
+
+        self._emit_rect_changed()
 
 
 __all__ = ["CropDialog"]

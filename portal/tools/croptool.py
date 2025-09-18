@@ -28,6 +28,9 @@ class _CropEdges:
     def to_rect(self) -> QRect:
         return QRect(self.left, self.top, self.width(), self.height())
 
+    def copy(self) -> "_CropEdges":
+        return _CropEdges(self.left, self.top, self.right, self.bottom)
+
 
 class CropTool(BaseTool):
     """Crop or expand the document by dragging side handles."""
@@ -43,6 +46,7 @@ class CropTool(BaseTool):
 
         self._dialog: CropDialog | None = None
         self._edges = _CropEdges(0, 0, -1, -1)
+        self._initial_edges: _CropEdges | None = None
         self._active_handle: str | None = None
         self._hover_handle: str | None = None
         self._handle_size = 14.0
@@ -54,6 +58,7 @@ class CropTool(BaseTool):
         document = getattr(self.canvas, "document", None)
         if document is None:
             self._edges = _CropEdges(0, 0, -1, -1)
+            self._initial_edges = None
             self._document_dimensions = None
             if self._dialog is not None:
                 self._close_dialog()
@@ -63,16 +68,19 @@ class CropTool(BaseTool):
         width = max(1, int(document.width))
         height = max(1, int(document.height))
         doc_dimensions = (width, height)
+        initial_edges = _CropEdges(0, 0, width - 1, height - 1)
         edges_invalid = (
             self._edges.right < self._edges.left
             or self._edges.bottom < self._edges.top
         )
 
+        self._initial_edges = initial_edges
         if self._document_dimensions != doc_dimensions or edges_invalid:
-            self._edges = _CropEdges(0, 0, width - 1, height - 1)
+            self._edges = initial_edges.copy()
         self._document_dimensions = doc_dimensions
 
         if self._dialog is not None:
+            self._update_dialog_initial_rect()
             self._dialog.set_rect(self._edges.to_rect())
         elif not self._dialog_manually_hidden:
             self._show_dialog()
@@ -182,6 +190,7 @@ class CropTool(BaseTool):
             self._dialog.accepted.connect(self._on_dialog_accepted)
             self._dialog.rejected.connect(self._on_dialog_rejected)
 
+        self._update_dialog_initial_rect()
         self._dialog.set_rect(self._edges.to_rect())
         self._dialog.show()
         self._dialog.raise_()
@@ -224,15 +233,15 @@ class CropTool(BaseTool):
     # ------------------------------------------------------------------
     def _on_dialog_accepted(self):
         self._apply_crop()
-        self._dialog = None
         self._dialog_manually_hidden = False
+        self._request_select_rectangle_tool()
 
     # ------------------------------------------------------------------
     def _on_dialog_rejected(self):
-        self._dialog = None
-        self._dialog_manually_hidden = True
+        self._dialog_manually_hidden = False
         self._sync_edges_to_document()
         self.canvas.update()
+        self._request_select_rectangle_tool()
 
     # ------------------------------------------------------------------
     def _apply_crop(self):
@@ -261,13 +270,17 @@ class CropTool(BaseTool):
         document = getattr(self.canvas, "document", None)
         if document is None:
             self._edges = _CropEdges(0, 0, -1, -1)
+            self._initial_edges = None
             self._document_dimensions = None
             return
 
         width = max(1, int(document.width))
         height = max(1, int(document.height))
-        self._edges = _CropEdges(0, 0, width - 1, height - 1)
+        initial_edges = _CropEdges(0, 0, width - 1, height - 1)
+        self._initial_edges = initial_edges
+        self._edges = initial_edges.copy()
         self._document_dimensions = (width, height)
+        self._update_dialog_initial_rect()
         self._update_dialog_rect()
 
     # ------------------------------------------------------------------
@@ -275,6 +288,22 @@ class CropTool(BaseTool):
         if self._dialog is None:
             return
         self._dialog.set_rect(self._edges.to_rect())
+
+    # ------------------------------------------------------------------
+    def _update_dialog_initial_rect(self):
+        if self._dialog is None:
+            return
+        if self._initial_edges is None:
+            self._dialog.set_initial_rect(None)
+        else:
+            self._dialog.set_initial_rect(self._initial_edges.to_rect())
+
+    # ------------------------------------------------------------------
+    def _request_select_rectangle_tool(self):
+        drawing_context = getattr(self.canvas, "drawing_context", None)
+        if drawing_context is None or not hasattr(drawing_context, "set_tool"):
+            return
+        drawing_context.set_tool("Select Rectangle")
 
     # ------------------------------------------------------------------
     def _update_edges_from_position(self, handle: str, doc_pos):
