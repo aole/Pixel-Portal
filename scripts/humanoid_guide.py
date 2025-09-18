@@ -2,7 +2,7 @@ import math
 from typing import Dict, List, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QPainter, QPolygonF
 
 POSE_CHOICES = ["T-Pose", "A-Pose"]
 
@@ -32,11 +32,12 @@ params = [
 
 
 class HumanoidGeometry:
-    """Stores the rectangles and ellipses that compose the figure."""
+    """Stores the primitives that compose the figure."""
 
     def __init__(self) -> None:
         self.ellipses: List[QRectF] = []
         self.rectangles: List[QRectF] = []
+        self.polygons: List[QPolygonF] = []
         self.segments: List[Tuple[QPointF, QPointF, float]] = []
         self.joints: List[Tuple[QPointF, float]] = []
         self.guides: List[QRectF] = []
@@ -72,6 +73,14 @@ class HumanoidGeometry:
     def add_guide(self, rect: QRectF) -> None:
         self.guides.append(rect)
         self._update_bounds(rect.left(), rect.top(), rect.right(), rect.bottom())
+
+    def add_polygon(self, polygon: QPolygonF) -> None:
+        self.polygons.append(polygon)
+        if polygon.isEmpty():
+            return
+        xs = [point.x() for point in polygon]
+        ys = [point.y() for point in polygon]
+        self._update_bounds(min(xs), min(ys), max(xs), max(ys))
 
     def _update_bounds(self, left: float, top: float, right: float, bottom: float) -> None:
         self.min_x = min(self.min_x, left)
@@ -112,9 +121,10 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     neck_height = max(1.0, head_height * 0.25)
     neck_width = head_width * 0.45
     torso_height = head_height * 2.0
-    torso_width = head_height * 1.9
+    torso_width_top = head_height * 1.9
+    torso_width_bottom = head_height * 1.5
     pelvis_height = head_height * 1.0
-    pelvis_width = head_height * 1.6
+    pelvis_width = head_height * 1.5
 
     joint_diameter = max(2.0, head_height * 0.35)
     arm_thickness = max(1.0, head_height * 0.35)
@@ -122,11 +132,11 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     upper_arm_length = head_height * 1.5
     lower_arm_length = head_height * 1.4
 
-    leg_thickness = max(1.0, head_height * 0.55)
-    calf_thickness = max(1.0, head_height * 0.34)
+    leg_thickness = max(1.0, head_height * 0.7)
+    calf_thickness = max(1.0, head_height * 0.4)
     upper_leg_length = head_height * 2.0
     lower_leg_length = head_height * 2.0
-    foot_length = head_height * 1.1
+    foot_length = head_height * 0.65
     foot_thickness = max(2.0, head_height * 0.35)
 
     # Core body shapes (centered on the origin, figure grows downward).
@@ -136,19 +146,26 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     neck_rect = QRectF(-neck_width / 2.0, head_rect.bottom(), neck_width, neck_height)
     geometry.add_rect(neck_rect)
 
-    torso_rect = QRectF(-torso_width / 2.0, neck_rect.bottom(), torso_width, torso_height)
-    geometry.add_rect(torso_rect)
+    torso_top = neck_rect.bottom()
+    torso_bottom = torso_top + torso_height
+    torso_polygon = QPolygonF([
+        QPointF(-torso_width_top / 2.0, torso_top),
+        QPointF(torso_width_top / 2.0, torso_top),
+        QPointF(torso_width_bottom / 2.0, torso_bottom),
+        QPointF(-torso_width_bottom / 2.0, torso_bottom),
+    ])
+    geometry.add_polygon(torso_polygon)
 
-    pelvis_rect = QRectF(-pelvis_width / 2.0, torso_rect.bottom(), pelvis_width, pelvis_height)
+    pelvis_rect = QRectF(-pelvis_width / 2.0, torso_bottom, pelvis_width, pelvis_height)
     geometry.add_rect(pelvis_rect)
 
-    shoulder_y = neck_rect.bottom() + head_height * 0.2
-    shoulder_offset = torso_width / 2.0 - head_height * 0.1
+    shoulder_y = torso_top + head_height * 0.2
+    shoulder_offset = torso_width_top / 2.0 - head_height * 0.1
     left_shoulder = QPointF(-shoulder_offset, shoulder_y)
     right_shoulder = QPointF(shoulder_offset, shoulder_y)
 
-    hip_y = pelvis_rect.top() + pelvis_height * 0.8
-    hip_offset = pelvis_width * 0.35
+    hip_y = pelvis_rect.top() + pelvis_height * 0.65
+    hip_offset = pelvis_width * 0.2
     left_hip = QPointF(-hip_offset, hip_y)
     right_hip = QPointF(hip_offset, hip_y)
 
@@ -212,16 +229,24 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
         geometry.add_joint(knee_point, joint_diameter)
         geometry.add_joint(ankle_point, joint_diameter * 0.6)
 
-        foot_rect = QRectF(
-            ankle_point.x() - foot_length / 2.0,
-            desired_ankle_y,
-            foot_length,
-            foot_thickness,
-        )
+        if side == 'left':
+            foot_rect = QRectF(
+                ankle_point.x() - foot_length,
+                desired_ankle_y,
+                foot_length,
+                foot_thickness,
+            )
+        else:
+            foot_rect = QRectF(
+                ankle_point.x(),
+                desired_ankle_y,
+                foot_length,
+                foot_thickness,
+            )
         geometry.add_rect(foot_rect)
 
     # Horizontal 8-head proportion guides.
-    guide_width = max(torso_width, pelvis_width, head_width) * 1.4
+    guide_width = max(torso_width_top, torso_width_bottom, pelvis_width, head_width) * 1.4
     guide_thickness = max(1.0, head_height * 0.05)
     for i in range(1, 8):
         y = head_height * i
@@ -307,6 +332,9 @@ def main(api, values):
             translated_start = QPointF(start.x() + horizontal_offset, start.y() + vertical_offset)
             translated_end = QPointF(end.x() + horizontal_offset, end.y() + vertical_offset)
             draw_segment(painter, translated_start, translated_end, thickness, structure_color)
+
+        for polygon in geometry.polygons:
+            painter.drawPolygon(polygon.translated(horizontal_offset, vertical_offset))
 
         for rect in geometry.ellipses:
             painter.drawEllipse(rect.translated(horizontal_offset, vertical_offset))
