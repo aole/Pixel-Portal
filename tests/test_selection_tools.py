@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QPainterPath, QMouseEvent, QColor, QImage
+from portal.commands.selection_commands import selection_paths_equal
 from portal.tools.baseselecttool import BaseSelectTool
 from portal.tools.selectcircletool import SelectCircleTool
 from portal.tools.selectcolortool import SelectColorTool
@@ -148,13 +149,17 @@ def test_select_lasso_mouse_events(select_lasso_tool, qtbot):
     canvas._update_selection_and_emit_size.reset_mock()
     move_event = QMouseEvent(QMouseEvent.Type.MouseMove, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseMoveEvent(move_event, QPoint(20, 20))
-    canvas._update_selection_and_emit_size.assert_called_with(path)
-    assert path.currentPosition() == QPoint(20, 20)
+    canvas._update_selection_and_emit_size.assert_called()
+    updated_path = canvas._update_selection_and_emit_size.call_args[0][0]
+    assert isinstance(updated_path, QPainterPath)
+    assert updated_path.currentPosition() == QPoint(20, 20)
+    canvas.selection_shape = updated_path
 
 
     # Mouse Release
     release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(20, 20), QPoint(20, 20), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
-    with patch.object(path, "closeSubpath") as mock_close_subpath:
+    assert tool._lasso_path is not None
+    with patch.object(tool._lasso_path, "closeSubpath") as mock_close_subpath:
         tool.mouseReleaseEvent(release_event, QPoint(20, 20))
         mock_close_subpath.assert_called_once()
     canvas.selection_changed.emit.assert_called_with(True)
@@ -328,3 +333,132 @@ def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     release_event = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, QPoint(30, 40), QPoint(30, 40), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mouseReleaseEvent(release_event, QPoint(30, 40))
     canvas.selection_changed.emit.assert_called_with(True)
+
+
+def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
+    tool = select_rectangle_tool
+    canvas = tool.canvas
+
+    base_selection = QPainterPath()
+    base_selection.addRect(QRect(0, 0, 10, 10))
+    canvas.selection_shape = base_selection
+
+    start_point = QPoint(20, 20)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    canvas._update_selection_and_emit_size.reset_mock()
+
+    move_point = QPoint(30, 32)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    canvas._update_selection_and_emit_size.assert_called()
+    combined_path = canvas._update_selection_and_emit_size.call_args[0][0]
+    assert isinstance(combined_path, QPainterPath)
+    canvas.selection_shape = combined_path
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    tool.mouseReleaseEvent(release_event, move_point)
+
+    expected_base = QPainterPath()
+    expected_base.addRect(QRect(0, 0, 10, 10))
+
+    dx = move_point.x() - start_point.x()
+    dy = move_point.y() - start_point.y()
+    size = min(abs(dx), abs(dy))
+    adjusted_end = QPoint(
+        start_point.x() + size * (1 if dx > 0 else -1),
+        start_point.y() + size * (1 if dy > 0 else -1),
+    )
+    adjusted_end = tool._clamp_to_document(
+        adjusted_end, extend_min=True, extend_max=True
+    )
+
+    expected_new = QPainterPath()
+    expected_new.addRect(QRect(tool.start_point, adjusted_end).normalized())
+
+    expected_combined = expected_base.united(expected_new).simplified()
+    assert selection_paths_equal(combined_path, expected_combined)
+
+
+def test_select_rectangle_alt_subtracts_from_selection(select_rectangle_tool):
+    tool = select_rectangle_tool
+    canvas = tool.canvas
+
+    base_selection = QPainterPath()
+    base_selection.addRect(QRect(0, 0, 30, 30))
+    canvas.selection_shape = base_selection
+
+    start_point = QPoint(5, 5)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.AltModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    canvas._update_selection_and_emit_size.reset_mock()
+
+    move_point = QPoint(18, 17)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.AltModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    canvas._update_selection_and_emit_size.assert_called()
+    combined_path = canvas._update_selection_and_emit_size.call_args[0][0]
+    assert isinstance(combined_path, QPainterPath)
+    canvas.selection_shape = combined_path
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.AltModifier,
+    )
+    tool.mouseReleaseEvent(release_event, move_point)
+
+    expected_base = QPainterPath()
+    expected_base.addRect(QRect(0, 0, 30, 30))
+
+    adjusted_end = tool._clamp_to_document(
+        move_point, extend_min=True, extend_max=True
+    )
+
+    expected_new = QPainterPath()
+    expected_new.addRect(QRect(tool.start_point, adjusted_end).normalized())
+
+    expected_combined = expected_base.subtracted(expected_new).simplified()
+    assert selection_paths_equal(combined_path, expected_combined)
