@@ -27,7 +27,7 @@ from PySide6.QtGui import (
     QImage,
     QShortcut,
 )
-from PySide6.QtCore import Qt, Slot, QSignalBlocker
+from PySide6.QtCore import Qt, Slot, QSignalBlocker, QSize
 from portal.core.animation_player import AnimationPlayer
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
@@ -119,6 +119,21 @@ class MainWindow(QMainWindow):
         self.timeline_autokey_button.setCheckable(True)
         self.timeline_autokey_button.setIcon(self._timeline_autokey_disabled_icon)
         self.timeline_autokey_button.setToolTip("Toggle auto-keyframing")
+        self.timeline_autokey_button.setAutoRaise(True)
+        self.timeline_autokey_button.setFocusPolicy(Qt.NoFocus)
+        self.timeline_autokey_button.setStyleSheet(
+            "QToolButton { padding: 0; margin: 0; border: none; background: transparent; }"
+            "QToolButton:hover { background: transparent; }"
+            "QToolButton:checked { padding: 0; margin: 0; border: none; background: transparent; }"
+            "QToolButton:pressed { padding: 0; margin: 0; border: none; background: transparent; }"
+        )
+        autokey_sizes = self._timeline_autokey_icon.availableSizes()
+        if autokey_sizes:
+            autokey_icon_size = autokey_sizes[0]
+        else:
+            autokey_icon_size = QSize(195, 64)
+        self.timeline_autokey_button.setIconSize(autokey_icon_size)
+        self.timeline_autokey_button.setFixedSize(autokey_icon_size)
         timeline_header_layout.addWidget(self.timeline_autokey_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
