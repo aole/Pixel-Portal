@@ -99,12 +99,12 @@ class Canvas(QWidget):
 
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
-        self._reset_mirror_axes()
+        self._reset_mirror_axes(force_center=True)
 
     @Slot(QSize)
     def set_document_size(self, size):
         self._document_size = size
-        self._reset_mirror_axes()
+        self._reset_mirror_axes(force_center=True)
         self.update()
 
     def keyPressEvent(self, event):
@@ -403,11 +403,11 @@ class Canvas(QWidget):
         y = (canvas_height - doc_height_scaled) / 2 + self.y_offset
         return QRect(x, y, int(doc_width_scaled), int(doc_height_scaled))
 
-    def _reset_mirror_axes(self):
+    def _reset_mirror_axes(self, *, force_center: bool = False):
         width = self._document_size.width()
         if width > 0:
             current = self.drawing_context.mirror_x_position
-            if current is None:
+            if force_center or current is None:
                 self.drawing_context.set_mirror_x_position(
                     self._default_mirror_position(width)
                 )
@@ -418,7 +418,7 @@ class Canvas(QWidget):
         height = self._document_size.height()
         if height > 0:
             current = self.drawing_context.mirror_y_position
-            if current is None:
+            if force_center or current is None:
                 self.drawing_context.set_mirror_y_position(
                     self._default_mirror_position(height)
                 )

@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import Qt, QSignalBlocker
 
 from portal.core.animation_player import AnimationPlayer
@@ -21,7 +21,11 @@ class PreviewPanel(QWidget):
         self.layout.setContentsMargins(2, 2, 2, 2)
         self.layout.setSpacing(6)
 
+        self._play_icon = QIcon("icons/play.png")
+        self._pause_icon = QIcon("icons/pause.png")
+
         self.preview_play_button = QToolButton(self)
+        self.preview_play_button.setIcon(self._play_icon)
         self.preview_play_button.setText("Play")
         self.preview_play_button.setCheckable(True)
         self.preview_play_button.toggled.connect(self._on_preview_play_toggled)
@@ -99,6 +103,9 @@ class PreviewPanel(QWidget):
         with QSignalBlocker(self.preview_play_button):
             self.preview_play_button.setChecked(playing)
         self.preview_play_button.setText("Pause" if playing else "Play")
+        self.preview_play_button.setIcon(
+            self._pause_icon if playing else self._play_icon
+        )
         if not playing:
             self.update_preview()
 
