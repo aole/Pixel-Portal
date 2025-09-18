@@ -7,7 +7,7 @@ from portal.core.command import DrawCommand
 
 class EraserTool(BaseTool):
     name = "Eraser"
-    icon = "icons/brush.png"
+    icon = "icons/tooleraser.png"
     shortcut = "e"
     category = "draw"
 

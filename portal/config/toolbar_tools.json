@@ -9,9 +9,9 @@
     },
     {
       "name": "Eraser",
-      "icon": "icons/brush.png",
+      "icon": "icons/tooleraser.png",
       "tools": [
-        {"name": "Eraser", "icon": "icons/brush.png"}
+        {"name": "Eraser", "icon": "icons/tooleraser.png"}
       ]
     },
     {
