@@ -40,6 +40,9 @@ class CanvasInputHandler:
             self.canvas.setCursor(Qt.ForbiddenCursor)
             return
 
+        if event.button() in (Qt.LeftButton, Qt.RightButton):
+            self._ensure_auto_keyframe()
+
         doc_pos = self.canvas.get_doc_coords(
             event.position().toPoint(),
             wrap=False,
@@ -161,3 +164,17 @@ class CanvasInputHandler:
 
         self.canvas.update()
         self.canvas.zoom_changed.emit(self.canvas.zoom)
+
+    def _ensure_auto_keyframe(self) -> bool:
+        canvas = self.canvas
+        if not getattr(canvas, "is_auto_key_enabled", None):
+            return False
+        if not canvas.is_auto_key_enabled():
+            return False
+        app = getattr(canvas, "app", None)
+        if app is None:
+            return False
+        ensure_method = getattr(app, "ensure_auto_key_for_active_layer", None)
+        if ensure_method is None:
+            return False
+        return bool(ensure_method())

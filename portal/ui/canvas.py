@@ -42,6 +42,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.drawing_context = drawing_context
         self.renderer = CanvasRenderer(self, self.drawing_context)
+        self.app = None
         self.input_handler = CanvasInputHandler(self)
         self.document = None
         self.drawing = Drawing()
@@ -118,6 +119,17 @@ class Canvas(QWidget):
         self._document_size = size
         self._reset_mirror_axes(force_center=size_changed)
         self.update()
+
+    def is_auto_key_enabled(self) -> bool:
+        app = getattr(self, "app", None)
+        if app is None:
+            return False
+        if hasattr(app, "is_auto_key_enabled"):
+            return bool(app.is_auto_key_enabled())
+        controller = getattr(app, "document_controller", None)
+        if controller is None:
+            return False
+        return bool(getattr(controller, "auto_key_enabled", False))
 
     def keyPressEvent(self, event):
         self.input_handler.keyPressEvent(event)

@@ -27,7 +27,7 @@ from PySide6.QtGui import (
     QImage,
     QShortcut,
 )
-from PySide6.QtCore import Qt, Slot, QSignalBlocker
+from PySide6.QtCore import Qt, Slot, QSignalBlocker, QSize
 from portal.core.animation_player import AnimationPlayer
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self.remove_background_dialog = None
 
         self.canvas = Canvas(self.app.drawing_context)
+        self.canvas.app = self.app
         self.canvas.set_background_image_alpha(
             self.app.settings_controller.background_image_alpha
         )
@@ -101,6 +102,8 @@ class MainWindow(QMainWindow):
         self._timeline_play_icon = QIcon("icons/play.png")
         self._timeline_pause_icon = QIcon("icons/pause.png")
         self._timeline_stop_icon = QIcon("icons/stop.png")
+        self._timeline_autokey_icon = QIcon("icons/autokey.png")
+        self._timeline_autokey_disabled_icon = QIcon("icons/autokeydisabled.png")
 
         self.timeline_play_button = QToolButton(self.timeline_panel)
         self.timeline_play_button.setIcon(self._timeline_play_icon)
@@ -112,6 +115,48 @@ class MainWindow(QMainWindow):
         self.timeline_stop_button.setIcon(self._timeline_stop_icon)
         self.timeline_stop_button.setText("Stop")
         timeline_header_layout.addWidget(self.timeline_stop_button)
+
+        self.timeline_autokey_button = QToolButton(self.timeline_panel)
+        self.timeline_autokey_button.setCheckable(True)
+        self.timeline_autokey_button.setIcon(self._timeline_autokey_disabled_icon)
+        self.timeline_autokey_button.setToolTip("Toggle auto-keyframing")
+        self.timeline_autokey_button.setAutoRaise(True)
+        self.timeline_autokey_button.setFocusPolicy(Qt.NoFocus)
+        self.timeline_autokey_button.setStyleSheet(
+            "QToolButton { padding: 0; margin: 0; border: none; background: transparent; }"
+            "QToolButton:hover { background: transparent; }"
+            "QToolButton:checked { padding: 0; margin: 0; border: none; background: transparent; }"
+            "QToolButton:pressed { padding: 0; margin: 0; border: none; background: transparent; }"
+        )
+        autokey_sizes = self._timeline_autokey_icon.availableSizes()
+        if autokey_sizes:
+            autokey_icon_size = autokey_sizes[0]
+        else:
+            autokey_icon_size = QSize(195, 64)
+
+        reference_height = self.timeline_stop_button.sizeHint().height()
+        if reference_height <= 0:
+            reference_height = autokey_icon_size.height()
+
+        if autokey_icon_size.height() > 0:
+            scaled_width = max(
+                1,
+                int(
+                    round(
+                        reference_height
+                        * autokey_icon_size.width()
+                        / autokey_icon_size.height()
+                    )
+                ),
+            )
+        else:
+            scaled_width = reference_height
+
+        scaled_size = QSize(scaled_width, reference_height)
+        self.timeline_autokey_button.setIconSize(scaled_size)
+        self.timeline_autokey_button.setFixedSize(scaled_size)
+        self.timeline_autokey_button.setChecked(self.app.is_auto_key_enabled())
+        timeline_header_layout.addWidget(self.timeline_autokey_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
         self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
@@ -158,6 +203,7 @@ class MainWindow(QMainWindow):
 
         self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
+        self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
 
@@ -184,6 +230,7 @@ class MainWindow(QMainWindow):
 
         self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
 
+        self._on_timeline_autokey_toggled(self.timeline_autokey_button.isChecked())
         self._update_current_frame_label(self.timeline_widget.current_frame())
         self._update_timeline_layer_label(None)
         self._on_player_state_changed(self.animation_player.is_playing)
@@ -341,6 +388,16 @@ class MainWindow(QMainWindow):
             or self.timeline_widget.current_frame() != 0
         )
         self.timeline_stop_button.setEnabled(should_enable)
+
+    @Slot(bool)
+    def _on_timeline_autokey_toggled(self, enabled: bool) -> None:
+        icon = (
+            self._timeline_autokey_icon
+            if enabled
+            else self._timeline_autokey_disabled_icon
+        )
+        self.timeline_autokey_button.setIcon(icon)
+        self.app.set_auto_key_enabled(enabled)
 
     @Slot(bool)
     def _on_timeline_play_toggled(self, checked: bool) -> None:
@@ -574,7 +631,7 @@ class MainWindow(QMainWindow):
         frame_manager = getattr(document, "frame_manager", None)
         if frame_manager is None:
             return
-        if not (0 <= frame < len(frame_manager.frames)):
+        if frame < 0:
             return
         if frame_manager.active_frame_index == frame:
             return

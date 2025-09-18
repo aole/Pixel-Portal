@@ -128,6 +128,15 @@ class App(QObject):
     def redo(self):
         self.document_controller.redo()
 
+    def is_auto_key_enabled(self) -> bool:
+        return self.document_controller.is_auto_key_enabled()
+
+    def set_auto_key_enabled(self, enabled: bool) -> None:
+        self.document_controller.set_auto_key_enabled(enabled)
+
+    def ensure_auto_key_for_active_layer(self) -> bool:
+        return self.document_controller.ensure_auto_key_for_active_layer()
+
     def add_keyframe(self, frame_index: int) -> None:
         self.document_controller.add_keyframe(frame_index)
 
