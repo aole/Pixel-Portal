@@ -204,6 +204,36 @@ def test_select_rectangle_clamps_to_document_bounds(select_rectangle_tool, qtbot
     assert rect.bottom() <= canvas._document_size.height()
 
 
+def test_select_rectangle_reaches_top_left_edge(select_rectangle_tool, qtbot):
+    tool = select_rectangle_tool
+    canvas = tool.canvas
+
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(10, 10),
+        QPoint(10, 10),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, QPoint(10, 10))
+
+    canvas._update_selection_and_emit_size.reset_mock()
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPoint(-5, -5),
+        QPoint(-5, -5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, QPoint(-5, -5))
+
+    rect = canvas._update_selection_and_emit_size.call_args[0][0].boundingRect()
+    assert rect.left() == 0
+    assert rect.top() == 0
+
+
 def test_select_lasso_clamps_points_to_document(select_lasso_tool, qtbot):
     tool = select_lasso_tool
     canvas = tool.canvas
@@ -236,9 +266,39 @@ def test_select_lasso_clamps_points_to_document(select_lasso_tool, qtbot):
     tool.mouseMoveEvent(move_event, QPoint(100, -5))
 
     assert canvas.selection_shape.currentPosition() == QPoint(
-        canvas._document_size.width() - 1,
+        canvas._document_size.width(),
         0,
     )
+
+
+def test_select_circle_reaches_top_left_edge(select_circle_tool, qtbot):
+    tool = select_circle_tool
+    canvas = tool.canvas
+
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(12, 12),
+        QPoint(12, 12),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, QPoint(12, 12))
+
+    canvas._update_selection_and_emit_size.reset_mock()
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPoint(-3, -7),
+        QPoint(-3, -7),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, QPoint(-3, -7))
+
+    rect = canvas._update_selection_and_emit_size.call_args[0][0].boundingRect()
+    assert rect.left() == 0
+    assert rect.top() == 0
 
 def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     """

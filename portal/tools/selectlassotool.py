@@ -20,7 +20,9 @@ class SelectLassoTool(BaseSelectTool):
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:
             if self.canvas.selection_shape:
-                clamped_pos = self._clamp_to_document(doc_pos)
+                clamped_pos = self._clamp_to_document(
+                    doc_pos, extend_max=True
+                )
                 self.canvas.selection_shape.lineTo(clamped_pos)
                 self.canvas._update_selection_and_emit_size(self.canvas.selection_shape)
         super().mouseMoveEvent(event, doc_pos)
