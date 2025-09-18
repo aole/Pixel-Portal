@@ -14,10 +14,12 @@ class StatusBarManager:
         self.main_window.zoom_level_label = QLabel("Zoom: 100%")
         self.main_window.selection_size_label = QLabel("")
         self.main_window.rotation_angle_label = QLabel("")
+        self.main_window.scale_factor_label = QLabel("")
         status_bar.addWidget(self.main_window.cursor_pos_label)
         status_bar.addWidget(self.main_window.zoom_level_label)
         status_bar.addWidget(self.main_window.selection_size_label)
         status_bar.addWidget(self.main_window.rotation_angle_label)
+        status_bar.addWidget(self.main_window.scale_factor_label)
 
     def _connect_signals(self):
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
@@ -41,3 +43,10 @@ class StatusBarManager:
             self.main_window.rotation_angle_label.setText(f"Angle: {round(angle)}°")
         else:
             self.main_window.rotation_angle_label.setText("")
+
+    def update_scale_factor_label(self, scale):
+        if scale is not None:
+            percent = int(round(scale * 100))
+            self.main_window.scale_factor_label.setText(f"Scale: {percent}%")
+        else:
+            self.main_window.scale_factor_label.setText("")

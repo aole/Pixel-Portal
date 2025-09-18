@@ -80,6 +80,52 @@ def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool
     return True
 
 
+def apply_qimage_transform_nearest(
+    destination: QImage, source: QImage, transform: QTransform
+) -> bool:
+    """Map *source* into *destination* using nearest-neighbour sampling.
+
+    Parameters
+    ----------
+    destination:
+        The image that receives the transformed pixels. Pixels outside the
+        transformed source are left untouched.
+    source:
+        Image providing the pixels to sample from.
+    transform:
+        Transform mapping source coordinates into destination coordinates.
+
+    Returns
+    -------
+    bool
+        ``True`` when the transform is invertible. ``False`` otherwise, in
+        which case *destination* is left unmodified.
+    """
+
+    inverse_transform, invertible = transform.inverted()
+    if not invertible:
+        return False
+
+    source_width = source.width()
+    source_height = source.height()
+    dest_width = destination.width()
+    dest_height = destination.height()
+
+    for y in range(dest_height):
+        for x in range(dest_width):
+            source_point = inverse_transform.map(QPointF(x, y))
+            sx_float = source_point.x()
+            sy_float = source_point.y()
+            if 0 <= sx_float < source_width and 0 <= sy_float < source_height:
+                sx = int(sx_float)
+                sy = int(sy_float)
+                color = source.pixelColor(sx, sy)
+                if color.alpha() > 0:
+                    destination.setPixelColor(x, y, color)
+
+    return True
+
+
 class MergeLayerDownCommand(Command):
     def __init__(self, document: 'Document', layer_index: int):
         self.document = document
@@ -257,6 +303,121 @@ class RotateLayerCommand(Command):
             else:
                 self.canvas._update_selection_and_emit_size(None)
 
+
+class ScaleLayerCommand(Command):
+    def __init__(
+        self,
+        layer: 'Layer',
+        scale_factor: float,
+        center_point: QPoint,
+        selection_shape: QPainterPath | None,
+        *,
+        canvas=None,
+        scaled_selection_shape: QPainterPath | None = None,
+    ):
+        self.layer = layer
+        self.scale_factor = scale_factor
+        self.center_point = center_point
+        self.selection_shape = (
+            QPainterPath(selection_shape) if selection_shape is not None else None
+        )
+        self.before_selection_shape = (
+            QPainterPath(selection_shape) if selection_shape is not None else None
+        )
+        self.after_selection_shape = (
+            QPainterPath(scaled_selection_shape)
+            if scaled_selection_shape is not None
+            else None
+        )
+        self.canvas = canvas
+        self.before_image = None
+
+    def _build_transform(self) -> QTransform:
+        center = self.center_point
+        return (
+            QTransform()
+            .translate(center.x(), center.y())
+            .scale(self.scale_factor, self.scale_factor)
+            .translate(-center.x(), -center.y())
+        )
+
+    def execute(self):
+        if self.before_image is None:
+            self.before_image = self.layer.image.copy()
+
+        transform = self._build_transform()
+
+        if self.selection_shape:
+            image_to_modify = self.before_image.copy()
+            painter = QPainter(image_to_modify)
+            painter.setRenderHint(QPainter.Antialiasing, False)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+            painter.setClipPath(self.selection_shape)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.fillPath(self.selection_shape, Qt.transparent)
+            painter.end()
+
+            selected_pixels = QImage(
+                self.before_image.size(),
+                self.before_image.format(),
+            )
+            selected_pixels.fill(Qt.transparent)
+
+            selection_painter = QPainter(selected_pixels)
+            selection_painter.setRenderHint(QPainter.Antialiasing, False)
+            selection_painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+            selection_painter.setClipPath(self.selection_shape)
+            selection_painter.drawImage(0, 0, self.before_image)
+            selection_painter.end()
+
+            if not apply_qimage_transform_nearest(
+                image_to_modify, selected_pixels, transform
+            ):
+                self.layer.image = self.before_image.copy()
+                self.layer.on_image_change.emit()
+                return
+
+            if self.after_selection_shape is None:
+                self.after_selection_shape = transform.map(self.selection_shape)
+        else:
+            image_to_modify = QImage(
+                self.before_image.size(),
+                self.before_image.format(),
+            )
+            image_to_modify.fill(Qt.transparent)
+
+            if not apply_qimage_transform_nearest(image_to_modify, self.before_image, transform):
+                return
+
+        self.layer.image = image_to_modify
+        self.layer.on_image_change.emit()
+
+        if self.canvas and (
+            self.before_selection_shape is not None
+            or self.after_selection_shape is not None
+        ):
+            if self.after_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(
+                    QPainterPath(self.after_selection_shape)
+                )
+            else:
+                self.canvas._update_selection_and_emit_size(None)
+
+    def undo(self):
+        if self.before_image:
+            self.layer.image = self.before_image.copy()
+            self.layer.on_image_change.emit()
+
+        if self.canvas and (
+            self.before_selection_shape is not None
+            or self.after_selection_shape is not None
+        ):
+            if self.before_selection_shape is not None:
+                self.canvas._update_selection_and_emit_size(
+                    QPainterPath(self.before_selection_shape)
+                )
+            else:
+                self.canvas._update_selection_and_emit_size(None)
 
 class RemoveBackgroundCommand(Command):
     def __init__(self, layer):
