@@ -52,6 +52,17 @@ Once the dependencies are installed, you can run the application with the follow
 python -m portal.main
 ```
 
+## Bonus Scripts
+
+Pixel-Portal bundles a few ready-to-run scripts under **Tools → Scripts** to
+kick-start new artwork. Highlights include:
+
+- **Island Creator** – spins up a fresh layer filled with stylised islands.
+  Tune the number of large landmasses (1–4), the share of water, beach width,
+  desert density, and an optional random seed. The script keeps the palette to
+  five or six readable colours so you can quickly block out overworld maps or
+  game backgrounds.
+
 ## Running the Tests
 
 The test suite relies on PySide6 and must run in a headless environment. Set the
