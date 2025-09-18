@@ -252,8 +252,11 @@ class RotateTool(BaseTool):
         center = self.get_center()
         handle_pos = self.get_handle_pos()
 
-        color_handle = QColor("lightgreen") if self.is_hovering_handle else QColor("green")
-        color_center = QColor("lightgreen") if self.is_hovering_center else QColor("green")
+        base_color = QColor("#ffaa41")
+        hover_color = base_color.lighter(120)
+
+        color_handle = hover_color if self.is_hovering_handle else base_color
+        color_center = hover_color if self.is_hovering_center else base_color
 
         # Circle (pivot)
         pen = QPen(color_center, 4)
