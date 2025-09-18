@@ -20,7 +20,7 @@ class SelectCircleTool(BaseSelectTool):
             return
         clamped_start = self._clamp_to_document(doc_pos)
         self.start_point = clamped_start
-        self.canvas._update_selection_and_emit_size(QPainterPath(clamped_start))
+        self._preview_selection_path(QPainterPath(clamped_start))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:
@@ -47,7 +47,7 @@ class SelectCircleTool(BaseSelectTool):
                 doc_rect = QRect(0, 0, size.width(), size.height())
                 rect = rect.intersected(doc_rect)
             qpp.addEllipse(rect)
-            self.canvas._update_selection_and_emit_size(qpp)
+            self._preview_selection_path(qpp)
         super().mouseMoveEvent(event, doc_pos)
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):

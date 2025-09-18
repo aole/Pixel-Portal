@@ -1,5 +1,7 @@
+from enum import Enum, auto
+
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QMouseEvent, QPainterPathStroker, Qt
+from PySide6.QtGui import QMouseEvent, QPainterPath, QPainterPathStroker, Qt
 
 from portal.commands.selection_commands import (
     SelectionChangeCommand,
@@ -9,13 +11,22 @@ from portal.commands.selection_commands import (
 from portal.tools.basetool import BaseTool
 
 
+class SelectionCombineMode(Enum):
+    REPLACE = auto()
+    ADD = auto()
+    SUBTRACT = auto()
+
+
 class BaseSelectTool(BaseTool):
     category = "select"
+
     def __init__(self, canvas):
         super().__init__(canvas)
         self.moving_selection = False
         self.selection_move_start_point = QPoint()
         self._selection_before_edit = None
+        self._draft_selection_path: QPainterPath | None = None
+        self._selection_combine_mode = SelectionCombineMode.REPLACE
         if not hasattr(self.canvas, "selection_shape"):
             self.canvas.selection_shape = None
 
@@ -32,6 +43,8 @@ class BaseSelectTool(BaseTool):
         self._selection_before_edit = clone_selection_path(
             getattr(self.canvas, "selection_shape", None)
         )
+        self._selection_combine_mode = self._determine_combine_mode(event.modifiers())
+        self._draft_selection_path = None
         if self.is_on_selection_border(doc_pos):
             self.moving_selection = True
             self.selection_move_start_point = doc_pos
@@ -61,6 +74,42 @@ class BaseSelectTool(BaseTool):
         else:
             super().mouseReleaseEvent(event, doc_pos)
         self._finalize_selection_change()
+
+    def _determine_combine_mode(self, modifiers: Qt.KeyboardModifiers):
+        if modifiers & Qt.AltModifier:
+            return SelectionCombineMode.SUBTRACT
+        if modifiers & Qt.ShiftModifier:
+            return SelectionCombineMode.ADD
+        return SelectionCombineMode.REPLACE
+
+    def _preview_selection_path(self, path: QPainterPath | None) -> None:
+        self._draft_selection_path = path
+        preview = self._build_preview_path()
+        self.canvas._update_selection_and_emit_size(preview)
+
+    def _build_preview_path(self) -> QPainterPath | None:
+        mode = self._selection_combine_mode
+        draft = clone_selection_path(self._draft_selection_path)
+
+        if mode is SelectionCombineMode.REPLACE:
+            return draft
+
+        base = clone_selection_path(self._selection_before_edit)
+        if base is None:
+            base = QPainterPath()
+
+        if draft is None or draft.isEmpty():
+            return None if base.isEmpty() else base
+
+        if mode is SelectionCombineMode.ADD:
+            combined = base.united(draft)
+        else:
+            combined = base.subtracted(draft)
+
+        combined = combined.simplified()
+        if combined.isEmpty():
+            return None
+        return combined
 
     def _clamp_to_document(
         self,
@@ -101,6 +150,7 @@ class BaseSelectTool(BaseTool):
         new_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
         previous_selection = clone_selection_path(self._selection_before_edit)
         self._selection_before_edit = None
+        self._draft_selection_path = None
         if selection_paths_equal(previous_selection, new_selection):
             return
         command = SelectionChangeCommand(self.canvas, previous_selection, new_selection)
