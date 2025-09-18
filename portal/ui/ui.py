@@ -383,7 +383,10 @@ class MainWindow(QMainWindow):
         if not document:
             return
         frame_manager = getattr(document, "frame_manager", None)
-        layer_manager = getattr(document, "layer_manager", None)
+        try:
+            layer_manager = document.layer_manager
+        except ValueError:
+            layer_manager = None
         if frame_manager is None or layer_manager is None:
             return
         active_layer = getattr(layer_manager, "active_layer", None)
@@ -399,9 +402,53 @@ class MainWindow(QMainWindow):
             current_frame = 0
         keys = frame_manager.layer_keys.get(layer_uid)
         existing_keys = keys if keys else {0}
-        if current_frame in existing_keys:
+        if current_frame not in existing_keys:
+            self.canvas.request_auto_keyframe(current_frame)
+            frame_manager = getattr(document, "frame_manager", None)
+            try:
+                layer_manager = document.layer_manager
+            except ValueError:
+                layer_manager = None
+            if layer_manager is None:
+                return
+            active_layer = getattr(layer_manager, "active_layer", None)
+            if active_layer is None:
+                return
+            layer_uid = getattr(active_layer, "uid", None)
+            if layer_uid is None:
+                return
+        self._retarget_command_to_layer(payload, layer_uid, active_layer)
+
+    def _retarget_command_to_layer(self, command: object, layer_uid, replacement_layer) -> None:
+        if layer_uid is None or replacement_layer is None:
             return
-        self.canvas.request_auto_keyframe(current_frame)
+        stack = [command]
+        visited: set[int] = set()
+        while stack:
+            current = stack.pop()
+            identifier = id(current)
+            if identifier in visited:
+                continue
+            visited.add(identifier)
+            subcommands = getattr(current, "commands", None)
+            if subcommands:
+                try:
+                    stack.extend(list(subcommands))
+                except TypeError:
+                    pass
+            layer = getattr(current, "layer", None)
+            if layer is None:
+                continue
+            if getattr(layer, "uid", None) != layer_uid:
+                continue
+            if layer is replacement_layer:
+                continue
+            setattr(current, "layer", replacement_layer)
+            if hasattr(current, "before_image"):
+                try:
+                    setattr(current, "before_image", None)
+                except Exception:
+                    pass
 
     @Slot()
     def _on_timeline_stop_clicked(self) -> None:
