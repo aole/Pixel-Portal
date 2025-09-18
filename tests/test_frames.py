@@ -4,7 +4,9 @@ from portal.core.document import Document
 from portal.core.frame_manager import FrameManager
 from portal.commands.timeline_commands import (
     AddKeyframeCommand,
+    DeleteFrameCommand,
     DuplicateKeyframeCommand,
+    InsertFrameCommand,
     RemoveKeyframeCommand,
 )
 
@@ -126,6 +128,26 @@ def test_remove_frame_updates_active_index():
     assert len(document.frame_manager.frames) == 1
     assert document.frame_manager.active_frame_index == 0
     assert document.layer_manager is document.frame_manager.current_layer_manager
+
+
+def test_insert_frame_shifts_following_keys():
+    document = Document(3, 3)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+
+    document.add_key_frame(2)
+    document.select_frame(2)
+    document.layer_manager.active_layer.image.fill(QColor("blue"))
+
+    document.select_frame(0)
+    document.insert_frame(1)
+
+    assert len(document.frame_manager.frames) >= 4
+    assert document.frame_manager.active_frame_index == 1
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(3)
+    assert document.key_frames == [0, 3]
+    assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
 
 
 def test_layer_manager_listener_notified_on_frame_change():
@@ -257,6 +279,32 @@ def test_add_keyframe_command_supports_undo_redo():
     assert document.render_current_frame().pixelColor(0, 0) == QColor("red")
 
 
+def test_insert_frame_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+    document.add_key_frame(2)
+
+    base_frames = len(document.frame_manager.frames)
+    command = InsertFrameCommand(document, 1)
+
+    command.execute()
+
+    assert len(document.frame_manager.frames) == base_frames + 1
+    assert document.key_frames == [0, 3]
+    assert document.frame_manager.active_frame_index == 1
+
+    command.undo()
+
+    assert len(document.frame_manager.frames) == base_frames
+    assert document.key_frames == [0, 2]
+    assert document.frame_manager.active_frame_index == 0
+
+    command.execute()
+
+    assert len(document.frame_manager.frames) == base_frames + 1
+    assert document.key_frames == [0, 3]
+
+
 def test_remove_keyframe_command_supports_undo_redo():
     document = Document(4, 4)
     document.layer_manager.active_layer.image.fill(QColor("red"))
@@ -277,6 +325,31 @@ def test_remove_keyframe_command_supports_undo_redo():
     assert document.key_frames == [0, 1]
     document.select_frame(1)
     assert document.render_current_frame().pixelColor(0, 0) == QColor("blue")
+
+
+def test_delete_frame_command_supports_undo_redo():
+    document = Document(4, 4)
+    document.layer_manager.active_layer.image.fill(QColor("red"))
+    document.add_frame()
+    document.add_key_frame(1)
+
+    base_frames = len(document.frame_manager.frames)
+    command = DeleteFrameCommand(document, 0)
+
+    command.execute()
+
+    assert len(document.frame_manager.frames) == base_frames - 1
+    assert document.key_frames == [0]
+
+    command.undo()
+
+    assert len(document.frame_manager.frames) == base_frames
+    assert document.key_frames == [0, 1]
+
+    command.execute()
+
+    assert len(document.frame_manager.frames) == base_frames - 1
+    assert document.key_frames == [0]
 
 
 def test_duplicate_keyframe_command_supports_undo_redo():

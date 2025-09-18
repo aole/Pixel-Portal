@@ -171,6 +171,12 @@ class MainWindow(QMainWindow):
         self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
         self.timeline_widget.key_copy_requested.connect(self.on_timeline_copy_key)
         self.timeline_widget.key_paste_requested.connect(self.on_timeline_paste_key)
+        self.timeline_widget.frame_insert_requested.connect(
+            self.on_timeline_insert_frame
+        )
+        self.timeline_widget.frame_delete_requested.connect(
+            self.on_timeline_delete_frame
+        )
 
         self.animation_player.frame_changed.connect(self.timeline_widget.set_current_frame)
         self.animation_player.playing_changed.connect(self._on_player_state_changed)
@@ -462,6 +468,7 @@ class MainWindow(QMainWindow):
         frame_manager = getattr(document, "frame_manager", None) if document else None
         if not document or frame_manager is None:
             self._update_timeline_layer_label(None)
+            self.timeline_widget.set_document_frame_count(0)
             timeline_blocker = QSignalBlocker(self.timeline_widget)
             try:
                 self.timeline_widget.set_total_frames(max(0, playback_total - 1))
@@ -486,6 +493,7 @@ class MainWindow(QMainWindow):
         self._update_timeline_layer_label(layer_name)
 
         frame_count = len(frame_manager.frames)
+        self.timeline_widget.set_document_frame_count(frame_count)
         doc_max_index = max(0, frame_count - 1) if frame_count else 0
         current_frame = frame_manager.active_frame_index
         if current_frame < 0 and frame_count:
@@ -549,6 +557,14 @@ class MainWindow(QMainWindow):
         self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
         if pasted:
             self.timeline_widget.set_current_frame(frame)
+
+    @Slot(int)
+    def on_timeline_insert_frame(self, frame: int) -> None:
+        self.app.insert_frame(frame + 1)
+
+    @Slot(int)
+    def on_timeline_delete_frame(self, frame: int) -> None:
+        self.app.delete_frame(frame)
 
     @Slot(int)
     def on_timeline_frame_changed(self, frame: int) -> None:

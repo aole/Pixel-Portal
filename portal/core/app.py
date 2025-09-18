@@ -139,6 +139,12 @@ class App(QObject):
     ) -> Optional[int]:
         return self.document_controller.duplicate_keyframe(source_frame, target_frame)
 
+    def insert_frame(self, frame_index: int) -> None:
+        self.document_controller.insert_frame(frame_index)
+
+    def delete_frame(self, frame_index: int) -> None:
+        self.document_controller.delete_frame(frame_index)
+
     def copy_keyframe(self, frame_index: int) -> bool:
         return self.document_controller.copy_keyframe(frame_index)
 

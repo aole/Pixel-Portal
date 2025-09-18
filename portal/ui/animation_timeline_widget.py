@@ -51,6 +51,8 @@ class AnimationTimelineWidget(QWidget):
     key_remove_requested = Signal(int)
     key_copy_requested = Signal(int)
     key_paste_requested = Signal(int)
+    frame_insert_requested = Signal(int)
+    frame_delete_requested = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -73,6 +75,7 @@ class AnimationTimelineWidget(QWidget):
         self._scrub_triangle_half_width = 8.0
         self._scrub_tolerance = 4.0
         self._key_hit_padding = 4.0
+        self._document_frame_count = 1
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -157,6 +160,12 @@ class AnimationTimelineWidget(QWidget):
         if has_key == self._has_copied_key:
             return
         self._has_copied_key = has_key
+
+    def set_document_frame_count(self, frame_count: int) -> None:
+        frame_count = max(0, int(frame_count))
+        if frame_count == self._document_frame_count:
+            return
+        self._document_frame_count = frame_count
 
     def current_frame(self) -> int:
         return self._current_frame
@@ -386,6 +395,23 @@ class AnimationTimelineWidget(QWidget):
         frame = self._frame_at_point(event)
         menu = QMenu(self)
 
+        if self._document_frame_count:
+            max_frame_index = self._document_frame_count - 1
+        else:
+            max_frame_index = 0
+        frame_for_frame_ops = max(0, min(frame, max_frame_index))
+        has_frame = 0 <= frame < self._document_frame_count
+
+        insert_action = menu.addAction(
+            f"Insert Frame After {frame_for_frame_ops}"
+        )
+        insert_action.setEnabled(has_frame and self._document_frame_count > 0)
+
+        delete_action = menu.addAction(f"Delete Frame {frame_for_frame_ops}")
+        delete_action.setEnabled(has_frame and self._document_frame_count > 1)
+
+        menu.addSeparator()
+
         add_action = menu.addAction(f"Add Key @ Frame {frame}")
         add_action.setEnabled(frame not in self._keys)
 
@@ -401,7 +427,11 @@ class AnimationTimelineWidget(QWidget):
         paste_action.setEnabled(self._has_copied_key)
 
         chosen = menu.exec(event.globalPos())
-        if chosen == add_action:
+        if chosen == insert_action:
+            self.frame_insert_requested.emit(frame_for_frame_ops)
+        elif chosen == delete_action:
+            self.frame_delete_requested.emit(frame_for_frame_ops)
+        elif chosen == add_action:
             self.key_add_requested.emit(frame)
         elif chosen == remove_action:
             self.key_remove_requested.emit(frame)
