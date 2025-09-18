@@ -18,12 +18,15 @@ class SelectRectangleTool(BaseSelectTool):
         super().mousePressEvent(event, doc_pos)
         if self.moving_selection:
             return
-        self.start_point = doc_pos
-        self.canvas._update_selection_and_emit_size(QPainterPath(self.start_point))
+        clamped_start = self._clamp_to_document(doc_pos)
+        self.start_point = clamped_start
+        self.canvas._update_selection_and_emit_size(QPainterPath(clamped_start))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:
-            end_point = doc_pos
+            end_point = self._clamp_to_document(
+                doc_pos, extend_min=True, extend_max=True
+            )
             if event.modifiers() & Qt.ShiftModifier:
                 dx = end_point.x() - self.start_point.x()
                 dy = end_point.y() - self.start_point.y()
@@ -33,8 +36,17 @@ class SelectRectangleTool(BaseSelectTool):
                     self.start_point.y() + size * (1 if dy > 0 else -1),
                 )
 
+            end_point = self._clamp_to_document(
+                end_point, extend_min=True, extend_max=True
+            )
+
             qpp = QPainterPath()
-            qpp.addRect(QRect(self.start_point, end_point).normalized())
+            rect = QRect(self.start_point, end_point).normalized()
+            size = getattr(self.canvas, "_document_size", None)
+            if size is not None and not size.isEmpty():
+                doc_rect = QRect(0, 0, size.width(), size.height())
+                rect = rect.intersected(doc_rect)
+            qpp.addRect(rect)
             self.canvas._update_selection_and_emit_size(qpp)
         super().mouseMoveEvent(event, doc_pos)
 

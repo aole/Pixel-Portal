@@ -62,6 +62,41 @@ class BaseSelectTool(BaseTool):
             super().mouseReleaseEvent(event, doc_pos)
         self._finalize_selection_change()
 
+    def _clamp_to_document(
+        self,
+        point: QPoint,
+        *,
+        extend_min: bool = False,
+        extend_max: bool = False,
+    ) -> QPoint:
+        """Clamp *point* to the document bounds.
+
+        When ``extend_min`` or ``extend_max`` are ``True`` the method allows
+        callers to stretch a point by one pixel beyond the document edges.
+        This mirrors the behaviour the selection tools relied on prior to the
+        clamping change: rectangle and ellipse selections need to reach ``-1``
+        to include the first row/column after normalization, while free-form
+        selections need access to ``width``/``height`` to cover the last
+        column/row.
+        """
+
+        size = getattr(self.canvas, "_document_size", None)
+        if size is None or size.isEmpty():
+            return QPoint(point)
+
+        min_x = -1 if extend_min and size.width() > 0 else 0
+        min_y = -1 if extend_min and size.height() > 0 else 0
+        max_x = size.width() if extend_max and size.width() > 0 else max(
+            size.width() - 1, 0
+        )
+        max_y = size.height() if extend_max and size.height() > 0 else max(
+            size.height() - 1, 0
+        )
+
+        clamped_x = min(max(point.x(), min_x), max_x)
+        clamped_y = min(max(point.y(), min_y), max_y)
+        return QPoint(clamped_x, clamped_y)
+
     def _finalize_selection_change(self):
         new_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
         previous_selection = clone_selection_path(self._selection_before_edit)
