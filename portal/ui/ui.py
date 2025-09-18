@@ -220,6 +220,7 @@ class MainWindow(QMainWindow):
         self.app.drawing_context.tool_changed.connect(self.canvas.on_tool_changed)
 
         # Connect Canvas signal to App and UI slots
+        self.canvas.command_generated.connect(self._ensure_auto_key_before_command)
         self.canvas.command_generated.connect(self.app.handle_command)
         self.canvas.command_generated.connect(self.handle_canvas_message)
 
@@ -371,6 +372,36 @@ class MainWindow(QMainWindow):
         else:
             tooltip = "Auto Key: Off – add keys manually"
         self.timeline_auto_key_button.setToolTip(tooltip)
+
+    @Slot(object)
+    def _ensure_auto_key_before_command(self, payload: object) -> None:
+        if isinstance(payload, tuple):
+            return
+        if not self.canvas.is_auto_key_enabled():
+            return
+        document = self.app.document
+        if not document:
+            return
+        frame_manager = getattr(document, "frame_manager", None)
+        layer_manager = getattr(document, "layer_manager", None)
+        if frame_manager is None or layer_manager is None:
+            return
+        active_layer = getattr(layer_manager, "active_layer", None)
+        if active_layer is None:
+            return
+        layer_uid = getattr(active_layer, "uid", None)
+        if layer_uid is None:
+            return
+        current_frame = getattr(frame_manager, "active_frame_index", None)
+        if not isinstance(current_frame, int):
+            return
+        if current_frame < 0:
+            current_frame = 0
+        keys = frame_manager.layer_keys.get(layer_uid)
+        existing_keys = keys if keys else {0}
+        if current_frame in existing_keys:
+            return
+        self.canvas.request_auto_keyframe(current_frame)
 
     @Slot()
     def _on_timeline_stop_clicked(self) -> None:
