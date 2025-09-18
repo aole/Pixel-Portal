@@ -15,6 +15,7 @@ Pixel-Portal is a lightweight, cross-platform image editor built with Python and
 - **Background Options**: Choose checkered, solid colors, or a custom image for the canvas background.
 - **Undo/Redo**: A robust undo/redo system to make editing easier and non-destructive.
 - **Customizable Interface**: A simple and intuitive interface that can be customized to your liking.
+- **Procedural Islands**: Craft colorful island layers with adjustable water coverage, large landmasses, and optional biomes via the Island Creator script.
 
 ## Getting Started
 
