@@ -147,7 +147,7 @@ class DocumentController(QObject):
             return
         command = AddKeyframeCommand(document, frame_index)
         self.execute_command(command)
-        self.select_frame(frame_index)
+        self.select_frame(frame_index, force=True)
 
     def remove_keyframe(self, frame_index: int) -> None:
         document = self.document
@@ -391,7 +391,7 @@ class DocumentController(QObject):
 
         self.execute_command(command)
 
-    def select_frame(self, index: int) -> None:
+    def select_frame(self, index: int, *, force: bool = False) -> None:
         document = self.document
         if document is None:
             return
@@ -399,7 +399,7 @@ class DocumentController(QObject):
         if index < 0:
             return
         frame_manager.ensure_frame(index)
-        if frame_manager.active_frame_index == index:
+        if not force and frame_manager.active_frame_index == index:
             return
         document.select_frame(index)
         self.document_changed.emit()
