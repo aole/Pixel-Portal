@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint, Qt, QObject, Signal
+from PySide6.QtCore import QPoint, Qt, QObject, Signal, QRect
 from PySide6.QtGui import QMouseEvent, QCursor, QImage
 
 from portal.core.frame_manager import resolve_active_layer_manager
@@ -42,6 +42,25 @@ class BaseTool(QObject):
     def draw_overlay(self, painter):
         """Called when the canvas is being painted."""
         pass
+
+    # Geometry helpers ----------------------------------------------------
+    @staticmethod
+    def _rect_from_points(p1: QPoint, p2: QPoint) -> QRect:
+        """Return an inclusive :class:`QRect` spanning *p1* and *p2*.
+
+        ``QRect`` treats the second point of the ``(QPoint, QPoint)``
+        constructor as inclusive, which means ``normalized()`` can shrink the
+        rectangle by a pixel when ``p2`` lies up/left of ``p1``. The tools rely
+        on consistent coverage regardless of drag direction, so we build the
+        rectangle explicitly from the extremities instead of using
+        ``normalized()``.
+        """
+
+        left = min(p1.x(), p2.x())
+        right = max(p1.x(), p2.x())
+        top = min(p1.y(), p2.y())
+        bottom = max(p1.y(), p2.y())
+        return QRect(QPoint(left, top), QPoint(right, bottom))
 
     # Preview helpers -----------------------------------------------------
     def _allocate_preview_images(

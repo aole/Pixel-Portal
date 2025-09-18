@@ -41,7 +41,7 @@ class SelectCircleTool(BaseSelectTool):
             )
 
             qpp = QPainterPath()
-            rect = QRect(self.start_point, end_point).normalized()
+            rect = self._rect_from_points(self.start_point, end_point)
             size = getattr(self.canvas, "_document_size", None)
             if size is not None and not size.isEmpty():
                 doc_rect = QRect(0, 0, size.width(), size.height())

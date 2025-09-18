@@ -735,3 +735,45 @@ def test_rectangle_mouse_events(rectangle_tool, qtbot):
     assert canvas.temp_image is None
     assert canvas.original_image is None
     assert canvas.temp_image_replaces_active_layer is False
+
+
+def test_rectangle_reverse_drag_includes_endpoints(rectangle_tool, qtbot):
+    tool = rectangle_tool
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    end_point = QPoint(4, 4)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, end_point)
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as blocker:
+        tool.mouseReleaseEvent(release_event, end_point)
+
+    command = blocker.args[0]
+    assert isinstance(command, ShapeCommand)
+    assert command.rect == QRect(4, 4, 7, 7)

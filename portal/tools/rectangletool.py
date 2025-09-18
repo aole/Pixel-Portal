@@ -54,7 +54,7 @@ class RectangleTool(BaseTool):
                 self.start_point.y() + size * (1 if dy > 0 else -1),
             )
 
-        rect = QRect(self.start_point, end_point).normalized()
+        rect = self._rect_from_points(self.start_point, end_point)
         self._paint_preview_rect(
             self.canvas.temp_image,
             rect=rect,
@@ -80,7 +80,7 @@ class RectangleTool(BaseTool):
                 self.start_point.y() + size * (1 if dy > 0 else -1),
             )
 
-        rect = QRect(self.start_point, end_point).normalized()
+        rect = self._rect_from_points(self.start_point, end_point)
 
         layer_manager = self._get_active_layer_manager()
         if layer_manager is None:
