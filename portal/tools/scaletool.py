@@ -24,6 +24,7 @@ class ScaleTool(BaseTool):
     name = "Scale"
     icon = "icons/toolscale.png"
     category = "draw"
+    supports_auto_key = True
     scale_changed = Signal(float)
 
     def __init__(self, canvas):

@@ -10,6 +10,7 @@ class LineTool(BaseTool):
     icon = "icons/toolline.png"
     shortcut = "l"
     category = "shape"
+    supports_auto_key = True
 
     def __init__(self, canvas):
         super().__init__(canvas)

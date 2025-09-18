@@ -10,6 +10,7 @@ class RectangleTool(BaseTool):
     icon = "icons/toolrect.png"
     shortcut = "r"
     category = "shape"
+    supports_auto_key = True
 
     def __init__(self, canvas):
         super().__init__(canvas)

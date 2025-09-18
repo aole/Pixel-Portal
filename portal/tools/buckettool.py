@@ -10,6 +10,7 @@ class BucketTool(BaseTool):
     icon = "icons/toolbucket.png"
     shortcut = "f"
     category = "draw"
+    supports_auto_key = True
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         layer_manager = self._get_active_layer_manager()

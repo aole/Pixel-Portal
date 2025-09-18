@@ -36,6 +36,14 @@ class CanvasInputHandler:
         if document is not None and document.layer_manager is not None:
             active_layer = document.layer_manager.active_layer
 
+        target_tool = None
+        if event.button() == Qt.LeftButton:
+            target_tool = current_tool
+        elif event.button() == Qt.RightButton:
+            target_tool = self.canvas.tools.get("Eraser")
+        if target_tool is not None:
+            self._maybe_auto_key_for_tool(target_tool)
+
         if active_layer and not active_layer.visible and requires_visible:
             self.canvas.setCursor(Qt.ForbiddenCursor)
             return
@@ -161,3 +169,47 @@ class CanvasInputHandler:
 
         self.canvas.update()
         self.canvas.zoom_changed.emit(self.canvas.zoom)
+
+    def _maybe_auto_key_for_tool(self, tool) -> None:
+        if tool is None or not getattr(tool, "supports_auto_key", False):
+            return
+
+        is_enabled = getattr(self.canvas, "is_auto_key_enabled", None)
+        if callable(is_enabled):
+            if not is_enabled():
+                return
+        elif not getattr(self.canvas, "_auto_key_enabled", False):
+            return
+
+        document = getattr(self.canvas, "document", None)
+        if document is None:
+            return
+
+        frame_manager = getattr(document, "frame_manager", None)
+        layer_manager = getattr(document, "layer_manager", None)
+        if frame_manager is None or layer_manager is None:
+            return
+
+        active_layer = getattr(layer_manager, "active_layer", None)
+        if active_layer is None or not getattr(active_layer, "visible", True):
+            return
+
+        layer_uid = getattr(active_layer, "uid", None)
+        if layer_uid is None:
+            return
+
+        current_frame = getattr(frame_manager, "active_frame_index", 0)
+        if not isinstance(current_frame, int):
+            return
+        if current_frame < 0:
+            current_frame = 0
+
+        keys = frame_manager.layer_keys.get(layer_uid)
+        if not keys:
+            keys = {0}
+        if current_frame in keys:
+            return
+
+        request_auto_key = getattr(self.canvas, "request_auto_keyframe", None)
+        if callable(request_auto_key):
+            request_auto_key(current_frame)

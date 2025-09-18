@@ -1,4 +1,5 @@
 import math
+from typing import Callable, Optional
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import (
     QBrush,
@@ -84,6 +85,9 @@ class Canvas(QWidget):
 
         # Properties that were previously in App
         self._document_size = QSize(64, 64)
+
+        self._auto_key_enabled = False
+        self._auto_key_callback: Optional[Callable[[int], None]] = None
 
         tool_defs = get_tools()
         self.tools = {tool_def["name"]: tool_def["class"](self) for tool_def in tool_defs}
@@ -194,6 +198,20 @@ class Canvas(QWidget):
     def toggle_tile_preview(self, enabled: bool):
         self.tile_preview_enabled = enabled
         self.update()
+
+    def set_auto_key_callback(self, callback: Optional[Callable[[int], None]]) -> None:
+        self._auto_key_callback = callback
+
+    def set_auto_key_enabled(self, enabled: bool) -> None:
+        self._auto_key_enabled = bool(enabled)
+
+    def is_auto_key_enabled(self) -> bool:
+        return self._auto_key_enabled
+
+    def request_auto_keyframe(self, frame_index: int) -> None:
+        if self._auto_key_callback is None:
+            return
+        self._auto_key_callback(int(frame_index))
 
     @Slot(str)
     def on_tool_changed(self, tool):

@@ -73,6 +73,7 @@ class MainWindow(QMainWindow):
         self.canvas.set_background_image_mode(
             self.app.settings_controller.background_image_mode
         )
+        self.canvas.set_auto_key_callback(self.app.add_keyframe)
 
         self.animation_player = AnimationPlayer(self)
 
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         self._timeline_play_icon = QIcon("icons/play.png")
         self._timeline_pause_icon = QIcon("icons/pause.png")
         self._timeline_stop_icon = QIcon("icons/stop.png")
+        self._timeline_auto_key_icon = QIcon("icons/autokey.png")
 
         self.timeline_play_button = QToolButton(self.timeline_panel)
         self.timeline_play_button.setIcon(self._timeline_play_icon)
@@ -112,6 +114,12 @@ class MainWindow(QMainWindow):
         self.timeline_stop_button.setIcon(self._timeline_stop_icon)
         self.timeline_stop_button.setText("Stop")
         timeline_header_layout.addWidget(self.timeline_stop_button)
+
+        self.timeline_auto_key_button = QToolButton(self.timeline_panel)
+        self.timeline_auto_key_button.setIcon(self._timeline_auto_key_icon)
+        self.timeline_auto_key_button.setCheckable(True)
+        self.timeline_auto_key_button.setToolTip("Auto Key: Off – add keys manually")
+        timeline_header_layout.addWidget(self.timeline_auto_key_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
         self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
@@ -160,6 +168,8 @@ class MainWindow(QMainWindow):
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
+        self.timeline_auto_key_button.toggled.connect(self._on_timeline_auto_key_toggled)
+        self._on_timeline_auto_key_toggled(self.timeline_auto_key_button.isChecked())
 
         self.play_pause_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
         self.play_pause_shortcut.setAutoRepeat(False)
@@ -348,6 +358,15 @@ class MainWindow(QMainWindow):
             self.animation_player.play()
         else:
             self.animation_player.pause()
+
+    @Slot(bool)
+    def _on_timeline_auto_key_toggled(self, enabled: bool) -> None:
+        self.canvas.set_auto_key_enabled(enabled)
+        if enabled:
+            tooltip = "Auto Key: On – drawing on empty frames creates keys automatically"
+        else:
+            tooltip = "Auto Key: Off – add keys manually"
+        self.timeline_auto_key_button.setToolTip(tooltip)
 
     @Slot()
     def _on_timeline_stop_clicked(self) -> None:

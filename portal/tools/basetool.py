@@ -12,6 +12,7 @@ class BaseTool(QObject):
     shortcut = None
     category = None
     requires_visible_layer = True
+    supports_auto_key = False
     command_generated = Signal(object)
 
     def __init__(self, canvas):

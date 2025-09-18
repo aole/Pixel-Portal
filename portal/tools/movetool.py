@@ -15,6 +15,7 @@ class MoveTool(BaseTool):
     icon = "icons/toolmove.png"
     shortcut = "m"
     category = "draw"
+    supports_auto_key = True
 
     def __init__(self, canvas):
         super().__init__(canvas)

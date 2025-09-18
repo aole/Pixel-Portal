@@ -9,6 +9,7 @@ class PenTool(BaseTool):
     icon = "icons/toolpen.png"
     shortcut = "b"
     category = "draw"
+    supports_auto_key = True
 
     def __init__(self, canvas):
         super().__init__(canvas)
