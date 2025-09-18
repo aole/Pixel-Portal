@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self.remove_background_dialog = None
 
         self.canvas = Canvas(self.app.drawing_context)
+        self.canvas.app = self.app
         self.canvas.set_background_image_alpha(
             self.app.settings_controller.background_image_alpha
         )
@@ -154,6 +155,7 @@ class MainWindow(QMainWindow):
         scaled_size = QSize(scaled_width, reference_height)
         self.timeline_autokey_button.setIconSize(scaled_size)
         self.timeline_autokey_button.setFixedSize(scaled_size)
+        self.timeline_autokey_button.setChecked(self.app.is_auto_key_enabled())
         timeline_header_layout.addWidget(self.timeline_autokey_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
@@ -395,6 +397,7 @@ class MainWindow(QMainWindow):
             else self._timeline_autokey_disabled_icon
         )
         self.timeline_autokey_button.setIcon(icon)
+        self.app.set_auto_key_enabled(enabled)
 
     @Slot(bool)
     def _on_timeline_play_toggled(self, checked: bool) -> None:

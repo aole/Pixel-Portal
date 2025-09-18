@@ -63,6 +63,7 @@ class DocumentController(QObject):
 
         self.main_window = None
         self._copied_key_state = None
+        self.auto_key_enabled = False
 
     # expose settings-backed properties
     @property
@@ -76,6 +77,15 @@ class DocumentController(QObject):
     @last_directory.setter
     def last_directory(self, value):
         self.settings.last_directory = value
+
+    def is_auto_key_enabled(self) -> bool:
+        return bool(self.auto_key_enabled)
+
+    def set_auto_key_enabled(self, enabled: bool) -> None:
+        normalized = bool(enabled)
+        if normalized == self.auto_key_enabled:
+            return
+        self.auto_key_enabled = normalized
 
     def execute_command(self, command):
         command.execute()
