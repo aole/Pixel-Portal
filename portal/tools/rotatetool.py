@@ -113,8 +113,17 @@ class RotateTool(BaseTool):
 
             dx = canvas_pos.x() - center.x()
             dy = canvas_pos.y() - center.y()
-            self.angle = math.atan2(dy, dx)
-            self.angle_changed.emit(math.degrees(self.angle))
+
+            angle_radians = math.atan2(dy, dx)
+            angle_degrees = math.degrees(angle_radians)
+
+            if event.modifiers() & Qt.ShiftModifier:
+                snap_increment = 22.5
+                angle_degrees = round(angle_degrees / snap_increment) * snap_increment
+                angle_radians = math.radians(angle_degrees)
+
+            self.angle = angle_radians
+            self.angle_changed.emit(angle_degrees)
 
             if self.original_image:
                 image_to_modify = self.original_image.copy()
@@ -252,8 +261,11 @@ class RotateTool(BaseTool):
         center = self.get_center()
         handle_pos = self.get_handle_pos()
 
-        color_handle = QColor("lightgreen") if self.is_hovering_handle else QColor("green")
-        color_center = QColor("lightgreen") if self.is_hovering_center else QColor("green")
+        base_color = QColor("#d27400")
+        hover_color = base_color.lighter(120)
+
+        color_handle = hover_color if self.is_hovering_handle else base_color
+        color_center = hover_color if self.is_hovering_center else base_color
 
         # Circle (pivot)
         pen = QPen(color_center, 4)
