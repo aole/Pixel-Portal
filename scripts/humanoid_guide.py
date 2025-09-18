@@ -122,8 +122,8 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     upper_arm_length = head_height * 1.5
     lower_arm_length = head_height * 1.4
 
-    leg_thickness = max(1.0, head_height * 0.45)
-    calf_thickness = max(1.0, head_height * 0.38)
+    leg_thickness = max(1.0, head_height * 0.55)
+    calf_thickness = max(1.0, head_height * 0.34)
     upper_leg_length = head_height * 2.0
     lower_leg_length = head_height * 2.0
     foot_length = head_height * 1.1
@@ -170,8 +170,8 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
         },
         "A-Pose": {
             'arms': {
-                'left': (150.0, 120.0),
-                'right': (30.0, 60.0),
+                'left': (150.0, 150.0),
+                'right': (30.0, 30.0),
             },
             'legs': {
                 'left': (105.0, 95.0),
@@ -210,7 +210,7 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
         geometry.add_segment(knee_point, ankle_point, calf_thickness)
 
         geometry.add_joint(knee_point, joint_diameter)
-        geometry.add_joint(ankle_point, joint_diameter * 0.9)
+        geometry.add_joint(ankle_point, joint_diameter * 0.6)
 
         foot_rect = QRectF(
             ankle_point.x() - foot_length / 2.0,
