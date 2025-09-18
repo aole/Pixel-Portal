@@ -1,7 +1,8 @@
 # This file will contain tests for selection tools.
 from unittest.mock import Mock, patch
+
 import pytest
-from PySide6.QtCore import QPoint, QRect, QRectF, Qt
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QPainterPath, QMouseEvent, QColor, QImage
 from portal.tools.baseselecttool import BaseSelectTool
 from portal.tools.selectcircletool import SelectCircleTool
@@ -13,6 +14,7 @@ from portal.tools.selectrectangletool import SelectRectangleTool
 def base_select_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.zoom = 1.0
+    mock_canvas._document_size = QSize(64, 64)
     tool = BaseSelectTool(mock_canvas)
     return tool
 
@@ -44,6 +46,7 @@ def test_is_on_selection_border(base_select_tool):
 def select_circle_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.selection_shape = None
+    mock_canvas._document_size = QSize(64, 64)
     tool = SelectCircleTool(mock_canvas)
     tool.moving_selection = False
     return tool
@@ -120,6 +123,7 @@ def test_select_color_mouse_press_event(select_color_tool):
 def select_lasso_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.selection_shape = None
+    mock_canvas._document_size = QSize(64, 64)
     tool = SelectLassoTool(mock_canvas)
     tool.moving_selection = False
     return tool
@@ -160,9 +164,81 @@ def test_select_lasso_mouse_events(select_lasso_tool, qtbot):
 def select_rectangle_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.selection_shape = None
+    mock_canvas._document_size = QSize(64, 64)
     tool = SelectRectangleTool(mock_canvas)
     tool.moving_selection = False
     return tool
+
+
+def test_select_rectangle_clamps_to_document_bounds(select_rectangle_tool, qtbot):
+    tool = select_rectangle_tool
+    canvas = tool.canvas
+    canvas._document_size = QSize(32, 32)
+
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(-10, -10),
+        QPoint(-10, -10),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, QPoint(-10, -10))
+
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPoint(100, 100),
+        QPoint(100, 100),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    canvas._update_selection_and_emit_size.reset_mock()
+    tool.mouseMoveEvent(move_event, QPoint(100, 100))
+
+    path = canvas._update_selection_and_emit_size.call_args[0][0]
+    rect = path.boundingRect()
+    assert rect.left() >= 0
+    assert rect.top() >= 0
+    assert rect.right() <= canvas._document_size.width()
+    assert rect.bottom() <= canvas._document_size.height()
+
+
+def test_select_lasso_clamps_points_to_document(select_lasso_tool, qtbot):
+    tool = select_lasso_tool
+    canvas = tool.canvas
+    canvas._document_size = QSize(16, 16)
+
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(-5, -5),
+        QPoint(-5, -5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, QPoint(-5, -5))
+
+    path = canvas._update_selection_and_emit_size.call_args[0][0]
+    assert path.currentPosition() == QPoint(0, 0)
+
+    canvas.selection_shape = path
+    canvas._update_selection_and_emit_size.reset_mock()
+
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPoint(100, -5),
+        QPoint(100, -5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, QPoint(100, -5))
+
+    assert canvas.selection_shape.currentPosition() == QPoint(
+        canvas._document_size.width() - 1,
+        0,
+    )
 
 def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     """

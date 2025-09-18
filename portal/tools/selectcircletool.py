@@ -18,12 +18,13 @@ class SelectCircleTool(BaseSelectTool):
         super().mousePressEvent(event, doc_pos)
         if self.moving_selection:
             return
-        self.start_point = doc_pos
-        self.canvas._update_selection_and_emit_size(QPainterPath(self.start_point))
+        clamped_start = self._clamp_to_document(doc_pos)
+        self.start_point = clamped_start
+        self.canvas._update_selection_and_emit_size(QPainterPath(clamped_start))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if not self.moving_selection:
-            end_point = doc_pos
+            end_point = self._clamp_to_document(doc_pos)
             if event.modifiers() & Qt.ShiftModifier:
                 dx = end_point.x() - self.start_point.x()
                 dy = end_point.y() - self.start_point.y()
@@ -32,6 +33,8 @@ class SelectCircleTool(BaseSelectTool):
                     self.start_point.x() + size * (1 if dx > 0 else -1),
                     self.start_point.y() + size * (1 if dy > 0 else -1),
                 )
+
+            end_point = self._clamp_to_document(end_point)
 
             qpp = QPainterPath()
             qpp.addEllipse(QRect(self.start_point, end_point).normalized())

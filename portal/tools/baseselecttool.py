@@ -62,6 +62,19 @@ class BaseSelectTool(BaseTool):
             super().mouseReleaseEvent(event, doc_pos)
         self._finalize_selection_change()
 
+    def _clamp_to_document(self, point: QPoint) -> QPoint:
+        """Clamp *point* to the document bounds."""
+
+        size = getattr(self.canvas, "_document_size", None)
+        if size is None or size.isEmpty():
+            return QPoint(0, 0)
+
+        max_x = max(size.width() - 1, 0)
+        max_y = max(size.height() - 1, 0)
+        clamped_x = min(max(point.x(), 0), max_x)
+        clamped_y = min(max(point.y(), 0), max_y)
+        return QPoint(clamped_x, clamped_y)
+
     def _finalize_selection_change(self):
         new_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
         previous_selection = clone_selection_path(self._selection_before_edit)
