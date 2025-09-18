@@ -6,27 +6,15 @@ from PySide6.QtGui import QColor, QPainter
 
 POSE_CHOICES = ["T-Pose", "A-Pose"]
 
+STRUCTURE_COLOR_HEX = "#FFC68C"
+
 params = [
     {
         'name': 'pose',
         'type': 'choice',
         'label': 'Pose',
         'choices': POSE_CHOICES,
-        'default': 'T-Pose',
-    },
-    {
-        'name': 'head_height',
-        'type': 'number',
-        'label': 'Head Height (px)',
-        'default': 20,
-        'min': 8,
-        'max': 96,
-    },
-    {
-        'name': 'structure_color',
-        'type': 'color',
-        'label': 'Structure Color',
-        'default': '#3B82F6',
+        'default': 'A-Pose',
     },
     {
         'name': 'joint_color',
@@ -248,66 +236,49 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
 
 def main(api, values):
     pose = values['pose']
-    head_height = float(values['head_height'])
-    structure_color = QColor(values['structure_color'])
+    structure_color = QColor(STRUCTURE_COLOR_HEX)
     joint_color = QColor(values['joint_color'])
     guide_color = QColor(values['guide_color'])
     guide_color.setAlpha(160)
 
-    new_layer = api.create_layer("Humanoid Guide")
-
-    if not new_layer:
-        api.show_message_box("Script Error", "Could not create a new layer.")
+    guides_layer = api.create_layer("Humanoid Guides")
+    if not guides_layer:
+        api.show_message_box("Script Error", "Could not create the guides layer.")
         return
 
-    def draw_figure(image):
-        nonlocal head_height
-        canvas_width = image.width()
-        canvas_height = image.height()
+    structure_layer = api.create_layer("Humanoid Structure")
+    if not structure_layer:
+        api.show_message_box("Script Error", "Could not create the structure layer.")
+        return
 
-        max_head_height = max(4.0, canvas_height // 8)
-        head_height = min(head_height, max_head_height)
-        if head_height < 4.0:
-            head_height = 4.0
+    def layout_geometry(image):
+        head_height = max(4.0, image.height() / 8.0)
 
         geometry = build_humanoid_geometry(head_height, pose)
         figure_width = geometry.max_x - geometry.min_x
 
-        while head_height > 4.0 and figure_width > canvas_width:
+        while head_height > 4.0 and figure_width > image.width():
             head_height -= 1.0
             geometry = build_humanoid_geometry(head_height, pose)
             figure_width = geometry.max_x - geometry.min_x
 
         figure_height = geometry.max_y - geometry.min_y
-        vertical_offset = max(0.0, (canvas_height - figure_height) / 2.0 - geometry.min_y)
-        horizontal_offset = canvas_width / 2.0 - (geometry.min_x + figure_width / 2.0)
+        vertical_offset = max(0.0, (image.height() - figure_height) / 2.0 - geometry.min_y)
+        horizontal_offset = image.width() / 2.0 - (geometry.min_x + figure_width / 2.0)
+
+        return geometry, horizontal_offset, vertical_offset
+
+    def draw_guides_and_joints(image):
+        geometry, horizontal_offset, vertical_offset = layout_geometry(image)
 
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing, False)
 
-        # Draw guides first so the figure sits on top.
         painter.setPen(Qt.NoPen)
         painter.setBrush(guide_color)
         for rect in geometry.guides:
-            offset_rect = rect.translated(horizontal_offset, vertical_offset)
-            painter.drawRect(offset_rect)
-
-        painter.setPen(structure_color)
-        painter.setBrush(structure_color)
-        for rect in geometry.rectangles:
             painter.drawRect(rect.translated(horizontal_offset, vertical_offset))
 
-        for start, end, thickness in geometry.segments:
-            translated_start = QPointF(start.x() + horizontal_offset, start.y() + vertical_offset)
-            translated_end = QPointF(end.x() + horizontal_offset, end.y() + vertical_offset)
-            draw_segment(painter, translated_start, translated_end, thickness, structure_color)
-
-        painter.setPen(structure_color)
-        painter.setBrush(structure_color)
-        for rect in geometry.ellipses:
-            painter.drawEllipse(rect.translated(horizontal_offset, vertical_offset))
-
-        painter.setPen(joint_color)
         painter.setBrush(joint_color)
         for center, diameter in geometry.joints:
             radius = diameter / 2.0
@@ -321,4 +292,26 @@ def main(api, values):
 
         painter.end()
 
-    api.modify_layer(new_layer, draw_figure)
+    def draw_structure(image):
+        geometry, horizontal_offset, vertical_offset = layout_geometry(image)
+
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, False)
+
+        painter.setPen(structure_color)
+        painter.setBrush(structure_color)
+        for rect in geometry.rectangles:
+            painter.drawRect(rect.translated(horizontal_offset, vertical_offset))
+
+        for start, end, thickness in geometry.segments:
+            translated_start = QPointF(start.x() + horizontal_offset, start.y() + vertical_offset)
+            translated_end = QPointF(end.x() + horizontal_offset, end.y() + vertical_offset)
+            draw_segment(painter, translated_start, translated_end, thickness, structure_color)
+
+        for rect in geometry.ellipses:
+            painter.drawEllipse(rect.translated(horizontal_offset, vertical_offset))
+
+        painter.end()
+
+    api.modify_layer(guides_layer, draw_guides_and_joints)
+    api.modify_layer(structure_layer, draw_structure)
