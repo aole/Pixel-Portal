@@ -37,6 +37,83 @@ def test_draw_line_wraps_across_edges():
 
     painted = {x for x in range(8) if image.pixelColor(x, 3).alpha() > 0}
     assert painted == {0, 1, 2, 6, 7}
+
+
+def _collect_drawn_points(image: QImage):
+    return [
+        (x, y)
+        for x in range(image.width())
+        for y in range(image.height())
+        if image.pixelColor(x, y).alpha() > 0
+    ]
+
+
+def test_draw_ellipse_respects_inclusive_rect_bounds():
+    image = QImage(24, 24, QImage.Format_ARGB32)
+    image.fill(QColor("transparent"))
+    painter = QPainter(image)
+    painter.setPen(QColor("black"))
+
+    drawing = Drawing()
+    rect = QRect(QPoint(4, 3), QPoint(15, 17))
+    drawing.draw_ellipse(
+        painter,
+        rect,
+        QSize(24, 24),
+        "Square",
+        1,
+        False,
+        False,
+    )
+    painter.end()
+
+    points = _collect_drawn_points(image)
+    assert points
+
+    xs = {x for x, _ in points}
+    ys = {y for _, y in points}
+
+    assert min(xs) == rect.left()
+    assert max(xs) == rect.right()
+    assert min(ys) == rect.top()
+    assert max(ys) == rect.bottom()
+
+    for x, y in points:
+        assert rect.left() <= x <= rect.right()
+        assert rect.top() <= y <= rect.bottom()
+
+
+def test_draw_ellipse_vertical_line_stays_within_bounds():
+    image = QImage(16, 16, QImage.Format_ARGB32)
+    image.fill(QColor("transparent"))
+    painter = QPainter(image)
+    painter.setPen(QColor("black"))
+
+    drawing = Drawing()
+    rect = QRect(QPoint(7, 2), QPoint(7, 9))
+    drawing.draw_ellipse(
+        painter,
+        rect,
+        QSize(16, 16),
+        "Square",
+        1,
+        False,
+        False,
+    )
+    painter.end()
+
+    points = _collect_drawn_points(image)
+    assert points
+
+    xs = {x for x, _ in points}
+    ys = {y for _, y in points}
+
+    assert xs == {rect.left()}
+    assert min(ys) == rect.top()
+    assert max(ys) == rect.bottom()
+
+    for _, y in points:
+        assert rect.top() <= y <= rect.bottom()
 @pytest.fixture
 def pen_tool(qtbot):
     mock_canvas = Mock()
@@ -579,6 +656,48 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert canvas.temp_image_replaces_active_layer is False
 
 
+def test_ellipse_reverse_drag_includes_endpoints(ellipse_tool, qtbot):
+    tool = ellipse_tool
+
+    start_point = QPoint(12, 12)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    end_point = QPoint(5, 2)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, end_point)
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as blocker:
+        tool.mouseReleaseEvent(release_event, end_point)
+
+    command = blocker.args[0]
+    assert isinstance(command, ShapeCommand)
+    assert command.rect == QRect(5, 2, 8, 11)
+
+
 def test_ellipse_tile_preview_overlay(ellipse_tool, qtbot):
     tool = ellipse_tool
     canvas = tool.canvas
@@ -735,3 +854,45 @@ def test_rectangle_mouse_events(rectangle_tool, qtbot):
     assert canvas.temp_image is None
     assert canvas.original_image is None
     assert canvas.temp_image_replaces_active_layer is False
+
+
+def test_rectangle_reverse_drag_includes_endpoints(rectangle_tool, qtbot):
+    tool = rectangle_tool
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated):
+        tool.mousePressEvent(press_event, start_point)
+
+    end_point = QPoint(4, 4)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, end_point)
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        end_point,
+        end_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as blocker:
+        tool.mouseReleaseEvent(release_event, end_point)
+
+    command = blocker.args[0]
+    assert isinstance(command, ShapeCommand)
+    assert command.rect == QRect(4, 4, 7, 7)
