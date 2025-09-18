@@ -308,7 +308,8 @@ class ScaleLayerCommand(Command):
     def __init__(
         self,
         layer: 'Layer',
-        scale_factor: float,
+        scale_x: float,
+        scale_y: float,
         center_point: QPoint,
         selection_shape: QPainterPath | None,
         *,
@@ -316,7 +317,8 @@ class ScaleLayerCommand(Command):
         scaled_selection_shape: QPainterPath | None = None,
     ):
         self.layer = layer
-        self.scale_factor = scale_factor
+        self.scale_x = scale_x
+        self.scale_y = scale_y
         self.center_point = center_point
         self.selection_shape = (
             QPainterPath(selection_shape) if selection_shape is not None else None
@@ -337,7 +339,7 @@ class ScaleLayerCommand(Command):
         return (
             QTransform()
             .translate(center.x(), center.y())
-            .scale(self.scale_factor, self.scale_factor)
+            .scale(self.scale_x, self.scale_y)
             .translate(-center.x(), -center.y())
         )
 

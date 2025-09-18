@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, Signal
+from PySide6.QtCore import Qt, QPointF, QRect, QRectF, Signal
 from PySide6.QtGui import (
     QColor,
     QCursor,
@@ -30,37 +30,36 @@ class ScaleTool(BaseTool):
         super().__init__(canvas)
         self.cursor = QCursor(Qt.ArrowCursor)
         self.scale_factor = 1.0
+        self.scale_x = 1.0
+        self.scale_y = 1.0
         self.drag_mode: str | None = None
         self.original_image: QImage | None = None
-        self.pivot_doc = QPoint(0, 0)
         self.original_selection_shape: QPainterPath | None = None
         self.selection_source_image: QImage | None = None
         self._hover_handle: str | None = None
         self._active_handle: str | None = None
-        self._hover_pivot = False
         self._handle_size = 14.0
-        self._pivot_radius = 10.0
         self._bounds_dirty = True
         self._base_edge_rect_doc: QRectF | None = None
         self._scaled_edge_rect_doc: QRectF | None = None
         self._drag_base_edge_rect_doc: QRectF | None = None
-        self._drag_initial_axis_distance: float | None = None
-        self._drag_axis_direction: int | None = None
+        self._drag_handle_axis: str | None = None
+        self._current_pivot_doc: QPointF | None = None
 
     # ------------------------------------------------------------------
     def activate(self):
         self.scale_factor = 1.0
+        self.scale_x = 1.0
+        self.scale_y = 1.0
         self.scale_changed.emit(self.scale_factor)
         self.drag_mode = None
         self._hover_handle = None
         self._active_handle = None
-        self._hover_pivot = False
         self._drag_base_edge_rect_doc = None
-        self._drag_initial_axis_distance = None
-        self._drag_axis_direction = None
+        self._drag_handle_axis = None
+        self._current_pivot_doc = None
         self._bounds_dirty = True
         self._refresh_base_rect()
-        self.pivot_doc = self._calculate_default_pivot_doc()
 
     # ------------------------------------------------------------------
     def deactivate(self):
@@ -86,38 +85,16 @@ class ScaleTool(BaseTool):
         self.selection_source_image = None
         self.original_selection_shape = None
         self.scale_factor = 1.0
+        self.scale_x = 1.0
+        self.scale_y = 1.0
         self.scale_changed.emit(self.scale_factor)
         self.drag_mode = None
         self._hover_handle = None
         self._active_handle = None
-        self._hover_pivot = False
         self._drag_base_edge_rect_doc = None
-        self._drag_initial_axis_distance = None
-        self._drag_axis_direction = None
+        self._drag_handle_axis = None
+        self._current_pivot_doc = None
         self._bounds_dirty = True
-
-    # ------------------------------------------------------------------
-    def _calculate_default_pivot_doc(self) -> QPoint:
-        selection_shape = getattr(self.canvas, "selection_shape", None)
-        if selection_shape:
-            rect = selection_shape.boundingRect().toAlignedRect()
-            if rect.isValid() and rect.width() > 0 and rect.height() > 0:
-                edge_rect = QRectF(rect.left(), rect.top(), rect.width(), rect.height())
-                return edge_rect.center().toPoint()
-
-        self._ensure_base_rect()
-        if self._base_edge_rect_doc is not None and not self._base_edge_rect_doc.isEmpty():
-            return self._base_edge_rect_doc.center().toPoint()
-
-        layer_manager = self._get_active_layer_manager()
-        if layer_manager and layer_manager.active_layer:
-            return layer_manager.active_layer.image.rect().center()
-
-        return QPoint(0, 0)
-
-    # ------------------------------------------------------------------
-    def _get_scale_center_doc(self) -> QPoint:
-        return self.pivot_doc
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event, doc_pos):
@@ -134,68 +111,53 @@ class ScaleTool(BaseTool):
                 self._update_cursor()
             return
 
-        if self._hit_test_pivot(canvas_pos):
-            self.drag_mode = "pivot"
-            self._hover_pivot = True
-            self._active_handle = None
-            self._hover_handle = None
-            self._update_cursor()
-
     # ------------------------------------------------------------------
     def mouseHoverEvent(self, event, doc_pos):
-        if self.drag_mode == "pivot" or self._active_handle is not None:
+        if self._active_handle is not None:
             return
 
         self._ensure_base_rect()
 
         canvas_pos = QPointF(event.position())
         handle = self._hit_test_handles(canvas_pos)
-        pivot_hover = False if handle is not None else self._hit_test_pivot(canvas_pos)
 
-        if handle != self._hover_handle or pivot_hover != self._hover_pivot:
+        if handle != self._hover_handle:
             self._hover_handle = handle
-            self._hover_pivot = pivot_hover
             self._update_cursor()
             self.canvas.update()
 
     # ------------------------------------------------------------------
     def mouseMoveEvent(self, event, doc_pos):
         if self.drag_mode == "scale" and self._active_handle is not None:
-            new_scale = self._compute_scale_from_handle(event)
-            if new_scale is None:
+            result = self._compute_scale_from_handle(event)
+            if result is None:
                 return
 
-            if event.modifiers() & Qt.ShiftModifier:
-                snap_increment = 0.125
-                new_scale = round(new_scale / snap_increment) * snap_increment
+            scale_x, scale_y, pivot = result
 
-            new_scale = max(0.125, new_scale)
+            self.scale_x = scale_x
+            self.scale_y = scale_y
+            self._current_pivot_doc = pivot
 
-            if abs(new_scale - self.scale_factor) >= 1e-3:
-                self.scale_factor = new_scale
-                self.scale_changed.emit(self.scale_factor)
-                self._update_scaled_rect_from_current_scale()
-                self._update_preview_image()
+            if self._drag_handle_axis == "horizontal":
+                display_value = self.scale_x
+            elif self._drag_handle_axis == "vertical":
+                display_value = self.scale_y
             else:
-                self._update_scaled_rect_from_current_scale()
+                display_value = max(self.scale_x, self.scale_y)
 
-            self.canvas.update()
+            if not math.isclose(display_value, self.scale_factor, abs_tol=1e-3):
+                self.scale_factor = display_value
+                self.scale_changed.emit(self.scale_factor)
 
-        elif self.drag_mode == "pivot":
-            self.pivot_doc = doc_pos
-            self._hover_pivot = True
-            self._update_cursor()
+            self._update_scaled_rect_from_current_scale()
+            self._update_preview_image()
+
             self.canvas.update()
 
     # ------------------------------------------------------------------
     def mouseReleaseEvent(self, event, doc_pos):
         if event.button() != Qt.LeftButton:
-            return
-
-        if self.drag_mode == "pivot":
-            self.drag_mode = None
-            self._hover_pivot = False
-            self._update_cursor()
             return
 
         if self.drag_mode != "scale":
@@ -211,13 +173,15 @@ class ScaleTool(BaseTool):
         active_layer = None if layer_manager is None else layer_manager.active_layer
 
         if active_layer is not None and self.original_image is not None:
-            if math.isclose(self.scale_factor, 1.0, abs_tol=1e-3):
+            if math.isclose(self.scale_x, 1.0, abs_tol=1e-3) and math.isclose(
+                self.scale_y, 1.0, abs_tol=1e-3
+            ):
                 if self.original_selection_shape is not None:
                     self.canvas._update_selection_and_emit_size(
                         QPainterPath(self.original_selection_shape)
                     )
             else:
-                center_doc = self._get_scale_center_doc()
+                center_doc = self._current_pivot_point().toPoint()
                 selection_shape = (
                     QPainterPath(self.original_selection_shape)
                     if self.original_selection_shape is not None
@@ -225,18 +189,14 @@ class ScaleTool(BaseTool):
                 )
                 scaled_shape = None
                 if self.original_selection_shape is not None:
-                    transform = (
-                        QTransform()
-                        .translate(center_doc.x(), center_doc.y())
-                        .scale(self.scale_factor, self.scale_factor)
-                        .translate(-center_doc.x(), -center_doc.y())
-                    )
+                    transform = self._build_transform()
                     scaled_shape = transform.map(self.original_selection_shape)
                     self.canvas._update_selection_and_emit_size(scaled_shape)
 
                 command = ScaleLayerCommand(
                     active_layer,
-                    self.scale_factor,
+                    self.scale_x,
+                    self.scale_y,
                     center_doc,
                     selection_shape,
                     canvas=self.canvas,
@@ -253,15 +213,16 @@ class ScaleTool(BaseTool):
         self.selection_source_image = None
         self.original_selection_shape = None
         self.scale_factor = 1.0
+        self.scale_x = 1.0
+        self.scale_y = 1.0
         self.scale_changed.emit(self.scale_factor)
         self.drag_mode = None
         self._active_handle = None
         self._hover_handle = None
-        self._hover_pivot = False
         self._drag_base_edge_rect_doc = None
-        self._drag_initial_axis_distance = None
-        self._drag_axis_direction = None
+        self._drag_handle_axis = None
         self._scaled_edge_rect_doc = None
+        self._current_pivot_doc = None
         self._bounds_dirty = True
         self._update_cursor()
         self.canvas.update()
@@ -271,13 +232,7 @@ class ScaleTool(BaseTool):
         if self.original_image is None:
             return
 
-        center_doc = self._get_scale_center_doc()
-        transform = (
-            QTransform()
-            .translate(center_doc.x(), center_doc.y())
-            .scale(self.scale_factor, self.scale_factor)
-            .translate(-center_doc.x(), -center_doc.y())
-        )
+        transform = self._build_transform()
 
         if self.original_selection_shape is not None:
             image_to_modify = self.original_image.copy()
@@ -356,21 +311,11 @@ class ScaleTool(BaseTool):
                 painter.setBrush(brush)
                 painter.drawRect(rect)
 
-        pivot_point = self._doc_to_canvas_point(QPointF(self.pivot_doc))
-        pivot_color = (
-            hover_color if self._hover_pivot or self.drag_mode == "pivot" else base_color
-        )
+        text = self._scale_display_text()
+        metrics = painter.fontMetrics()
+        text_width = metrics.horizontalAdvance(text) + 16
+        text_height = metrics.height() + 8
 
-        painter.setPen(QPen(pivot_color, 2))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(pivot_point, self._pivot_radius, self._pivot_radius)
-
-        painter.setBrush(pivot_color)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(pivot_point, 3, 3)
-
-        text_width = 72
-        text_height = 20
         if overlay_rect is not None:
             text_rect = QRectF(
                 overlay_rect.center().x() - text_width / 2,
@@ -379,9 +324,10 @@ class ScaleTool(BaseTool):
                 text_height,
             )
         else:
+            pivot_point = self._doc_to_canvas_point(self._current_pivot_point())
             text_rect = QRectF(
                 pivot_point.x() - text_width / 2,
-                pivot_point.y() - self._pivot_radius - text_height - 6,
+                pivot_point.y() - text_height - 6,
                 text_width,
                 text_height,
             )
@@ -391,7 +337,7 @@ class ScaleTool(BaseTool):
         painter.drawRoundedRect(text_rect, 4, 4)
 
         painter.setPen(QPen(QColor("#ffffff")))
-        painter.drawText(text_rect, Qt.AlignCenter, f"{self.scale_factor:.2f}x")
+        painter.drawText(text_rect, Qt.AlignCenter, text)
 
         painter.restore()
 
@@ -405,19 +351,9 @@ class ScaleTool(BaseTool):
         if base_rect is None or base_rect.isEmpty():
             return False
 
-        handle_positions = self._handle_positions_for_edge_rect(base_rect)
-        handle_pos = handle_positions.get(handle)
-        if handle_pos is None:
+        if handle in ("left", "right") and math.isclose(base_rect.width(), 0.0):
             return False
-
-        pivot_point = QPointF(self._get_scale_center_doc())
-        axis_distance = (
-            handle_pos.x() - pivot_point.x()
-            if handle in ("left", "right")
-            else handle_pos.y() - pivot_point.y()
-        )
-
-        if math.isclose(axis_distance, 0.0, abs_tol=1e-6):
+        if handle in ("top", "bottom") and math.isclose(base_rect.height(), 0.0):
             return False
 
         active_layer = layer_manager.active_layer
@@ -441,39 +377,85 @@ class ScaleTool(BaseTool):
             selection_painter.drawImage(0, 0, self.original_image)
             selection_painter.end()
 
+        if handle in ("left", "right"):
+            self._drag_handle_axis = "horizontal"
+            pivot_point = QPointF(
+                base_rect.right() if handle == "left" else base_rect.left(),
+                base_rect.center().y(),
+            )
+        else:
+            self._drag_handle_axis = "vertical"
+            pivot_point = QPointF(
+                base_rect.center().x(),
+                base_rect.bottom() if handle == "top" else base_rect.top(),
+            )
+
         self.drag_mode = "scale"
         self._active_handle = handle
         self._hover_handle = handle
         self._drag_base_edge_rect_doc = QRectF(base_rect)
-        self._drag_initial_axis_distance = axis_distance
-        self._drag_axis_direction = 1 if axis_distance >= 0 else -1
+        self._current_pivot_doc = QPointF(pivot_point)
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self.scale_factor = 1.0
+        self.scale_changed.emit(self.scale_factor)
         self._scaled_edge_rect_doc = QRectF(self._drag_base_edge_rect_doc)
         return True
 
     # ------------------------------------------------------------------
-    def _compute_scale_from_handle(self, event) -> float | None:
-        if self._active_handle is None or self._drag_initial_axis_distance is None:
+    def _compute_scale_from_handle(self, event) -> tuple[float, float, QPointF] | None:
+        if self._active_handle is None or self._drag_base_edge_rect_doc is None:
             return None
 
+        rect = self._drag_base_edge_rect_doc
+        handle = self._active_handle
         canvas_pos = QPointF(event.position())
         doc_point = self._canvas_to_doc_point(canvas_pos)
-        pivot_point = QPointF(self._get_scale_center_doc())
 
-        if self._active_handle in ("left", "right"):
-            raw_distance = doc_point.x() - pivot_point.x()
+        min_scale = 0.125
+        scale_x = 1.0
+        scale_y = 1.0
+
+        if handle in ("left", "right"):
+            width = rect.width()
+            if math.isclose(width, 0.0):
+                return None
+            anchor_x = rect.right() if handle == "left" else rect.left()
+            raw_width = (
+                anchor_x - doc_point.x()
+                if handle == "left"
+                else doc_point.x() - anchor_x
+            )
+            min_width = width * min_scale
+            if raw_width < min_width:
+                raw_width = min_width
+            scale_x = max(min_scale, raw_width / width)
         else:
-            raw_distance = doc_point.y() - pivot_point.y()
+            height = rect.height()
+            if math.isclose(height, 0.0):
+                return None
+            anchor_y = rect.bottom() if handle == "top" else rect.top()
+            raw_height = (
+                anchor_y - doc_point.y()
+                if handle == "top"
+                else doc_point.y() - anchor_y
+            )
+            min_height = height * min_scale
+            if raw_height < min_height:
+                raw_height = min_height
+            scale_y = max(min_scale, raw_height / height)
 
-        direction = self._drag_axis_direction or 1
-        aligned_distance = raw_distance * direction
-        if aligned_distance < 0:
-            aligned_distance = 0.0
+        if event.modifiers() & Qt.ShiftModifier:
+            uniform = scale_x if handle in ("left", "right") else scale_y
+            uniform = max(min_scale, uniform)
+            scale_x = uniform
+            scale_y = uniform
 
-        if aligned_distance <= 1e-4:
-            return 0.125
+        pivot = self._current_pivot_doc
+        if pivot is None:
+            pivot = rect.center()
 
-        scale = aligned_distance / abs(self._drag_initial_axis_distance)
-        return max(0.125, scale)
+        return scale_x, scale_y, QPointF(pivot)
 
     # ------------------------------------------------------------------
     def _current_edge_rect_doc(self) -> QRectF | None:
@@ -583,25 +565,58 @@ class ScaleTool(BaseTool):
         return QRect(left, top, right - left + 1, bottom - top + 1)
 
     # ------------------------------------------------------------------
+    def _current_pivot_point(self) -> QPointF:
+        if self._current_pivot_doc is not None:
+            return QPointF(self._current_pivot_doc)
+
+        rect = self._drag_base_edge_rect_doc or self._base_edge_rect_doc
+        if rect is not None and not rect.isEmpty():
+            return rect.center()
+
+        return QPointF(0.0, 0.0)
+
+    # ------------------------------------------------------------------
+    def _build_transform(self) -> QTransform:
+        pivot = self._current_pivot_point()
+        return (
+            QTransform()
+            .translate(pivot.x(), pivot.y())
+            .scale(self.scale_x, self.scale_y)
+            .translate(-pivot.x(), -pivot.y())
+        )
+
+    # ------------------------------------------------------------------
+    def _scale_display_text(self) -> str:
+        if math.isclose(self.scale_x, self.scale_y, abs_tol=1e-3):
+            return f"{self.scale_x:.2f}x"
+        return f"W {self.scale_x:.2f}x  H {self.scale_y:.2f}x"
+
+    # ------------------------------------------------------------------
     def _update_scaled_rect_from_current_scale(self):
         base_rect = self._drag_base_edge_rect_doc or self._base_edge_rect_doc
         if base_rect is None or base_rect.isEmpty():
             self._scaled_edge_rect_doc = None
             return
 
-        if math.isclose(self.scale_factor, 1.0, abs_tol=1e-4):
+        if math.isclose(self.scale_x, 1.0, abs_tol=1e-4) and math.isclose(
+            self.scale_y, 1.0, abs_tol=1e-4
+        ):
             self._scaled_edge_rect_doc = QRectF(base_rect)
         else:
-            self._scaled_edge_rect_doc = self._scale_edge_rect(base_rect, self.scale_factor)
+            pivot = self._current_pivot_point()
+            self._scaled_edge_rect_doc = self._scale_edge_rect(
+                base_rect, self.scale_x, self.scale_y, pivot
+            )
 
     # ------------------------------------------------------------------
-    def _scale_edge_rect(self, rect: QRectF, factor: float) -> QRectF:
-        center = QPointF(self._get_scale_center_doc())
+    def _scale_edge_rect(
+        self, rect: QRectF, scale_x: float, scale_y: float, pivot: QPointF
+    ) -> QRectF:
         transform = (
             QTransform()
-            .translate(center.x(), center.y())
-            .scale(factor, factor)
-            .translate(-center.x(), -center.y())
+            .translate(pivot.x(), pivot.y())
+            .scale(scale_x, scale_y)
+            .translate(-pivot.x(), -pivot.y())
         )
         top_left = transform.map(rect.topLeft())
         bottom_right = transform.map(rect.bottomRight())
@@ -687,15 +702,6 @@ class ScaleTool(BaseTool):
         return None
 
     # ------------------------------------------------------------------
-    def _hit_test_pivot(self, canvas_pos: QPointF) -> bool:
-        pivot_point = self._doc_to_canvas_point(QPointF(self.pivot_doc))
-        distance = math.hypot(
-            canvas_pos.x() - pivot_point.x(),
-            canvas_pos.y() - pivot_point.y(),
-        )
-        return distance <= self._pivot_radius
-
-    # ------------------------------------------------------------------
     def _cursor_for_handle(self, handle: str | None):
         if handle in ("left", "right"):
             return Qt.SizeHorCursor
@@ -709,10 +715,6 @@ class ScaleTool(BaseTool):
         cursor = self._cursor_for_handle(handle)
         if cursor is not None:
             self.canvas.setCursor(cursor)
-            return
-
-        if self.drag_mode == "pivot" or self._hover_pivot:
-            self.canvas.setCursor(Qt.SizeAllCursor)
             return
 
         self.canvas.setCursor(self.cursor)
