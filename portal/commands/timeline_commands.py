@@ -49,6 +49,30 @@ class RemoveKeyframeCommand(_KeyframeCommand):
         self.document.remove_key_frame(self.frame_index)
 
 
+class InsertFrameCommand(_KeyframeCommand):
+    """Insert a new frame at ``frame_index``."""
+
+    def __init__(self, document: Document, frame_index: int):
+        super().__init__(document)
+        self.frame_index = frame_index
+
+    def execute(self) -> None:
+        self._capture_before()
+        self.document.insert_frame(self.frame_index)
+
+
+class DeleteFrameCommand(_KeyframeCommand):
+    """Delete the frame at ``frame_index`` if allowed."""
+
+    def __init__(self, document: Document, frame_index: int):
+        super().__init__(document)
+        self.frame_index = frame_index
+
+    def execute(self) -> None:
+        self._capture_before()
+        self.document.remove_frame(self.frame_index)
+
+
 class DuplicateKeyframeCommand(_KeyframeCommand):
     """Duplicate an existing keyframe to another frame index."""
 

@@ -18,7 +18,9 @@ from portal.core.command import (
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.commands.timeline_commands import (
     AddKeyframeCommand,
+    DeleteFrameCommand,
     DuplicateKeyframeCommand,
+    InsertFrameCommand,
     PasteKeyframeCommand,
     RemoveKeyframeCommand,
 )
@@ -177,6 +179,28 @@ class DocumentController(QObject):
         command = DuplicateKeyframeCommand(document, source_frame, target_frame)
         self.execute_command(command)
         return command.created_frame
+
+    def insert_frame(self, frame_index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        if frame_index < 0:
+            frame_index = 0
+        command = InsertFrameCommand(document, frame_index)
+        self.execute_command(command)
+
+    def delete_frame(self, frame_index: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        frame_count = len(frame_manager.frames)
+        if frame_count <= 1:
+            return
+        if not (0 <= frame_index < frame_count):
+            return
+        command = DeleteFrameCommand(document, frame_index)
+        self.execute_command(command)
 
     def has_copied_keyframe(self) -> bool:
         return self._copied_key_state is not None

@@ -71,6 +71,11 @@ class Document:
         self._notify_layer_manager_changed()
         return frame
 
+    def insert_frame(self, index: int):
+        frame = self.frame_manager.insert_frame(index)
+        self.select_frame(index)
+        return frame
+
     def remove_frame(self, index: int):
         self.frame_manager.remove_frame(index)
         self._notify_layer_manager_changed()

@@ -214,6 +214,48 @@ class FrameManager:
         self._rebind_all_layers()
         return frame
 
+    def insert_frame(self, index: int) -> Frame:
+        if index < 0:
+            index = 0
+        if not self.frames:
+            frame = Frame(self.width, self.height)
+            self.frames.insert(0, frame)
+            self.active_frame_index = 0
+            if not self.frame_markers:
+                self.frame_markers = {0}
+            self._initialize_layer_keys()
+            return frame
+
+        if index > len(self.frames):
+            index = len(self.frames)
+
+        source_index = index - 1 if index > 0 else 0
+        if source_index >= len(self.frames):
+            source_index = len(self.frames) - 1
+        source_frame = self.frames[source_index]
+        new_frame = source_frame.clone()
+        self.frames.insert(index, new_frame)
+
+        if self.active_frame_index >= index:
+            self.active_frame_index += 1
+
+        updated_keys: Dict[int, Set[int]] = {}
+        for layer_uid, frames in self.layer_keys.items():
+            shifted: Set[int] = set()
+            for frame_index in frames:
+                if frame_index >= index:
+                    shifted.add(frame_index + 1)
+                else:
+                    shifted.add(frame_index)
+            if not shifted and self.frames:
+                shifted = {0}
+            updated_keys[layer_uid] = shifted
+        self.layer_keys = updated_keys
+
+        self._refresh_frame_markers()
+        self._rebind_all_layers()
+        return new_frame
+
     def remove_frame(self, index: int) -> None:
         if not (0 <= index < len(self.frames)):
             raise IndexError("Frame index out of range.")
