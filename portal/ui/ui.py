@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         self._timeline_play_icon = QIcon("icons/play.png")
         self._timeline_pause_icon = QIcon("icons/pause.png")
         self._timeline_stop_icon = QIcon("icons/stop.png")
+        self._timeline_autokey_icon = QIcon("icons/autokey.png")
+        self._timeline_autokey_disabled_icon = QIcon("icons/autokeydisabled.png")
 
         self.timeline_play_button = QToolButton(self.timeline_panel)
         self.timeline_play_button.setIcon(self._timeline_play_icon)
@@ -112,6 +114,12 @@ class MainWindow(QMainWindow):
         self.timeline_stop_button.setIcon(self._timeline_stop_icon)
         self.timeline_stop_button.setText("Stop")
         timeline_header_layout.addWidget(self.timeline_stop_button)
+
+        self.timeline_autokey_button = QToolButton(self.timeline_panel)
+        self.timeline_autokey_button.setCheckable(True)
+        self.timeline_autokey_button.setIcon(self._timeline_autokey_disabled_icon)
+        self.timeline_autokey_button.setToolTip("Toggle auto-keyframing")
+        timeline_header_layout.addWidget(self.timeline_autokey_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
         self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
@@ -158,6 +166,7 @@ class MainWindow(QMainWindow):
 
         self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
+        self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
 
@@ -184,6 +193,7 @@ class MainWindow(QMainWindow):
 
         self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
 
+        self._on_timeline_autokey_toggled(self.timeline_autokey_button.isChecked())
         self._update_current_frame_label(self.timeline_widget.current_frame())
         self._update_timeline_layer_label(None)
         self._on_player_state_changed(self.animation_player.is_playing)
@@ -341,6 +351,15 @@ class MainWindow(QMainWindow):
             or self.timeline_widget.current_frame() != 0
         )
         self.timeline_stop_button.setEnabled(should_enable)
+
+    @Slot(bool)
+    def _on_timeline_autokey_toggled(self, enabled: bool) -> None:
+        icon = (
+            self._timeline_autokey_icon
+            if enabled
+            else self._timeline_autokey_disabled_icon
+        )
+        self.timeline_autokey_button.setIcon(icon)
 
     @Slot(bool)
     def _on_timeline_play_toggled(self, checked: bool) -> None:
