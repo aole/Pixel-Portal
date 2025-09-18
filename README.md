@@ -13,6 +13,7 @@ Pixel-Portal is a lightweight, cross-platform image editor built with Python and
 - **AI-Powered Image Generation**: Integrated with state-of-the-art AI models to generate images from text prompts.
 - **Optional Background Removal**: Strip backgrounds from generated images using `rembg` (requires `onnxruntime`).
 - **Background Options**: Choose checkered, solid colors, or a custom image for the canvas background.
+- **Island Creator Script**: Generate stylized island layers with adjustable water coverage, beaches, deserts, and mountain peaks using a handy script.
 - **Undo/Redo**: A robust undo/redo system to make editing easier and non-destructive.
 - **Customizable Interface**: A simple and intuitive interface that can be customized to your liking.
 
