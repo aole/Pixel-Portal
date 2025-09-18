@@ -1,7 +1,7 @@
 import math
 from typing import Dict, List, Tuple
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QColor, QPainter, QPolygonF
 
 POSE_CHOICES = ["T-Pose", "A-Pose"]
@@ -19,12 +19,6 @@ params = [
         'choices': POSE_CHOICES,
         'default': 'A-Pose',
     },
-    {
-        'name': 'joint_color',
-        'type': 'color',
-        'label': 'Joint Color',
-        'default': '#F97316',
-    },
 ]
 
 
@@ -36,7 +30,6 @@ class HumanoidGeometry:
         self.rectangles: List[QRectF] = []
         self.polygons: List[QPolygonF] = []
         self.segments: List[Tuple[QPointF, QPointF, float]] = []
-        self.joints: List[Tuple[QPointF, float]] = []
         self.min_x: float = float('inf')
         self.max_x: float = float('-inf')
         self.min_y: float = float('inf')
@@ -59,12 +52,6 @@ class HumanoidGeometry:
             max(start.x(), end.x()) + half,
             max(start.y(), end.y()) + half,
         )
-
-    def add_joint(self, center: QPointF, diameter: float) -> None:
-        radius = diameter / 2.0
-        rect = QRectF(center.x() - radius, center.y() - radius, diameter, diameter)
-        self.joints.append((center, diameter))
-        self._update_bounds(rect.left(), rect.top(), rect.right(), rect.bottom())
 
     def add_polygon(self, polygon: QPolygonF) -> None:
         self.polygons.append(polygon)
@@ -122,7 +109,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     pelvis_height = head_height * 1.0
     pelvis_width = head_height * 1.5
 
-    joint_diameter = max(2.0, head_height * 0.35)
     arm_thickness = max(1.0, head_height * 0.35)
     forearm_thickness = max(1.0, head_height * 0.3)
     upper_arm_length = head_height * 1.5
@@ -165,11 +151,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
     left_hip = QPointF(-hip_offset, hip_y)
     right_hip = QPointF(hip_offset, hip_y)
 
-    geometry.add_joint(left_shoulder, joint_diameter)
-    geometry.add_joint(right_shoulder, joint_diameter)
-    geometry.add_joint(left_hip, joint_diameter)
-    geometry.add_joint(right_hip, joint_diameter)
-
     pose_settings: Dict[str, Dict[str, Tuple[float, float]]] = {
         "T-Pose": {
             'arms': (0.0, 0.0),
@@ -201,9 +182,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
         geometry.add_segment(shoulder_point, elbow_point, arm_thickness)
         geometry.add_segment(elbow_point, wrist_point, forearm_thickness)
 
-        geometry.add_joint(elbow_point, joint_diameter)
-        geometry.add_joint(wrist_point, joint_diameter * 0.9)
-
     # Legs
     for side, hip_point in (('left', left_hip), ('right', right_hip)):
         upper_angle, lower_angle = leg_angles[side]
@@ -218,9 +196,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
 
         geometry.add_segment(hip_point, knee_point, leg_thickness)
         geometry.add_segment(knee_point, ankle_point, calf_thickness)
-
-        geometry.add_joint(knee_point, joint_diameter)
-        geometry.add_joint(ankle_point, joint_diameter * 0.6)
 
         if side == 'left':
             foot_rect = QRectF(
@@ -247,13 +222,6 @@ def build_humanoid_geometry(head_height: float, pose: str) -> HumanoidGeometry:
 def main(api, values):
     pose = values['pose']
     structure_color = QColor(STRUCTURE_COLOR_HEX)
-    joint_color = QColor(values['joint_color'])
-    joint_color.setAlpha(200)
-
-    joints_layer = api.create_layer("Humanoid Joints")
-    if not joints_layer:
-        api.show_message_box("Script Error", "Could not create the joints layer.")
-        return
 
     structure_layer = api.create_layer("Humanoid Structure")
     if not structure_layer:
@@ -294,26 +262,6 @@ def main(api, values):
 
         return geometry, horizontal_offset, vertical_offset
 
-    def draw_joints(image):
-        geometry, horizontal_offset, vertical_offset = layout_geometry(image)
-
-        painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing, False)
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(joint_color)
-        for center, diameter in geometry.joints:
-            radius = diameter / 2.0
-            ellipse_rect = QRectF(
-                center.x() - radius + horizontal_offset,
-                center.y() - radius + vertical_offset,
-                diameter,
-                diameter,
-            )
-            painter.drawEllipse(ellipse_rect)
-
-        painter.end()
-
     def draw_structure(image):
         geometry, horizontal_offset, vertical_offset = layout_geometry(image)
 
@@ -338,5 +286,4 @@ def main(api, values):
 
         painter.end()
 
-    api.modify_layer(joints_layer, draw_joints)
     api.modify_layer(structure_layer, draw_structure)
