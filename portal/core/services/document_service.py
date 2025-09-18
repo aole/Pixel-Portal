@@ -1,6 +1,9 @@
+import math
+import os
+
+from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
 from PySide6.QtWidgets import QFileDialog, QMessageBox
-import os
 
 from portal.core.document import Document
 
@@ -60,6 +63,148 @@ class DocumentService:
                 image.save(file_path)
 
             app.is_dirty = False
+
+    def export_animation(self):
+        app = self.app
+        if app is None:
+            return
+
+        document = getattr(app, "document", None)
+        if document is None:
+            return
+
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None or not getattr(frame_manager, "frames", None):
+            parent = getattr(app, "main_window", None)
+            QMessageBox.information(
+                parent,
+                "Export Animation",
+                "The current document does not contain any animation frames to export.",
+            )
+            return
+
+        parent = getattr(app, "main_window", None)
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            parent,
+            "Export Animation",
+            app.last_directory,
+            "Animated GIF (*.gif);;Animated PNG (*.png *.apng);;Animated WebP (*.webp)",
+        )
+        if not file_path:
+            return
+
+        base_path, extension = os.path.splitext(file_path)
+        extension = extension.lower()
+        if not extension:
+            if "GIF" in selected_filter:
+                extension = ".gif"
+            elif "PNG" in selected_filter:
+                extension = ".apng"
+            elif "WebP" in selected_filter:
+                extension = ".webp"
+            else:
+                extension = ".gif"
+            file_path = base_path + extension
+
+        format_map = {
+            ".gif": "GIF",
+            ".png": "PNG",
+            ".apng": "PNG",
+            ".webp": "WEBP",
+        }
+        if extension not in format_map:
+            extension = ".gif"
+            file_path = base_path + extension
+        format_name = format_map[extension]
+
+        export_directory = os.path.dirname(file_path)
+        if export_directory:
+            app.last_directory = export_directory
+            app.config.set("General", "last_directory", app.last_directory)
+
+        main_window = getattr(app, "main_window", None)
+        if main_window is not None:
+            try:
+                total_frames = int(main_window.animation_player.total_frames)
+            except (TypeError, ValueError):
+                total_frames = len(frame_manager.frames)
+            fps_value = getattr(main_window.animation_player, "fps", 12.0)
+        else:
+            total_frames = len(frame_manager.frames)
+            fps_value = 12.0
+
+        if total_frames <= 0:
+            total_frames = 1
+
+        try:
+            fps_value = float(fps_value)
+        except (TypeError, ValueError):
+            fps_value = 12.0
+        if not math.isfinite(fps_value) or fps_value <= 0:
+            fps_value = 12.0
+
+        rendered_cache = {}
+        pil_frames = []
+        frame_count = len(frame_manager.frames)
+        for playback_index in range(total_frames):
+            resolved_index = frame_manager.resolve_key_frame_index(playback_index)
+            if resolved_index is None:
+                continue
+            if not (0 <= resolved_index < frame_count):
+                continue
+            cached = rendered_cache.get(resolved_index)
+            if cached is None:
+                qimage = frame_manager.frames[resolved_index].render()
+                cached = Document.qimage_to_pil(qimage).convert("RGBA")
+                rendered_cache[resolved_index] = cached
+            pil_frames.append(cached.copy())
+
+        if not pil_frames:
+            QMessageBox.information(
+                parent,
+                "Export Animation",
+                "No frames are available to export for the current animation.",
+            )
+            return
+
+        frame_duration = max(1, int(round(1000.0 / fps_value)))
+
+        base_frame = pil_frames[0]
+        append_frames = [frame.copy() for frame in pil_frames[1:]]
+
+        if format_name == "GIF":
+            base_frame = base_frame.convert("P", palette=Image.ADAPTIVE)
+            append_frames = [frame.convert("P", palette=Image.ADAPTIVE) for frame in append_frames]
+
+        save_kwargs = {}
+        if append_frames:
+            save_kwargs.update(
+                {
+                    "save_all": True,
+                    "append_images": append_frames,
+                    "loop": 0,
+                    "duration": frame_duration,
+                }
+            )
+            if format_name in {"GIF", "PNG"}:
+                save_kwargs["disposal"] = 2
+        else:
+            if format_name in {"GIF", "PNG"}:
+                save_kwargs["duration"] = frame_duration
+
+        if format_name == "WEBP":
+            save_kwargs["lossless"] = True
+            if append_frames:
+                save_kwargs.setdefault("save_all", True)
+
+        try:
+            base_frame.save(file_path, format=format_name, **save_kwargs)
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(
+                parent,
+                "Export Animation",
+                f"Failed to export animation: {exc}",
+            )
 
     def import_animation(self):
         app = self.app

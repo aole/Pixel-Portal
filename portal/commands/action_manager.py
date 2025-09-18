@@ -38,6 +38,9 @@ class ActionManager:
         self.import_animation_action = QAction("Import Animation...", self.main_window)
         self.import_animation_action.triggered.connect(self.app.document_service.import_animation)
 
+        self.export_animation_action = QAction("Export Animation...", self.main_window)
+        self.export_animation_action.triggered.connect(self.app.document_service.export_animation)
+
         self.save_action = QAction(QIcon("icons/save.png"), "&Save", self.main_window)
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.app.document_service.save_document)
