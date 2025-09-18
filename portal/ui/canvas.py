@@ -275,7 +275,11 @@ class Canvas(QWidget):
     def enterEvent(self, event):
         self.setFocus()
         self.mouse_over_canvas = True
-        self.on_tool_changed(self.drawing_context.tool)
+        current_tool_name = getattr(self.current_tool, "name", None)
+        if current_tool_name != self.drawing_context.tool:
+            self.on_tool_changed(self.drawing_context.tool)
+        elif self.current_tool is not None:
+            self.setCursor(self.current_tool.cursor)
         self.update()
         self.zoom_changed.emit(self.zoom)
         doc_pos = self.get_doc_coords(event.pos())
