@@ -119,6 +119,10 @@ class MainWindow(QMainWindow):
         self.timeline_auto_key_button.setIcon(self._timeline_auto_key_icon)
         self.timeline_auto_key_button.setCheckable(True)
         self.timeline_auto_key_button.setToolTip("Auto Key: Off – add keys manually")
+        auto_key_height = self.timeline_auto_key_button.sizeHint().height()
+        if auto_key_height > 0:
+            self.timeline_auto_key_button.setFixedHeight(auto_key_height)
+            self.timeline_auto_key_button.setFixedWidth(auto_key_height * 3)
         timeline_header_layout.addWidget(self.timeline_auto_key_button)
 
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
