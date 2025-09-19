@@ -1176,7 +1176,10 @@ def test_merge_layer_down_current_frame_creates_missing_key():
     assert bottom_keys_after == [0, 1]
     bottom_layer_frame1 = layer_at(1, bottom_layer.uid)
     assert bottom_layer_frame1.image.pixelColor(0, 0) == QColor("red")
-    assert len(document.layer_manager.layers) == 2
+    merged_manager = document.layer_manager
+    assert len(merged_manager.layers) == 1
+    assert merged_manager.layers[0].uid == bottom_layer.uid
+    assert top_layer.uid not in document.frame_manager.layer_keys
 
     command.undo()
 
@@ -1186,6 +1189,10 @@ def test_merge_layer_down_current_frame_creates_missing_key():
     assert fallback_index == 0
     fallback_layer = layer_at(fallback_index, bottom_layer.uid)
     assert fallback_layer.image.pixelColor(0, 0) == QColor(0, 0, 0, 0)
+    restored_manager = document.layer_manager
+    assert len(restored_manager.layers) == 2
+    assert any(layer.uid == top_layer.uid for layer in restored_manager.layers)
+    assert document.frame_manager.layer_key_frames(top_layer.uid) == [0, 1]
 
 
 def test_collapse_layers_merges_entire_stack():

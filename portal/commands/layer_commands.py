@@ -133,6 +133,8 @@ def _merge_layer_down_current_frame(document: 'Document', layer_index: int) -> b
     painter.end()
 
     target_layer.on_image_change.emit()
+    layer_manager.remove_layer(layer_index)
+    document.unregister_layer(top_uid)
     return True
 
 
