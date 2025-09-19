@@ -1,6 +1,5 @@
-from typing import Iterable, Optional
-
 import os
+from typing import Iterable, Optional
 
 from PySide6.QtCore import QObject, Signal, Slot
 
