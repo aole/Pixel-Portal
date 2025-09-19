@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt, Signal
 
 class LayerListWidget(QListWidget):
     merge_down_requested = Signal(int)
+    merge_down_current_frame_requested = Signal(int)
     select_opaque_requested = Signal(int)
     duplicate_requested = Signal(int)
     remove_background_requested = Signal(int)
@@ -21,6 +22,7 @@ class LayerListWidget(QListWidget):
         index = self.row(item)
         menu = QMenu()
         merge_down_action = menu.addAction("Merge Down")
+        merge_down_current_frame_action = menu.addAction("Merge Down (Current Frame)")
         select_opaque_action = menu.addAction("Select Opaque")
         duplicate_action = menu.addAction("Duplicate")
         remove_bg_action = menu.addAction("Remove Background")
@@ -32,6 +34,8 @@ class LayerListWidget(QListWidget):
 
         if action == merge_down_action:
             self.merge_down_requested.emit(index)
+        elif action == merge_down_current_frame_action:
+            self.merge_down_current_frame_requested.emit(index)
         elif action == select_opaque_action:
             self.select_opaque_requested.emit(index)
         elif action == duplicate_action:

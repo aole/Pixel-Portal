@@ -36,6 +36,9 @@ class LayerManagerWidget(QWidget):
         self.layer_list.itemSelectionChanged.connect(self.on_selection_changed)
         self.layer_list.model().rowsMoved.connect(self.on_layers_moved)
         self.layer_list.merge_down_requested.connect(self.merge_layer_down)
+        self.layer_list.merge_down_current_frame_requested.connect(
+            self.merge_layer_down_current_frame
+        )
         self.layer_list.select_opaque_requested.connect(self.select_opaque)
         self.layer_list.duplicate_requested.connect(self.duplicate_layer_from_menu)
         self.layer_list.remove_background_requested.connect(self.remove_background_from_menu)
@@ -298,6 +301,16 @@ class LayerManagerWidget(QWidget):
         actual_index = len(document.layer_manager.layers) - 1 - index_in_list
         from portal.commands.layer_commands import MergeLayerDownCommand
         command = MergeLayerDownCommand(document, actual_index)
+        self.app.execute_command(command)
+
+    def merge_layer_down_current_frame(self, index_in_list):
+        document = self.app.document
+        if document is None:
+            return
+        actual_index = len(document.layer_manager.layers) - 1 - index_in_list
+        from portal.commands.layer_commands import MergeLayerDownCurrentFrameCommand
+
+        command = MergeLayerDownCurrentFrameCommand(document, actual_index)
         self.app.execute_command(command)
 
     def select_opaque(self, index_in_list):
