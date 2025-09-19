@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 import io
 import json
 
@@ -119,6 +119,18 @@ class Document:
         if layer is None:
             return False
         changed = self.frame_manager.set_layer_key_frames(layer.uid, frames)
+        if changed:
+            self._notify_layer_manager_changed()
+        return changed
+
+    def move_key_frames(self, moves: Mapping[int, int]) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.move_layer_keys(layer.uid, moves)
         if changed:
             self._notify_layer_manager_changed()
         return changed

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Mapping, Optional, Set
 
 from PySide6.QtGui import QImage
 
@@ -79,24 +79,23 @@ class FrameManager:
         source_layer = self._find_layer(source_manager, layer_uid)
         if source_layer is None:
             return
+        source_index = self._find_layer_index(source_manager, layer_uid)
+        if source_index is None:
+            return
+
+        clone = source_layer.clone()
         target_layer = self._find_layer(target_manager, layer_uid)
         if target_layer is None:
-            index = self._find_layer_index(source_manager, layer_uid)
-            if index is None:
-                return
-            clone = source_layer.clone()
-            target_manager.layers.insert(index, clone)
-            target_layer = clone
-        elif target_layer is source_layer:
-            index = self._find_layer_index(source_manager, layer_uid)
-            if index is None:
-                return
-            clone = source_layer.clone()
-            target_manager.layers[index] = clone
-            target_layer = clone
-        if target_layer is source_layer:
-            return
-        target_layer.apply_key_state_from(source_layer)
+            insertion_index = min(source_index, len(target_manager.layers))
+            target_manager.layers.insert(insertion_index, clone)
+        else:
+            target_index = self._find_layer_index(target_manager, layer_uid)
+            if target_index is None:
+                target_index = min(source_index, len(target_manager.layers))
+                target_manager.layers.insert(target_index, clone)
+            else:
+                target_manager.layers[target_index] = clone
+
 
     def _copy_layer_between_layers(
         self, source_uid: int, target_uid: int, frame_index: int
@@ -130,6 +129,8 @@ class FrameManager:
             if fallback_index is None:
                 continue
             if not (0 <= fallback_index < len(self.frames)):
+                continue
+            if frame_index < fallback_index:
                 continue
             source_manager = self.frames[fallback_index].layer_manager
             target_manager = frame.layer_manager
@@ -355,6 +356,55 @@ class FrameManager:
         self._rebind_layer_fallbacks(layer_uid)
         return True
 
+    def move_layer_keys(self, layer_uid: int, moves: Mapping[int, int]) -> bool:
+        keys = self.layer_keys.get(layer_uid)
+        if not keys:
+            return False
+        normalized: dict[int, int] = {}
+        for source, target in moves.items():
+            try:
+                source_index = int(source)
+                target_index = int(target)
+            except (TypeError, ValueError):
+                continue
+            if source_index not in keys:
+                continue
+            if target_index < 0:
+                continue
+            self.ensure_frame(target_index)
+            if not (0 <= target_index < len(self.frames)):
+                continue
+            normalized[source_index] = target_index
+        if not normalized:
+            return False
+        if all(source == target for source, target in normalized.items()):
+            return False
+
+        for source, target in normalized.items():
+            if source == target:
+                continue
+            self._clone_layer_state(layer_uid, source, target)
+
+        existing_keys = set(keys)
+        target_positions = set(normalized.values())
+
+        updated_keys = set(existing_keys)
+        for source, target in normalized.items():
+            if source != target:
+                updated_keys.discard(source)
+        for target in target_positions:
+            updated_keys.discard(target)
+        updated_keys.update(target_positions)
+        if not updated_keys and self.frames:
+            updated_keys = {0}
+        if updated_keys == existing_keys:
+            return False
+        self.layer_keys[layer_uid] = updated_keys
+
+        self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
+        return True
+
     def add_layer_key(self, layer_uid: int, index: int) -> bool:
         if index < 0:
             return False
@@ -552,7 +602,7 @@ class FrameManager:
         position = bisect_right(sorted_keys, frame_index)
         if position:
             return sorted_keys[position - 1]
-        return sorted_keys[0]
+        return frame_index
 
     def resolve_layer_key_frame_index(
         self, layer_uid: int, frame_index: Optional[int] = None

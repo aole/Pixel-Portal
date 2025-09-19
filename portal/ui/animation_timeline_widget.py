@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import ceil
 from typing import Iterable, List, Set
 
@@ -35,6 +35,43 @@ class _TimelineLayout:
     scrub_bottom: float
 
 
+@dataclass
+class _KeyDragState:
+    """Runtime information captured while dragging keyed frames."""
+
+    is_dragging: bool = False
+    candidate_frame: int | None = None
+    candidate_modifiers: Qt.KeyboardModifiers = Qt.NoModifier
+    initial_keys: Set[int] = field(default_factory=set)
+    other_keys: Set[int] = field(default_factory=set)
+    all_keys: Set[int] = field(default_factory=set)
+    start_frame: int = 0
+    last_offset: int = 0
+    has_moved: bool = False
+    defer_selection: bool = False
+    follow_current_frame: bool = False
+    start_current_frame: int = 0
+
+    def clear(self) -> None:
+        self.is_dragging = False
+        self.candidate_frame = None
+        self.candidate_modifiers = Qt.NoModifier
+        self.initial_keys.clear()
+        self.other_keys.clear()
+        self.all_keys.clear()
+        self.start_frame = 0
+        self.last_offset = 0
+        self.has_moved = False
+        self.defer_selection = False
+        self.follow_current_frame = False
+        self.start_current_frame = 0
+
+    @property
+    def pending(self) -> bool:
+        """Return True if a drag candidate is waiting to activate."""
+
+        return self.candidate_frame is not None
+
 class AnimationTimelineWidget(QWidget):
     """A minimal animation timeline widget displaying frames and keyed positions.
 
@@ -53,6 +90,7 @@ class AnimationTimelineWidget(QWidget):
     key_paste_requested = Signal(int)
     frame_insert_requested = Signal(int)
     frame_delete_requested = Signal(int)
+    key_move_requested = Signal(list, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -76,6 +114,8 @@ class AnimationTimelineWidget(QWidget):
         self._scrub_tolerance = 4.0
         self._key_hit_padding = 4.0
         self._document_frame_count = 1
+        self._drag_state = _KeyDragState()
+        self._drag_state.clear()
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -138,6 +178,7 @@ class AnimationTimelineWidget(QWidget):
         if new_keys == self._keys:
             return
         self._keys = new_keys
+        self._clear_key_drag_state()
         self._ensure_base_frame(max(self._keys))
         if added_keys:
             self._set_selection(set(), anchor=None)
@@ -171,13 +212,17 @@ class AnimationTimelineWidget(QWidget):
         return self._current_frame
 
     def set_current_frame(self, frame: int) -> None:
+        self._set_current_frame_internal(frame, emit_signal=True)
+
+    def _set_current_frame_internal(self, frame: int, *, emit_signal: bool) -> None:
         frame = max(0, int(frame))
         if frame == self._current_frame:
             return
         self._current_frame = frame
         self._ensure_base_frame(frame)
         self._ensure_frame_visible(frame)
-        self.current_frame_changed.emit(self._current_frame)
+        if emit_signal:
+            self.current_frame_changed.emit(self._current_frame)
         self.update()
 
     def add_key(self, frame: int) -> None:
@@ -336,19 +381,36 @@ class AnimationTimelineWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            self._clear_key_drag_state()
             modifiers = event.modifiers()
             ctrl_down = self._is_control_modifier(modifiers)
             shift_down = bool(modifiers & Qt.ShiftModifier)
             key_frame = self._key_at_point(event)
             if key_frame is not None:
                 self._is_dragging = False
-                self._handle_key_click(key_frame, modifiers)
-                if not ctrl_down and not shift_down:
+                if not ctrl_down and not shift_down and key_frame in self._selected_keys:
+                    self._prepare_key_drag(
+                        key_frame,
+                        modifiers=modifiers,
+                        defer_selection=True,
+                    )
                     self.set_current_frame(key_frame)
+                else:
+                    self._handle_key_click(key_frame, modifiers)
+                    if not ctrl_down and not shift_down:
+                        self._prepare_key_drag(
+                            key_frame,
+                            modifiers=modifiers,
+                            defer_selection=False,
+                        )
+                        self.set_current_frame(key_frame)
+                    else:
+                        self._clear_key_drag_state()
                 event.accept()
                 return
             frame = self._frame_at_point(event)
             if self._is_point_in_scrub_area(event):
+                self._clear_key_drag_state()
                 self._is_dragging = True
                 self.set_current_frame(frame)
                 event.accept()
@@ -376,6 +438,14 @@ class AnimationTimelineWidget(QWidget):
             self._is_panning = False
             self._last_pan_x = 0.0
             self.unsetCursor()
+        if self._drag_state.is_dragging or self._drag_state.pending:
+            if event.buttons() & Qt.LeftButton:
+                frame = self._frame_at_point(event)
+                self._update_key_drag(frame)
+                event.accept()
+                return
+            if not self._drag_state.is_dragging:
+                self._clear_key_drag_state()
         if not (event.buttons() & Qt.LeftButton):
             self._is_dragging = False
         if self._is_dragging:
@@ -387,6 +457,8 @@ class AnimationTimelineWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            if self._finish_key_drag(event):
+                return
             if self._is_dragging:
                 frame = self._frame_at_point(event)
                 self.set_current_frame(frame)
@@ -647,4 +719,108 @@ class AnimationTimelineWidget(QWidget):
         top = layout.scrub_top - self._scrub_tolerance
         bottom = layout.scrub_bottom + self._scrub_tolerance
         return top <= y <= bottom
+
+    def _prepare_key_drag(
+        self,
+        frame: int,
+        *,
+        modifiers: Qt.KeyboardModifiers,
+        defer_selection: bool,
+    ) -> None:
+        initial_selection = set(self._selected_keys)
+        if not initial_selection or frame not in initial_selection:
+            self._clear_key_drag_state()
+            return
+        state = self._drag_state
+        state.clear()
+        state.candidate_frame = frame
+        state.candidate_modifiers = modifiers
+        state.initial_keys.update(initial_selection)
+        state.other_keys.update(key for key in self._keys if key not in state.initial_keys)
+        state.all_keys.update(self._keys)
+        state.start_frame = frame
+        state.last_offset = 0
+        state.has_moved = False
+        state.defer_selection = defer_selection
+        state.follow_current_frame = self._current_frame in initial_selection
+        state.start_current_frame = self._current_frame
+
+    def _clear_key_drag_state(self) -> None:
+        self._drag_state.clear()
+
+    def _clamp_key_drag_delta(self, delta: int) -> int:
+        state = self._drag_state
+        if not state.initial_keys:
+            return 0
+        min_key = min(state.initial_keys)
+        min_delta = -min_key
+        return max(min_delta, delta)
+
+    def _update_key_drag(self, frame: int) -> None:
+        state = self._drag_state
+        if not state.pending:
+            return
+        delta = frame - state.start_frame
+        clamped_delta = self._clamp_key_drag_delta(delta)
+        if not state.is_dragging and (clamped_delta != 0 or state.has_moved):
+            state.is_dragging = True
+        if clamped_delta == state.last_offset:
+            if delta != 0:
+                state.has_moved = True
+            return
+        if clamped_delta != 0:
+            state.has_moved = True
+        self._apply_key_drag_delta(clamped_delta)
+        state.last_offset = clamped_delta
+
+    def _apply_key_drag_delta(self, delta: int) -> None:
+        state = self._drag_state
+        if not state.initial_keys:
+            return
+        shifted_keys = {max(0, frame + delta) for frame in state.initial_keys}
+        remaining_keys = {frame for frame in state.other_keys if frame not in shifted_keys}
+        updated_keys = remaining_keys | shifted_keys
+        if not updated_keys:
+            updated_keys = {0}
+        if updated_keys != self._keys:
+            self._keys = updated_keys
+        self._ensure_base_frame(max(updated_keys))
+        anchor = self._selection_anchor
+        if anchor in state.initial_keys:
+            anchor = anchor + delta
+        self._set_selection(shifted_keys, anchor=anchor, prefer_existing_anchor=True)
+        if state.follow_current_frame:
+            target_frame = state.start_current_frame + delta
+            self._set_current_frame_internal(target_frame, emit_signal=False)
+        else:
+            self.update()
+        self.keys_changed.emit(self.keys())
+
+    def _finish_key_drag(self, event: QMouseEvent) -> bool:
+        state = self._drag_state
+        if not state.pending and not state.is_dragging and not state.has_moved:
+            return False
+        if state.is_dragging or state.has_moved:
+            moved_keys = self.keys()
+            follow_current = state.follow_current_frame
+            final_frame = self._current_frame
+            initial_selection = sorted(state.initial_keys)
+            if initial_selection and set(moved_keys) != state.all_keys:
+                self.key_move_requested.emit(initial_selection, state.last_offset)
+            if follow_current:
+                self._set_current_frame_internal(final_frame, emit_signal=False)
+                self.current_frame_changed.emit(final_frame)
+            self._clear_key_drag_state()
+            event.accept()
+            return True
+        if state.defer_selection and state.candidate_frame is not None:
+            self._handle_key_click(state.candidate_frame, state.candidate_modifiers)
+            modifiers = state.candidate_modifiers
+            if not self._is_control_modifier(modifiers) and not (
+                modifiers & Qt.ShiftModifier
+            ):
+                self.set_current_frame(state.candidate_frame)
+        self._clear_key_drag_state()
+        event.accept()
+        return True
 
