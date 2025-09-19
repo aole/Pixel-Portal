@@ -616,9 +616,9 @@ class MainWindow(QMainWindow):
         if pasted:
             self.timeline_widget.set_current_frame(frame)
 
-    @Slot(list)
-    def on_timeline_move_keys(self, frames: list[int]) -> None:
-        self.app.set_keyframes(frames)
+    @Slot(list, int)
+    def on_timeline_move_keys(self, frames: list[int], delta: int) -> None:
+        self.app.move_keyframes(frames, delta)
 
     @Slot(int)
     def on_timeline_insert_frame(self, frame: int) -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Mapping, Optional
 
 from portal.core.command import Command
 from portal.core.document import Document
@@ -70,6 +70,30 @@ class SetKeyframesCommand(_KeyframeCommand):
     def execute(self) -> None:
         self._capture_before()
         self.document.set_key_frames(self.frames)
+
+
+class MoveKeyframesCommand(_KeyframeCommand):
+    """Move existing keyframes according to ``moves`` mapping."""
+
+    def __init__(self, document: Document, moves: Mapping[int, int]):
+        super().__init__(document)
+        normalized: dict[int, int] = {}
+        for source, target in moves.items():
+            try:
+                source_index = int(source)
+                target_index = int(target)
+            except (TypeError, ValueError):
+                continue
+            if source_index < 0 or target_index < 0:
+                continue
+            normalized[source_index] = target_index
+        self.moves = normalized
+
+    def execute(self) -> None:
+        if not self.moves:
+            return
+        self._capture_before()
+        self.document.move_key_frames(self.moves)
 
 
 class InsertFrameCommand(_KeyframeCommand):

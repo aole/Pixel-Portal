@@ -53,7 +53,7 @@ class AnimationTimelineWidget(QWidget):
     key_paste_requested = Signal(int)
     frame_insert_requested = Signal(int)
     frame_delete_requested = Signal(int)
-    key_move_requested = Signal(list)
+    key_move_requested = Signal(list, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -81,6 +81,7 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_candidate_frame: int | None = None
         self._key_drag_initial_keys: Set[int] = set()
         self._key_drag_other_keys: Set[int] = set()
+        self._key_drag_initial_all_keys: Set[int] = set()
         self._key_drag_start_frame = 0
         self._key_drag_last_offset = 0
         self._key_drag_has_moved = False
@@ -710,6 +711,7 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_other_keys = {
             key for key in self._keys if key not in self._key_drag_initial_keys
         }
+        self._key_drag_initial_all_keys = set(self._keys)
         self._key_drag_start_frame = frame
         self._key_drag_last_offset = 0
         self._key_drag_has_moved = False
@@ -723,6 +725,7 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_candidate_modifiers = Qt.NoModifier
         self._key_drag_initial_keys = set()
         self._key_drag_other_keys = set()
+        self._key_drag_initial_all_keys = set()
         self._key_drag_start_frame = 0
         self._key_drag_last_offset = 0
         self._key_drag_has_moved = False
@@ -790,7 +793,9 @@ class AnimationTimelineWidget(QWidget):
             moved_keys = self.keys()
             follow_current = self._key_drag_follow_current_frame
             final_frame = self._current_frame
-            self.key_move_requested.emit(moved_keys)
+            initial_selection = sorted(self._key_drag_initial_keys)
+            if initial_selection and set(moved_keys) != self._key_drag_initial_all_keys:
+                self.key_move_requested.emit(initial_selection, self._key_drag_last_offset)
             if follow_current:
                 self._set_current_frame_internal(final_frame, emit_signal=False)
                 self.current_frame_changed.emit(final_frame)

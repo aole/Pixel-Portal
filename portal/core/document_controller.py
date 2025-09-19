@@ -21,6 +21,7 @@ from portal.commands.timeline_commands import (
     DeleteFrameCommand,
     DuplicateKeyframeCommand,
     InsertFrameCommand,
+    MoveKeyframesCommand,
     PasteKeyframeCommand,
     RemoveKeyframeCommand,
     SetKeyframesCommand,
@@ -146,6 +147,35 @@ class DocumentController(QObject):
         if normalized == existing_keys:
             return
         command = SetKeyframesCommand(document, normalized)
+        self.execute_command(command)
+
+    def move_keyframes(self, frames: Iterable[int], delta: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        layer_manager = getattr(frame_manager, "current_layer_manager", None)
+        if layer_manager is None or layer_manager.active_layer is None:
+            return
+        try:
+            offset = int(delta)
+        except (TypeError, ValueError):
+            return
+        if not offset:
+            return
+        normalized: dict[int, int] = {}
+        for value in frames:
+            try:
+                source = int(value)
+            except (TypeError, ValueError):
+                continue
+            target = source + offset
+            if source < 0 or target < 0:
+                continue
+            normalized[source] = target
+        if not normalized:
+            return
+        command = MoveKeyframesCommand(document, normalized)
         self.execute_command(command)
 
     def execute_command(self, command):
