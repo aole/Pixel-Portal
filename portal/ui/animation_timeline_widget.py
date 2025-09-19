@@ -86,6 +86,8 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_has_moved = False
         self._key_drag_defer_selection = False
         self._key_drag_candidate_modifiers = Qt.NoModifier
+        self._key_drag_follow_current_frame = False
+        self._key_drag_start_current_frame = 0
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.setMinimumHeight(100)
@@ -182,13 +184,17 @@ class AnimationTimelineWidget(QWidget):
         return self._current_frame
 
     def set_current_frame(self, frame: int) -> None:
+        self._set_current_frame_internal(frame, emit_signal=True)
+
+    def _set_current_frame_internal(self, frame: int, *, emit_signal: bool) -> None:
         frame = max(0, int(frame))
         if frame == self._current_frame:
             return
         self._current_frame = frame
         self._ensure_base_frame(frame)
         self._ensure_frame_visible(frame)
-        self.current_frame_changed.emit(self._current_frame)
+        if emit_signal:
+            self.current_frame_changed.emit(self._current_frame)
         self.update()
 
     def add_key(self, frame: int) -> None:
@@ -708,6 +714,8 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_last_offset = 0
         self._key_drag_has_moved = False
         self._key_drag_defer_selection = defer_selection
+        self._key_drag_follow_current_frame = self._current_frame in initial_selection
+        self._key_drag_start_current_frame = self._current_frame
 
     def _clear_key_drag_state(self) -> None:
         self._is_dragging_keys = False
@@ -719,6 +727,8 @@ class AnimationTimelineWidget(QWidget):
         self._key_drag_last_offset = 0
         self._key_drag_has_moved = False
         self._key_drag_defer_selection = False
+        self._key_drag_follow_current_frame = False
+        self._key_drag_start_current_frame = 0
 
     def _clamp_key_drag_delta(self, delta: int) -> int:
         if not self._key_drag_initial_keys:
@@ -762,8 +772,9 @@ class AnimationTimelineWidget(QWidget):
         if anchor in self._key_drag_initial_keys:
             anchor = anchor + delta
         self._set_selection(shifted_keys, anchor=anchor, prefer_existing_anchor=True)
-        if self._current_frame in self._key_drag_initial_keys:
-            self.set_current_frame(self._current_frame + delta)
+        if self._key_drag_follow_current_frame:
+            target_frame = self._key_drag_start_current_frame + delta
+            self._set_current_frame_internal(target_frame, emit_signal=False)
         else:
             self.update()
         self.keys_changed.emit(self.keys())
@@ -777,7 +788,12 @@ class AnimationTimelineWidget(QWidget):
             return False
         if self._is_dragging_keys or self._key_drag_has_moved:
             moved_keys = self.keys()
+            follow_current = self._key_drag_follow_current_frame
+            final_frame = self._current_frame
             self.key_move_requested.emit(moved_keys)
+            if follow_current:
+                self._set_current_frame_internal(final_frame, emit_signal=False)
+                self.current_frame_changed.emit(final_frame)
             self._clear_key_drag_state()
             event.accept()
             return True
