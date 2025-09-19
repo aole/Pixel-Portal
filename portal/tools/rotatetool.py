@@ -1,6 +1,7 @@
 import math
 from PySide6.QtGui import QCursor, QPen, QColor, QTransform, QImage, QPainter, QPainterPath
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
+from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
 
@@ -25,9 +26,20 @@ class RotateTool(BaseTool):
         self.pivot_doc = QPoint(0, 0)
         self.original_selection_shape: QPainterPath | None = None
         self.selection_source_image: QImage | None = None
+        self._layer_tracker = ActiveLayerTracker(canvas)
+
+        self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
     def activate(self):
-        self.pivot_doc = self.calculate_default_pivot_doc()
+        self.drag_mode = None
+        self.is_hovering_handle = False
+        self.is_hovering_center = False
+        self.original_image = None
+        self.selection_source_image = None
+        self.original_selection_shape = None
+        self.angle = 0.0
+        self._layer_tracker.reset()
+        self._sync_active_layer(force=True)
 
     def calculate_default_pivot_doc(self) -> QPoint:
         if self.canvas.selection_shape:
@@ -52,7 +64,88 @@ class RotateTool(BaseTool):
             center.y() + 100 * math.sin(self.angle),
         )
 
+    def _sync_active_layer(self, *, force: bool = False, suppress_update: bool = False) -> bool:
+        """Ensure cached geometry reflects the currently selected layer."""
+
+        if not force and not self._layer_tracker.has_changed():
+            return False
+
+        self._layer_tracker.refresh()
+
+        # Drop any in-progress preview so we don't leak the previous layer's
+        # imagery onto the new target.
+        self.canvas.temp_image = None
+        self.canvas.temp_image_replaces_active_layer = False
+        self.drag_mode = None
+
+        self.original_image = None
+        self.selection_source_image = None
+        self.original_selection_shape = None
+
+        new_pivot = self.calculate_default_pivot_doc()
+        pivot_changed = new_pivot != self.pivot_doc
+        self.pivot_doc = new_pivot
+
+        angle_changed = not math.isclose(self.angle, 0.0, abs_tol=1e-6)
+        self.angle = 0.0
+        if angle_changed:
+            self.angle_changed.emit(0.0)
+
+        self.is_hovering_handle = False
+        self.is_hovering_center = False
+
+        if not suppress_update:
+            self.canvas.update()
+
+        return True
+
+    def _on_canvas_selection_changed(self, *_):
+        if self.drag_mode in ("rotate", "pivot"):
+            return
+
+        self.original_image = None
+        self.selection_source_image = None
+        self.original_selection_shape = None
+
+        new_pivot = self.calculate_default_pivot_doc()
+        if new_pivot != self.pivot_doc:
+            self.pivot_doc = new_pivot
+            self.canvas.update()
+
+    def _update_hover_state_from_point(
+        self, canvas_pos: QPointF, *, request_update: bool = True
+    ) -> None:
+        handle_pos = self.get_handle_pos()
+        center_pos = self.get_center()
+
+        distance_handle = math.hypot(
+            canvas_pos.x() - handle_pos.x(), canvas_pos.y() - handle_pos.y()
+        )
+        distance_center = math.hypot(
+            canvas_pos.x() - center_pos.x(), canvas_pos.y() - center_pos.y()
+        )
+
+        new_hover_handle = distance_handle <= 6
+        new_hover_center = distance_center <= 10
+
+        if (
+            self.is_hovering_handle != new_hover_handle
+            or self.is_hovering_center != new_hover_center
+        ):
+            self.is_hovering_handle = new_hover_handle
+            self.is_hovering_center = new_hover_center
+            if request_update:
+                self.canvas.repaint()
+
     def mousePressEvent(self, event, doc_pos):
+        if event.button() != Qt.LeftButton:
+            return
+
+        self._sync_active_layer()
+        self._update_hover_state_from_point(
+            QPointF(event.pos()), request_update=False
+        )
+
         if self.is_hovering_handle:
             self.drag_mode = 'rotate'
             layer_manager = self._get_active_layer_manager()
@@ -83,27 +176,13 @@ class RotateTool(BaseTool):
             self.drag_mode = 'pivot'
 
     def mouseHoverEvent(self, event, doc_pos):
-        canvas_pos = QPointF(event.pos())
-        handle_pos = self.get_handle_pos()
-        center_pos = self.get_center()
-
-        dx = canvas_pos.x() - handle_pos.x()
-        dy = canvas_pos.y() - handle_pos.y()
-        distance_handle = math.sqrt(dx * dx + dy * dy)
-
-        dx_center = canvas_pos.x() - center_pos.x()
-        dy_center = canvas_pos.y() - center_pos.y()
-        distance_center = math.sqrt(dx_center * dx_center + dy_center * dy_center)
-
-        new_hover_handle = (distance_handle <= 6)
-        new_hover_center = (distance_center <= 10)
-
-        if self.is_hovering_handle != new_hover_handle or self.is_hovering_center != new_hover_center:
-            self.is_hovering_handle = new_hover_handle
-            self.is_hovering_center = new_hover_center
-            self.canvas.repaint()
+        self._sync_active_layer()
+        self._update_hover_state_from_point(QPointF(event.pos()))
 
     def mouseMoveEvent(self, event, doc_pos):
+        if self._sync_active_layer():
+            return
+
         if not self.drag_mode:
             return
 
@@ -189,6 +268,12 @@ class RotateTool(BaseTool):
             self.canvas.update()
 
     def mouseReleaseEvent(self, event, doc_pos):
+        if event.button() != Qt.LeftButton:
+            return
+
+        if self._sync_active_layer():
+            return
+
         if self.drag_mode == 'rotate':
             self.canvas.temp_image = None
             self.canvas.temp_image_replaces_active_layer = False
@@ -254,8 +339,13 @@ class RotateTool(BaseTool):
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))
         self.drag_mode = None
+        self.is_hovering_handle = False
+        self.is_hovering_center = False
+        self._layer_tracker.reset()
 
     def draw_overlay(self, painter):
+        self._sync_active_layer(suppress_update=True)
+
         painter.save()
 
         center = self.get_center()
