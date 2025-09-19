@@ -15,6 +15,7 @@ from portal.commands.layer_commands import (
     ScaleLayerCommand,
     apply_qimage_transform_nearest,
 )
+from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 
 
@@ -45,6 +46,7 @@ class ScaleTool(BaseTool):
         self._drag_base_edge_rect_doc: QRectF | None = None
         self._drag_handle_axis: str | None = None
         self._current_pivot_doc: QPointF | None = None
+        self._layer_tracker = ActiveLayerTracker(canvas)
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -73,6 +75,7 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._layer_tracker.reset()
         self._refresh_base_rect()
 
     # ------------------------------------------------------------------
@@ -109,6 +112,7 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._layer_tracker.reset()
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event, doc_pos):
@@ -497,10 +501,14 @@ class ScaleTool(BaseTool):
         else:
             self._base_edge_rect_doc = QRectF(rect)
             self._scaled_edge_rect_doc = QRectF(rect)
+        self._layer_tracker.refresh()
         self._bounds_dirty = False
 
     # ------------------------------------------------------------------
     def _ensure_base_rect(self):
+        if self._layer_tracker.has_changed():
+            self._bounds_dirty = True
+
         if self._bounds_dirty:
             self._refresh_base_rect()
 
