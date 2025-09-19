@@ -5,6 +5,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QMessageBox
 
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
 from portal.core.document import Document
 from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
@@ -68,6 +69,7 @@ class DocumentController(QObject):
         self.main_window = None
         self._copied_key_state = None
         self.auto_key_enabled = False
+        self._playback_total_frames = DEFAULT_TOTAL_FRAMES
 
     # expose settings-backed properties
     @property
@@ -90,6 +92,19 @@ class DocumentController(QObject):
         if normalized == self.auto_key_enabled:
             return
         self.auto_key_enabled = normalized
+
+    @property
+    def playback_total_frames(self) -> int:
+        return self._playback_total_frames
+
+    def set_playback_total_frames(self, frame_count: int) -> None:
+        try:
+            normalized = int(frame_count)
+        except (TypeError, ValueError):
+            return
+        if normalized < 1:
+            normalized = 1
+        self._playback_total_frames = normalized
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         """Create a keyframe on the active layer if auto-key is enabled."""

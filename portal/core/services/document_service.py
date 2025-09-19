@@ -152,15 +152,26 @@ class DocumentService:
             app.config.set("General", "last_directory", app.last_directory)
 
         main_window = getattr(app, "main_window", None)
+        total_frames = None
         if main_window is not None:
             try:
                 total_frames = int(main_window.animation_player.total_frames)
             except (TypeError, ValueError):
-                total_frames = len(frame_manager.frames)
+                total_frames = None
             fps_value = getattr(main_window.animation_player, "fps", 12.0)
         else:
-            total_frames = len(frame_manager.frames)
             fps_value = 12.0
+
+        if total_frames is None:
+            playback_total = getattr(app, "playback_total_frames", None)
+            if playback_total is not None:
+                try:
+                    total_frames = int(playback_total)
+                except (TypeError, ValueError):
+                    total_frames = None
+
+        if total_frames is None:
+            total_frames = len(frame_manager.frames)
 
         if total_frames <= 0:
             total_frames = 1
@@ -317,6 +328,7 @@ class DocumentService:
             return
 
         app.attach_document(document)
+        app.set_playback_total_frames(len(frames))
         if app.main_window:
             app.main_window.apply_imported_animation_metadata(len(frames), fps)
         app.undo_manager.clear()
