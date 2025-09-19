@@ -3,11 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 import io
 import json
+import os
+import zipfile
 
 from PySide6.QtCore import QBuffer, QSize, Qt
 from PySide6.QtGui import QImage, QPainter
 from PIL import Image, ImageSequence, ImageQt
 
+from portal.core.frame import Frame
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
@@ -274,6 +277,188 @@ class Document:
                 doc.register_layer(layer, len(doc.layer_manager.layers) - 1)
 
         return doc
+
+    def save_aole(self, filename: str) -> None:
+        """Persist the entire document, including frames and layers, to an AOLE archive."""
+
+        frame_manager = self.frame_manager
+        metadata: dict[str, object] = {
+            "version": 1,
+            "width": self.width,
+            "height": self.height,
+            "frames": [],
+            "frame_manager": {
+                "active_frame_index": frame_manager.active_frame_index,
+                "frame_markers": sorted(frame_manager.frame_markers),
+                "layer_keys": {
+                    str(layer_uid): sorted(frames)
+                    for layer_uid, frames in frame_manager.layer_keys.items()
+                },
+            },
+        }
+
+        os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
+
+        with zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for frame_index, frame in enumerate(frame_manager.frames):
+                layer_manager = frame.layer_manager
+                frame_entry: dict[str, object] = {
+                    "active_layer_index": layer_manager.active_layer_index,
+                    "layers": [],
+                }
+                for layer_position, layer in enumerate(layer_manager.layers):
+                    image_buffer = QBuffer()
+                    image_buffer.open(QBuffer.ReadWrite)
+                    layer.image.save(image_buffer, "PNG")
+                    image_path = f"frames/{frame_index}/layers/{layer.uid}_{layer_position}.png"
+                    archive.writestr(image_path, bytes(image_buffer.data()))
+                    layer_entry = {
+                        "uid": layer.uid,
+                        "name": layer.name,
+                        "visible": layer.visible,
+                        "opacity": layer.opacity,
+                        "image": image_path,
+                    }
+                    frame_entry["layers"].append(layer_entry)
+                metadata["frames"].append(frame_entry)
+
+            archive.writestr(
+                "document.json",
+                json.dumps(metadata, indent=2).encode("utf-8"),
+            )
+
+    @classmethod
+    def load_aole(cls, filename: str) -> "Document":
+        """Load a full document, including animation data, from an AOLE archive."""
+
+        try:
+            with zipfile.ZipFile(filename, "r") as archive:
+                try:
+                    metadata_bytes = archive.read("document.json")
+                except KeyError as exc:
+                    raise ValueError("Document metadata is missing from archive") from exc
+                metadata = json.loads(metadata_bytes.decode("utf-8"))
+
+                width = int(metadata.get("width", 0))
+                height = int(metadata.get("height", 0))
+                if width <= 0 or height <= 0:
+                    raise ValueError("Invalid document dimensions in archive")
+
+                frame_manager = FrameManager(width, height, frame_count=0)
+                frames_data = metadata.get("frames", [])
+                for frame_data in frames_data:
+                    frame = Frame(width, height, create_background=False)
+                    layer_manager = frame.layer_manager
+                    layer_manager.layers = []
+                    try:
+                        active_layer_index = int(frame_data.get("active_layer_index", -1))
+                    except (TypeError, ValueError):
+                        active_layer_index = -1
+                    layers_data = frame_data.get("layers", [])
+                    for layer_data in layers_data:
+                        image_path = layer_data.get("image")
+                        if not image_path:
+                            continue
+                        try:
+                            image_bytes = archive.read(image_path)
+                        except KeyError as exc:
+                            raise ValueError(f"Missing layer image '{image_path}'") from exc
+                        qimage = QImage()
+                        if not qimage.loadFromData(image_bytes, "PNG"):
+                            raise ValueError(f"Layer image '{image_path}' could not be read")
+                        name = layer_data.get("name") or f"Layer {len(layer_manager.layers) + 1}"
+                        layer = Layer.from_qimage(qimage, name)
+                        try:
+                            layer.uid = int(layer_data.get("uid", layer.uid))
+                        except (TypeError, ValueError):
+                            layer.uid = layer.uid
+                        visible_value = layer_data.get("visible", True)
+                        if isinstance(visible_value, str):
+                            layer.visible = visible_value.lower() == "true"
+                        else:
+                            layer.visible = bool(visible_value)
+                        try:
+                            layer.opacity = float(layer_data.get("opacity", 1.0))
+                        except (TypeError, ValueError):
+                            layer.opacity = 1.0
+                        layer_manager.layers.append(layer)
+                    if layer_manager.layers:
+                        if active_layer_index < 0 or active_layer_index >= len(layer_manager.layers):
+                            active_layer_index = 0
+                    layer_manager.active_layer_index = active_layer_index
+                    frame_manager.frames.append(frame)
+
+                if not frame_manager.frames:
+                    raise ValueError("Document archive does not contain any frames")
+
+                frame_meta = metadata.get("frame_manager", {})
+                raw_layer_keys = frame_meta.get("layer_keys", {})
+                layer_keys: dict[int, set[int]] = {}
+                for uid_str, frames in raw_layer_keys.items():
+                    try:
+                        layer_uid = int(uid_str)
+                    except (TypeError, ValueError):
+                        continue
+                    normalized: set[int] = set()
+                    for value in frames:
+                        try:
+                            index = int(value)
+                        except (TypeError, ValueError):
+                            continue
+                        if index >= 0:
+                            normalized.add(index)
+                    if not normalized and frame_manager.frames:
+                        normalized = {0}
+                    layer_keys[layer_uid] = normalized
+
+                for frame in frame_manager.frames:
+                    for layer in frame.layer_manager.layers:
+                        if layer.uid not in layer_keys:
+                            layer_keys[layer.uid] = {0} if frame_manager.frames else set()
+
+                frame_manager.layer_keys = layer_keys
+
+                markers = frame_meta.get("frame_markers") or []
+                normalized_markers: set[int] = set()
+                for marker in markers:
+                    try:
+                        normalized_markers.add(int(marker))
+                    except (TypeError, ValueError):
+                        continue
+                frame_manager.frame_markers = normalized_markers
+                if not frame_manager.frame_markers and frame_manager.frames:
+                    frame_manager.frame_markers = {0}
+
+                try:
+                    active_index = int(frame_meta.get("active_frame_index", 0))
+                except (TypeError, ValueError):
+                    active_index = 0
+                if frame_manager.frames:
+                    active_index = max(0, min(active_index, len(frame_manager.frames) - 1))
+                else:
+                    active_index = -1
+                frame_manager.active_frame_index = active_index
+
+                if frame_manager.frames:
+                    rebind = getattr(frame_manager, "_rebind_all_layers", None)
+                    if callable(rebind):
+                        rebind()
+
+        except zipfile.BadZipFile as exc:
+            raise ValueError("The provided file is not a valid AOLE archive") from exc
+
+        document = cls(width, height)
+        document.apply_frame_manager_snapshot(frame_manager)
+
+        max_uid = 0
+        for frame in document.frame_manager.frames:
+            for layer in frame.layer_manager.layers:
+                if layer.uid > max_uid:
+                    max_uid = layer.uid
+        if max_uid > Layer._uid_counter:
+            Layer._uid_counter = max_uid
+
+        return document
 
     def resize(self, width, height, interpolation):
         self.width = width

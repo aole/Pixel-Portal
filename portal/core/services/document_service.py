@@ -1,5 +1,7 @@
+import json
 import math
 import os
+import zipfile
 
 from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
@@ -17,24 +19,48 @@ class DocumentService:
         if not app.check_for_unsaved_changes():
             return
 
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_filters = (
+            "Pixel Portal Document (*.aole);;"
+            "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff);;"
+            "Image Files (*.png *.jpg *.bmp);;"
+            "TIFF Files (*.tif *.tiff)"
+        )
+        file_path, selected_filter = QFileDialog.getOpenFileName(
             None,
-            "Open Image",
+            "Open Document",
             app.last_directory,
-            "All Supported Files (*.png *.jpg *.bmp *.tif *.tiff);;Image Files (*.png *.jpg *.bmp);;TIFF Files (*.tif *.tiff)"
+            file_filters,
         )
         if file_path:
             app.last_directory = os.path.dirname(file_path)
             app.config.set('General', 'last_directory', app.last_directory)
 
-            if file_path.lower().endswith(('.tif', '.tiff')):
-                document = Document.load_tiff(file_path)
-            else:
-                image = QImage(file_path)
-                if image.isNull():
-                    return
-                document = Document(image.width(), image.height())
-                document.layer_manager.layers[0].image = image
+            extension = os.path.splitext(file_path)[1].lower()
+            selected_filter_lower = (selected_filter or "").lower()
+            if not extension:
+                if "pixel portal document" in selected_filter_lower:
+                    extension = ".aole"
+                elif "tiff" in selected_filter_lower:
+                    extension = ".tiff"
+
+            try:
+                if extension == ".aole":
+                    document = Document.load_aole(file_path)
+                elif extension in ('.tif', '.tiff'):
+                    document = Document.load_tiff(file_path)
+                else:
+                    image = QImage(file_path)
+                    if image.isNull():
+                        return
+                    document = Document(image.width(), image.height())
+                    document.layer_manager.layers[0].image = image
+            except (ValueError, OSError, json.JSONDecodeError, zipfile.BadZipFile):
+                message_box = QMessageBox()
+                message_box.setText("Unable to open the selected document.")
+                message_box.setInformativeText("The file appears to be corrupted or in an unsupported format.")
+                message_box.setIcon(QMessageBox.Warning)
+                message_box.exec()
+                return
 
             app.attach_document(document)
             app.undo_manager.clear()
@@ -75,19 +101,45 @@ class DocumentService:
 
     def save_document(self):
         app = self.app
+        file_filters = (
+            "Pixel Portal Document (*.aole);;"
+            "PNG (*.png);;"
+            "JPEG (*.jpg *.jpeg);;"
+            "Bitmap (*.bmp);;"
+            "TIFF (*.tif *.tiff)"
+        )
         file_path, selected_filter = QFileDialog.getSaveFileName(
             None,
-            "Save Image",
+            "Save Document",
             app.last_directory,
-            "PNG (*.png);;JPEG (*.jpg *.jpeg);;Bitmap (*.bmp);;TIFF (*.tif *.tiff)"
+            file_filters,
         )
         if file_path:
             app.last_directory = os.path.dirname(file_path)
             app.config.set('General', 'last_directory', app.last_directory)
 
-            if "TIFF" in selected_filter:
+            base_path, extension = os.path.splitext(file_path)
+            extension = extension.lower()
+
+            selected_filter_lower = (selected_filter or "").lower()
+
+            if "pixel portal document" in selected_filter_lower or extension == ".aole":
+                if extension != ".aole":
+                    file_path = base_path + ".aole"
+                app.document.save_aole(file_path)
+            elif "tiff" in selected_filter_lower or extension in (".tif", ".tiff"):
+                if extension not in (".tif", ".tiff"):
+                    file_path = base_path + ".tiff"
                 app.document.save_tiff(file_path)
             else:
+                if not extension:
+                    if "jpeg" in selected_filter_lower or "jpg" in selected_filter_lower:
+                        extension = ".jpg"
+                    elif "bmp" in selected_filter_lower:
+                        extension = ".bmp"
+                    else:
+                        extension = ".png"
+                    file_path = base_path + extension
                 image = app.document.render()
                 image.save(file_path)
 
