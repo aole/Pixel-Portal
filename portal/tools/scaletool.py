@@ -45,6 +45,8 @@ class ScaleTool(BaseTool):
         self._drag_base_edge_rect_doc: QRectF | None = None
         self._drag_handle_axis: str | None = None
         self._current_pivot_doc: QPointF | None = None
+        self._base_rect_layer_manager = None
+        self._base_rect_layer_uid = None
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -73,6 +75,8 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._base_rect_layer_manager = None
+        self._base_rect_layer_uid = None
         self._refresh_base_rect()
 
     # ------------------------------------------------------------------
@@ -109,6 +113,8 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._base_rect_layer_manager = None
+        self._base_rect_layer_uid = None
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event, doc_pos):
@@ -497,10 +503,20 @@ class ScaleTool(BaseTool):
         else:
             self._base_edge_rect_doc = QRectF(rect)
             self._scaled_edge_rect_doc = QRectF(rect)
+        layer_manager, layer_uid = self._active_layer_identity()
+        self._base_rect_layer_manager = layer_manager
+        self._base_rect_layer_uid = layer_uid
         self._bounds_dirty = False
 
     # ------------------------------------------------------------------
     def _ensure_base_rect(self):
+        layer_manager, layer_uid = self._active_layer_identity()
+        if (
+            layer_manager is not self._base_rect_layer_manager
+            or layer_uid != self._base_rect_layer_uid
+        ):
+            self._bounds_dirty = True
+
         if self._bounds_dirty:
             self._refresh_base_rect()
 
@@ -635,6 +651,19 @@ class ScaleTool(BaseTool):
         top_left = transform.map(rect.topLeft())
         bottom_right = transform.map(rect.bottomRight())
         return QRectF(top_left, bottom_right).normalized()
+
+    # ------------------------------------------------------------------
+    def _active_layer_identity(self):
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager is None:
+            return None, None
+
+        active_layer = getattr(layer_manager, "active_layer", None)
+        layer_uid = None
+        if active_layer is not None:
+            layer_uid = getattr(active_layer, "uid", None)
+
+        return layer_manager, layer_uid
 
     # ------------------------------------------------------------------
     def _doc_to_canvas_point(self, point: QPointF) -> QPointF:
