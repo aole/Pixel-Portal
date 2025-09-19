@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.timeline_widget = AnimationTimelineWidget(self)
         self.timeline_widget.set_playback_total_frames(self.animation_player.total_frames)
         self.timeline_widget.set_total_frames(max(0, self.animation_player.total_frames - 1))
+        self.app.set_playback_total_frames(self.animation_player.total_frames)
 
         self.timeline_panel = QFrame(self)
         self.timeline_panel.setObjectName("animationTimelinePanel")
@@ -452,6 +453,7 @@ class MainWindow(QMainWindow):
             and self.animation_player.current_frame != current_frame
         ):
             self.animation_player.set_current_frame(current_frame)
+        self.app.set_playback_total_frames(value)
         self._update_stop_button_state()
 
     def apply_imported_animation_metadata(self, frame_count: int, fps: float) -> None:
@@ -522,6 +524,7 @@ class MainWindow(QMainWindow):
         playback_total = max(1, self.timeline_total_frames_spinbox.value())
         self.timeline_widget.set_playback_total_frames(playback_total)
         self.preview_panel.set_playback_total_frames(playback_total)
+        self.app.set_playback_total_frames(playback_total)
 
         document = self.app.document
         frame_manager = getattr(document, "frame_manager", None) if document else None

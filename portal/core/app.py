@@ -134,6 +134,13 @@ class App(QObject):
     def set_auto_key_enabled(self, enabled: bool) -> None:
         self.document_controller.set_auto_key_enabled(enabled)
 
+    @property
+    def playback_total_frames(self) -> int:
+        return self.document_controller.playback_total_frames
+
+    def set_playback_total_frames(self, frame_count: int) -> None:
+        self.document_controller.set_playback_total_frames(frame_count)
+
     def ensure_auto_key_for_active_layer(self) -> bool:
         return self.document_controller.ensure_auto_key_for_active_layer()
 
