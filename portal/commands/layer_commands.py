@@ -80,6 +80,62 @@ def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool
     return True
 
 
+def _merge_layer_down_current_frame(document: 'Document', layer_index: int) -> bool:
+    try:
+        layer_manager = document.layer_manager
+    except ValueError:
+        return False
+    if not (0 < layer_index < len(layer_manager.layers)):
+        return False
+
+    top_layer = layer_manager.layers[layer_index]
+    bottom_layer = layer_manager.layers[layer_index - 1]
+
+    top_uid = getattr(top_layer, "uid", None)
+    bottom_uid = getattr(bottom_layer, "uid", None)
+    if top_uid is None or bottom_uid is None:
+        return False
+
+    frame_manager = getattr(document, "frame_manager", None)
+    if frame_manager is None:
+        return False
+
+    frame_index = getattr(frame_manager, "active_frame_index", None)
+    if frame_index is None or frame_index < 0:
+        return False
+
+    frame_manager.ensure_frame(frame_index)
+    if not (0 <= frame_index < len(frame_manager.frames)):
+        return False
+
+    source_frame_index = frame_manager.resolve_layer_key_frame_index(top_uid, frame_index)
+    if source_frame_index is None:
+        return False
+    if not (0 <= source_frame_index < len(frame_manager.frames)):
+        return False
+
+    keys = frame_manager.layer_keys.setdefault(bottom_uid, {0})
+    if frame_index not in keys:
+        frame_manager.add_layer_key(bottom_uid, frame_index)
+
+    source_manager = frame_manager.frames[source_frame_index].layer_manager
+    target_manager = frame_manager.frames[frame_index].layer_manager
+
+    source_layer = _find_layer_with_uid(source_manager, top_uid)
+    target_layer = _find_layer_with_uid(target_manager, bottom_uid)
+    if source_layer is None or target_layer is None:
+        return False
+
+    painter = QPainter(target_layer.image)
+    painter.setOpacity(source_layer.opacity)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+    painter.drawImage(0, 0, source_layer.image)
+    painter.end()
+
+    target_layer.on_image_change.emit()
+    return True
+
+
 def apply_qimage_transform_nearest(
     destination: QImage, source: QImage, transform: QTransform
 ) -> bool:
@@ -139,6 +195,37 @@ class MergeLayerDownCommand(Command):
                 return
             self._before_state = self.document.frame_manager.clone()
             if not _merge_layer_down_with_union(self.document, self.layer_index):
+                self._before_state = None
+                return
+            self._after_state = self.document.frame_manager.clone()
+        else:
+            if self._after_state is None:
+                return
+            self.document.apply_frame_manager_snapshot(self._after_state)
+
+    def undo(self):
+        if self._before_state is None:
+            return
+        self.document.apply_frame_manager_snapshot(self._before_state)
+
+
+class MergeLayerDownCurrentFrameCommand(Command):
+    def __init__(self, document: 'Document', layer_index: int):
+        self.document = document
+        self.layer_index = layer_index
+        self._before_state = None
+        self._after_state = None
+
+    def execute(self):
+        if self._before_state is None:
+            try:
+                layer_count = len(self.document.layer_manager.layers)
+            except ValueError:
+                return
+            if not (0 < self.layer_index < layer_count):
+                return
+            self._before_state = self.document.frame_manager.clone()
+            if not _merge_layer_down_current_frame(self.document, self.layer_index):
                 self._before_state = None
                 return
             self._after_state = self.document.frame_manager.clone()
