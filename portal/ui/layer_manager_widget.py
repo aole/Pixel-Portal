@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QHBoxLayout, QAbstractItemView
 )
 from portal.ui.layer_list_widget import LayerListWidget
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtGui import QIcon
 from portal.core.app import App
 from portal.ui.layer_item_widget import LayerItemWidget
@@ -113,18 +113,27 @@ class LayerManagerWidget(QWidget):
 
     def on_visibility_toggled(self, widget):
         """Handles toggling layer visibility."""
-        for i in range(self.layer_list.count()):
-            item = self.layer_list.item(i)
-            if self.layer_list.itemWidget(item) == widget:
-                actual_index = len(self.app.document.layer_manager.layers) - 1 - i
-                current_row = self.layer_list.currentRow()
-                if current_row != i:
-                    self.layer_list.setCurrentRow(i)
-                else:
-                    self.app.document.layer_manager.select_layer(actual_index)
-                self.app.document.layer_manager.toggle_visibility(actual_index)
-                self.layer_changed.emit()
-                return
+        document = getattr(self.app, "document", None)
+        layer_manager = getattr(document, "layer_manager", None) if document else None
+        if layer_manager is None:
+            return
+
+        layers = getattr(layer_manager, "layers", [])
+        try:
+            actual_index = layers.index(widget.layer)
+        except ValueError:
+            return
+
+        list_index = len(layers) - 1 - actual_index
+        selection_changed = self.layer_list.currentRow() != list_index
+
+        if selection_changed:
+            with QSignalBlocker(self.layer_list):
+                self.layer_list.setCurrentRow(list_index)
+
+        layer_manager.select_layer(actual_index)
+        layer_manager.toggle_visibility(actual_index)
+        self.layer_changed.emit()
 
     def on_opacity_preview_changed(self, widget, value):
         """Preview layer opacity while dragging."""
