@@ -1009,6 +1009,28 @@ class TestClipboard:
         assert pasted_layer.name == "Pasted Layer"
         assert pasted_layer.image.pixelColor(15, 15) == QColor("orange")
 
+    def test_paste_as_key(self, app):
+        """Test that the clipboard image is applied as a key on the active layer."""
+        from PySide6.QtWidgets import QApplication
+
+        app.new_document(16, 16)
+        app.document.add_frame()
+        app.select_frame(1)
+
+        active_layer = app.document.layer_manager.active_layer
+        active_layer.image.fill(QColor("blue"))
+
+        image_to_paste = QImage(10, 10, QImage.Format_ARGB32)
+        image_to_paste.fill(QColor("red"))
+        QApplication.clipboard().setImage(image_to_paste)
+
+        result = app.clipboard_service.paste_as_key()
+
+        assert result is True
+        assert 1 in app.document.key_frames
+        updated_layer = app.document.layer_manager.active_layer
+        assert updated_layer.image.pixelColor(0, 0) == QColor("red")
+
     def test_paste_in_selection_smaller_image(self, app):
         """Test pasting an image smaller than the selection."""
         from PySide6.QtWidgets import QApplication

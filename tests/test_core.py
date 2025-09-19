@@ -206,6 +206,25 @@ def test_open_document(mock_get_open_file_name, app, qtbot):
     assert document_blocker
     assert undo_blocker
 
+@patch('PySide6.QtWidgets.QFileDialog.getOpenFileName')
+def test_open_as_key(mock_get_open_file_name, app, qtbot):
+    test_image_path = os.path.abspath('tests/test_image.png')
+    mock_get_open_file_name.return_value = (test_image_path, 'Image Files (*.png *.jpg *.bmp)')
+
+    active_layer = app.document.layer_manager.active_layer
+    active_layer.image.fill(QColor("white"))
+
+    with qtbot.waitSignal(app.document_changed, raising=True) as document_blocker, \
+         qtbot.waitSignal(app.undo_stack_changed, raising=True) as undo_blocker:
+        app.document_service.open_as_key()
+
+    assert document_blocker
+    assert undo_blocker
+
+    top_left = active_layer.image.pixelColor(0, 0)
+    assert top_left == QColor(0, 0, 0)
+    assert 0 in app.document.key_frames
+
 @patch('PySide6.QtWidgets.QFileDialog.getSaveFileName')
 def test_save_document(mock_get_save_file_name, app, tmp_path):
     save_path = tmp_path / "saved_image.png"
@@ -299,6 +318,7 @@ def test_setup_actions(mock_main_window):
     # Verify that all actions are created
     assert action_manager.new_action is not None
     assert action_manager.open_action is not None
+    assert action_manager.open_as_key_action is not None
     assert action_manager.save_action is not None
     assert action_manager.load_palette_action is not None
     assert action_manager.save_palette_as_png_action is not None
@@ -306,6 +326,7 @@ def test_setup_actions(mock_main_window):
     assert action_manager.undo_action is not None
     assert action_manager.redo_action is not None
     assert action_manager.paste_as_new_image_action is not None
+    assert action_manager.paste_as_key_action is not None
     assert action_manager.select_all_action is not None
     assert action_manager.select_none_action is not None
     assert action_manager.invert_selection_action is not None
@@ -332,6 +353,9 @@ def test_setup_actions(mock_main_window):
     action_manager.open_action.trigger()
     mock_main_window.app.document_service.open_document.assert_called_once()
 
+    action_manager.open_as_key_action.trigger()
+    mock_main_window.app.document_service.open_as_key.assert_called_once()
+
     action_manager.save_action.trigger()
     mock_main_window.app.document_service.save_document.assert_called_once()
 
@@ -352,6 +376,9 @@ def test_setup_actions(mock_main_window):
 
     action_manager.paste_as_new_image_action.trigger()
     mock_main_window.app.clipboard_service.paste_as_new_image.assert_called_once()
+
+    action_manager.paste_as_key_action.trigger()
+    mock_main_window.app.clipboard_service.paste_as_key.assert_called_once()
 
     action_manager.select_all_action.trigger()
     mock_main_window.app.select_all.assert_called_once()

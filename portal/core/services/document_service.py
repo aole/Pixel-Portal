@@ -44,6 +44,35 @@ class DocumentService:
             if app.main_window:
                 app.main_window.canvas.set_initial_zoom()
 
+    def open_as_key(self):
+        app = self.app
+        if app is None:
+            return
+
+        document = getattr(app, "document", None)
+        if document is None:
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            None,
+            "Open Image as Key",
+            app.last_directory,
+            "Image Files (*.png *.jpg *.bmp *.tif *.tiff);;All Files (*)",
+        )
+        if not file_path:
+            return
+
+        image = QImage(file_path)
+        if image.isNull():
+            return
+
+        app.last_directory = os.path.dirname(file_path)
+        app.config.set('General', 'last_directory', app.last_directory)
+
+        paste_key = getattr(app, "paste_key_from_image", None)
+        if callable(paste_key):
+            paste_key(image)
+
     def save_document(self):
         app = self.app
         file_path, selected_filter = QFileDialog.getSaveFileName(
