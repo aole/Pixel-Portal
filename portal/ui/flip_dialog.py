@@ -27,13 +27,13 @@ class FlipDialog(QDialog):
 
         # Scope Radio Buttons
         self.scope_group = QGroupBox("Scope")
-        self.current_layer_radio = QRadioButton("Current Layer")
         self.current_frame_radio = QRadioButton("Current Frame")
+        self.current_layer_radio = QRadioButton("Current Layer")
         self.whole_document_radio = QRadioButton("Whole Document")
-        self.current_layer_radio.setChecked(True)
+        self.current_frame_radio.setChecked(True)
         scope_layout = QVBoxLayout()
-        scope_layout.addWidget(self.current_layer_radio)
         scope_layout.addWidget(self.current_frame_radio)
+        scope_layout.addWidget(self.current_layer_radio)
         scope_layout.addWidget(self.whole_document_radio)
         self.scope_group.setLayout(scope_layout)
 

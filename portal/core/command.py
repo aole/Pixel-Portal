@@ -328,6 +328,13 @@ class FlipCommand(Command):
         self._target_layers: list['Layer'] | None = None
 
     def execute(self):
+        keys_added = self._ensure_scope_keys()
+        if keys_added:
+            # Keying a layer may replace the objects referenced by the current
+            # frame. Clear cached state so we capture the updated layer
+            # instances and their pristine images before applying the flip.
+            self._target_layers = None
+            self._before_images = {}
         target_layers = self._resolve_target_layers()
         if not self._before_images:
             for layer in target_layers:
@@ -349,6 +356,40 @@ class FlipCommand(Command):
             painter.drawImage(0, 0, before_image)
             painter.end()
             layer.on_image_change.emit()
+
+    def _ensure_scope_keys(self) -> bool:
+        if self.scope is FlipScope.DOCUMENT:
+            return False
+
+        document = self.document
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return False
+
+        frame_index = getattr(frame_manager, "active_frame_index", None)
+        if frame_index is None or frame_index < 0:
+            return False
+
+        add_layer_key = getattr(frame_manager, "add_layer_key", None)
+        if not callable(add_layer_key):
+            return False
+
+        try:
+            layer_manager = document.layer_manager
+        except ValueError:
+            return False
+
+        if self.scope is FlipScope.LAYER:
+            layer = getattr(layer_manager, "active_layer", None)
+            if layer is None:
+                return False
+            return bool(add_layer_key(layer.uid, frame_index))
+
+        added = False
+        for layer in list(getattr(layer_manager, "layers", [])):
+            if add_layer_key(layer.uid, frame_index):
+                added = True
+        return added
 
     def _resolve_target_layers(self) -> list['Layer']:
         if self._target_layers is not None:

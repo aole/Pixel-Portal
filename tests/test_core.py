@@ -566,6 +566,83 @@ def test_flip_command_frame_scope(document):
         assert layer.image.pixelColor(99, 99) == QColor("blue")
 
 
+def test_flip_command_layer_scope_creates_key(document):
+    """Ensure flipping a single layer keys the active frame before mutating it."""
+
+    frame_manager = document.frame_manager
+    frame_manager.ensure_frame(1)
+
+    base_layer = frame_manager.frames[0].layer_manager.layers[0]
+    second_layer = frame_manager.frames[1].layer_manager.layers[0]
+    assert second_layer is base_layer
+
+    width = document.width
+    base_layer.image.fill(QColor(0, 0, 0, 0))
+    base_layer.image.setPixelColor(0, 0, QColor("red"))
+    base_layer.image.setPixelColor(width - 1, 0, QColor("blue"))
+
+    document.select_frame(1)
+    assert document.layer_manager.active_layer is base_layer
+
+    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.LAYER)
+    command.execute()
+
+    keys = frame_manager.layer_key_frames(base_layer.uid)
+    assert 1 in keys
+
+    keyed_layer = frame_manager.frames[1].layer_manager.layers[0]
+    assert keyed_layer is not base_layer
+
+    document.select_frame(0)
+    original_layer = document.layer_manager.active_layer
+    assert original_layer.image.pixelColor(0, 0) == QColor("red")
+    assert original_layer.image.pixelColor(width - 1, 0) == QColor("blue")
+
+    document.select_frame(1)
+    flipped_layer = document.layer_manager.active_layer
+    assert flipped_layer.image.pixelColor(width - 1, 0) == QColor("red")
+    assert flipped_layer.image.pixelColor(0, 0) == QColor("blue")
+
+
+def test_flip_command_frame_scope_creates_keys(document):
+    """Ensure flipping a frame creates keys for every layer on that frame."""
+
+    frame_manager = document.frame_manager
+    frame_manager.ensure_frame(1)
+
+    base_layers = list(frame_manager.frames[0].layer_manager.layers)
+    for layer in base_layers:
+        layer.image.fill(QColor(0, 0, 0, 0))
+        layer.image.setPixelColor(0, 0, QColor("red"))
+        layer.image.setPixelColor(document.width - 1, 0, QColor("blue"))
+
+    document.select_frame(1)
+
+    for layer, base in zip(document.layer_manager.layers, base_layers):
+        assert layer is base
+
+    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.FRAME)
+    command.execute()
+
+    for layer in base_layers:
+        keys = frame_manager.layer_key_frames(layer.uid)
+        assert 1 in keys
+
+    keyed_layers = list(frame_manager.frames[1].layer_manager.layers)
+    for base_layer, keyed_layer in zip(base_layers, keyed_layers):
+        assert keyed_layer is not base_layer
+
+    document.select_frame(0)
+    for layer in document.layer_manager.layers:
+        assert layer.image.pixelColor(0, 0) == QColor("red")
+        assert layer.image.pixelColor(document.width - 1, 0) == QColor("blue")
+
+    document.select_frame(1)
+    for layer in document.layer_manager.layers:
+        assert layer.image.pixelColor(document.width - 1, 0) == QColor("red")
+        assert layer.image.pixelColor(0, 0) == QColor("blue")
+
+
 def test_flip_command_document_scope(document):
     """Test that the FlipCommand flips layers across all frames exactly once."""
 
