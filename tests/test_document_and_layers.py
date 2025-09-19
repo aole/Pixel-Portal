@@ -780,7 +780,7 @@ def test_scale_layer_command_scales_entire_layer_with_nearest_sampling():
     layer.image.fill(Qt.transparent)
     layer.image.setPixelColor(1, 1, QColor("red"))
 
-    command = ScaleLayerCommand(layer, 2.0, QPoint(0, 0), None)
+    command = ScaleLayerCommand(layer, 2.0, 2.0, QPoint(0, 0), None)
     command.execute()
 
     expected_red_pixels = {(2, 2), (3, 2), (2, 3), (3, 3)}
@@ -814,7 +814,7 @@ def test_scale_layer_command_scales_selection_and_updates_path():
 
     canvas = DummyCanvas(selection)
 
-    command = ScaleLayerCommand(layer, 2.0, QPoint(1, 1), selection, canvas=canvas)
+    command = ScaleLayerCommand(layer, 2.0, 2.0, QPoint(1, 1), selection, canvas=canvas)
     command.execute()
 
     scaled_positions = {(1, 1), (2, 1), (1, 2), (2, 2)}
