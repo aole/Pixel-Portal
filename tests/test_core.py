@@ -142,8 +142,8 @@ def test_paste_as_new_layer(mock_clipboard, mock_paste_command, app):
 
 @patch('portal.core.document_controller.FlipCommand')
 def test_flip(mock_flip_command, app):
-    app.flip(horizontal=True, vertical=False, all_layers=False)
-    mock_flip_command.assert_called_once_with(app.document, True, False, False)
+    app.flip(horizontal=True, vertical=False, scope=FlipScope.LAYER)
+    mock_flip_command.assert_called_once_with(app.document, True, False, FlipScope.LAYER)
     mock_flip_command.return_value.execute.assert_called_once()
 
 import os
@@ -155,9 +155,19 @@ from portal.commands.action_manager import ActionManager
 from portal.core.document import Document
 from portal.core.layer import Layer
 from portal.core.command import (
-    ResizeCommand, FlipCommand, AddLayerCommand, PasteCommand, CropCommand,
-    DrawCommand, FillCommand, ShapeCommand, DuplicateLayerCommand,
-    ClearLayerCommand, RemoveLayerCommand, MoveLayerCommand
+    ResizeCommand,
+    FlipCommand,
+    FlipScope,
+    AddLayerCommand,
+    PasteCommand,
+    CropCommand,
+    DrawCommand,
+    FillCommand,
+    ShapeCommand,
+    DuplicateLayerCommand,
+    ClearLayerCommand,
+    RemoveLayerCommand,
+    MoveLayerCommand,
 )
 from PySide6.QtCore import QPoint
 from portal.core.drawing import Drawing
@@ -516,7 +526,7 @@ def test_flip_command(document, layer):
     layer.image.setPixelColor(99, 99, QColor("blue"))
 
     # Horizontal flip
-    command_h = FlipCommand(document, horizontal=True, vertical=False, all_layers=False)
+    command_h = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.LAYER)
     command_h.execute()
     assert layer.image.pixelColor(99, 0) == QColor("red")
     assert layer.image.pixelColor(0, 99) == QColor("blue")
@@ -526,7 +536,7 @@ def test_flip_command(document, layer):
     assert layer.image.pixelColor(99, 99) == QColor("blue")
 
     # Vertical flip
-    command_v = FlipCommand(document, horizontal=False, vertical=True, all_layers=False)
+    command_v = FlipCommand(document, horizontal=False, vertical=True, scope=FlipScope.LAYER)
     command_v.execute()
     assert layer.image.pixelColor(0, 99) == QColor("red")
     assert layer.image.pixelColor(99, 0) == QColor("blue")
@@ -535,8 +545,8 @@ def test_flip_command(document, layer):
     assert layer.image.pixelColor(0, 0) == QColor("red")
     assert layer.image.pixelColor(99, 99) == QColor("blue")
 
-def test_flip_command_all_layers(document):
-    """Test that the FlipCommand correctly flips all layers in the document."""
+def test_flip_command_frame_scope(document):
+    """Test that the FlipCommand correctly flips all layers in the current frame."""
     # Create a non-symmetrical image on each layer
     for layer in document.layer_manager.layers:
         layer.image.fill(QColor(0, 0, 0, 0))
@@ -544,7 +554,7 @@ def test_flip_command_all_layers(document):
         layer.image.setPixelColor(99, 99, QColor("blue"))
 
     # Horizontal flip all layers
-    command_h = FlipCommand(document, horizontal=True, vertical=False, all_layers=True)
+    command_h = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.FRAME)
     command_h.execute()
     for layer in document.layer_manager.layers:
         assert layer.image.pixelColor(99, 0) == QColor("red")
@@ -554,6 +564,38 @@ def test_flip_command_all_layers(document):
     for layer in document.layer_manager.layers:
         assert layer.image.pixelColor(0, 0) == QColor("red")
         assert layer.image.pixelColor(99, 99) == QColor("blue")
+
+
+def test_flip_command_document_scope(document):
+    """Test that the FlipCommand flips layers across all frames exactly once."""
+
+    frame_manager = document.frame_manager
+    frame_manager.ensure_frame(1)
+
+    base_frame = frame_manager.frames[0]
+    base_layer = base_frame.layer_manager.layers[0]
+    base_layer.image.fill(QColor(0, 0, 0, 0))
+    base_layer.image.setPixelColor(0, 0, QColor("red"))
+
+    second_frame = frame_manager.frames[1]
+    second_layer = second_frame.layer_manager.layers[0]
+    tracked_layers = [(base_layer, QColor("red"))]
+
+    if second_layer is not base_layer:
+        second_layer.image.fill(QColor(0, 0, 0, 0))
+        second_layer.image.setPixelColor(0, 0, QColor("blue"))
+        tracked_layers.append((second_layer, QColor("blue")))
+
+    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.DOCUMENT)
+    command.execute()
+
+    for layer, color in tracked_layers:
+        assert layer.image.pixelColor(99, 0) == color
+
+    command.undo()
+
+    for layer, color in tracked_layers:
+        assert layer.image.pixelColor(0, 0) == color
 
 def test_add_layer_command(document):
     """Test that the AddLayerCommand adds a new layer and that undo removes it."""

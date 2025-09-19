@@ -174,9 +174,9 @@ class App(QObject):
     def select_none(self):
         self.select_none_triggered.emit()
 
-    @Slot(bool, bool, bool)
-    def flip(self, horizontal, vertical, all_layers):
-        self.document_controller.flip(horizontal, vertical, all_layers)
+    @Slot(bool, bool, object)
+    def flip(self, horizontal, vertical, scope):
+        self.document_controller.flip(horizontal, vertical, scope)
 
     @Slot()
     def invert_selection(self):

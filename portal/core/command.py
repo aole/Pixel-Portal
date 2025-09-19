@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, TYPE_CHECKING
 
+from enum import Enum, auto
+
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from portal.core.layer import Layer
@@ -300,51 +302,94 @@ class DrawCommand(Command):
             # painting it back. Drawing through a QPainter can subtly mutate
             # pixel values, which broke exact undo comparisons in tests.
             self.layer.image = self.before_image.copy()
-            self.layer.on_image_change.emit()
+        self.layer.on_image_change.emit()
+
+
+class FlipScope(Enum):
+    LAYER = auto()
+    FRAME = auto()
+    DOCUMENT = auto()
 
 
 class FlipCommand(Command):
-    def __init__(self, document: 'Document', horizontal: bool, vertical: bool, all_layers: bool):
+    def __init__(
+        self,
+        document: 'Document',
+        horizontal: bool,
+        vertical: bool,
+        scope: FlipScope,
+    ):
         from portal.core.document import Document
         self.document = document
         self.horizontal = horizontal
         self.vertical = vertical
-        self.all_layers = all_layers
-        self.before_images = {}
+        self.scope = scope
+        self._before_images: dict[int, QImage] = {}
+        self._target_layers: list['Layer'] | None = None
 
     def execute(self):
-        if not self.before_images:
-            if self.all_layers:
-                for i, layer in enumerate(self.document.layer_manager.layers):
-                    self.before_images[i] = layer.image.copy()
-            else:
-                active_layer = self.document.layer_manager.active_layer
-                active_layer_index = self.document.layer_manager.active_layer_index
-                if active_layer:
-                    self.before_images[active_layer_index] = active_layer.image.copy()
+        target_layers = self._resolve_target_layers()
+        if not self._before_images:
+            for layer in target_layers:
+                self._before_images[id(layer)] = layer.image.copy()
 
-        if self.all_layers:
-            for layer in self.document.layer_manager.layers:
-                if self.horizontal:
-                    layer.flip_horizontal()
-                if self.vertical:
-                    layer.flip_vertical()
-        else:
-            active_layer = self.document.layer_manager.active_layer
-            if active_layer:
-                if self.horizontal:
-                    active_layer.flip_horizontal()
-                if self.vertical:
-                    active_layer.flip_vertical()
+        for layer in target_layers:
+            if self.horizontal:
+                layer.flip_horizontal()
+            if self.vertical:
+                layer.flip_vertical()
 
     def undo(self):
-        for index, before_image in self.before_images.items():
-            layer = self.document.layer_manager.layers[index]
+        for layer in self._resolve_target_layers():
+            before_image = self._before_images.get(id(layer))
+            if before_image is None:
+                continue
             painter = QPainter(layer.image)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
             painter.drawImage(0, 0, before_image)
             painter.end()
             layer.on_image_change.emit()
+
+    def _resolve_target_layers(self) -> list['Layer']:
+        if self._target_layers is not None:
+            return self._target_layers
+
+        document = self.document
+        target_layers: list['Layer'] = []
+        seen: set[int] = set()
+
+        try:
+            frame_manager = document.frame_manager
+        except AttributeError:
+            frame_manager = None
+
+        def append_layer(layer: 'Layer') -> None:
+            identity = id(layer)
+            if identity in seen:
+                return
+            seen.add(identity)
+            target_layers.append(layer)
+
+        if self.scope is FlipScope.LAYER:
+            layer_manager = document.layer_manager
+            layer = layer_manager.active_layer
+            if layer is not None:
+                append_layer(layer)
+        elif self.scope is FlipScope.FRAME or frame_manager is None:
+            layer_manager = document.layer_manager
+            for layer in getattr(layer_manager, "layers", []):
+                append_layer(layer)
+        else:
+            frames = getattr(frame_manager, "frames", [])
+            for frame in frames:
+                manager = getattr(frame, "layer_manager", None)
+                if manager is None:
+                    continue
+                for layer in getattr(manager, "layers", []):
+                    append_layer(layer)
+
+        self._target_layers = target_layers
+        return target_layers
 
 
 class ResizeCommand(Command):

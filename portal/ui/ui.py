@@ -861,7 +861,7 @@ class MainWindow(QMainWindow):
             dialog = FlipDialog(self)
             if dialog.exec():
                 values = dialog.get_values()
-                self.app.flip(values["horizontal"], values["vertical"], values["all_layers"])
+                self.app.flip(values["horizontal"], values["vertical"], values["scope"])
 
     def apply_grid_settings_from_settings(self):
         self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
