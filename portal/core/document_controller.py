@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Optional
+from typing import Iterable, Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
@@ -23,6 +23,7 @@ from portal.commands.timeline_commands import (
     InsertFrameCommand,
     PasteKeyframeCommand,
     RemoveKeyframeCommand,
+    SetKeyframesCommand,
 )
 from portal.core.color_utils import find_closest_color
 from portal.core.layer import Layer
@@ -121,6 +122,31 @@ class DocumentController(QObject):
 
         self.add_keyframe(current_frame)
         return True
+
+    def set_keyframes(self, frames: Iterable[int]) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        layer_manager = getattr(frame_manager, "current_layer_manager", None)
+        if layer_manager is None or layer_manager.active_layer is None:
+            return
+        normalized: set[int] = set()
+        for value in frames:
+            try:
+                frame_index = int(value)
+            except (TypeError, ValueError):
+                continue
+            if frame_index < 0:
+                continue
+            normalized.add(frame_index)
+        if not normalized:
+            normalized = {0}
+        existing_keys = set(document.key_frames)
+        if normalized == existing_keys:
+            return
+        command = SetKeyframesCommand(document, normalized)
+        self.execute_command(command)
 
     def execute_command(self, command):
         command.execute()

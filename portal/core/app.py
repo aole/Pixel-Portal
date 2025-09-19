@@ -1,7 +1,8 @@
-from typing import Optional
+from typing import Iterable, Optional
+
+import os
 
 from PySide6.QtCore import QObject, Signal, Slot
-import os
 
 from portal.core.document_controller import DocumentController, BackgroundRemovalScope
 from portal.core.settings_controller import SettingsController
@@ -136,6 +137,9 @@ class App(QObject):
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         return self.document_controller.ensure_auto_key_for_active_layer()
+
+    def set_keyframes(self, frames: Iterable[int]) -> None:
+        self.document_controller.set_keyframes(frames)
 
     def add_keyframe(self, frame_index: int) -> None:
         self.document_controller.add_keyframe(frame_index)

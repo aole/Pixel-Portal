@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterable, Optional
 
 from portal.core.command import Command
 from portal.core.document import Document
@@ -47,6 +47,29 @@ class RemoveKeyframeCommand(_KeyframeCommand):
     def execute(self) -> None:
         self._capture_before()
         self.document.remove_key_frame(self.frame_index)
+
+
+class SetKeyframesCommand(_KeyframeCommand):
+    """Replace the active layer's keyframes with ``frames``."""
+
+    def __init__(self, document: Document, frames: Iterable[int]):
+        super().__init__(document)
+        normalized: set[int] = set()
+        for value in frames:
+            try:
+                frame = int(value)
+            except (TypeError, ValueError):
+                continue
+            if frame < 0:
+                continue
+            normalized.add(frame)
+        if not normalized:
+            normalized = {0}
+        self.frames = sorted(normalized)
+
+    def execute(self) -> None:
+        self._capture_before()
+        self.document.set_key_frames(self.frames)
 
 
 class InsertFrameCommand(_KeyframeCommand):
