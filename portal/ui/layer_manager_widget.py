@@ -117,6 +117,11 @@ class LayerManagerWidget(QWidget):
             item = self.layer_list.item(i)
             if self.layer_list.itemWidget(item) == widget:
                 actual_index = len(self.app.document.layer_manager.layers) - 1 - i
+                current_row = self.layer_list.currentRow()
+                if current_row != i:
+                    self.layer_list.setCurrentRow(i)
+                else:
+                    self.app.document.layer_manager.select_layer(actual_index)
                 self.app.document.layer_manager.toggle_visibility(actual_index)
                 self.layer_changed.emit()
                 return
