@@ -74,3 +74,20 @@ class ClipboardService:
         if app.document and not image.isNull():
             command = PasteCommand(app.document, image)
             app.execute_command(command)
+
+    def paste_as_key(self):
+        app = self.app
+        if app is None:
+            return False
+
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+
+        if image.isNull():
+            return False
+
+        paste_key = getattr(app, "paste_key_from_image", None)
+        if not callable(paste_key):
+            return False
+
+        return bool(paste_key(image))

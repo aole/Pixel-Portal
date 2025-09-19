@@ -1,8 +1,8 @@
 from enum import Enum, auto
 from typing import Optional
 
-from PySide6.QtCore import QObject, Signal, Slot, QRect
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
+from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QMessageBox
 
 from portal.core.document import Document
@@ -25,6 +25,7 @@ from portal.commands.timeline_commands import (
     RemoveKeyframeCommand,
 )
 from portal.core.color_utils import find_closest_color
+from portal.core.layer import Layer
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
@@ -286,6 +287,77 @@ class DocumentController(QObject):
             if response != QMessageBox.Yes:
                 return False
         command = PasteKeyframeCommand(document, frame_index, self._copied_key_state)
+        self.execute_command(command)
+        return command.applied
+
+    def paste_key_from_image(
+        self,
+        image: QImage,
+        frame_index: Optional[int] = None,
+        *,
+        prompt_on_replace: bool = False,
+    ) -> bool:
+        if image is None or image.isNull():
+            return False
+        document = self.document
+        if document is None:
+            return False
+        frame_manager = document.frame_manager
+        if frame_manager is None:
+            return False
+        target_frame = frame_index
+        if target_frame is None:
+            target_frame = getattr(frame_manager, "active_frame_index", None)
+        if target_frame is None or target_frame < 0:
+            return False
+        frame_manager.ensure_frame(target_frame)
+        layer_manager = frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        if prompt_on_replace:
+            existing_keys = set(document.key_frames)
+            if target_frame in existing_keys:
+                parent = getattr(self, "main_window", None)
+                response = QMessageBox.question(
+                    parent,
+                    "Replace Keyframe?",
+                    (
+                        f"Frame {target_frame} already has a key. "
+                        "Replace it with the imported image?"
+                    ),
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if response != QMessageBox.Yes:
+                    return False
+
+        target_width = layer.image.width()
+        target_height = layer.image.height()
+        prepared_image = image
+        if (
+            prepared_image.width() > target_width
+            or prepared_image.height() > target_height
+        ):
+            prepared_image = prepared_image.scaled(
+                target_width,
+                target_height,
+                Qt.KeepAspectRatio,
+                Qt.FastTransformation,
+            )
+
+        key_state = Layer(target_width, target_height, layer.name)
+        key_state.visible = layer.visible
+        key_state.opacity = layer.opacity
+        key_state.image.fill(Qt.transparent)
+
+        painter = QPainter(key_state.image)
+        painter.drawImage(0, 0, prepared_image)
+        painter.end()
+
+        command = PasteKeyframeCommand(document, target_frame, key_state)
         self.execute_command(command)
         return command.applied
 

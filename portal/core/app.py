@@ -163,6 +163,17 @@ class App(QObject):
     def has_copied_keyframe(self) -> bool:
         return self.document_controller.has_copied_keyframe()
 
+    def paste_key_from_image(
+        self,
+        image,
+        frame_index: Optional[int] = None,
+        *,
+        prompt_on_replace: bool = False,
+    ) -> bool:
+        return self.document_controller.paste_key_from_image(
+            image, frame_index, prompt_on_replace=prompt_on_replace
+        )
+
     def select_frame(self, index: int) -> None:
         self.document_controller.select_frame(index)
 

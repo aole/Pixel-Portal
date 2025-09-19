@@ -35,6 +35,9 @@ class ActionManager:
         self.open_action.setShortcut("Ctrl+O")
         self.open_action.triggered.connect(self.app.document_service.open_document)
 
+        self.open_as_key_action = QAction("Open as Key...", self.main_window)
+        self.open_as_key_action.triggered.connect(self.app.document_service.open_as_key)
+
         self.import_animation_action = QAction("Import Animation...", self.main_window)
         self.import_animation_action.triggered.connect(self.app.document_service.import_animation)
 
@@ -79,6 +82,9 @@ class ActionManager:
         self.paste_as_new_image_action = QAction("Paste as New Image", self.main_window)
         self.paste_as_new_image_action.setShortcut("Ctrl+Shift+V")
         self.paste_as_new_image_action.triggered.connect(self.app.clipboard_service.paste_as_new_image)
+
+        self.paste_as_key_action = QAction("Paste as Key", self.main_window)
+        self.paste_as_key_action.triggered.connect(self.app.clipboard_service.paste_as_key)
 
         self.clear_action = QAction(QIcon("icons/clear.png"), "Clear", self.main_window)
         self.clear_action.setShortcut(QKeySequence.Delete)
