@@ -415,22 +415,49 @@ class FlipCommand(Command):
             layer_manager = document.layer_manager
             layer = layer_manager.active_layer
             if layer is not None:
-                append_layer(layer)
+                for keyed_layer in self._resolve_layer_keys(layer):
+                    append_layer(keyed_layer)
         elif self.scope is FlipScope.FRAME or frame_manager is None:
             layer_manager = document.layer_manager
             for layer in getattr(layer_manager, "layers", []):
                 append_layer(layer)
         else:
-            frames = getattr(frame_manager, "frames", [])
-            for frame in frames:
-                manager = getattr(frame, "layer_manager", None)
-                if manager is None:
-                    continue
-                for layer in getattr(manager, "layers", []):
-                    append_layer(layer)
+            layer_manager = document.layer_manager
+            for layer in getattr(layer_manager, "layers", []):
+                for keyed_layer in self._resolve_layer_keys(layer):
+                    append_layer(keyed_layer)
 
         self._target_layers = target_layers
         return target_layers
+
+    def _resolve_layer_keys(self, layer: 'Layer') -> list['Layer']:
+        frame_manager = getattr(self.document, "frame_manager", None)
+        if frame_manager is None:
+            return [layer]
+
+        frames = getattr(frame_manager, "frames", [])
+        if not frames:
+            return [layer]
+
+        try:
+            key_frames = frame_manager.layer_key_frames(layer.uid)
+        except Exception:
+            key_frames = [0]
+
+        keyed_layers: list['Layer'] = []
+        for frame_index in key_frames:
+            if not (0 <= frame_index < len(frames)):
+                continue
+            frame = frames[frame_index]
+            manager = getattr(frame, "layer_manager", None)
+            if manager is None:
+                continue
+            for candidate in getattr(manager, "layers", []):
+                if getattr(candidate, "uid", None) == layer.uid:
+                    keyed_layers.append(candidate)
+                    break
+
+        return keyed_layers or [layer]
 
 
 class ResizeCommand(Command):
