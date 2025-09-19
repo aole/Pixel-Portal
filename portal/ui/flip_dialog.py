@@ -1,4 +1,14 @@
-from PySide6.QtWidgets import QDialog, QCheckBox, QPushButton, QVBoxLayout, QHBoxLayout, QGroupBox, QRadioButton
+from PySide6.QtWidgets import (
+    QDialog,
+    QCheckBox,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QRadioButton,
+)
+
+from portal.core.command import FlipScope
 
 class FlipDialog(QDialog):
     def __init__(self, parent=None):
@@ -17,10 +27,12 @@ class FlipDialog(QDialog):
 
         # Scope Radio Buttons
         self.scope_group = QGroupBox("Scope")
+        self.current_frame_radio = QRadioButton("Current Frame")
         self.current_layer_radio = QRadioButton("Current Layer")
         self.whole_document_radio = QRadioButton("Whole Document")
-        self.current_layer_radio.setChecked(True)
+        self.current_frame_radio.setChecked(True)
         scope_layout = QVBoxLayout()
+        scope_layout.addWidget(self.current_frame_radio)
         scope_layout.addWidget(self.current_layer_radio)
         scope_layout.addWidget(self.whole_document_radio)
         self.scope_group.setLayout(scope_layout)
@@ -42,8 +54,15 @@ class FlipDialog(QDialog):
         self.setLayout(main_layout)
 
     def get_values(self):
+        if self.whole_document_radio.isChecked():
+            scope = FlipScope.DOCUMENT
+        elif self.current_frame_radio.isChecked():
+            scope = FlipScope.FRAME
+        else:
+            scope = FlipScope.LAYER
+
         return {
             "horizontal": self.horizontal_checkbox.isChecked(),
             "vertical": self.vertical_checkbox.isChecked(),
-            "all_layers": self.whole_document_radio.isChecked()
+            "scope": scope,
         }

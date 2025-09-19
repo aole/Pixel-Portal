@@ -10,6 +10,7 @@ from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
 from portal.core.command import (
     FlipCommand,
+    FlipScope,
     ResizeCommand,
     CropCommand,
     AddLayerCommand,
@@ -174,10 +175,23 @@ class DocumentController(QObject):
         self.undo_stack_changed.emit()
         self.document_changed.emit()
 
-    @Slot(bool, bool, bool)
-    def flip(self, horizontal, vertical, all_layers):
+    @Slot(bool, bool, object)
+    def flip(self, horizontal, vertical, scope):
         if self.document:
-            command = FlipCommand(self.document, horizontal, vertical, all_layers)
+            if not isinstance(scope, FlipScope):
+                scope_map = {
+                    True: FlipScope.FRAME,
+                    False: FlipScope.LAYER,
+                    "layer": FlipScope.LAYER,
+                    "current_layer": FlipScope.LAYER,
+                    "frame": FlipScope.FRAME,
+                    "current_frame": FlipScope.FRAME,
+                    "document": FlipScope.DOCUMENT,
+                    "whole_document": FlipScope.DOCUMENT,
+                    "all_frames": FlipScope.DOCUMENT,
+                }
+                scope = scope_map.get(scope, FlipScope.LAYER)
+            command = FlipCommand(self.document, horizontal, vertical, scope)
             self.execute_command(command)
 
     def add_keyframe(self, frame_index: int) -> None:
