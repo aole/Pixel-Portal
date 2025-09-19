@@ -1,12 +1,17 @@
+from functools import partial
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QListWidgetItem,
     QPushButton, QHBoxLayout, QAbstractItemView
 )
-from portal.ui.layer_list_widget import LayerListWidget
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtGui import QIcon
+
 from portal.core.app import App
+from portal.core.layer_manager import LayerManager
 from portal.ui.layer_item_widget import LayerItemWidget
+from portal.ui.layer_list_widget import LayerListWidget
 
 
 class LayerManagerWidget(QWidget):
@@ -67,64 +72,87 @@ class LayerManagerWidget(QWidget):
 
     def refresh_layers(self):
         """Refreshes the layer list from the document's layer manager."""
+        layer_manager = self._get_layer_manager()
+
         self._updating_layers = True
         self.layer_list.blockSignals(True)
         try:
             self.layer_list.clear()
-            for layer in reversed(self.app.document.layer_manager.layers):
+
+            if layer_manager is None:
+                return
+
+            for layer in reversed(layer_manager.layers):
                 item = QListWidgetItem()
                 self.layer_list.addItem(item)
 
                 item_widget = LayerItemWidget(layer)
                 item_widget.visibility_toggled.connect(
-                    lambda widget=item_widget: self.on_visibility_toggled(widget)
+                    partial(self.on_visibility_toggled, item_widget)
                 )
                 item_widget.opacity_preview_changed.connect(
-                    lambda value, widget=item_widget: self.on_opacity_preview_changed(widget, value)
+                    partial(self.on_opacity_preview_changed, item_widget)
                 )
                 item_widget.opacity_changed.connect(
-                    lambda old, new, widget=item_widget: self.on_opacity_changed(widget, old, new)
+                    partial(self.on_opacity_changed, item_widget)
                 )
                 item.setSizeHint(item_widget.sizeHint())
                 self.layer_list.setItemWidget(item, item_widget)
 
-            if self.app.document.layer_manager.active_layer:
-                active_index = (
-                    len(self.app.document.layer_manager.layers)
-                    - 1
-                    - self.app.document.layer_manager.active_layer_index
+            if layer_manager.active_layer is not None:
+                active_index = self._list_row_from_layer_index(
+                    layer_manager,
+                    layer_manager.active_layer_index,
                 )
-                self.layer_list.setCurrentRow(active_index)
+                self._set_list_current_row(active_index)
         finally:
             self.layer_list.blockSignals(False)
             self._updating_layers = False
 
     def on_selection_changed(self):
         """Handles changing the active layer."""
+        if self._updating_layers:
+            return
+
+        layer_manager = self._get_layer_manager()
+        if layer_manager is None:
+            return
+
         selected_items = self.layer_list.selectedItems()
         if not selected_items:
             return
 
         # QListWidget is populated in reverse order
         index_in_list = self.layer_list.row(selected_items[0])
-        actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
-        self.app.document.layer_manager.select_layer(actual_index)
+        actual_index = self._layer_index_from_list_row(layer_manager, index_in_list)
+
+        if actual_index == layer_manager.active_layer_index:
+            return
+
+        layer_manager.select_layer(actual_index)
         self.layer_changed.emit()
 
     def on_visibility_toggled(self, widget):
         """Handles toggling layer visibility."""
-        for i in range(self.layer_list.count()):
-            item = self.layer_list.item(i)
-            if self.layer_list.itemWidget(item) == widget:
-                actual_index = len(self.app.document.layer_manager.layers) - 1 - i
-                current_row = self.layer_list.currentRow()
-                if current_row != i:
-                    self.layer_list.setCurrentRow(i)
-                else:
-                    self.app.document.layer_manager.select_layer(actual_index)
-                self.app.document.layer_manager.toggle_visibility(actual_index)
-                self.layer_changed.emit()
-                return
+        layer_manager = self._get_layer_manager()
+        if layer_manager is None:
+            return
+
+        try:
+            actual_index = layer_manager.layers.index(widget.layer)
+        except ValueError:
+            return
+
+        list_index = self._list_row_from_layer_index(layer_manager, actual_index)
+
+        if self.layer_list.currentRow() != list_index:
+            self._set_list_current_row(list_index)
+
+        if layer_manager.active_layer_index != actual_index:
+            layer_manager.select_layer(actual_index)
+
+        layer_manager.toggle_visibility(actual_index)
+        self.layer_changed.emit()
 
     def on_opacity_preview_changed(self, widget, value):
         """Preview layer opacity while dragging."""
@@ -297,3 +325,20 @@ class LayerManagerWidget(QWidget):
         from portal.commands.layer_commands import CollapseLayersCommand
         command = CollapseLayersCommand(document)
         self.app.execute_command(command)
+
+    def _get_layer_manager(self) -> Optional[LayerManager]:
+        document = getattr(self.app, "document", None)
+        return getattr(document, "layer_manager", None) if document else None
+
+    def _layer_index_from_list_row(self, layer_manager: LayerManager, row: int) -> int:
+        return len(layer_manager.layers) - 1 - row
+
+    def _list_row_from_layer_index(self, layer_manager: LayerManager, layer_index: int) -> int:
+        return len(layer_manager.layers) - 1 - layer_index
+
+    def _set_list_current_row(self, row: int) -> None:
+        if not 0 <= row < self.layer_list.count():
+            return
+
+        with QSignalBlocker(self.layer_list):
+            self.layer_list.setCurrentRow(row)
