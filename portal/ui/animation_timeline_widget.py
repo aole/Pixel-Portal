@@ -429,6 +429,16 @@ class AnimationTimelineWidget(QWidget):
             return
         super().mousePressEvent(event)
 
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if event.button() == Qt.LeftButton:
+            frame = self._frame_at_point(event)
+            if frame not in self._keys:
+                self.key_add_requested.emit(frame)
+            self.set_current_frame(frame)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if self._is_panning:
             if event.buttons() & Qt.MiddleButton:
