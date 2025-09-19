@@ -79,24 +79,23 @@ class FrameManager:
         source_layer = self._find_layer(source_manager, layer_uid)
         if source_layer is None:
             return
+        source_index = self._find_layer_index(source_manager, layer_uid)
+        if source_index is None:
+            return
+
+        clone = source_layer.clone()
         target_layer = self._find_layer(target_manager, layer_uid)
         if target_layer is None:
-            index = self._find_layer_index(source_manager, layer_uid)
-            if index is None:
-                return
-            clone = source_layer.clone()
-            target_manager.layers.insert(index, clone)
-            target_layer = clone
-        elif target_layer is source_layer:
-            index = self._find_layer_index(source_manager, layer_uid)
-            if index is None:
-                return
-            clone = source_layer.clone()
-            target_manager.layers[index] = clone
-            target_layer = clone
-        if target_layer is source_layer:
-            return
-        target_layer.apply_key_state_from(source_layer)
+            insertion_index = min(source_index, len(target_manager.layers))
+            target_manager.layers.insert(insertion_index, clone)
+        else:
+            target_index = self._find_layer_index(target_manager, layer_uid)
+            if target_index is None:
+                target_index = min(source_index, len(target_manager.layers))
+                target_manager.layers.insert(target_index, clone)
+            else:
+                target_manager.layers[target_index] = clone
+
 
     def _copy_layer_between_layers(
         self, source_uid: int, target_uid: int, frame_index: int
@@ -401,14 +400,6 @@ class FrameManager:
         if updated_keys == existing_keys:
             return False
         self.layer_keys[layer_uid] = updated_keys
-
-        for source, target in normalized.items():
-            if source == target:
-                continue
-            manager = self.frames[source].layer_manager
-            layer = self._find_layer(manager, layer_uid)
-            if layer is not None:
-                layer.clear()
 
         self._refresh_frame_markers()
         self._rebind_layer_fallbacks(layer_uid)
