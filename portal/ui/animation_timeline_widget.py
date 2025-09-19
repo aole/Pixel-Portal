@@ -86,6 +86,7 @@ class AnimationTimelineWidget(QWidget):
     current_frame_changed = Signal(int)
     key_add_requested = Signal(int)
     key_remove_requested = Signal(int)
+    keys_remove_requested = Signal(list)
     key_copy_requested = Signal(int)
     key_paste_requested = Signal(int)
     frame_insert_requested = Signal(int)
@@ -429,6 +430,16 @@ class AnimationTimelineWidget(QWidget):
             return
         super().mousePressEvent(event)
 
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if event.button() == Qt.LeftButton:
+            frame = self._frame_at_point(event)
+            if frame not in self._keys:
+                self.key_add_requested.emit(frame)
+            self.set_current_frame(frame)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if self._is_panning:
             if event.buttons() & Qt.MiddleButton:
@@ -497,8 +508,19 @@ class AnimationTimelineWidget(QWidget):
         add_action = menu.addAction(f"Add Key @ Frame {frame}")
         add_action.setEnabled(frame not in self._keys)
 
-        remove_action = menu.addAction(f"Remove Key @ Frame {frame}")
-        remove_action.setEnabled(frame in self._keys and len(self._keys) > 1)
+        selected_keys = self.selected_keys()
+        if selected_keys:
+            if len(selected_keys) == 1:
+                remove_label = "Remove Selected Key"
+            else:
+                remove_label = "Remove Selected Keys"
+        else:
+            remove_label = f"Remove Key @ Frame {frame}"
+
+        remove_action = menu.addAction(remove_label)
+        remove_action.setEnabled(
+            (frame in self._keys or bool(selected_keys)) and len(self._keys) > 1
+        )
 
         menu.addSeparator()
         copy_frame = frame
@@ -516,7 +538,14 @@ class AnimationTimelineWidget(QWidget):
         elif chosen == add_action:
             self.key_add_requested.emit(frame)
         elif chosen == remove_action:
-            self.key_remove_requested.emit(frame)
+            if selected_keys:
+                unique_selection = sorted(set(selected_keys))
+                if len(unique_selection) == 1:
+                    self.key_remove_requested.emit(unique_selection[0])
+                else:
+                    self.keys_remove_requested.emit(unique_selection)
+            else:
+                self.key_remove_requested.emit(frame)
         elif chosen == copy_action:
             self.key_copy_requested.emit(copy_frame)
         elif chosen == paste_action:
