@@ -1,5 +1,3 @@
-import logging
-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QListWidgetItem,
     QPushButton, QHBoxLayout, QAbstractItemView
@@ -10,9 +8,6 @@ from PySide6.QtGui import QIcon
 from portal.core.app import App
 from portal.ui.layer_item_widget import LayerItemWidget
 from portal.ui.layer_list_widget import LayerListWidget
-
-
-logger = logging.getLogger(__name__)
 
 
 class LayerManagerWidget(QWidget):
@@ -114,10 +109,9 @@ class LayerManagerWidget(QWidget):
         # QListWidget is populated in reverse order
         index_in_list = self.layer_list.row(selected_items[0])
         actual_index = len(self.app.document.layer_manager.layers) - 1 - index_in_list
-        logger.debug(
-            "Layer selection changed via list: list_row=%s -> layer_index=%s",
-            index_in_list,
-            actual_index,
+        print(
+            "Layer selection changed via list: list_row=%s -> layer_index=%s"
+            % (index_in_list, actual_index)
         )
         self.app.document.layer_manager.select_layer(actual_index)
         self.layer_changed.emit()
@@ -133,40 +127,42 @@ class LayerManagerWidget(QWidget):
         try:
             actual_index = layers.index(widget.layer)
         except ValueError:
-            logger.debug(
-                "Visibility toggle: widget layer %r not found in layer manager list",
-                getattr(widget.layer, "name", widget.layer),
+            print(
+                "Visibility toggle: widget layer %r not found in layer manager list"
+                % (getattr(widget.layer, "name", widget.layer),)
             )
             return
 
         list_index = len(layers) - 1 - actual_index
         selection_changed = self.layer_list.currentRow() != list_index
 
-        logger.debug(
-            "Visibility toggle requested for layer %r (layer_index=%s, list_row=%s, current_row=%s)",
-            getattr(widget.layer, "name", widget.layer),
-            actual_index,
-            list_index,
-            self.layer_list.currentRow(),
+        print(
+            "Visibility toggle requested for layer %r (layer_index=%s, list_row=%s, current_row=%s)"
+            % (
+                getattr(widget.layer, "name", widget.layer),
+                actual_index,
+                list_index,
+                self.layer_list.currentRow(),
+            )
         )
 
         if selection_changed:
             with QSignalBlocker(self.layer_list):
                 self.layer_list.setCurrentRow(list_index)
-            logger.debug(
-                "Adjusted list selection to row %s for visibility toggle",
-                list_index,
+            print(
+                "Adjusted list selection to row %s for visibility toggle"
+                % (list_index,)
             )
 
         layer_manager.select_layer(actual_index)
-        logger.debug(
-            "Active layer after selection: %s",
-            layer_manager.active_layer_index,
+        print(
+            "Active layer after selection: %s"
+            % (layer_manager.active_layer_index,)
         )
         layer_manager.toggle_visibility(actual_index)
-        logger.debug(
-            "Layer visibility toggled: now %s",
-            "visible" if widget.layer.visible else "hidden",
+        print(
+            "Layer visibility toggled: now %s"
+            % ("visible" if widget.layer.visible else "hidden",)
         )
         self.layer_changed.emit()
 
