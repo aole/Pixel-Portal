@@ -46,6 +46,33 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis: str | None = None
         self._current_pivot_doc: QPointF | None = None
 
+        self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
+
+    # ------------------------------------------------------------------
+    def _on_canvas_selection_changed(self, *_):
+        if self.drag_mode == "scale":
+            return
+
+        self._drag_base_edge_rect_doc = None
+        self._current_pivot_doc = None
+        self._refresh_base_rect()
+
+        cursor_pos = QCursor.pos()
+        canvas_pos = self.canvas.mapFromGlobal(cursor_pos)
+        if self.canvas.rect().contains(canvas_pos):
+            handle = self._hit_test_handles(QPointF(canvas_pos))
+            if handle != self._hover_handle:
+                self._hover_handle = handle
+                self._update_cursor()
+                self.canvas.update()
+                return
+
+        if self._hover_handle is not None:
+            self._hover_handle = None
+            self._update_cursor()
+
+        self.canvas.update()
+
     # ------------------------------------------------------------------
     def activate(self):
         self.scale_factor = 1.0
