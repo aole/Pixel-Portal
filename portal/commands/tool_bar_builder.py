@@ -19,6 +19,8 @@ class ToolBarBuilder:
         self.tool_action_group = None
         self.tool_buttons = {}
         self._button_fallback_icons = {}
+        self._button_entry_names = {}
+        self._button_actions_map = {}
 
     def setup_toolbars(self):
         self._setup_top_toolbar()
@@ -40,39 +42,104 @@ class ToolBarBuilder:
 
         return None
 
+    def _action_display_text(self, action):
+        if action is None:
+            return ""
+
+        text = (action.text() or "").replace("&", "").strip()
+        if text:
+            return text
+
+        tooltip = action.toolTip()
+        if tooltip:
+            paren_index = tooltip.find("(")
+            if paren_index > 0:
+                return tooltip[:paren_index].strip()
+            return tooltip.strip()
+
+        return ""
+
+    def _action_primary_hint(self, action):
+        if action is None:
+            return None
+
+        hint = action.property("shortcut_hint")
+        if hint is not None:
+            hint_text = str(hint).strip()
+            if hint_text:
+                return hint_text
+
+        shortcut = action.shortcut()
+        if isinstance(shortcut, QKeySequence):
+            if hasattr(shortcut, "isEmpty"):
+                if not shortcut.isEmpty():
+                    text = shortcut.toString(QKeySequence.NativeText)
+                    if text:
+                        return text
+            else:
+                text = shortcut.toString(QKeySequence.NativeText)
+                if text:
+                    return text
+        elif shortcut:
+            shortcut_text = str(shortcut).strip()
+            if shortcut_text:
+                return shortcut_text
+
+        try:
+            sequences = action.shortcuts()
+        except AttributeError:
+            sequences = []
+
+        for sequence in sequences:
+            if isinstance(sequence, QKeySequence):
+                if hasattr(sequence, "isEmpty") and sequence.isEmpty():
+                    continue
+                text = sequence.toString(QKeySequence.NativeText)
+            else:
+                text = str(sequence).strip()
+            if text:
+                return text
+
+        tooltip = action.toolTip()
+        if tooltip:
+            start = tooltip.rfind("(")
+            end = tooltip.rfind(")")
+            if start != -1 and end != -1 and end > start:
+                candidate = tooltip[start + 1 : end].strip()
+                if candidate:
+                    return candidate
+
+        return None
+
     def _button_tooltip_from_actions(self, entry_name, actions):
         if not actions:
             return entry_name or ""
 
+        default_action = actions[0]
+
         if len(actions) == 1:
-            tooltip = actions[0].toolTip()
+            tooltip = default_action.toolTip()
             if tooltip:
                 return tooltip
             if entry_name:
                 return entry_name
-            return (actions[0].text() or "").replace("&", "").strip()
+            return self._action_display_text(default_action)
 
-        hints = []
-        for action in actions:
-            hint = action.property("shortcut_hint") or ""
-            hint = str(hint).strip()
-            if hint and hint not in hints:
-                hints.append(hint)
+        label = entry_name or self._action_display_text(default_action)
+        hint = self._action_primary_hint(default_action)
 
-        if hints and entry_name:
-            return f"{entry_name} ({', '.join(hints)})"
+        if label and hint:
+            return f"{label} ({hint})"
+        if label:
+            return label
+        if hint:
+            return hint
 
-        if hints:
-            return ", ".join(hints)
-
-        tooltip = actions[0].toolTip()
+        tooltip = default_action.toolTip()
         if tooltip:
             return tooltip
 
-        if entry_name:
-            return entry_name
-
-        return (actions[0].text() or "").replace("&", "").strip()
+        return self._action_display_text(default_action)
 
     def _setup_top_toolbar(self):
         self.top_toolbar = QToolBar("Top Toolbar")
@@ -180,10 +247,12 @@ class ToolBarBuilder:
                 tool_info = normalized_tools[0]
                 button = QToolButton(self.main_window)
                 action = tool_info["action"]
-                button.setToolTip(
-                    self._button_tooltip_from_actions(entry_name, [action])
-                )
                 button.setDefaultAction(action)
+
+                entry_label = entry_name or tool_info["name"]
+                self._button_entry_names[button] = entry_label
+                self._button_actions_map[button] = [action]
+                self._refresh_button_tooltip(button, action)
 
                 fallback_icon = entry_icon or tool_info.get("icon")
                 icon = action.icon()
@@ -219,9 +288,11 @@ class ToolBarBuilder:
                     continue
 
                 button.setDefaultAction(first_action)
-                button.setToolTip(
-                    self._button_tooltip_from_actions(entry_name, actions_for_button)
-                )
+
+                entry_label = entry_name or normalized_tools[0]["name"]
+                self._button_entry_names[button] = entry_label
+                self._button_actions_map[button] = list(actions_for_button)
+                self._refresh_button_tooltip(button, first_action)
 
                 fallback_icon = entry_icon or normalized_tools[0].get("icon")
                 icon = first_action.icon()
@@ -242,10 +313,11 @@ class ToolBarBuilder:
 
             action = self._get_or_create_tool_action(tool)
             button = QToolButton(self.main_window)
-            button.setToolTip(
-                self._button_tooltip_from_actions(tool_name, [action])
-            )
             button.setDefaultAction(action)
+
+            self._button_entry_names[button] = tool_name
+            self._button_actions_map[button] = [action]
+            self._refresh_button_tooltip(button, action)
 
             fallback_icon = tool.get("icon")
             icon = action.icon()
@@ -299,6 +371,8 @@ class ToolBarBuilder:
 
         button.setDefaultAction(action)
 
+        self._refresh_button_tooltip(button, action)
+
         icon = action.icon()
         if icon.isNull():
             icon_path = self._button_fallback_icons.get(button)
@@ -306,6 +380,23 @@ class ToolBarBuilder:
                 button.setIcon(QIcon(icon_path))
         else:
             button.setIcon(icon)
+
+    def _refresh_button_tooltip(self, button, default_action):
+        if button is None or default_action is None:
+            return
+
+        actions = self._button_actions_map.get(button, [])
+        if actions:
+            ordered_actions = [default_action] + [a for a in actions if a is not default_action]
+        else:
+            ordered_actions = [default_action]
+
+        entry_name = self._button_entry_names.get(button)
+        tooltip = self._button_tooltip_from_actions(entry_name, ordered_actions)
+        button.setToolTip(tooltip)
+
+        if actions:
+            self._button_actions_map[button] = ordered_actions
 
     def _load_toolbar_layout(self, tools_by_name):
         config = self._read_toolbar_config()

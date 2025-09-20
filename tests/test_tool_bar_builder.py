@@ -140,11 +140,13 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
     assert shape_button is builder.tool_buttons[DummyShapeTwoTool.name]
     shape_action_names = [action.text() for action in shape_button.menu().actions()]
     assert shape_action_names == [DummyShapeOneTool.name, DummyShapeTwoTool.name]
+    assert shape_button.toolTip() == "Shape Tools (2)"
 
     selection_button = builder.tool_buttons[DummySelectTool.name]
     assert selection_button is builder.tool_buttons[DummySelectTwoTool.name]
     selection_action_names = [action.text() for action in selection_button.menu().actions()]
     assert selection_action_names == [DummySelectTool.name, DummySelectTwoTool.name]
+    assert selection_button.toolTip() == "Selection Tools (4)"
 
     direct_button = builder.tool_buttons[DummyDrawTool.name]
     assert direct_button.menu() is None
@@ -154,3 +156,8 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
 
     builder.update_tool_buttons(DummyShapeTwoTool.name)
     assert shape_button.defaultAction().text() == DummyShapeTwoTool.name
+    assert shape_button.toolTip() == "Shape Tools (3)"
+
+    builder.update_tool_buttons(DummySelectTwoTool.name)
+    assert selection_button.defaultAction().text() == DummySelectTwoTool.name
+    assert selection_button.toolTip() == "Selection Tools (5)"
