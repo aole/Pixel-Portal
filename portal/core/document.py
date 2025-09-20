@@ -23,6 +23,7 @@ class Document:
         self.frame_manager = FrameManager(width, height)
         self._layer_manager_listeners: list[Callable[[LayerManager], None]] = []
         self._notify_layer_manager_changed()
+        self.file_path: str | None = None
 
     @property
     def layer_manager(self) -> LayerManager:
@@ -250,6 +251,8 @@ class Document:
                 description=json.dumps(layer_properties)
             )
 
+        self.file_path = filename
+
     @staticmethod
     def load_tiff(filename):
         with Image.open(filename) as img:
@@ -276,6 +279,7 @@ class Document:
                 doc.layer_manager.layers.append(layer)
                 doc.register_layer(layer, len(doc.layer_manager.layers) - 1)
 
+        doc.file_path = filename
         return doc
 
     def save_aole(self, filename: str) -> None:
@@ -326,6 +330,8 @@ class Document:
                 "document.json",
                 json.dumps(metadata, indent=2).encode("utf-8"),
             )
+
+        self.file_path = filename
 
     @classmethod
     def load_aole(cls, filename: str) -> "Document":
@@ -449,6 +455,8 @@ class Document:
 
         document = cls(width, height)
         document.apply_frame_manager_snapshot(frame_manager)
+
+        document.file_path = filename
 
         max_uid = 0
         for frame in document.frame_manager.frames:

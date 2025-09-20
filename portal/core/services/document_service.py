@@ -54,6 +54,7 @@ class DocumentService:
                         return
                     document = Document(image.width(), image.height())
                     document.layer_manager.layers[0].image = image
+                document.file_path = file_path
             except (ValueError, OSError, json.JSONDecodeError, zipfile.BadZipFile):
                 message_box = QMessageBox()
                 message_box.setText("Unable to open the selected document.")
@@ -69,6 +70,8 @@ class DocumentService:
             app.document_changed.emit()
             if app.main_window:
                 app.main_window.canvas.set_initial_zoom()
+            if hasattr(app, "update_main_window_title"):
+                app.update_main_window_title()
 
     def open_as_key(self):
         app = self.app
@@ -142,8 +145,11 @@ class DocumentService:
                     file_path = base_path + extension
                 image = app.document.render()
                 image.save(file_path)
-
+            if hasattr(app.document, "file_path"):
+                app.document.file_path = file_path
             app.is_dirty = False
+            if hasattr(app, "update_main_window_title"):
+                app.update_main_window_title()
 
     def export_animation(self):
         app = self.app

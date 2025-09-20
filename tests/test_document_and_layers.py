@@ -85,8 +85,10 @@ def test_save_load_tiff(document):
     """Test that a document with multiple layers can be saved and loaded as a TIFF file."""
     filepath = "test.tiff"
     document.save_tiff(filepath)
+    assert document.file_path == filepath
 
     loaded_document = Document.load_tiff(filepath)
+    assert loaded_document.file_path == filepath
 
     assert loaded_document.width == document.width
     assert loaded_document.height == document.height
@@ -132,7 +134,9 @@ def test_save_load_aole(tmp_path):
 
     save_path = tmp_path / "sample.aole"
     doc.save_aole(str(save_path))
+    assert doc.file_path == str(save_path)
     loaded = Document.load_aole(str(save_path))
+    assert loaded.file_path == str(save_path)
 
     assert loaded.width == doc.width
     assert loaded.height == doc.height
