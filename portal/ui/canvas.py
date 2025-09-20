@@ -575,11 +575,6 @@ class Canvas(QWidget):
         if self.app is not None:
             self.app.set_ai_output_rect(rect)
 
-    def mousePressEvent(self, event):
-        if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:
-            if self._handle_ai_output_mouse_press(event):
-                return
-              
     def _initialize_ruler_handles(self) -> None:
         width = float(max(0, self._document_size.width()))
         height = float(max(0, self._document_size.height()))
@@ -742,6 +737,10 @@ class Canvas(QWidget):
         self.update()
 
     def mousePressEvent(self, event):
+        if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:
+            if self._handle_ai_output_mouse_press(event):
+                return
+
         pos = event.position().toPoint()
         if event.button() == Qt.LeftButton:
             if self.ruler_enabled:
