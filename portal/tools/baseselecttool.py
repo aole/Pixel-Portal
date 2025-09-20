@@ -45,7 +45,9 @@ class BaseSelectTool(BaseTool):
         )
         self._selection_combine_mode = self._determine_combine_mode(event.modifiers())
         self._draft_selection_path = None
-        if self.is_on_selection_border(doc_pos):
+
+        on_border = self.is_on_selection_border(doc_pos)
+        if on_border and self._selection_combine_mode is SelectionCombineMode.REPLACE:
             self.moving_selection = True
             self.selection_move_start_point = doc_pos
         else:
@@ -78,7 +80,7 @@ class BaseSelectTool(BaseTool):
     def _determine_combine_mode(self, modifiers: Qt.KeyboardModifiers):
         if modifiers & Qt.AltModifier:
             return SelectionCombineMode.SUBTRACT
-        if modifiers & Qt.ShiftModifier:
+        if modifiers & Qt.ControlModifier:
             return SelectionCombineMode.ADD
         return SelectionCombineMode.REPLACE
 

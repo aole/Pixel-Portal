@@ -1,4 +1,6 @@
-from PySide6.QtCore import QPoint, QRect
+from collections import deque
+
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QMouseEvent, QPainterPath
 
 from portal.commands.selection_commands import (
@@ -23,16 +25,10 @@ class SelectColorTool(BaseTool):
         if not rendered_image.rect().contains(doc_pos):
             return
 
-        target_color = rendered_image.pixelColor(doc_pos)
-        path = QPainterPath()
-
-        for x in range(rendered_image.width()):
-            for y in range(rendered_image.height()):
-                if rendered_image.pixelColor(x, y) == target_color:
-                    path.addRect(QRect(x, y, 1, 1))
-        new_selection = path.simplified()
-        if new_selection.isEmpty():
-            new_selection = None
+        contiguous = not bool(event.modifiers() & Qt.ControlModifier)
+        new_selection = self._build_selection_path(
+            rendered_image, doc_pos, contiguous=contiguous
+        )
         previous_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
 
         if selection_paths_equal(previous_selection, new_selection):
@@ -54,3 +50,50 @@ class SelectColorTool(BaseTool):
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
         pass
+
+    def _build_selection_path(
+        self, image, point: QPoint, *, contiguous: bool
+    ) -> QPainterPath | None:
+        if image is None or image.isNull():
+            return None
+        if not image.rect().contains(point):
+            return None
+
+        target_x = int(point.x())
+        target_y = int(point.y())
+        target_rgba = int(image.pixel(target_x, target_y))
+
+        path = QPainterPath()
+
+        if contiguous:
+            width = image.width()
+            height = image.height()
+            queue: deque[tuple[int, int]] = deque()
+            queue.append((target_x, target_y))
+            visited: set[tuple[int, int]] = set()
+            while queue:
+                x, y = queue.popleft()
+                if (x, y) in visited:
+                    continue
+                visited.add((x, y))
+                if int(image.pixel(x, y)) != target_rgba:
+                    continue
+                path.addRect(QRect(x, y, 1, 1))
+                if x > 0:
+                    queue.append((x - 1, y))
+                if x + 1 < width:
+                    queue.append((x + 1, y))
+                if y > 0:
+                    queue.append((x, y - 1))
+                if y + 1 < height:
+                    queue.append((x, y + 1))
+        else:
+            for x in range(image.width()):
+                for y in range(image.height()):
+                    if int(image.pixel(x, y)) == target_rgba:
+                        path.addRect(QRect(x, y, 1, 1))
+
+        simplified = path.simplified()
+        if simplified.isEmpty():
+            return None
+        return simplified

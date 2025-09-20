@@ -43,6 +43,28 @@ def test_is_on_selection_border(base_select_tool):
     assert tool.is_on_selection_border(QPoint(10, 20)) is False
 
 
+def test_ctrl_drag_on_border_does_not_move_selection(base_select_tool):
+    tool = base_select_tool
+    canvas = tool.canvas
+
+    path = QPainterPath()
+    path.addRect(QRect(5, 5, 10, 10))
+    canvas.selection_shape = path
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(5, 10),
+        QPoint(5, 10),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+
+    tool.mousePressEvent(event, QPoint(5, 10))
+
+    assert tool.moving_selection is False
+
+
 @pytest.fixture
 def select_circle_tool(qtbot):
     mock_canvas = Mock()
@@ -62,7 +84,7 @@ def test_select_circle_mouse_events(select_circle_tool, qtbot):
     # Mouse Press
     press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     tool.mousePressEvent(press_event, QPoint(10, 10))
-    canvas._update_selection_and_emit_size.assert_called()
+    canvas._update_selection_and_emit_size.assert_called_once()
     assert tool.start_point == QPoint(10, 10)
 
     # Mouse Move
@@ -83,6 +105,40 @@ def test_select_circle_mouse_events(select_circle_tool, qtbot):
     canvas.selection_changed.emit.assert_called_with(True)
 
 
+def test_select_circle_shift_enforces_symmetry(select_circle_tool):
+    tool = select_circle_tool
+    canvas = tool.canvas
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    canvas._update_selection_and_emit_size.reset_mock()
+
+    move_point = QPoint(30, 20)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    canvas._update_selection_and_emit_size.assert_called()
+    path = canvas._update_selection_and_emit_size.call_args[0][0]
+    rect = path.boundingRect()
+    assert rect.width() == rect.height()
+
+
 @pytest.fixture
 def select_color_tool(qtbot):
     mock_canvas = Mock()
@@ -91,16 +147,16 @@ def select_color_tool(qtbot):
     image.fill(QColor("blue"))
     # Create a pattern of red pixels
     image.setPixelColor(2, 2, QColor("red"))
-    image.setPixelColor(4, 4, QColor("red"))
+    image.setPixelColor(2, 3, QColor("red"))
     image.setPixelColor(6, 6, QColor("red"))
     mock_document.render.return_value = image
     mock_canvas.document = mock_document
     tool = SelectColorTool(mock_canvas)
     return tool
 
-def test_select_color_mouse_press_event(select_color_tool):
+def test_select_color_mouse_press_event_contiguous_by_default(select_color_tool):
     """
-    This test should check that all pixels of the same color are selected.
+    This test should check that contiguous pixels of the same color are selected by default.
     """
     tool = select_color_tool
     canvas = tool.canvas
@@ -114,10 +170,34 @@ def test_select_color_mouse_press_event(select_color_tool):
 
     expected_path = QPainterPath()
     expected_path.addRect(QRect(2, 2, 1, 1))
-    expected_path.addRect(QRect(4, 4, 1, 1))
-    expected_path.addRect(QRect(6, 6, 1, 1))
+    expected_path.addRect(QRect(2, 3, 1, 1))
 
     assert path == expected_path.simplified()
+
+
+def test_select_color_ctrl_click_selects_all_matching_pixels(select_color_tool):
+    tool = select_color_tool
+    canvas = tool.canvas
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(2, 2),
+        QPoint(2, 2),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    tool.mousePressEvent(event, QPoint(2, 2))
+
+    canvas._update_selection_and_emit_size.assert_called()
+    path = canvas._update_selection_and_emit_size.call_args[0][0]
+
+    expected_path = QPainterPath()
+    expected_path.addRect(QRect(2, 2, 1, 1))
+    expected_path.addRect(QRect(2, 3, 1, 1))
+    expected_path.addRect(QRect(6, 6, 1, 1))
+
+    assert selection_paths_equal(path, expected_path.simplified())
 
 
 @pytest.fixture
@@ -434,7 +514,71 @@ def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     canvas.selection_changed.emit.assert_called_with(True)
 
 
-def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
+def test_select_rectangle_ctrl_adds_to_selection(select_rectangle_tool):
+    tool = select_rectangle_tool
+    canvas = tool.canvas
+
+    base_selection = QPainterPath()
+    base_selection.addRect(QRect(0, 0, 10, 10))
+    canvas.selection_shape = base_selection
+
+    start_point = QPoint(20, 20)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    tool.mousePressEvent(press_event, start_point)
+
+    canvas._update_selection_and_emit_size.reset_mock()
+
+    move_point = QPoint(30, 32)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+
+    canvas._update_selection_and_emit_size.assert_called()
+    combined_path = canvas._update_selection_and_emit_size.call_args[0][0]
+    assert isinstance(combined_path, QPainterPath)
+    canvas.selection_shape = combined_path
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    tool.mouseReleaseEvent(release_event, move_point)
+
+    expected_base = QPainterPath()
+    expected_base.addRect(QRect(0, 0, 10, 10))
+
+    adjusted_end = tool._clamp_to_document(
+        move_point, extend_min=True, extend_max=True
+    )
+
+    expected_new = QPainterPath()
+    rect = tool._rect_from_points(tool.start_point, adjusted_end)
+    doc_rect = QRect(0, 0, canvas._document_size.width(), canvas._document_size.height())
+    rect = rect.intersected(doc_rect)
+    expected_new.addRect(rect)
+
+    expected_combined = expected_base.united(expected_new).simplified()
+    assert selection_paths_equal(combined_path, expected_combined)
+
+
+def test_select_rectangle_shift_keeps_selection_symmetrical(select_rectangle_tool):
     tool = select_rectangle_tool
     canvas = tool.canvas
 
@@ -455,7 +599,7 @@ def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
 
     canvas._update_selection_and_emit_size.reset_mock()
 
-    move_point = QPoint(30, 32)
+    move_point = QPoint(32, 30)
     move_event = QMouseEvent(
         QMouseEvent.Type.MouseMove,
         move_point,
@@ -467,23 +611,9 @@ def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
     tool.mouseMoveEvent(move_event, move_point)
 
     canvas._update_selection_and_emit_size.assert_called()
-    combined_path = canvas._update_selection_and_emit_size.call_args[0][0]
-    assert isinstance(combined_path, QPainterPath)
-    canvas.selection_shape = combined_path
+    preview_path = canvas._update_selection_and_emit_size.call_args[0][0]
 
-    release_event = QMouseEvent(
-        QMouseEvent.Type.MouseButtonRelease,
-        move_point,
-        move_point,
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ShiftModifier,
-    )
-    tool.mouseReleaseEvent(release_event, move_point)
-
-    expected_base = QPainterPath()
-    expected_base.addRect(QRect(0, 0, 10, 10))
-
+    doc_rect = QRect(0, 0, canvas._document_size.width(), canvas._document_size.height())
     dx = move_point.x() - start_point.x()
     dy = move_point.y() - start_point.y()
     size = min(abs(dx), abs(dy))
@@ -494,12 +624,12 @@ def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
     adjusted_end = tool._clamp_to_document(
         adjusted_end, extend_min=True, extend_max=True
     )
+    expected_rect = tool._rect_from_points(tool.start_point, adjusted_end).intersected(doc_rect)
 
-    expected_new = QPainterPath()
-    expected_new.addRect(QRect(tool.start_point, adjusted_end).normalized())
+    expected_path = QPainterPath()
+    expected_path.addRect(expected_rect)
 
-    expected_combined = expected_base.united(expected_new).simplified()
-    assert selection_paths_equal(combined_path, expected_combined)
+    assert selection_paths_equal(preview_path, expected_path)
 
 
 def test_select_rectangle_alt_subtracts_from_selection(select_rectangle_tool):
