@@ -41,7 +41,7 @@ class CanvasRenderer:
         ):
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
-            self._apply_onion_skin(final_image, document)
+            self._draw_onion_skin_background(final_image, document)
             image_painter = QPainter(final_image)
             layer_manager = resolve_active_layer_manager(document)
             if layer_manager is not None:
@@ -54,6 +54,7 @@ class CanvasRenderer:
                         image_painter.setOpacity(layer.opacity)
                         image_painter.drawImage(0, 0, image_to_draw)
             image_painter.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             image_to_draw_on = final_image
         else:
@@ -242,7 +243,8 @@ class CanvasRenderer:
         if layer_manager is None:
             empty_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             empty_image.fill(Qt.transparent)
-            self._apply_onion_skin(empty_image, document)
+            self._draw_onion_skin_background(empty_image, document)
+            self._draw_onion_skin_foreground(empty_image, document)
             painter.drawImage(target_rect, empty_image)
             return empty_image
 
@@ -257,7 +259,7 @@ class CanvasRenderer:
                 QImage.Format_ARGB32,
             )
             final_image.fill(QColor("transparent"))
-            self._apply_onion_skin(final_image, document)
+            self._draw_onion_skin_background(final_image, document)
             image_painter = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -271,13 +273,14 @@ class CanvasRenderer:
                     image_painter.drawImage(0, 0, image_to_draw)
 
             image_painter.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             return final_image
         else:
             # This path handles the standard document rendering and optional tool previews.
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
-            self._apply_onion_skin(final_image, document)
+            self._draw_onion_skin_background(final_image, document)
             p = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -306,11 +309,56 @@ class CanvasRenderer:
                         p.drawImage(0, 0, self.canvas.temp_image)
 
             p.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             return final_image
 
-    def _apply_onion_skin(self, target: QImage, document) -> None:
+    def _should_overlay_previous_on_top(self, document) -> bool:
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return False
+
+        frames = getattr(frame_manager, "frames", None)
+        if not frames:
+            return False
+
+        active_index = getattr(frame_manager, "active_frame_index", 0)
+        if active_index is None:
+            return False
+
+        total_frames = len(frames)
+        if total_frames <= 0:
+            return False
+
+        active_index = max(0, min(active_index, total_frames - 1))
+        resolved_active = frame_manager.resolve_key_frame_index(active_index)
+        if resolved_active is None:
+            return False
+        return resolved_active != active_index
+
+    def _draw_onion_skin_background(self, target: QImage, document) -> None:
+        if self._should_overlay_previous_on_top(document):
+            self._apply_onion_skin(target, document, include_previous=False)
+        else:
+            self._apply_onion_skin(target, document)
+
+    def _draw_onion_skin_foreground(self, target: QImage, document) -> None:
+        if not self._should_overlay_previous_on_top(document):
+            return
+        self._apply_onion_skin(target, document, include_next=False)
+
+    def _apply_onion_skin(
+        self,
+        target: QImage,
+        document,
+        *,
+        include_previous: bool = True,
+        include_next: bool = True,
+    ) -> None:
         if not getattr(self.canvas, "onion_skin_enabled", False):
+            return
+
+        if not include_previous and not include_next:
             return
 
         frame_manager = getattr(document, "frame_manager", None)
@@ -338,22 +386,28 @@ class CanvasRenderer:
         ):
             drawn_indices.add(resolved_active)
 
-        previous_images = self._collect_onion_images(
-            frame_manager,
-            active_index,
-            -1,
-            drawn_indices,
-            self.canvas.onion_skin_prev_frames,
-            self.canvas.onion_skin_prev_color,
-        )
-        next_images = self._collect_onion_images(
-            frame_manager,
-            active_index,
-            1,
-            drawn_indices,
-            self.canvas.onion_skin_next_frames,
-            self.canvas.onion_skin_next_color,
-        )
+        previous_images: List[Tuple[int, QImage]] = []
+        next_images: List[Tuple[int, QImage]] = []
+
+        if include_previous:
+            previous_images = self._collect_onion_images(
+                frame_manager,
+                active_index,
+                -1,
+                drawn_indices,
+                self.canvas.onion_skin_prev_frames,
+                self.canvas.onion_skin_prev_color,
+            )
+
+        if include_next:
+            next_images = self._collect_onion_images(
+                frame_manager,
+                active_index,
+                1,
+                drawn_indices,
+                self.canvas.onion_skin_next_frames,
+                self.canvas.onion_skin_next_color,
+            )
 
         if not previous_images and not next_images:
             return
