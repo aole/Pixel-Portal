@@ -129,6 +129,13 @@ class AIPanel(QWidget):
         model_layout.addWidget(self.model_combo)
         self.layout.addLayout(model_layout)
 
+        # --- Document Dimensions ---
+        self.dimensions_label = QLabel()
+        self.dimensions_label.setObjectName("ai-dimensions-label")
+        self.layout.addWidget(self.dimensions_label)
+        self.app.document_changed.connect(self.update_dimensions_label)
+        self.update_dimensions_label()
+
         # --- Background Removal ---
         self.remove_bg_checkbox = QCheckBox("Remove BG")
         if not self.image_generator.is_background_removal_available():
@@ -223,6 +230,22 @@ class AIPanel(QWidget):
         if not torch.cuda.is_available():
             QMessageBox.warning(self, "CUDA Not Available", "CUDA is not available. AI features will be disabled.")
             self.set_buttons_enabled(False)
+
+
+    def update_dimensions_label(self):
+        document = getattr(self.app, "document", None)
+        if not document:
+            self.dimensions_label.setText("Generation Size: —")
+            return
+
+        width = getattr(document, "width", None)
+        height = getattr(document, "height", None)
+
+        if width is None or height is None:
+            self.dimensions_label.setText("Generation Size: —")
+            return
+
+        self.dimensions_label.setText(f"Generation Size: {width} × {height}px")
 
 
     def start_generation(self, mode: GenerationMode):
