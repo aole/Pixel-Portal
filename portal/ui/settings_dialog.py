@@ -61,14 +61,14 @@ class SettingsDialog(QDialog):
         grid_layout = QGridLayout(grid_tab)
         grid_layout.setColumnStretch(0, 1)
 
-        self.major_grid_checkbox = QCheckBox("Show major grid lines", grid_tab)
+        self.major_grid_checkbox = QCheckBox("Major", grid_tab)
         self.major_grid_spacing = QSpinBox(grid_tab)
         self.major_grid_spacing.setMinimum(1)
         self.major_grid_spacing.setMaximum(1024)
         self.major_grid_spacing.setEnabled(self.major_grid_checkbox.isChecked())
         self.major_grid_checkbox.toggled.connect(self.major_grid_spacing.setEnabled)
 
-        self.minor_grid_checkbox = QCheckBox("Show minor grid lines", grid_tab)
+        self.minor_grid_checkbox = QCheckBox("Minor", grid_tab)
         self.minor_grid_spacing = QSpinBox(grid_tab)
         self.minor_grid_spacing.setMinimum(1)
         self.minor_grid_spacing.setMaximum(1024)
