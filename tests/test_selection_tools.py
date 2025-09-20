@@ -5,7 +5,7 @@ import pytest
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QPainterPath, QMouseEvent, QColor, QImage
 from portal.commands.selection_commands import selection_paths_equal
-from portal.tools.baseselecttool import BaseSelectTool, SelectionCombineMode
+from portal.tools.baseselecttool import BaseSelectTool
 from portal.tools.selectcircletool import SelectCircleTool
 from portal.tools.selectcolortool import SelectColorTool
 from portal.tools.selectlassotool import SelectLassoTool
@@ -41,29 +41,6 @@ def test_is_on_selection_border(base_select_tool):
     # Test with no selection
     canvas.selection_shape = None
     assert tool.is_on_selection_border(QPoint(10, 20)) is False
-
-
-def test_ctrl_drag_does_not_move_selection(base_select_tool):
-    tool = base_select_tool
-    canvas = tool.canvas
-
-    path = QPainterPath()
-    path.addRect(QRect(5, 5, 10, 10))
-    canvas.selection_shape = path
-
-    press_event = QMouseEvent(
-        QMouseEvent.Type.MouseButtonPress,
-        QPoint(5, 5),
-        QPoint(5, 5),
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ControlModifier,
-    )
-
-    tool.mousePressEvent(press_event, QPoint(5, 5))
-
-    assert tool.moving_selection is False
-    assert tool._selection_combine_mode is SelectionCombineMode.ADD
 
 
 @pytest.fixture
@@ -202,7 +179,7 @@ def test_select_lasso_click_selects_contiguous_color(select_lasso_tool):
     image.fill(QColor("white"))
     image.setPixelColor(2, 2, QColor("red"))
     image.setPixelColor(2, 3, QColor("red"))
-    image.setPixelColor(6, 6, QColor("red"))
+    image.setPixelColor(4, 4, QColor("red"))
     canvas.document.render.return_value = image
 
     start_point = QPoint(2, 2)
@@ -457,7 +434,7 @@ def test_select_rectangle_mouse_events(select_rectangle_tool, qtbot):
     canvas.selection_changed.emit.assert_called_with(True)
 
 
-def test_select_rectangle_ctrl_adds_to_selection(select_rectangle_tool):
+def test_select_rectangle_shift_adds_to_selection(select_rectangle_tool):
     tool = select_rectangle_tool
     canvas = tool.canvas
 
@@ -472,7 +449,7 @@ def test_select_rectangle_ctrl_adds_to_selection(select_rectangle_tool):
         start_point,
         Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ControlModifier,
+        Qt.KeyboardModifier.ShiftModifier,
     )
     tool.mousePressEvent(press_event, start_point)
 
@@ -485,7 +462,7 @@ def test_select_rectangle_ctrl_adds_to_selection(select_rectangle_tool):
         move_point,
         Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ControlModifier,
+        Qt.KeyboardModifier.ShiftModifier,
     )
     tool.mouseMoveEvent(move_event, move_point)
 
@@ -500,72 +477,12 @@ def test_select_rectangle_ctrl_adds_to_selection(select_rectangle_tool):
         move_point,
         Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ControlModifier,
+        Qt.KeyboardModifier.ShiftModifier,
     )
     tool.mouseReleaseEvent(release_event, move_point)
 
     expected_base = QPainterPath()
     expected_base.addRect(QRect(0, 0, 10, 10))
-
-    adjusted_end = tool._clamp_to_document(
-        move_point, extend_min=True, extend_max=True
-    )
-
-    expected_new = QPainterPath()
-    expected_new.addRect(QRect(tool.start_point, adjusted_end).normalized())
-
-    expected_combined = expected_base.united(expected_new).simplified()
-    assert selection_paths_equal(combined_path, expected_combined)
-
-
-def test_select_rectangle_shift_constrains_without_adding(select_rectangle_tool):
-    tool = select_rectangle_tool
-    canvas = tool.canvas
-
-    base_selection = QPainterPath()
-    base_selection.addRect(QRect(0, 0, 10, 10))
-    canvas.selection_shape = base_selection
-
-    start_point = QPoint(20, 20)
-    press_event = QMouseEvent(
-        QMouseEvent.Type.MouseButtonPress,
-        start_point,
-        start_point,
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ShiftModifier,
-    )
-    tool.mousePressEvent(press_event, start_point)
-
-    canvas._update_selection_and_emit_size.reset_mock()
-
-    move_point = QPoint(30, 32)
-    move_event = QMouseEvent(
-        QMouseEvent.Type.MouseMove,
-        move_point,
-        move_point,
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ShiftModifier,
-    )
-    tool.mouseMoveEvent(move_event, move_point)
-
-    canvas._update_selection_and_emit_size.assert_called()
-    new_path = canvas._update_selection_and_emit_size.call_args[0][0]
-    canvas.selection_shape = new_path
-
-    release_event = QMouseEvent(
-        QMouseEvent.Type.MouseButtonRelease,
-        move_point,
-        move_point,
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.ShiftModifier,
-    )
-    tool.mouseReleaseEvent(release_event, move_point)
-
-    rect = new_path.boundingRect()
-    assert rect.width() == rect.height()
 
     dx = move_point.x() - start_point.x()
     dy = move_point.y() - start_point.y()
@@ -581,7 +498,8 @@ def test_select_rectangle_shift_constrains_without_adding(select_rectangle_tool)
     expected_new = QPainterPath()
     expected_new.addRect(QRect(tool.start_point, adjusted_end).normalized())
 
-    assert selection_paths_equal(new_path, expected_new)
+    expected_combined = expected_base.united(expected_new).simplified()
+    assert selection_paths_equal(combined_path, expected_combined)
 
 
 def test_select_rectangle_alt_subtracts_from_selection(select_rectangle_tool):

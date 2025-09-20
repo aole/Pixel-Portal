@@ -40,16 +40,12 @@ class BaseSelectTool(BaseTool):
         return border.contains(doc_pos)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        modifiers = event.modifiers()
         self._selection_before_edit = clone_selection_path(
             getattr(self.canvas, "selection_shape", None)
         )
-        self._selection_combine_mode = self._determine_combine_mode(modifiers)
+        self._selection_combine_mode = self._determine_combine_mode(event.modifiers())
         self._draft_selection_path = None
-        if (
-            self._selection_combine_mode is SelectionCombineMode.REPLACE
-            and self.is_on_selection_border(doc_pos)
-        ):
+        if self.is_on_selection_border(doc_pos):
             self.moving_selection = True
             self.selection_move_start_point = doc_pos
         else:
@@ -82,7 +78,7 @@ class BaseSelectTool(BaseTool):
     def _determine_combine_mode(self, modifiers: Qt.KeyboardModifiers):
         if modifiers & Qt.AltModifier:
             return SelectionCombineMode.SUBTRACT
-        if modifiers & Qt.ControlModifier:
+        if modifiers & Qt.ShiftModifier:
             return SelectionCombineMode.ADD
         return SelectionCombineMode.REPLACE
 
