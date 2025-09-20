@@ -10,6 +10,7 @@ from portal.tools.selectcircletool import SelectCircleTool
 from portal.tools.selectcolortool import SelectColorTool
 from portal.tools.selectlassotool import SelectLassoTool
 from portal.tools.selectrectangletool import SelectRectangleTool
+from portal.tools.color_selection import build_color_selection_path
 
 @pytest.fixture
 def base_select_tool(qtbot):
@@ -198,6 +199,18 @@ def test_select_color_ctrl_click_selects_all_matching_pixels(select_color_tool):
     expected_path.addRect(QRect(6, 6, 1, 1))
 
     assert selection_paths_equal(path, expected_path.simplified())
+
+
+def test_color_selection_handles_sparse_rows():
+    image = QImage(4, 4, QImage.Format_ARGB32)
+    image.fill(QColor("black"))
+    target = QPoint(1, 2)
+    image.setPixelColor(target.x(), target.y(), QColor("red"))
+
+    path = build_color_selection_path(image, target, contiguous=False)
+
+    assert path is not None
+    assert path.boundingRect() == QRectF(target.x(), target.y(), 1, 1)
 
 
 @pytest.fixture
