@@ -30,6 +30,7 @@ class MenuBarBuilder:
         file_menu.addAction(self.action_manager.import_animation_action)
         file_menu.addAction(self.action_manager.export_animation_action)
         file_menu.addAction(self.action_manager.save_action)
+        file_menu.addAction(self.action_manager.save_as_action)
         file_menu.addSeparator()
         file_menu.addAction(self.action_manager.load_palette_action)
         file_menu.addAction(self.action_manager.save_palette_as_png_action)

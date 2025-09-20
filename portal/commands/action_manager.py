@@ -48,6 +48,10 @@ class ActionManager:
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.app.document_service.save_document)
 
+        self.save_as_action = QAction("Save &As...", self.main_window)
+        self.save_as_action.setShortcut("Ctrl+Shift+S")
+        self.save_as_action.triggered.connect(self.app.document_service.save_document_as)
+
         self.save_palette_as_png_action = QAction("Save Palette as PNG...", self.main_window)
         self.save_palette_as_png_action.triggered.connect(self.main_window.save_palette_as_png)
 
