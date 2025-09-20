@@ -4,9 +4,11 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from portal.core.app import App
 from portal.core.drawing_context import DrawingContext
+from portal.tools.selectrectangletool import SelectRectangleTool
 from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
+from types import SimpleNamespace
 
 
 @pytest.fixture
@@ -758,11 +760,14 @@ def test_ctrl_key_activates_move_tool(app, qtbot):
     # Mock a canvas to instantiate the handler
     mock_canvas = MagicMock()
     mock_canvas.drawing_context = app.drawing_context
+    mock_canvas.tools = {}
+    mock_canvas.current_tool = None
     handler = CanvasInputHandler(mock_canvas)
 
     # Simulate Ctrl press
     mock_event = MagicMock()
     mock_event.key.return_value = Qt.Key_Control
+    mock_event.text.return_value = ""
     handler.keyPressEvent(mock_event)
 
     assert app.drawing_context.tool == "Move"
@@ -771,6 +776,34 @@ def test_ctrl_key_activates_move_tool(app, qtbot):
     # Simulate Ctrl release
     handler.keyReleaseEvent(mock_event)
     assert app.drawing_context.tool == "Pen"
+
+
+def test_ctrl_key_does_not_override_selection_tool(app):
+    """Ctrl should not switch to the Move tool when a selection tool is active."""
+
+    app.drawing_context.set_tool("Select Rectangle")
+
+    dummy_canvas = SimpleNamespace(
+        drawing_context=app.drawing_context,
+        tools={},
+        selection_shape=None,
+        _document_size=None,
+    )
+    dummy_canvas.current_tool = SelectRectangleTool(dummy_canvas)
+
+    handler = CanvasInputHandler(dummy_canvas)
+
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Control
+    mock_event.text.return_value = ""
+
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
+
+    handler.keyReleaseEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
 
 
 def test_add_command():
