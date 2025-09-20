@@ -371,14 +371,36 @@ class DocumentService:
             painter.end()
             normalized_frames.append(canvas)
 
-        valid_delays = [delay for delay in delays if delay and delay > 0]
-        if valid_delays:
-            average = sum(valid_delays) / len(valid_delays)
-            fps = 1000.0 / average if average > 0 else 12.0
-        else:
-            fps = 12.0
+        valid_delays = [int(delay) for delay in delays if delay and delay > 0]
+        # GIF timings are stored in milliseconds. When the delay is missing or zero,
+        # browsers typically fall back to 100 ms (10 FPS). Mirror that behaviour so
+        # that the imported animation has sensible timing.
+        fallback_delay = valid_delays[0] if valid_delays else 100
 
-        return normalized_frames, fps
+        normalized_delays: list[int] = []
+        last_valid_delay = fallback_delay
+        for delay in delays:
+            if delay and delay > 0:
+                last_valid_delay = int(delay)
+            normalized_delays.append(last_valid_delay)
+
+        if not normalized_delays:
+            return normalized_frames, 12.0
+
+        frame_unit = normalized_delays[0]
+        for delay in normalized_delays[1:]:
+            frame_unit = math.gcd(frame_unit, delay)
+        frame_unit = max(1, frame_unit)
+
+        expanded_frames: list[QImage] = []
+        for frame, delay in zip(normalized_frames, normalized_delays):
+            repeats = max(1, delay // frame_unit)
+            for _ in range(repeats):
+                expanded_frames.append(frame.copy())
+
+        fps = 1000.0 / frame_unit if frame_unit > 0 else 12.0
+
+        return expanded_frames, fps
 
     def _populate_document_with_frames(self, frames, filename):
         if not frames:
