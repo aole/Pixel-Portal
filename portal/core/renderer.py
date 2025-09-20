@@ -321,17 +321,21 @@ class CanvasRenderer:
         if not frames:
             return
 
-        frame_count = len(frames)
+        total_frames = len(frames)
         active_index = getattr(frame_manager, "active_frame_index", 0)
         if active_index is None:
             active_index = 0
-        if frame_count <= 0:
+        if total_frames <= 0:
             return
-        active_index = max(0, min(active_index, frame_count - 1))
+        active_index = max(0, min(active_index, total_frames - 1))
 
         resolved_active = frame_manager.resolve_key_frame_index(active_index)
         drawn_indices: set[int] = set()
-        if resolved_active is not None and 0 <= resolved_active < frame_count:
+        if (
+            resolved_active is not None
+            and resolved_active == active_index
+            and 0 <= resolved_active < total_frames
+        ):
             drawn_indices.add(resolved_active)
 
         previous_images = self._collect_onion_images(
@@ -375,28 +379,49 @@ class CanvasRenderer:
         if frame_count <= 0:
             return []
 
-        total_frames = len(getattr(frame_manager, "frames", []))
+        frames = getattr(frame_manager, "frames", None)
+        if not frames:
+            return []
+
+        total_frames = len(frames)
         if total_frames <= 0:
             return []
 
+        active_index = max(0, min(active_index, total_frames - 1))
+
+        markers = list(getattr(frame_manager, "frame_markers", []))
+        if not markers:
+            markers = list(range(total_frames))
+
+        markers.sort()
+        marker_set = set(markers)
+
+        if direction < 0:
+            candidate_keys = [idx for idx in markers if idx <= active_index]
+            if active_index in marker_set:
+                candidate_keys = [idx for idx in candidate_keys if idx != active_index]
+            candidate_keys.reverse()
+        else:
+            candidate_keys = [idx for idx in markers if idx > active_index]
+
         images: List[Tuple[int, QImage]] = []
-        for step in range(1, frame_count + 1):
-            candidate = active_index + direction * step
-            if candidate < 0 or candidate >= total_frames:
+        if not candidate_keys:
+            return images
+
+        step = 0
+        for key_index in candidate_keys:
+            if key_index in drawn_indices:
+                continue
+            if key_index < 0 or key_index >= total_frames:
                 continue
 
-            resolved = frame_manager.resolve_key_frame_index(candidate)
-            if resolved is None or resolved in drawn_indices:
-                continue
-            if resolved < 0 or resolved >= total_frames:
-                continue
-
-            frame = frame_manager.frames[resolved]
+            frame = frames[key_index]
             source = frame.render()
             if source is None or source.isNull():
                 continue
 
-            tint_color = self._scaled_onion_color(base_color, step)
+            tentative_step = step + 1
+            tint_color = self._scaled_onion_color(base_color, tentative_step)
             if tint_color.alpha() <= 0:
                 continue
 
@@ -404,8 +429,11 @@ class CanvasRenderer:
             if tinted is None or tinted.isNull():
                 continue
 
-            drawn_indices.add(resolved)
+            step = tentative_step
+            drawn_indices.add(key_index)
             images.append((step, tinted))
+            if step >= frame_count:
+                break
 
         images.sort(key=lambda item: item[0], reverse=True)
         return images
