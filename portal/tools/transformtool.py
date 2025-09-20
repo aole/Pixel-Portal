@@ -2,12 +2,12 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QCursor
 
 from .basetool import BaseTool
 from .movetool import MoveTool
 from .rotatetool import RotateTool
 from .scaletool import ScaleTool
+from ._transform_style import TRANSFORM_DEFAULT_CURSOR
 
 
 Operation = Literal["move", "rotate", "scale"]
@@ -33,7 +33,7 @@ class TransformTool(BaseTool):
         scale_tool: Optional[BaseTool] = None,
     ):
         super().__init__(canvas)
-        self.cursor = QCursor(Qt.OpenHandCursor)
+        self.cursor = TRANSFORM_DEFAULT_CURSOR
 
         self._move_tool = move_tool or MoveTool(canvas)
         self._rotate_tool = rotate_tool or RotateTool(canvas)
@@ -47,6 +47,7 @@ class TransformTool(BaseTool):
         self._connect_signal(self._scale_tool, "scale_changed", self.scale_changed.emit)
 
         self._active_operation: Operation | None = None
+        self._dragging_transform = False
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -67,6 +68,7 @@ class TransformTool(BaseTool):
     # ------------------------------------------------------------------
     def activate(self):
         self._active_operation = None
+        self._set_dragging_transform(False)
         # Reset cached state for the composed tools so their gizmos reflect
         # the newly selected layer/selection.
         self._invoke(self._move_tool, "deactivate")
@@ -77,6 +79,7 @@ class TransformTool(BaseTool):
     # ------------------------------------------------------------------
     def deactivate(self):
         self._active_operation = None
+        self._set_dragging_transform(False)
         self._invoke(self._move_tool, "deactivate")
         self._invoke(self._rotate_tool, "deactivate")
         self._invoke(self._scale_tool, "deactivate")
@@ -87,9 +90,11 @@ class TransformTool(BaseTool):
             return
 
         self._active_operation = None
+        self._set_dragging_transform(False)
 
         self._invoke(self._rotate_tool, "mousePressEvent", event, doc_pos)
-        if getattr(self._rotate_tool, "drag_mode", None) in {"rotate", "pivot"}:
+        rotate_mode = getattr(self._rotate_tool, "drag_mode", None)
+        if rotate_mode in {"rotate", "pivot"}:
             self._active_operation = "rotate"
             return
 
@@ -104,10 +109,22 @@ class TransformTool(BaseTool):
     # ------------------------------------------------------------------
     def mouseMoveEvent(self, event, doc_pos):
         if self._active_operation == "rotate":
+            if getattr(self._rotate_tool, "drag_mode", None) == "rotate":
+                self._set_dragging_transform(True)
+            else:
+                self._set_dragging_transform(False)
             self._invoke(self._rotate_tool, "mouseMoveEvent", event, doc_pos)
         elif self._active_operation == "scale":
+            if getattr(self._scale_tool, "drag_mode", None) == "scale":
+                self._set_dragging_transform(True)
+            else:
+                self._set_dragging_transform(False)
             self._invoke(self._scale_tool, "mouseMoveEvent", event, doc_pos)
         else:
+            if self._active_operation == "move":
+                self._set_dragging_transform(True)
+            else:
+                self._set_dragging_transform(False)
             self._invoke(self._move_tool, "mouseMoveEvent", event, doc_pos)
 
     # ------------------------------------------------------------------
@@ -116,6 +133,7 @@ class TransformTool(BaseTool):
             return
 
         operation = self._active_operation
+        self._set_dragging_transform(False)
 
         if operation == "rotate":
             previous_mode = getattr(self._rotate_tool, "drag_mode", None)
@@ -143,8 +161,19 @@ class TransformTool(BaseTool):
 
     # ------------------------------------------------------------------
     def draw_overlay(self, painter):
+        if self._dragging_transform:
+            return
         self._invoke(self._scale_tool, "draw_overlay", painter)
         self._invoke(self._rotate_tool, "draw_overlay", painter)
+
+    # ------------------------------------------------------------------
+    def _set_dragging_transform(self, active: bool) -> None:
+        if self._dragging_transform == active:
+            return
+        self._dragging_transform = active
+        setter = getattr(self.canvas, "set_selection_overlay_hidden", None)
+        if callable(setter):
+            setter(active)
 
     # ------------------------------------------------------------------
     def _handle_rotation_finished(self, did_rotate: bool) -> None:

@@ -116,6 +116,15 @@ class _DummyEvent:
 @pytest.fixture
 def transform_fixture(qapp):
     canvas = SimpleNamespace()
+    canvas.selection_overlay_hidden = False
+    canvas.selection_hidden_calls = []
+
+    def set_selection_overlay_hidden(hidden: bool) -> None:
+        canvas.selection_overlay_hidden = hidden
+        canvas.selection_hidden_calls.append(hidden)
+
+    canvas.set_selection_overlay_hidden = set_selection_overlay_hidden
+    canvas.update = lambda *args, **kwargs: None
     move = StubMoveTool(canvas)
     rotate = StubRotateTool(canvas)
     scale = StubScaleTool(canvas)
@@ -125,7 +134,9 @@ def transform_fixture(qapp):
         rotate_tool=rotate,
         scale_tool=scale,
     )
-    return SimpleNamespace(tool=tool, move=move, rotate=rotate, scale=scale)
+    return SimpleNamespace(
+        tool=tool, move=move, rotate=rotate, scale=scale, canvas=canvas
+    )
 
 
 def test_move_release_offsets_manual_pivot(transform_fixture):
@@ -176,4 +187,42 @@ def test_scale_release_refreshes_gizmos(transform_fixture):
 
     assert fixture.scale.refresh_calls == 1
     assert fixture.rotate.refresh_calls == 1
+
+
+def test_move_drag_hides_selection_overlay(transform_fixture):
+    fixture = transform_fixture
+    fixture.move.start_point = QPoint(0, 0)
+    fixture.tool._active_operation = "move"
+
+    fixture.tool.mouseMoveEvent(SimpleNamespace(), QPoint(5, 5))
+
+    assert fixture.canvas.selection_hidden_calls[-1] is True
+
+    fixture.tool.mouseReleaseEvent(_DummyEvent(), QPoint(5, 5))
+
+    assert fixture.canvas.selection_hidden_calls[-1] is False
+
+
+def test_rotate_drag_hides_selection_overlay(transform_fixture):
+    fixture = transform_fixture
+    fixture.tool._active_operation = "rotate"
+    fixture.rotate.drag_mode = "rotate"
+
+    fixture.tool.mouseMoveEvent(SimpleNamespace(), QPoint(3, 4))
+
+    assert fixture.canvas.selection_hidden_calls[-1] is True
+
+    fixture.tool.mouseReleaseEvent(_DummyEvent(), QPoint(3, 4))
+
+    assert fixture.canvas.selection_hidden_calls[-1] is False
+
+
+def test_pivot_drag_keeps_selection_visible(transform_fixture):
+    fixture = transform_fixture
+    fixture.tool._active_operation = "rotate"
+    fixture.rotate.drag_mode = "pivot"
+
+    fixture.tool.mouseMoveEvent(SimpleNamespace(), QPoint(2, 2))
+
+    assert True not in fixture.canvas.selection_hidden_calls
 

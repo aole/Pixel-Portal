@@ -83,6 +83,7 @@ class Canvas(QWidget):
         self.background.image_alpha = self.background_image_alpha
         self.background_color = self.palette().window().color()
         self.selection_shape = None
+        self.selection_overlay_hidden = False
         self.ctrl_pressed = False
         self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)
         self.is_erasing_preview = False
@@ -262,6 +263,15 @@ class Canvas(QWidget):
             self.selection_size_changed.emit(int(bounds.width()), int(bounds.height()))
         self.update()
         self.selection_changed.emit(True)
+
+    def set_selection_overlay_hidden(self, hidden: bool) -> None:
+        if self.selection_overlay_hidden == hidden:
+            return
+        self.selection_overlay_hidden = hidden
+        self.update()
+
+    def is_selection_overlay_hidden(self) -> bool:
+        return self.selection_overlay_hidden
 
     def _emit_selection_command(
         self,

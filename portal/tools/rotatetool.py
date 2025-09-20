@@ -1,9 +1,14 @@
 import math
-from PySide6.QtGui import QCursor, QPen, QColor, QTransform, QImage, QPainter, QPainterPath
+from PySide6.QtGui import QPen, QColor, QTransform, QImage, QPainter, QPainterPath
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
+from ._transform_style import (
+    TRANSFORM_DEFAULT_CURSOR,
+    TRANSFORM_GIZMO_BASE_COLOR,
+    TRANSFORM_GIZMO_HOVER_COLOR,
+)
 
 
 class RotateTool(BaseTool):
@@ -18,7 +23,7 @@ class RotateTool(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = QCursor(Qt.ArrowCursor)
+        self.cursor = TRANSFORM_DEFAULT_CURSOR
         self.angle = 0.0
         self.is_hovering_handle = False
         self.is_hovering_center = False
@@ -358,8 +363,8 @@ class RotateTool(BaseTool):
         center = self.get_center()
         handle_pos = self.get_handle_pos()
 
-        base_color = QColor("#d27400")
-        hover_color = base_color.lighter(120)
+        base_color = QColor(TRANSFORM_GIZMO_BASE_COLOR)
+        hover_color = QColor(TRANSFORM_GIZMO_HOVER_COLOR)
 
         color_handle = hover_color if self.is_hovering_handle else base_color
         color_center = hover_color if self.is_hovering_center else base_color

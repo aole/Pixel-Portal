@@ -3,7 +3,6 @@ import math
 from PySide6.QtCore import Qt, QPointF, QRect, QRectF, Signal
 from PySide6.QtGui import (
     QColor,
-    QCursor,
     QImage,
     QPainter,
     QPainterPath,
@@ -17,6 +16,12 @@ from portal.commands.layer_commands import (
 )
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
+from ._transform_style import (
+    TRANSFORM_DEFAULT_CURSOR,
+    TRANSFORM_GIZMO_ACTIVE_COLOR,
+    TRANSFORM_GIZMO_BASE_COLOR,
+    TRANSFORM_GIZMO_HOVER_COLOR,
+)
 
 
 class ScaleTool(BaseTool):
@@ -31,7 +36,7 @@ class ScaleTool(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = QCursor(Qt.ArrowCursor)
+        self.cursor = TRANSFORM_DEFAULT_CURSOR
         self.scale_factor = 1.0
         self.scale_x = 1.0
         self.scale_y = 1.0
@@ -313,9 +318,9 @@ class ScaleTool(BaseTool):
 
         _, overlay_rect, handle_rects = self._overlay_geometry()
 
-        base_color = QColor("#0c7bdc")
-        hover_color = base_color.lighter(130)
-        active_color = QColor("#f5c156")
+        base_color = QColor(TRANSFORM_GIZMO_BASE_COLOR)
+        hover_color = QColor(TRANSFORM_GIZMO_HOVER_COLOR)
+        active_color = QColor(TRANSFORM_GIZMO_ACTIVE_COLOR)
 
         if overlay_rect is not None:
             border_pen = QPen(base_color)
