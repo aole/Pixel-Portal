@@ -802,6 +802,63 @@ def test_ctrl_key_does_not_override_selection_tool(app):
     assert app.drawing_context.tool == "Select Rectangle"
 
 
+def test_alt_key_activates_picker_for_non_selection_tool(app):
+    """Alt should temporarily switch to the Picker tool for non-selection tools."""
+
+    app.drawing_context.set_tool("Pen")
+
+    dummy_canvas = SimpleNamespace(
+        drawing_context=app.drawing_context,
+        tools={},
+        selection_shape=None,
+        _document_size=None,
+    )
+    dummy_canvas.current_tool = SimpleNamespace(category="draw")
+
+    handler = CanvasInputHandler(dummy_canvas)
+
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Alt
+    mock_event.text.return_value = ""
+
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Picker"
+    assert app.drawing_context.previous_tool == "Pen"
+
+    handler.keyReleaseEvent(mock_event)
+
+    assert app.drawing_context.tool == "Pen"
+
+
+def test_alt_key_does_not_override_selection_tool(app):
+    """Alt should not activate the Picker tool when a selection tool is active."""
+
+    app.drawing_context.set_tool("Select Rectangle")
+
+    dummy_canvas = SimpleNamespace(
+        drawing_context=app.drawing_context,
+        tools={},
+        selection_shape=None,
+        _document_size=None,
+    )
+    dummy_canvas.current_tool = SelectRectangleTool(dummy_canvas)
+
+    handler = CanvasInputHandler(dummy_canvas)
+
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Alt
+    mock_event.text.return_value = ""
+
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
+
+    handler.keyReleaseEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
+
+
 def test_add_command():
     """Test that a command is added to the undo stack and that the redo stack is cleared."""
     undo_manager = UndoManager()

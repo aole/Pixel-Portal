@@ -7,6 +7,12 @@ class CanvasInputHandler:
         self.canvas = canvas
         self.drawing_context = canvas.drawing_context
         self._ctrl_forced_move = False
+        self._alt_forced_picker = False
+
+    def _is_selection_tool_active(self) -> bool:
+        current_tool = getattr(self.canvas, "current_tool", None)
+        category = getattr(current_tool, "category", None)
+        return isinstance(category, str) and category == "select"
 
     def keyPressEvent(self, event):
         key_text = event.text()
@@ -16,12 +22,13 @@ class CanvasInputHandler:
                 return
 
         if event.key() == Qt.Key_Alt:
-            self.drawing_context.set_tool("Picker")
+            if not self._is_selection_tool_active():
+                self.drawing_context.set_tool("Picker")
+                self._alt_forced_picker = True
+            else:
+                self._alt_forced_picker = False
         elif event.key() == Qt.Key_Control:
-            current_tool = getattr(self.canvas, "current_tool", None)
-            category = getattr(current_tool, "category", None)
-            is_select_tool = isinstance(category, str) and category == "select"
-            if is_select_tool:
+            if self._is_selection_tool_active():
                 self._ctrl_forced_move = False
             else:
                 self.drawing_context.set_tool("Move")
@@ -29,7 +36,9 @@ class CanvasInputHandler:
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
-            self.drawing_context.set_tool(self.drawing_context.previous_tool)
+            if self._alt_forced_picker:
+                self.drawing_context.set_tool(self.drawing_context.previous_tool)
+            self._alt_forced_picker = False
         elif event.key() == Qt.Key_Control:
             if self._ctrl_forced_move:
                 self.drawing_context.set_tool(self.drawing_context.previous_tool)
