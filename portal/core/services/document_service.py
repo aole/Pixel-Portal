@@ -1,6 +1,10 @@
+import base64
+import binascii
+import io
 import json
 import math
 import os
+import zlib
 
 from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
@@ -301,7 +305,16 @@ class DocumentService:
             if append_frames:
                 save_kwargs.setdefault("save_all", True)
 
+        metadata_rgba_frames: list[str] = []
         if format_name == "GIF":
+            for chunk in frame_chunks:
+                buffer = io.BytesIO()
+                chunk["image"].save(buffer, format="PNG")
+                png_bytes = buffer.getvalue()
+                compressed = zlib.compress(png_bytes)
+                encoded = base64.b64encode(compressed).decode("ascii")
+                metadata_rgba_frames.append(encoded)
+
             metadata = {
                 "version": 1,
                 "total_frames": int(total_frames),
@@ -309,6 +322,9 @@ class DocumentService:
                 "frame_duration_ms": frame_duration,
                 "fps": fps_value,
             }
+            if metadata_rgba_frames:
+                metadata["rgba_encoding"] = "png+zlib+base64"
+                metadata["rgba_frames"] = metadata_rgba_frames
             comment = json.dumps({"pixel_portal": metadata}, separators=(",", ":"))
             save_kwargs["comment"] = comment.encode("utf-8")
 
@@ -429,6 +445,34 @@ class DocumentService:
         metadata_total_frames = metadata.get("total_frames") if isinstance(metadata, dict) else None
         metadata_frame_duration = metadata.get("frame_duration_ms") if isinstance(metadata, dict) else None
         metadata_fps = metadata.get("fps") if isinstance(metadata, dict) else None
+        metadata_rgba_frames = metadata.get("rgba_frames") if isinstance(metadata, dict) else None
+
+        decoded_rgba_frames: list[QImage] = []
+        if isinstance(metadata_rgba_frames, list) and metadata_rgba_frames:
+            for entry in metadata_rgba_frames:
+                if not isinstance(entry, str):
+                    decoded_rgba_frames = []
+                    break
+                try:
+                    compressed = base64.b64decode(entry.encode("ascii"), validate=True)
+                    png_bytes = zlib.decompress(compressed)
+                except (binascii.Error, ValueError, zlib.error):
+                    decoded_rgba_frames = []
+                    break
+                frame = QImage()
+                if not frame.loadFromData(png_bytes, "PNG"):
+                    decoded_rgba_frames = []
+                    break
+                decoded_rgba_frames.append(frame.convertToFormat(QImage.Format_ARGB32))
+
+        if decoded_rgba_frames and len(decoded_rgba_frames) == len(normalized_frames):
+            base_width = decoded_rgba_frames[0].width()
+            base_height = decoded_rgba_frames[0].height()
+            if all(
+                frame.width() == base_width and frame.height() == base_height
+                for frame in decoded_rgba_frames
+            ):
+                normalized_frames = decoded_rgba_frames
 
         frame_entries: list[tuple[QImage, int]] = []
         total_playback_frames = 0
