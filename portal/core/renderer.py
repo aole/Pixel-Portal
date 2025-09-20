@@ -1,5 +1,6 @@
 import math
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 from PySide6.QtCore import QPoint, QRect, QRectF, Qt
 from PySide6.QtGui import (
@@ -15,6 +16,53 @@ from PySide6.QtGui import (
 
 from portal.core.frame_manager import resolve_active_layer_manager
 from portal.ui.background import BackgroundImageMode
+
+
+@dataclass(frozen=True)
+class _OnionSkinSettings:
+    prev_count: int
+    next_count: int
+    prev_color: Optional[QColor]
+    next_color: Optional[QColor]
+
+    @property
+    def has_previous(self) -> bool:
+        return self.prev_count > 0 and self.prev_color is not None
+
+    @property
+    def has_next(self) -> bool:
+        return self.next_count > 0 and self.next_color is not None
+
+
+@dataclass(frozen=True)
+class _OnionSkinContext:
+    frames: Sequence
+    active_index: int
+    resolved_index: Optional[int]
+    key_indices: Tuple[int, ...]
+
+    @property
+    def active_is_key(self) -> bool:
+        return self.resolved_index is not None and self.resolved_index == self.active_index
+
+    @property
+    def should_overlay_previous_on_top(self) -> bool:
+        return (
+            self.resolved_index is not None
+            and self.resolved_index != self.active_index
+        )
+
+    def iter_keys(self, direction: int) -> Iterable[int]:
+        if direction < 0:
+            for key in reversed(self.key_indices):
+                if key >= self.active_index:
+                    continue
+                yield key
+        else:
+            for key in self.key_indices:
+                if key <= self.active_index:
+                    continue
+                yield key
 
 
 class CanvasRenderer:
@@ -313,39 +361,39 @@ class CanvasRenderer:
             painter.drawImage(target_rect, final_image)
             return final_image
 
-    def _should_overlay_previous_on_top(self, document) -> bool:
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return False
-
-        frames = getattr(frame_manager, "frames", None)
-        if not frames:
-            return False
-
-        active_index = getattr(frame_manager, "active_frame_index", 0)
-        if active_index is None:
-            return False
-
-        total_frames = len(frames)
-        if total_frames <= 0:
-            return False
-
-        active_index = max(0, min(active_index, total_frames - 1))
-        resolved_active = frame_manager.resolve_key_frame_index(active_index)
-        if resolved_active is None:
-            return False
-        return resolved_active != active_index
-
     def _draw_onion_skin_background(self, target: QImage, document) -> None:
-        if self._should_overlay_previous_on_top(document):
-            self._apply_onion_skin(target, document, include_previous=False)
-        else:
-            self._apply_onion_skin(target, document)
+        state = self._resolve_onion_skin_state(document)
+        if state is None:
+            return
+        settings, context = state
+        include_previous = settings.has_previous and not context.should_overlay_previous_on_top
+        include_next = settings.has_next
+        if not include_previous and not include_next:
+            return
+        self._apply_onion_skin(
+            target,
+            document,
+            include_previous=include_previous,
+            include_next=include_next,
+            settings=settings,
+            context=context,
+        )
 
     def _draw_onion_skin_foreground(self, target: QImage, document) -> None:
-        if not self._should_overlay_previous_on_top(document):
+        state = self._resolve_onion_skin_state(document)
+        if state is None:
             return
-        self._apply_onion_skin(target, document, include_next=False)
+        settings, context = state
+        if not context.should_overlay_previous_on_top or not settings.has_previous:
+            return
+        self._apply_onion_skin(
+            target,
+            document,
+            include_previous=True,
+            include_next=False,
+            settings=settings,
+            context=context,
+        )
 
     def _apply_onion_skin(
         self,
@@ -354,59 +402,50 @@ class CanvasRenderer:
         *,
         include_previous: bool = True,
         include_next: bool = True,
+        settings: Optional[_OnionSkinSettings] = None,
+        context: Optional[_OnionSkinContext] = None,
     ) -> None:
-        if not getattr(self.canvas, "onion_skin_enabled", False):
-            return
-
         if not include_previous and not include_next:
             return
 
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
+        if settings is None:
+            settings = self._resolve_onion_skin_settings()
+        if settings is None:
             return
 
-        frames = getattr(frame_manager, "frames", None)
-        if not frames:
+        include_previous = include_previous and settings.has_previous
+        include_next = include_next and settings.has_next
+        if not include_previous and not include_next:
             return
 
-        total_frames = len(frames)
-        active_index = getattr(frame_manager, "active_frame_index", 0)
-        if active_index is None:
-            active_index = 0
-        if total_frames <= 0:
+        if context is None:
+            context = self._build_onion_skin_context(document)
+        if context is None:
             return
-        active_index = max(0, min(active_index, total_frames - 1))
 
-        resolved_active = frame_manager.resolve_key_frame_index(active_index)
         drawn_indices: set[int] = set()
-        if (
-            resolved_active is not None
-            and resolved_active == active_index
-            and 0 <= resolved_active < total_frames
-        ):
-            drawn_indices.add(resolved_active)
+        if context.active_is_key:
+            drawn_indices.add(context.active_index)
 
         previous_images: List[Tuple[int, QImage]] = []
         next_images: List[Tuple[int, QImage]] = []
 
-        if include_previous:
+        if include_previous and settings.prev_color is not None:
             previous_images = self._collect_onion_images(
-                frame_manager,
-                active_index,
-                -1,
-                drawn_indices,
-                self.canvas.onion_skin_prev_frames,
-                self.canvas.onion_skin_prev_color,
+                context,
+                direction=-1,
+                drawn_indices=drawn_indices,
+                frame_limit=settings.prev_count,
+                tint_color=settings.prev_color,
             )
 
-        if include_next:
+        if include_next and settings.next_color is not None:
             next_images = self._collect_onion_images(
-                frame_manager,
-                active_index,
-                1,
-                drawn_indices,
-                self.canvas.onion_skin_next_frames,
-                self.canvas.onion_skin_next_color,
+                context,
+                direction=1,
+                drawn_indices=drawn_indices,
+                frame_limit=settings.next_count,
+                tint_color=settings.next_color,
             )
 
         if not previous_images and not next_images:
@@ -421,72 +460,201 @@ class CanvasRenderer:
         finally:
             painter.end()
 
-    def _collect_onion_images(
-        self,
-        frame_manager,
-        active_index: int,
-        direction: int,
-        drawn_indices: set[int],
-        frame_count: int,
-        base_color: QColor,
-    ) -> List[Tuple[int, QImage]]:
-        if frame_count <= 0:
-            return []
+    def _resolve_onion_skin_state(
+        self, document
+    ) -> Optional[Tuple[_OnionSkinSettings, _OnionSkinContext]]:
+        settings = self._resolve_onion_skin_settings()
+        if settings is None:
+            return None
+
+        context = self._build_onion_skin_context(document)
+        if context is None:
+            return None
+
+        return settings, context
+
+    def _resolve_onion_skin_settings(self) -> Optional[_OnionSkinSettings]:
+        if not getattr(self.canvas, "onion_skin_enabled", False):
+            return None
+
+        prev_count = self._normalize_onion_count(
+            getattr(self.canvas, "onion_skin_prev_frames", 0)
+        )
+        next_count = self._normalize_onion_count(
+            getattr(self.canvas, "onion_skin_next_frames", 0)
+        )
+
+        prev_color: Optional[QColor] = None
+        if prev_count > 0:
+            prev_color = self._normalize_onion_color(
+                getattr(self.canvas, "onion_skin_prev_color", None)
+            )
+            if prev_color is None:
+                prev_count = 0
+
+        next_color: Optional[QColor] = None
+        if next_count > 0:
+            next_color = self._normalize_onion_color(
+                getattr(self.canvas, "onion_skin_next_color", None)
+            )
+            if next_color is None:
+                next_count = 0
+
+        if prev_count <= 0 and next_count <= 0:
+            return None
+
+        return _OnionSkinSettings(prev_count, next_count, prev_color, next_color)
+
+    def _build_onion_skin_context(
+        self, document
+    ) -> Optional[_OnionSkinContext]:
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return None
 
         frames = getattr(frame_manager, "frames", None)
         if not frames:
+            return None
+
+        total_frames = len(frames)
+        if total_frames <= 0:
+            return None
+
+        active_raw = getattr(frame_manager, "active_frame_index", 0)
+        try:
+            active_index = int(active_raw)
+        except (TypeError, ValueError):
+            active_index = 0
+        active_index = max(0, min(active_index, total_frames - 1))
+
+        resolved_index: Optional[int] = None
+        if hasattr(frame_manager, "resolve_key_frame_index"):
+            try:
+                resolved_candidate = frame_manager.resolve_key_frame_index(active_index)
+            except (TypeError, ValueError):
+                resolved_candidate = None
+            if resolved_candidate is not None:
+                try:
+                    resolved_index = int(resolved_candidate)
+                except (TypeError, ValueError):
+                    resolved_index = None
+                else:
+                    if resolved_index < 0 or resolved_index >= total_frames:
+                        resolved_index = None
+
+        markers_raw = getattr(frame_manager, "frame_markers", None)
+        normalized_markers: List[int] = []
+        if markers_raw:
+            for marker in markers_raw:
+                try:
+                    normalized = int(marker)
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= normalized < total_frames:
+                    normalized_markers.append(normalized)
+
+        if not normalized_markers:
+            normalized_markers = list(range(total_frames))
+
+        if (
+            resolved_index is not None
+            and 0 <= resolved_index < total_frames
+            and resolved_index not in normalized_markers
+        ):
+            normalized_markers.append(resolved_index)
+
+        normalized_markers = sorted(set(normalized_markers))
+
+        return _OnionSkinContext(
+            frames=frames,
+            active_index=active_index,
+            resolved_index=resolved_index,
+            key_indices=tuple(normalized_markers),
+        )
+
+    @staticmethod
+    def _normalize_onion_count(raw_value) -> int:
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, value)
+
+    @staticmethod
+    def _normalize_onion_color(raw_color) -> Optional[QColor]:
+        if raw_color is None:
+            return None
+
+        if isinstance(raw_color, QColor):
+            color = QColor(raw_color)
+        else:
+            try:
+                color = QColor(raw_color)
+            except TypeError:
+                return None
+
+        if not color.isValid():
+            return None
+
+        return color
+
+    def _collect_onion_images(
+        self,
+        context: _OnionSkinContext,
+        *,
+        direction: int,
+        drawn_indices: set[int],
+        frame_limit: int,
+        tint_color: QColor,
+    ) -> List[Tuple[int, QImage]]:
+        if frame_limit <= 0:
             return []
 
+        if tint_color.alpha() <= 0:
+            return []
+
+        frames = context.frames
         total_frames = len(frames)
         if total_frames <= 0:
             return []
 
-        active_index = max(0, min(active_index, total_frames - 1))
-
-        markers = list(getattr(frame_manager, "frame_markers", []))
-        if not markers:
-            markers = list(range(total_frames))
-
-        markers.sort()
-        marker_set = set(markers)
-
-        if direction < 0:
-            candidate_keys = [idx for idx in markers if idx <= active_index]
-            if active_index in marker_set:
-                candidate_keys = [idx for idx in candidate_keys if idx != active_index]
-            candidate_keys.reverse()
-        else:
-            candidate_keys = [idx for idx in markers if idx > active_index]
-
         images: List[Tuple[int, QImage]] = []
-        if not candidate_keys:
-            return images
-
         step = 0
-        for key_index in candidate_keys:
+        for key_index in context.iter_keys(direction):
             if key_index in drawn_indices:
                 continue
             if key_index < 0 or key_index >= total_frames:
                 continue
 
             frame = frames[key_index]
-            source = frame.render()
+            if frame is None:
+                continue
+
+            render_fn = getattr(frame, "render", None)
+            if render_fn is None:
+                continue
+
+            try:
+                source = render_fn()
+            except Exception:
+                continue
+
             if source is None or source.isNull():
                 continue
 
             tentative_step = step + 1
-            tint_color = self._scaled_onion_color(base_color, tentative_step)
-            if tint_color.alpha() <= 0:
+            tint_step_color = self._scaled_onion_color(tint_color, tentative_step)
+            if tint_step_color.alpha() <= 0:
                 continue
 
-            tinted = self._create_tinted_onion_image(source, tint_color)
+            tinted = self._create_tinted_onion_image(source, tint_step_color)
             if tinted is None or tinted.isNull():
                 continue
 
             step = tentative_step
             drawn_indices.add(key_index)
             images.append((step, tinted))
-            if step >= frame_count:
+            if step >= frame_limit:
                 break
 
         images.sort(key=lambda item: item[0], reverse=True)
@@ -497,13 +665,15 @@ class CanvasRenderer:
         if source is None or source.isNull():
             return None
 
-        tinted = QImage(source.size(), QImage.Format_ARGB32)
+        tinted = QImage(source.size(), QImage.Format_ARGB32_Premultiplied)
         tinted.fill(Qt.transparent)
         painter = QPainter(tinted)
-        painter.drawImage(0, 0, source)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(source.rect(), tint_color)
-        painter.end()
+        try:
+            painter.drawImage(0, 0, source)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.fillRect(source.rect(), tint_color)
+        finally:
+            painter.end()
         return tinted
 
     @staticmethod
