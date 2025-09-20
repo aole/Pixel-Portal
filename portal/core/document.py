@@ -8,6 +8,7 @@ from PySide6.QtCore import QBuffer, QSize, Qt
 from PySide6.QtGui import QImage, QPainter
 from PIL import Image, ImageSequence, ImageQt
 
+from portal.core.aole_archive import AOLEArchive
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
@@ -20,6 +21,7 @@ class Document:
         self.frame_manager = FrameManager(width, height)
         self._layer_manager_listeners: list[Callable[[LayerManager], None]] = []
         self._notify_layer_manager_changed()
+        self.file_path: str | None = None
 
     @property
     def layer_manager(self) -> LayerManager:
@@ -247,6 +249,8 @@ class Document:
                 description=json.dumps(layer_properties)
             )
 
+        self.file_path = filename
+
     @staticmethod
     def load_tiff(filename):
         with Image.open(filename) as img:
@@ -273,7 +277,22 @@ class Document:
                 doc.layer_manager.layers.append(layer)
                 doc.register_layer(layer, len(doc.layer_manager.layers) - 1)
 
+        doc.file_path = filename
         return doc
+
+    def save_aole(self, filename: str) -> None:
+        """Persist the entire document, including frames and layers, to an AOLE archive."""
+
+        AOLEArchive.save(self, filename)
+        self.file_path = filename
+
+    @classmethod
+    def load_aole(cls, filename: str) -> "Document":
+        """Load a full document, including animation data, from an AOLE archive."""
+
+        document = AOLEArchive.load(cls, filename)
+        document.file_path = filename
+        return document
 
     def resize(self, width, height, interpolation):
         self.width = width
