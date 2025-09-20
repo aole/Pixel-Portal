@@ -5,12 +5,47 @@ import json
 import math
 import os
 import zlib
+from dataclasses import dataclass
+from typing import List, Optional, Sequence, Tuple
 
 from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from portal.core.document import Document
+
+
+DEFAULT_PLAYBACK_FPS = 12.0
+
+
+@dataclass
+class AnimationFrameChunk:
+    index: int
+    image: Image.Image
+    repeats: int = 1
+
+
+@dataclass
+class AnimationMetadata:
+    version: Optional[int] = None
+    frame_repeats: Optional[list[int]] = None
+    total_frames: Optional[int] = None
+    frame_duration_ms: Optional[int] = None
+    fps: Optional[float] = None
+    rgba_encoding: Optional[str] = None
+    rgba_frames: Optional[list[str]] = None
+
+    @property
+    def has_rgba_payload(self) -> bool:
+        return bool(self.rgba_frames and self.rgba_encoding == "png+zlib+base64")
+
+
+class AnimationExportError(RuntimeError):
+    """Raised when exporting an animation fails."""
+
+
+class EmptyAnimationError(AnimationExportError):
+    """Raised when no frames are available for export."""
 
 
 class DocumentService:
@@ -127,6 +162,38 @@ class DocumentService:
         if not file_path:
             return
 
+        file_path, format_name = self._resolve_animation_export_path(file_path, selected_filter)
+
+        export_directory = os.path.dirname(file_path)
+        if export_directory:
+            app.last_directory = export_directory
+            app.config.set("General", "last_directory", app.last_directory)
+
+        total_frames, fps_value = self._resolve_playback_state(app, frame_manager)
+
+        try:
+            self._export_animation_file(
+                frame_manager=frame_manager,
+                file_path=file_path,
+                format_name=format_name,
+                total_frames=total_frames,
+                fps_value=fps_value,
+            )
+        except EmptyAnimationError:
+            QMessageBox.information(
+                parent,
+                "Export Animation",
+                "No frames are available to export for the current animation.",
+            )
+        except AnimationExportError as exc:
+            QMessageBox.critical(
+                parent,
+                "Export Animation",
+                f"Failed to export animation: {exc}",
+            )
+
+    @staticmethod
+    def _resolve_animation_export_path(file_path: str, selected_filter: str) -> Tuple[str, str]:
         base_path, extension = os.path.splitext(file_path)
         extension = extension.lower()
         if not extension:
@@ -149,154 +216,205 @@ class DocumentService:
         if extension not in format_map:
             extension = ".gif"
             file_path = base_path + extension
-        format_name = format_map[extension]
+        return file_path, format_map[extension]
 
-        export_directory = os.path.dirname(file_path)
-        if export_directory:
-            app.last_directory = export_directory
-            app.config.set("General", "last_directory", app.last_directory)
-
+    def _resolve_playback_state(self, app, frame_manager) -> Tuple[int, float]:
         main_window = getattr(app, "main_window", None)
         total_frames = None
+        fps_value: float = DEFAULT_PLAYBACK_FPS
+
         if main_window is not None:
-            try:
-                total_frames = int(main_window.animation_player.total_frames)
-            except (TypeError, ValueError):
-                total_frames = None
-            fps_value = getattr(main_window.animation_player, "fps", 12.0)
-        else:
-            fps_value = 12.0
+            animation_player = getattr(main_window, "animation_player", None)
+            if animation_player is not None:
+                total_frames = self._safe_positive_int(
+                    getattr(animation_player, "total_frames", None)
+                )
+                fps_value = self._sanitize_fps(
+                    getattr(animation_player, "fps", DEFAULT_PLAYBACK_FPS)
+                )
 
         if total_frames is None:
-            playback_total = getattr(app, "playback_total_frames", None)
-            if playback_total is not None:
-                try:
-                    total_frames = int(playback_total)
-                except (TypeError, ValueError):
-                    total_frames = None
+            total_frames = self._safe_positive_int(getattr(app, "playback_total_frames", None))
 
         if total_frames is None:
-            total_frames = len(frame_manager.frames)
+            total_frames = len(getattr(frame_manager, "frames", []) or [None])
 
-        if total_frames <= 0:
-            total_frames = 1
+        return max(1, total_frames), fps_value
+
+    def _export_animation_file(
+        self,
+        *,
+        frame_manager,
+        file_path: str,
+        format_name: str,
+        total_frames: int,
+        fps_value: float,
+    ) -> None:
+        total_frames = max(1, int(total_frames))
+        fps_value = self._sanitize_fps(fps_value)
+
+        frame_chunks = self._collect_frame_chunks(frame_manager, total_frames)
+        if not frame_chunks:
+            raise EmptyAnimationError(
+                "No frames are available to export for the current animation."
+            )
+
+        frame_duration = max(1, int(round(1000.0 / fps_value)))
+        frame_repeats = [int(chunk.repeats) for chunk in frame_chunks]
+        durations = [max(1, repeats * frame_duration) for repeats in frame_repeats]
+
+        needs_transparency = any(
+            self._frame_has_transparency(chunk.image) for chunk in frame_chunks
+        )
+
+        converted_frames, transparency_index = self._convert_chunks_for_format(
+            frame_chunks, format_name, needs_transparency
+        )
+
+        base_frame = converted_frames[0]
+        append_frames = converted_frames[1:]
+
+        save_kwargs = self._build_animation_save_kwargs(
+            format_name=format_name,
+            append_frames=append_frames,
+            durations=durations,
+            transparency_index=transparency_index,
+        )
+
+        comment = self._build_animation_metadata_comment(
+            format_name=format_name,
+            chunks=frame_chunks,
+            total_frames=total_frames,
+            frame_repeats=frame_repeats,
+            frame_duration=frame_duration,
+            fps_value=fps_value,
+        )
+        if comment is not None:
+            save_kwargs["comment"] = comment
 
         try:
-            fps_value = float(fps_value)
-        except (TypeError, ValueError):
-            fps_value = 12.0
-        if not math.isfinite(fps_value) or fps_value <= 0:
-            fps_value = 12.0
+            base_frame.save(file_path, format=format_name, **save_kwargs)
+        except (OSError, ValueError) as exc:
+            raise AnimationExportError(str(exc)) from exc
 
-        rendered_cache = {}
-        frame_count = len(frame_manager.frames)
-        frame_chunks: list[dict[str, object]] = []
+    def _collect_frame_chunks(self, frame_manager, total_frames: int) -> List[AnimationFrameChunk]:
+        rendered_cache: dict[int, Image.Image] = {}
+        frame_chunks: List[AnimationFrameChunk] = []
+        frame_count = len(getattr(frame_manager, "frames", []) or [])
+
         for playback_index in range(total_frames):
             resolved_index = frame_manager.resolve_key_frame_index(playback_index)
-            if resolved_index is None:
+            if resolved_index is None or not (0 <= resolved_index < frame_count):
                 continue
-            if not (0 <= resolved_index < frame_count):
-                continue
+
             cached = rendered_cache.get(resolved_index)
             if cached is None:
                 qimage = frame_manager.frames[resolved_index].render()
                 cached = Document.qimage_to_pil(qimage).convert("RGBA")
                 rendered_cache[resolved_index] = cached
-            if frame_chunks and frame_chunks[-1]["index"] == resolved_index:
-                frame_chunks[-1]["repeats"] = int(frame_chunks[-1]["repeats"]) + 1
+
+            if frame_chunks and frame_chunks[-1].index == resolved_index:
+                frame_chunks[-1].repeats += 1
             else:
-                frame_chunks.append({"index": resolved_index, "image": cached, "repeats": 1})
-
-        if not frame_chunks:
-            QMessageBox.information(
-                parent,
-                "Export Animation",
-                "No frames are available to export for the current animation.",
-            )
-            return
-
-        frame_duration = max(1, int(round(1000.0 / fps_value)))
-        frame_repeats = [int(chunk["repeats"]) for chunk in frame_chunks]
-        durations = [max(1, repeat * frame_duration) for repeat in frame_repeats]
-
-        def _frame_has_transparency(image):
-            alpha = image.getchannel("A")
-            extrema = alpha.getextrema()
-            return extrema is not None and extrema[0] < 255
-
-        needs_transparency = any(
-            _frame_has_transparency(chunk["image"]) for chunk in frame_chunks
-        )
-
-        converted_frames = []
-        gif_transparency_index = None
-
-        if format_name == "GIF":
-            def _convert_frame_to_gif(frame):
-                rgba_frame = frame.convert("RGBA")
-                rgb_frame = rgba_frame.convert("RGB")
-                palette_colors = 255 if needs_transparency else 256
-                pal_frame = rgb_frame.convert("P", palette=Image.ADAPTIVE, colors=palette_colors)
-
-                transparency_index = None
-                if needs_transparency:
-                    palette = pal_frame.getpalette() or []
-                    if len(palette) < 768:
-                        palette = palette + [0] * (768 - len(palette))
-                    transparency_index = 255
-                    palette[transparency_index * 3 : transparency_index * 3 + 3] = [0, 0, 0]
-                    pal_frame.putpalette(palette)
-
-                    alpha = rgba_frame.getchannel("A")
-                    transparency_mask = alpha.point(lambda value: 255 if value == 0 else 0)
-                    if transparency_mask.getbbox():
-                        pal_frame.paste(transparency_index, mask=transparency_mask)
-                    pal_frame.info["transparency"] = transparency_index
-
-                return pal_frame, transparency_index
-
-            for chunk in frame_chunks:
-                converted_frame, frame_transparency_index = _convert_frame_to_gif(
-                    chunk["image"].copy()
+                frame_chunks.append(
+                    AnimationFrameChunk(index=resolved_index, image=cached, repeats=1)
                 )
-                converted_frames.append(converted_frame)
-                if gif_transparency_index is None and frame_transparency_index is not None:
-                    gif_transparency_index = frame_transparency_index
 
-            base_frame = converted_frames[0]
-            append_frames = converted_frames[1:]
-            if gif_transparency_index is not None:
+        return frame_chunks
+
+    @staticmethod
+    def _frame_has_transparency(image: Image.Image) -> bool:
+        alpha = image.getchannel("A")
+        extrema = alpha.getextrema()
+        return bool(extrema and extrema[0] < 255)
+
+    def _convert_chunks_for_format(
+        self,
+        chunks: Sequence[AnimationFrameChunk],
+        format_name: str,
+        needs_transparency: bool,
+    ) -> Tuple[List[Image.Image], Optional[int]]:
+        if not chunks:
+            raise EmptyAnimationError(
+                "No frames are available to export for the current animation."
+            )
+
+        if format_name != "GIF":
+            return [chunk.image.copy() for chunk in chunks], None
+
+        converted: List[Image.Image] = []
+        transparency_index: Optional[int] = None
+
+        for chunk in chunks:
+            pal_frame, frame_transparency_index = self._convert_rgba_to_gif_palette(
+                chunk.image, needs_transparency
+            )
+            converted.append(pal_frame)
+            if transparency_index is None and frame_transparency_index is not None:
+                transparency_index = frame_transparency_index
+
+        if transparency_index is not None:
+            for frame in converted:
                 try:
-                    base_frame.info["background"] = gif_transparency_index
+                    frame.info["background"] = transparency_index
                 except (AttributeError, TypeError):
-                    pass
-                for frame in append_frames:
-                    try:
-                        frame.info["background"] = gif_transparency_index
-                    except (AttributeError, TypeError):
-                        pass
+                    continue
 
-        else:
-            converted_frames = [chunk["image"].copy() for chunk in frame_chunks]
-            base_frame = converted_frames[0]
-            append_frames = converted_frames[1:]
+        return converted, transparency_index
 
-        save_kwargs = {}
-        if gif_transparency_index is not None:
-            save_kwargs["transparency"] = gif_transparency_index
-            save_kwargs.setdefault("background", gif_transparency_index)
+    @staticmethod
+    def _convert_rgba_to_gif_palette(
+        image: Image.Image, needs_transparency: bool
+    ) -> Tuple[Image.Image, Optional[int]]:
+        rgba_frame = image.convert("RGBA")
+        rgb_frame = rgba_frame.convert("RGB")
+        palette_colors = 255 if needs_transparency else 256
+        pal_frame = rgb_frame.convert("P", palette=Image.ADAPTIVE, colors=palette_colors)
+
+        transparency_index: Optional[int] = None
+        if needs_transparency:
+            palette = pal_frame.getpalette() or []
+            if len(palette) < 768:
+                palette = palette + [0] * (768 - len(palette))
+            transparency_index = 255
+            palette[transparency_index * 3 : transparency_index * 3 + 3] = [0, 0, 0]
+            pal_frame.putpalette(palette)
+
+            alpha = rgba_frame.getchannel("A")
+            transparency_mask = alpha.point(lambda value: 255 if value == 0 else 0)
+            if transparency_mask.getbbox():
+                pal_frame.paste(transparency_index, mask=transparency_mask)
+            pal_frame.info["transparency"] = transparency_index
+
+        return pal_frame, transparency_index
+
+    @staticmethod
+    def _build_animation_save_kwargs(
+        *,
+        format_name: str,
+        append_frames: Sequence[Image.Image],
+        durations: Sequence[int],
+        transparency_index: Optional[int],
+    ) -> dict:
+        save_kwargs: dict = {}
+        durations = list(durations)
+
+        if transparency_index is not None:
+            save_kwargs["transparency"] = transparency_index
+            save_kwargs.setdefault("background", transparency_index)
+
         if append_frames:
             save_kwargs.update(
                 {
                     "save_all": True,
-                    "append_images": append_frames,
+                    "append_images": list(append_frames),
                     "loop": 0,
                     "duration": durations if len(durations) > 1 else durations[0],
                 }
             )
             if format_name in {"GIF", "PNG"}:
                 save_kwargs["disposal"] = 2
-        else:
+        elif durations:
             if format_name in {"GIF", "PNG"}:
                 save_kwargs["duration"] = durations[0]
 
@@ -305,37 +423,74 @@ class DocumentService:
             if append_frames:
                 save_kwargs.setdefault("save_all", True)
 
-        metadata_rgba_frames: list[str] = []
-        if format_name == "GIF":
-            for chunk in frame_chunks:
-                buffer = io.BytesIO()
-                chunk["image"].save(buffer, format="PNG")
-                png_bytes = buffer.getvalue()
+        return save_kwargs
+
+    def _build_animation_metadata_comment(
+        self,
+        *,
+        format_name: str,
+        chunks: Sequence[AnimationFrameChunk],
+        total_frames: int,
+        frame_repeats: Sequence[int],
+        frame_duration: int,
+        fps_value: float,
+    ) -> Optional[bytes]:
+        if format_name != "GIF":
+            return None
+
+        metadata = {
+            "version": 1,
+            "total_frames": int(total_frames),
+            "frame_repeats": [int(repeat) for repeat in frame_repeats],
+            "frame_duration_ms": int(frame_duration),
+            "fps": float(fps_value),
+        }
+
+        rgba_payload = self._encode_rgba_chunks(chunks)
+        if rgba_payload:
+            metadata["rgba_encoding"] = "png+zlib+base64"
+            metadata["rgba_frames"] = rgba_payload
+
+        comment = json.dumps({"pixel_portal": metadata}, separators=(",", ":"))
+        return comment.encode("utf-8")
+
+    def _encode_rgba_chunks(
+        self, chunks: Sequence[AnimationFrameChunk]
+    ) -> List[str]:
+        encoded_frames: List[str] = []
+        for chunk in chunks:
+            buffer = io.BytesIO()
+            try:
+                chunk.image.save(buffer, format="PNG")
+            except (OSError, ValueError):
+                return []
+            png_bytes = buffer.getvalue()
+            try:
                 compressed = zlib.compress(png_bytes)
-                encoded = base64.b64encode(compressed).decode("ascii")
-                metadata_rgba_frames.append(encoded)
+            except zlib.error:
+                return []
+            encoded_frames.append(base64.b64encode(compressed).decode("ascii"))
+        return encoded_frames
 
-            metadata = {
-                "version": 1,
-                "total_frames": int(total_frames),
-                "frame_repeats": frame_repeats,
-                "frame_duration_ms": frame_duration,
-                "fps": fps_value,
-            }
-            if metadata_rgba_frames:
-                metadata["rgba_encoding"] = "png+zlib+base64"
-                metadata["rgba_frames"] = metadata_rgba_frames
-            comment = json.dumps({"pixel_portal": metadata}, separators=(",", ":"))
-            save_kwargs["comment"] = comment.encode("utf-8")
-
+    @staticmethod
+    def _sanitize_fps(value) -> float:
         try:
-            base_frame.save(file_path, format=format_name, **save_kwargs)
-        except (OSError, ValueError) as exc:
-            QMessageBox.critical(
-                parent,
-                "Export Animation",
-                f"Failed to export animation: {exc}",
-            )
+            fps_value = float(value)
+        except (TypeError, ValueError):
+            return DEFAULT_PLAYBACK_FPS
+        if not math.isfinite(fps_value) or fps_value <= 0:
+            return DEFAULT_PLAYBACK_FPS
+        return fps_value
+
+    @staticmethod
+    def _safe_positive_int(value) -> Optional[int]:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        if number <= 0:
+            return None
+        return number
 
     def import_animation(self):
         app = self.app
@@ -395,6 +550,33 @@ class DocumentService:
             app.main_window.canvas.set_initial_zoom()
 
     def _read_animation_frames(self, file_path):
+        frames, delays = self._read_raw_animation_frames(file_path)
+        normalized_frames = self._normalize_frame_sizes(frames)
+        normalized_delays = self._normalize_frame_delays(delays)
+
+        metadata = self._extract_animation_metadata(file_path)
+        decoded_frames = self._decode_metadata_rgba_frames(metadata)
+        if (
+            decoded_frames
+            and len(decoded_frames) == len(normalized_frames)
+            and self._frames_share_dimensions(decoded_frames)
+        ):
+            normalized_frames = decoded_frames
+
+        frame_entries, total_playback_frames, frame_unit = self._build_import_frame_entries(
+            normalized_frames, normalized_delays, metadata
+        )
+
+        fps_value = self._determine_import_fps(metadata, frame_unit)
+        total_frames = self._apply_total_frame_hint(
+            total_playback_frames, metadata.total_frames
+        )
+
+        return frame_entries, total_frames or len(frame_entries), fps_value
+
+    def _read_raw_animation_frames(
+        self, file_path: str
+    ) -> tuple[list[QImage], list[int]]:
         reader = QImageReader(file_path)
         reader.setDecideFormatFromContent(True)
         if not reader.supportsAnimation():
@@ -409,190 +591,240 @@ class DocumentService:
                     break
                 message = reader.errorString() or "Unable to read image data."
                 raise ValueError(message)
-            converted = image.convertToFormat(QImage.Format_ARGB32)
-            frames.append(converted)
+            frames.append(image.convertToFormat(QImage.Format_ARGB32))
             delays.append(reader.nextImageDelay())
+
+        return frames, delays
+
+    @staticmethod
+    def _normalize_frame_sizes(frames: Sequence[QImage]) -> list[QImage]:
+        if not frames:
+            return []
 
         base_width = frames[0].width()
         base_height = frames[0].height()
-        normalized_frames: list[QImage] = []
+        normalized: list[QImage] = []
         for frame in frames:
             if frame.width() == base_width and frame.height() == base_height:
-                normalized_frames.append(frame)
+                normalized.append(frame)
                 continue
             canvas = QImage(base_width, base_height, QImage.Format_ARGB32)
             canvas.fill(0)
             painter = QPainter(canvas)
             painter.drawImage(0, 0, frame)
             painter.end()
-            normalized_frames.append(canvas)
+            normalized.append(canvas)
+        return normalized
 
+    @staticmethod
+    def _normalize_frame_delays(delays: Sequence[int]) -> list[int]:
         valid_delays = [int(delay) for delay in delays if delay and delay > 0]
-        # GIF timings are stored in milliseconds. When the delay is missing or zero,
-        # browsers typically fall back to 100 ms (10 FPS). Mirror that behaviour so
-        # that the imported animation has sensible timing.
         fallback_delay = valid_delays[0] if valid_delays else 100
 
-        normalized_delays: list[int] = []
+        normalized: list[int] = []
         last_valid_delay = fallback_delay
         for delay in delays:
             if delay and delay > 0:
                 last_valid_delay = int(delay)
-            normalized_delays.append(last_valid_delay)
+            normalized.append(last_valid_delay)
+        return normalized
 
-        metadata = self._extract_animation_metadata(file_path)
-        metadata_repeats = metadata.get("frame_repeats") if isinstance(metadata, dict) else None
-        metadata_total_frames = metadata.get("total_frames") if isinstance(metadata, dict) else None
-        metadata_frame_duration = metadata.get("frame_duration_ms") if isinstance(metadata, dict) else None
-        metadata_fps = metadata.get("fps") if isinstance(metadata, dict) else None
-        metadata_rgba_frames = metadata.get("rgba_frames") if isinstance(metadata, dict) else None
+    def _decode_metadata_rgba_frames(
+        self, metadata: AnimationMetadata
+    ) -> list[QImage]:
+        if not metadata.has_rgba_payload:
+            return []
 
-        decoded_rgba_frames: list[QImage] = []
-        if isinstance(metadata_rgba_frames, list) and metadata_rgba_frames:
-            for entry in metadata_rgba_frames:
-                if not isinstance(entry, str):
-                    decoded_rgba_frames = []
-                    break
-                try:
-                    compressed = base64.b64decode(entry.encode("ascii"), validate=True)
-                    png_bytes = zlib.decompress(compressed)
-                except (binascii.Error, ValueError, zlib.error):
-                    decoded_rgba_frames = []
-                    break
-                frame = QImage()
-                if not frame.loadFromData(png_bytes, "PNG"):
-                    decoded_rgba_frames = []
-                    break
-                decoded_rgba_frames.append(frame.convertToFormat(QImage.Format_ARGB32))
-
-        if decoded_rgba_frames and len(decoded_rgba_frames) == len(normalized_frames):
-            base_width = decoded_rgba_frames[0].width()
-            base_height = decoded_rgba_frames[0].height()
-            if all(
-                frame.width() == base_width and frame.height() == base_height
-                for frame in decoded_rgba_frames
-            ):
-                normalized_frames = decoded_rgba_frames
-
-        frame_entries: list[tuple[QImage, int]] = []
-        total_playback_frames = 0
-
-        if (
-            isinstance(metadata_repeats, list)
-            and len(metadata_repeats) == len(normalized_frames)
-        ):
-            parsed_repeats: list[int] = []
-            for value in metadata_repeats:
-                try:
-                    repeat_value = int(value)
-                except (TypeError, ValueError):
-                    parsed_repeats = []
-                    break
-                if repeat_value <= 0:
-                    parsed_repeats = []
-                    break
-                parsed_repeats.append(repeat_value)
-            if parsed_repeats:
-                for frame, repeats in zip(normalized_frames, parsed_repeats):
-                    repeats = max(1, repeats)
-                    frame_entries.append((frame, repeats))
-                    total_playback_frames += repeats
-
-        if not frame_entries:
-            if not normalized_delays:
-                fallback_entries = [(frame, 1) for frame in normalized_frames]
-                return fallback_entries, len(fallback_entries), 12.0
-
-            frame_unit = normalized_delays[0]
-            for delay in normalized_delays[1:]:
-                frame_unit = math.gcd(frame_unit, delay)
-            frame_unit = max(1, frame_unit)
-
-            last_frame_bytes = None
-            for frame, delay in zip(normalized_frames, normalized_delays):
-                repeats = max(1, delay // frame_unit)
-                frame_bytes = frame.bits().tobytes()
-                if (
-                    frame_entries
-                    and last_frame_bytes is not None
-                    and frame_bytes == last_frame_bytes
-                ):
-                    previous_frame, previous_repeats = frame_entries[-1]
-                    frame_entries[-1] = (previous_frame, previous_repeats + repeats)
-                else:
-                    frame_entries.append((frame, repeats))
-                total_playback_frames += repeats
-                last_frame_bytes = frame_bytes
-        else:
-            frame_unit = None
-
-        if not frame_entries:
-            # Fallback to treating every frame as unique with a single repeat.
-            for frame in normalized_frames:
-                frame_entries.append((frame, 1))
-            total_playback_frames = len(frame_entries)
-            frame_unit = None
-
-        if frame_unit is None and metadata_frame_duration:
+        decoded: list[QImage] = []
+        for entry in metadata.rgba_frames or []:
             try:
-                frame_unit = int(metadata_frame_duration)
-            except (TypeError, ValueError):
-                frame_unit = None
-            if frame_unit is not None and frame_unit <= 0:
-                frame_unit = None
-
-        if frame_unit is None and normalized_delays:
-            frame_unit = normalized_delays[0]
-            for delay in normalized_delays[1:]:
-                frame_unit = math.gcd(frame_unit, delay)
-            frame_unit = max(1, frame_unit)
-
-        fps_value = None
-        if metadata_fps is not None:
-            try:
-                fps_candidate = float(metadata_fps)
-            except (TypeError, ValueError):
-                fps_candidate = None
-            if fps_candidate and math.isfinite(fps_candidate) and fps_candidate > 0:
-                fps_value = fps_candidate
-        if fps_value is None and frame_unit and frame_unit > 0:
-            fps_value = 1000.0 / frame_unit
-        if fps_value is None:
-            fps_value = 12.0
-
-        if metadata_total_frames:
-            try:
-                total_hint = int(metadata_total_frames)
-            except (TypeError, ValueError):
-                total_hint = None
-            if total_hint and total_hint > 0:
-                total_playback_frames = max(total_playback_frames, total_hint)
-
-        return frame_entries, total_playback_frames or len(frame_entries), fps_value
+                compressed = base64.b64decode(entry.encode('ascii'), validate=True)
+                png_bytes = zlib.decompress(compressed)
+            except (binascii.Error, ValueError, zlib.error):
+                return []
+            frame = QImage()
+            if not frame.loadFromData(png_bytes, 'PNG'):
+                return []
+            decoded.append(frame.convertToFormat(QImage.Format_ARGB32))
+        return decoded
 
     @staticmethod
-    def _extract_animation_metadata(file_path):
-        if not file_path.lower().endswith(".gif"):
+    def _frames_share_dimensions(frames: Sequence[QImage]) -> bool:
+        if not frames:
+            return False
+        width = frames[0].width()
+        height = frames[0].height()
+        return all(frame.width() == width and frame.height() == height for frame in frames)
+
+    def _build_import_frame_entries(
+        self,
+        frames: Sequence[QImage],
+        delays: Sequence[int],
+        metadata: AnimationMetadata,
+    ) -> tuple[list[tuple[QImage, int]], int, Optional[int]]:
+        frame_entries: list[tuple[QImage, int]] = []
+        total_playback_frames = 0
+        frame_unit = self._compute_frame_unit(metadata.frame_duration_ms, delays)
+
+        repeats = metadata.frame_repeats
+        if repeats and len(repeats) == len(frames):
+            for frame, repeat in zip(frames, repeats):
+                repeat = max(1, int(repeat))
+                frame_entries.append((frame, repeat))
+                total_playback_frames += repeat
+        else:
+            if not delays:
+                frame_entries = [(frame, 1) for frame in frames]
+                total_playback_frames = len(frame_entries)
+            else:
+                effective_unit = frame_unit if frame_unit and frame_unit > 0 else delays[0]
+                effective_unit = max(1, effective_unit)
+                last_frame_bytes: Optional[bytes] = None
+
+                for frame, delay in zip(frames, delays):
+                    repeats = max(1, int(delay // effective_unit))
+                    frame_bytes = frame.bits().tobytes()
+                    if (
+                        frame_entries
+                        and last_frame_bytes is not None
+                        and frame_bytes == last_frame_bytes
+                    ):
+                        previous_frame, previous_repeats = frame_entries[-1]
+                        frame_entries[-1] = (previous_frame, previous_repeats + repeats)
+                    else:
+                        frame_entries.append((frame, repeats))
+                    total_playback_frames += repeats
+                    last_frame_bytes = frame_bytes
+
+        if not frame_entries:
+            frame_entries = [(frame, 1) for frame in frames]
+            total_playback_frames = len(frame_entries)
+
+        return frame_entries, total_playback_frames, frame_unit
+
+    @staticmethod
+    def _compute_frame_unit(
+        frame_duration_ms: Optional[int], delays: Sequence[int]
+    ) -> Optional[int]:
+        if frame_duration_ms is not None and frame_duration_ms > 0:
+            return frame_duration_ms
+        if not delays:
             return None
+        frame_unit = delays[0]
+        for delay in delays[1:]:
+            frame_unit = math.gcd(frame_unit, delay)
+        return max(1, frame_unit)
+
+    def _determine_import_fps(
+        self, metadata: AnimationMetadata, frame_unit: Optional[int]
+    ) -> float:
+        if metadata.fps is not None:
+            return metadata.fps
+        if frame_unit and frame_unit > 0:
+            return 1000.0 / frame_unit
+        return DEFAULT_PLAYBACK_FPS
+
+    @staticmethod
+    def _apply_total_frame_hint(
+        computed_total: int, metadata_total: Optional[int]
+    ) -> int:
+        if metadata_total is None or metadata_total <= 0:
+            return computed_total
+        return max(computed_total, metadata_total)
+
+    @staticmethod
+    def _extract_animation_metadata(file_path) -> AnimationMetadata:
+        if not file_path.lower().endswith('.gif'):
+            return AnimationMetadata()
         try:
             with Image.open(file_path) as image:
-                comment = image.info.get("comment")
+                comment = image.info.get('comment')
                 if not comment:
-                    return None
+                    return AnimationMetadata()
                 if isinstance(comment, bytes):
                     try:
-                        comment = comment.decode("utf-8")
+                        comment = comment.decode('utf-8')
                     except UnicodeDecodeError:
-                        return None
+                        return AnimationMetadata()
                 data = json.loads(comment)
         except (OSError, ValueError, json.JSONDecodeError):
-            return None
+            return AnimationMetadata()
         if not isinstance(data, dict):
-            return None
-        payload = data.get("pixel_portal")
+            return AnimationMetadata()
+        payload = data.get('pixel_portal')
         if not isinstance(payload, dict):
+            return AnimationMetadata()
+        return DocumentService._parse_animation_metadata(payload)
+
+    @staticmethod
+    def _parse_animation_metadata(payload: dict) -> AnimationMetadata:
+        version = payload.get('version')
+        if not isinstance(version, int):
+            version = None
+
+        frame_repeats = DocumentService._normalize_repeat_list(
+            payload.get('frame_repeats')
+        )
+        total_frames = DocumentService._coerce_positive_int(payload.get('total_frames'))
+        frame_duration = DocumentService._coerce_positive_int(
+            payload.get('frame_duration_ms')
+        )
+        fps_value = DocumentService._coerce_positive_float(payload.get('fps'))
+
+        rgba_frames = payload.get('rgba_frames')
+        if not isinstance(rgba_frames, list) or not all(
+            isinstance(entry, str) for entry in rgba_frames
+        ):
+            rgba_frames = None
+
+        rgba_encoding = payload.get('rgba_encoding')
+        if not isinstance(rgba_encoding, str):
+            rgba_encoding = None
+
+        return AnimationMetadata(
+            version=version,
+            frame_repeats=frame_repeats,
+            total_frames=total_frames,
+            frame_duration_ms=frame_duration,
+            fps=fps_value,
+            rgba_encoding=rgba_encoding,
+            rgba_frames=rgba_frames,
+        )
+
+    @staticmethod
+    def _normalize_repeat_list(value) -> Optional[list[int]]:
+        if not isinstance(value, list) or not value:
             return None
-        return payload
+        normalized: list[int] = []
+        for entry in value:
+            try:
+                repeat = int(entry)
+            except (TypeError, ValueError):
+                return None
+            if repeat <= 0:
+                return None
+            normalized.append(repeat)
+        return normalized
+
+    @staticmethod
+    def _coerce_positive_int(value) -> Optional[int]:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        if number <= 0:
+            return None
+        return number
+
+    @staticmethod
+    def _coerce_positive_float(value) -> Optional[float]:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(number) or number <= 0:
+            return None
+        return number
 
     def _populate_document_with_frames(self, frame_entries, total_frames, filename):
         if not frame_entries:
