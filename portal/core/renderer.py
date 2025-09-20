@@ -354,11 +354,21 @@ class CanvasRenderer:
         painter.drawText(height_x, height_y, height_text)
 
     def draw_grid(self, painter, target_rect):
-        if self.canvas.zoom < 2 or not self.canvas.grid_visible:
+        if (
+            self.canvas.zoom < 2
+            or not self.canvas.grid_visible
+            or target_rect.isNull()
+        ):
             return
 
-        major_visible = self.canvas.grid_major_visible and self.canvas.grid_major_spacing > 0
-        minor_visible = self.canvas.grid_minor_visible and self.canvas.grid_minor_spacing > 0
+        major_visible = (
+            self.canvas.grid_major_visible
+            and self.canvas.grid_major_spacing > 0
+        )
+        minor_visible = (
+            self.canvas.grid_minor_visible
+            and self.canvas.grid_minor_spacing > 0
+        )
 
         if not major_visible and not minor_visible:
             return
@@ -366,63 +376,109 @@ class CanvasRenderer:
         doc_width = self.canvas._document_size.width()
         doc_height = self.canvas._document_size.height()
 
-        # Define colors for grid lines
-        minor_color = QColor(self.canvas.grid_minor_color)
-        major_color = QColor(self.canvas.grid_major_color)
+        if doc_width <= 0 or doc_height <= 0:
+            return
 
-        major_spacing = max(1, int(self.canvas.grid_major_spacing))
-        minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
+        zoom = float(self.canvas.zoom)
 
-        # Find the range of document coordinates currently visible on the canvas
         doc_top_left = self.canvas.get_doc_coords(QPoint(0, 0))
         doc_bottom_right = self.canvas.get_doc_coords(
             QPoint(self.canvas.width(), self.canvas.height())
         )
 
-        start_x = max(0, math.floor(doc_top_left.x()))
-        end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
-        start_y = max(0, math.floor(doc_top_left.y()))
-        end_y = min(doc_height, math.ceil(doc_bottom_right.y()))
+        start_x = max(0, int(math.floor(doc_top_left.x())))
+        end_x = min(doc_width, int(math.ceil(doc_bottom_right.x())))
+        start_y = max(0, int(math.floor(doc_top_left.y())))
+        end_y = min(doc_height, int(math.ceil(doc_bottom_right.y())))
 
-        # Draw vertical lines
-        for dx in range(start_x, end_x + 1):
-            canvas_x = target_rect.x() + dx * self.canvas.zoom
-            pen = None
-            if major_visible and dx % major_spacing == 0:
-                pen = major_color
-            elif minor_visible and dx % minor_spacing == 0:
-                pen = minor_color
+        if start_x > end_x or start_y > end_y:
+            return
 
-            if pen is None:
-                continue
+        major_spacing = max(1, int(self.canvas.grid_major_spacing))
+        minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
 
-            painter.setPen(pen)
-            painter.drawLine(
-                round(canvas_x),
-                target_rect.top(),
-                round(canvas_x),
-                target_rect.bottom(),
-            )
+        def create_pen(color_value):
+            color = QColor(color_value)
+            if not color.isValid():
+                return None
+            pen = QPen(color)
+            pen.setCosmetic(True)
+            pen.setWidth(0)
+            return pen
 
-        # Draw horizontal lines
-        for dy in range(start_y, end_y + 1):
-            canvas_y = target_rect.y() + dy * self.canvas.zoom
-            pen = None
-            if major_visible and dy % major_spacing == 0:
-                pen = major_color
-            elif minor_visible and dy % minor_spacing == 0:
-                pen = minor_color
+        major_pen = create_pen(self.canvas.grid_major_color) if major_visible else None
+        minor_pen = create_pen(self.canvas.grid_minor_color) if minor_visible else None
 
-            if pen is None:
-                continue
+        major_visible = major_visible and major_pen is not None
+        minor_visible = minor_visible and minor_pen is not None
 
-            painter.setPen(pen)
-            painter.drawLine(
-                target_rect.left(),
-                round(canvas_y),
-                target_rect.right(),
-                round(canvas_y),
-            )
+        if not major_visible and not minor_visible:
+            return
+
+        left = target_rect.left()
+        right = target_rect.right()
+        top = target_rect.top()
+        bottom = target_rect.bottom()
+
+        def first_multiple(start: int, spacing: int) -> int:
+            remainder = start % spacing
+            return start if remainder == 0 else start + (spacing - remainder)
+
+        if major_visible:
+            first_major_x = first_multiple(start_x, major_spacing)
+            if first_major_x <= end_x:
+                painter.setPen(major_pen)
+                for dx in range(first_major_x, end_x + 1, major_spacing):
+                    canvas_x = left + dx * zoom
+                    painter.drawLine(
+                        int(round(canvas_x)),
+                        top,
+                        int(round(canvas_x)),
+                        bottom,
+                    )
+
+        if minor_visible:
+            first_minor_x = first_multiple(start_x, minor_spacing)
+            if first_minor_x <= end_x:
+                painter.setPen(minor_pen)
+                for dx in range(first_minor_x, end_x + 1, minor_spacing):
+                    if major_visible and dx % major_spacing == 0:
+                        continue
+                    canvas_x = left + dx * zoom
+                    painter.drawLine(
+                        int(round(canvas_x)),
+                        top,
+                        int(round(canvas_x)),
+                        bottom,
+                    )
+
+        if major_visible:
+            first_major_y = first_multiple(start_y, major_spacing)
+            if first_major_y <= end_y:
+                painter.setPen(major_pen)
+                for dy in range(first_major_y, end_y + 1, major_spacing):
+                    canvas_y = top + dy * zoom
+                    painter.drawLine(
+                        left,
+                        int(round(canvas_y)),
+                        right,
+                        int(round(canvas_y)),
+                    )
+
+        if minor_visible:
+            first_minor_y = first_multiple(start_y, minor_spacing)
+            if first_minor_y <= end_y:
+                painter.setPen(minor_pen)
+                for dy in range(first_minor_y, end_y + 1, minor_spacing):
+                    if major_visible and dy % major_spacing == 0:
+                        continue
+                    canvas_y = top + dy * zoom
+                    painter.drawLine(
+                        left,
+                        int(round(canvas_y)),
+                        right,
+                        int(round(canvas_y)),
+                    )
 
     def draw_cursor(self, painter, target_rect, doc_image):
         layer_manager = resolve_active_layer_manager(self.canvas.document)
