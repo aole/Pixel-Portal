@@ -94,6 +94,18 @@ class SettingsDialog(QDialog):
         grid_layout.addWidget(self.minor_grid_spacing, 1, 2)
         grid_layout.addWidget(self.minor_grid_color_button, 1, 3)
 
+        self.grid_reset_button = QPushButton("Reset to Defaults", grid_tab)
+        self.grid_reset_button.clicked.connect(self._reset_grid_tab)
+        grid_layout.addWidget(
+            self.grid_reset_button,
+            2,
+            0,
+            1,
+            4,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        grid_layout.setRowStretch(3, 1)
+
         self.tab_widget.addTab(grid_tab, "Grid")
 
     def _build_canvas_tab(self):
@@ -129,7 +141,18 @@ class SettingsDialog(QDialog):
         self.background_alpha_slider.valueChanged.connect(
             self._update_background_alpha_label
         )
-        canvas_layout.setRowStretch(2, 1)
+
+        self.canvas_reset_button = QPushButton("Reset to Defaults", canvas_tab)
+        self.canvas_reset_button.clicked.connect(self._reset_canvas_tab)
+        canvas_layout.addWidget(
+            self.canvas_reset_button,
+            2,
+            0,
+            1,
+            3,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        canvas_layout.setRowStretch(3, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
@@ -196,6 +219,39 @@ class SettingsDialog(QDialog):
             image_mode=self.get_background_image_mode(),
             image_alpha=self.get_background_image_alpha(),
         )
+
+    def _reset_grid_tab(self):
+        defaults = self.settings_controller.get_default_grid_settings()
+        self.major_grid_checkbox.setChecked(defaults.get("major_visible", True))
+        self.major_grid_spacing.setValue(defaults.get("major_spacing", 8))
+        self.minor_grid_checkbox.setChecked(defaults.get("minor_visible", True))
+        self.minor_grid_spacing.setValue(defaults.get("minor_spacing", 1))
+
+        self._major_grid_color = defaults.get("major_color", "#64000000")
+        self._minor_grid_color = defaults.get("minor_color", "#64808080")
+        self._update_color_button(self.major_grid_color_button, self._major_grid_color)
+        self._update_color_button(self.minor_grid_color_button, self._minor_grid_color)
+
+    def _reset_canvas_tab(self):
+        defaults = self.settings_controller.get_default_background_settings()
+        mode = defaults.get("image_mode", BackgroundImageMode.FIT)
+        if not isinstance(mode, BackgroundImageMode):
+            try:
+                mode = BackgroundImageMode(mode)
+            except ValueError:
+                mode = BackgroundImageMode.FIT
+        index = self.background_mode_combo.findData(mode)
+        if index >= 0:
+            self.background_mode_combo.setCurrentIndex(index)
+
+        alpha_value = defaults.get("image_alpha", 1.0)
+        try:
+            percent = int(round(float(alpha_value) * 100))
+        except (TypeError, ValueError):
+            percent = 100
+        clamped_percent = max(0, min(100, percent))
+        self.background_alpha_slider.setValue(clamped_percent)
+        self._update_background_alpha_label(clamped_percent)
 
     def _choose_major_grid_color(self):
         self._major_grid_color = self._choose_grid_color(

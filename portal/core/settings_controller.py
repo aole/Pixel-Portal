@@ -10,6 +10,20 @@ from portal.ui.background import BackgroundImageMode
 class SettingsController(QObject):
     """Manages application settings persistence."""
 
+    DEFAULT_GRID_SETTINGS = {
+        "major_visible": True,
+        "minor_visible": True,
+        "major_spacing": 8,
+        "minor_spacing": 1,
+        "major_color": "#64000000",
+        "minor_color": "#64808080",
+    }
+
+    DEFAULT_BACKGROUND_SETTINGS = {
+        "image_mode": BackgroundImageMode.FIT,
+        "image_alpha": 1.0,
+    }
+
     def __init__(self):
         super().__init__()
         self.config = configparser.ConfigParser()
@@ -20,18 +34,32 @@ class SettingsController(QObject):
 
         if not self.config.has_section('Grid'):
             self.config.add_section('Grid')
-        self.grid_major_visible = self._get_grid_bool('major_visible', True)
-        self.grid_minor_visible = self._get_grid_bool('minor_visible', True)
-        self.grid_major_spacing = self._get_grid_int('major_spacing', 8)
-        self.grid_minor_spacing = self._get_grid_int('minor_spacing', 1)
-        self.grid_major_color = self._get_grid_color('major_color', '#64000000')
-        self.grid_minor_color = self._get_grid_color('minor_color', '#64808080')
+        self.grid_major_visible = self._get_grid_bool(
+            'major_visible', self.DEFAULT_GRID_SETTINGS["major_visible"]
+        )
+        self.grid_minor_visible = self._get_grid_bool(
+            'minor_visible', self.DEFAULT_GRID_SETTINGS["minor_visible"]
+        )
+        self.grid_major_spacing = self._get_grid_int(
+            'major_spacing', self.DEFAULT_GRID_SETTINGS["major_spacing"]
+        )
+        self.grid_minor_spacing = self._get_grid_int(
+            'minor_spacing', self.DEFAULT_GRID_SETTINGS["minor_spacing"]
+        )
+        self.grid_major_color = self._get_grid_color(
+            'major_color', self.DEFAULT_GRID_SETTINGS["major_color"]
+        )
+        self.grid_minor_color = self._get_grid_color(
+            'minor_color', self.DEFAULT_GRID_SETTINGS["minor_color"]
+        )
         self._sync_grid_settings_to_config()
 
         if not self.config.has_section('Background'):
             self.config.add_section('Background')
         raw_mode = self.config.get(
-            'Background', 'image_mode', fallback=BackgroundImageMode.FIT.value
+            'Background',
+            'image_mode',
+            fallback=self.DEFAULT_BACKGROUND_SETTINGS["image_mode"].value,
         )
         try:
             self.background_image_mode = BackgroundImageMode(raw_mode)
@@ -41,7 +69,7 @@ class SettingsController(QObject):
         try:
             alpha_value = self.config.getfloat('Background', 'image_alpha')
         except (configparser.NoOptionError, ValueError):
-            alpha_value = 1.0
+            alpha_value = self.DEFAULT_BACKGROUND_SETTINGS["image_alpha"]
         self.background_image_alpha = max(0.0, min(1.0, float(alpha_value)))
         self._sync_background_settings_to_config()
 
@@ -114,6 +142,12 @@ class SettingsController(QObject):
             'image_mode': self.background_image_mode,
             'image_alpha': self.background_image_alpha,
         }
+
+    def get_default_grid_settings(self):
+        return dict(self.DEFAULT_GRID_SETTINGS)
+
+    def get_default_background_settings(self):
+        return dict(self.DEFAULT_BACKGROUND_SETTINGS)
 
     def update_grid_settings(
         self,
