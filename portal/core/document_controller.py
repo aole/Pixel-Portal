@@ -60,8 +60,6 @@ class DocumentController(QObject):
         self.document_service.app = self
         self.clipboard_service.app = self
 
-        self.attach_document(Document(64, 64))
-
         self.is_recording = False
         self.recorded_commands = []
         self._is_dirty = False
@@ -70,6 +68,8 @@ class DocumentController(QObject):
         self._base_window_title = "Pixel Portal"
         self._copied_key_state = None
         self.auto_key_enabled = False
+
+        self.attach_document(Document(64, 64))
 
     # expose settings-backed properties
     @property
