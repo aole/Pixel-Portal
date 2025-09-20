@@ -1,3 +1,4 @@
+import os
 from enum import Enum, auto
 from typing import Iterable, Optional
 
@@ -60,16 +61,17 @@ class DocumentController(QObject):
         self.document_service.app = self
         self.clipboard_service.app = self
 
-        self.attach_document(Document(64, 64))
-
         self.is_recording = False
         self.recorded_commands = []
-        self.is_dirty = False
+        self._is_dirty = False
 
-        self.main_window = None
+        self._main_window = None
+        self._base_window_title = "Pixel Portal"
         self._copied_key_state = None
         self.auto_key_enabled = False
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
+
+        self.attach_document(Document(64, 64))
 
     # expose settings-backed properties
     @property
@@ -83,6 +85,41 @@ class DocumentController(QObject):
     @last_directory.setter
     def last_directory(self, value):
         self.settings.last_directory = value
+
+    @property
+    def main_window(self):
+        return self._main_window
+
+    @main_window.setter
+    def main_window(self, window):
+        previous_window = getattr(self, "_main_window", None)
+        self._main_window = window
+        if window is None:
+            self._base_window_title = "Pixel Portal"
+        elif window is not previous_window:
+            title_accessor = getattr(window, "windowTitle", None)
+            if callable(title_accessor):
+                base_title = title_accessor()
+            elif isinstance(title_accessor, str):
+                base_title = title_accessor
+            else:
+                base_title = None
+            if not isinstance(base_title, str) or not base_title:
+                base_title = "Pixel Portal"
+            self._base_window_title = base_title
+        self._refresh_window_title()
+
+    @property
+    def is_dirty(self) -> bool:
+        return self._is_dirty
+
+    @is_dirty.setter
+    def is_dirty(self, value: bool) -> None:
+        normalized = bool(value)
+        previous = self._is_dirty
+        self._is_dirty = normalized
+        if normalized != previous:
+            self._refresh_window_title()
 
     def is_auto_key_enabled(self) -> bool:
         return bool(self.auto_key_enabled)
@@ -468,6 +505,27 @@ class DocumentController(QObject):
         self._layer_manager_unsubscribe = self.document.add_layer_manager_listener(
             self._bind_layer_manager
         )
+        self._refresh_window_title()
+
+    def update_main_window_title(self) -> None:
+        self._refresh_window_title()
+
+    def _refresh_window_title(self) -> None:
+        window = self._main_window
+        if window is None:
+            return
+        base_title = self._base_window_title or "Pixel Portal"
+        document = self.document
+        file_path = getattr(document, "file_path", None) if document is not None else None
+        title = base_title
+        if file_path:
+            display_name = os.path.basename(str(file_path))
+            if display_name:
+                title = f"{base_title} - {display_name}"
+        setter = getattr(window, "setWindowTitle", None)
+        if not callable(setter):
+            return
+        setter(title)
 
     def _bind_layer_manager(self, layer_manager):
         if layer_manager is self._layer_manager:

@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QMouseEvent
 from unittest.mock import MagicMock, patch, Mock
 import os
+import zipfile
 from portal.commands.layer_commands import (
     RotateLayerCommand,
     MergeLayerDownCommand,
@@ -85,8 +86,10 @@ def test_save_load_tiff(document):
     """Test that a document with multiple layers can be saved and loaded as a TIFF file."""
     filepath = "test.tiff"
     document.save_tiff(filepath)
+    assert document.file_path == filepath
 
     loaded_document = Document.load_tiff(filepath)
+    assert loaded_document.file_path == filepath
 
     assert loaded_document.width == document.width
     assert loaded_document.height == document.height
@@ -101,6 +104,74 @@ def test_save_load_tiff(document):
         assert original_layer.image.constBits() == loaded_layer.image.constBits()
 
     os.remove(filepath)
+
+
+def test_save_load_aole(tmp_path):
+    """Saving and loading an AOLE document should preserve frames, layers, and keyframes."""
+
+    doc = Document(16, 16)
+    base_layer = doc.layer_manager.layers[0]
+    base_layer.name = "Base"
+    base_layer.opacity = 0.75
+    base_layer.image.fill(QColor(50, 60, 70, 255))
+
+    doc.layer_manager.add_layer("Top")
+    doc.register_layer(
+        doc.layer_manager.active_layer,
+        doc.layer_manager.active_layer_index,
+    )
+    top_layer = doc.layer_manager.layers[1]
+    top_layer.opacity = 0.5
+    top_layer.image.fill(QColor(200, 100, 50, 255))
+
+    doc.frame_manager.add_frame()
+    doc.select_frame(1)
+    doc.frame_manager.add_layer_key(top_layer.uid, 1)
+
+    frame_one_manager = doc.layer_manager
+    frame_one_top_layer = frame_one_manager.layers[1]
+    frame_one_top_layer.image.fill(QColor(0, 255, 0, 255))
+    frame_one_top_layer.visible = False
+
+    save_path = tmp_path / "sample.aole"
+    doc.save_aole(str(save_path))
+    assert doc.file_path == str(save_path)
+    loaded = Document.load_aole(str(save_path))
+    assert loaded.file_path == str(save_path)
+
+    assert loaded.width == doc.width
+    assert loaded.height == doc.height
+    assert len(loaded.frame_manager.frames) == len(doc.frame_manager.frames)
+    assert loaded.frame_manager.active_frame_index == doc.frame_manager.active_frame_index
+
+    original_keys = doc.frame_manager.layer_keys[top_layer.uid]
+    loaded_keys = loaded.frame_manager.layer_keys[top_layer.uid]
+    assert loaded_keys == original_keys
+
+    loaded_frame0_manager = loaded.frame_manager.frames[0].layer_manager
+    loaded_frame1_manager = loaded.frame_manager.frames[1].layer_manager
+    assert loaded_frame0_manager.layers[1].opacity == top_layer.opacity
+    assert loaded_frame1_manager.layers[1].visible is False
+    assert (
+        loaded_frame1_manager.layers[1].image.pixelColor(0, 0)
+        == frame_one_top_layer.image.pixelColor(0, 0)
+    )
+
+    loaded.layer_manager.add_layer("New Layer")
+    loaded.register_layer(
+        loaded.layer_manager.active_layer,
+        loaded.layer_manager.active_layer_index,
+    )
+    assert loaded.layer_manager.active_layer.uid > top_layer.uid
+
+
+def test_load_aole_missing_metadata(tmp_path):
+    archive_path = tmp_path / "broken.aole"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("frames/0/layers/0_0.png", b"")
+
+    with pytest.raises(ValueError):
+        Document.load_aole(str(archive_path))
 
 def test_flip_horizontal_vertical(document):
     """Test that all layers in the document are flipped correctly."""
