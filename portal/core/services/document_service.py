@@ -252,10 +252,21 @@ class DocumentService:
                 if gif_transparency_index is None and frame_transparency_index is not None:
                     gif_transparency_index = frame_transparency_index
             append_frames = converted_append_frames
+            if gif_transparency_index is not None:
+                try:
+                    base_frame.info["background"] = gif_transparency_index
+                except (AttributeError, TypeError):
+                    pass
+                for frame in append_frames:
+                    try:
+                        frame.info["background"] = gif_transparency_index
+                    except (AttributeError, TypeError):
+                        pass
 
         save_kwargs = {}
         if gif_transparency_index is not None:
             save_kwargs["transparency"] = gif_transparency_index
+            save_kwargs.setdefault("background", gif_transparency_index)
         if append_frames:
             save_kwargs.update(
                 {
@@ -305,13 +316,13 @@ class DocumentService:
         app.config.set('General', 'last_directory', app.last_directory)
 
         try:
-            frames, fps = self._read_animation_frames(file_path)
+            frame_entries, total_playback_frames, fps = self._read_animation_frames(file_path)
         except ValueError as exc:
             parent = getattr(app, "main_window", None)
             QMessageBox.warning(parent, "Import Animation", str(exc))
             return
 
-        if not frames:
+        if not frame_entries:
             parent = getattr(app, "main_window", None)
             QMessageBox.warning(
                 parent,
@@ -321,16 +332,20 @@ class DocumentService:
             return
 
         try:
-            document = self._populate_document_with_frames(frames, os.path.basename(file_path))
+            document = self._populate_document_with_frames(
+                frame_entries,
+                max(1, total_playback_frames),
+                os.path.basename(file_path),
+            )
         except ValueError as exc:
             parent = getattr(app, "main_window", None)
             QMessageBox.warning(parent, "Import Animation", str(exc))
             return
 
         app.attach_document(document)
-        app.set_playback_total_frames(len(frames))
+        app.set_playback_total_frames(max(1, total_playback_frames))
         if app.main_window:
-            app.main_window.apply_imported_animation_metadata(len(frames), fps)
+            app.main_window.apply_imported_animation_metadata(max(1, total_playback_frames), fps)
         app.undo_manager.clear()
         app.is_dirty = False
         app.undo_stack_changed.emit()
@@ -392,22 +407,30 @@ class DocumentService:
             frame_unit = math.gcd(frame_unit, delay)
         frame_unit = max(1, frame_unit)
 
-        expanded_frames: list[QImage] = []
+        frame_entries: list[tuple[QImage, int]] = []
+        total_playback_frames = 0
+        last_frame_bytes = None
         for frame, delay in zip(normalized_frames, normalized_delays):
             repeats = max(1, delay // frame_unit)
-            for _ in range(repeats):
-                expanded_frames.append(frame.copy())
+            frame_bytes = frame.bits().tobytes()
+            if frame_entries and last_frame_bytes is not None and frame_bytes == last_frame_bytes:
+                previous_frame, previous_repeats = frame_entries[-1]
+                frame_entries[-1] = (previous_frame, previous_repeats + repeats)
+            else:
+                frame_entries.append((frame, repeats))
+            total_playback_frames += repeats
+            last_frame_bytes = frame_bytes
 
         fps = 1000.0 / frame_unit if frame_unit > 0 else 12.0
 
-        return expanded_frames, fps
+        return frame_entries, total_playback_frames or len(frame_entries), fps
 
-    def _populate_document_with_frames(self, frames, filename):
-        if not frames:
+    def _populate_document_with_frames(self, frame_entries, total_frames, filename):
+        if not frame_entries:
             raise ValueError("No frames available to import.")
 
-        width = frames[0].width()
-        height = frames[0].height()
+        width = frame_entries[0][0].width()
+        height = frame_entries[0][0].height()
         document = Document(width, height)
         layer_manager = document.layer_manager
         active_layer = layer_manager.active_layer
@@ -426,15 +449,29 @@ class DocumentService:
 
         frame_manager = document.frame_manager
         layer_uid = active_layer.uid
-        for index, frame in enumerate(frames):
-            frame_manager.ensure_frame(index)
-            if index not in frame_manager.layer_keys.get(layer_uid, {0}):
-                frame_manager.add_layer_key(layer_uid, index)
-            target_layer = self._layer_instance_for_frame(frame_manager, index, layer_uid)
+        layer_keys = frame_manager.layer_keys.setdefault(layer_uid, {0})
+        if 0 not in layer_keys:
+            frame_manager.add_layer_key(layer_uid, 0)
+
+        total_frames = max(1, int(total_frames))
+        frame_manager.ensure_frame(total_frames - 1)
+
+        playback_index = 0
+        for frame, repeats in frame_entries:
+            repeats = max(1, int(repeats))
+            if playback_index < 0 or playback_index >= len(frame_manager.frames):
+                break
+            if playback_index != 0 and playback_index not in frame_manager.layer_keys.get(layer_uid, {0}):
+                frame_manager.add_layer_key(layer_uid, playback_index)
+            target_layer = self._layer_instance_for_frame(frame_manager, playback_index, layer_uid)
             if target_layer is None:
+                playback_index += repeats
                 continue
             target_layer.image = frame.copy()
             target_layer.on_image_change.emit()
+            playback_index += repeats
+            if playback_index >= total_frames:
+                break
 
         document.select_frame(0)
         return document
