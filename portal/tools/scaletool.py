@@ -17,10 +17,10 @@ from portal.commands.layer_commands import (
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from ._transform_style import (
-    TRANSFORM_DEFAULT_CURSOR,
     TRANSFORM_GIZMO_ACTIVE_COLOR,
     TRANSFORM_GIZMO_BASE_COLOR,
     TRANSFORM_GIZMO_HOVER_COLOR,
+    make_transform_cursor,
 )
 
 
@@ -36,7 +36,7 @@ class ScaleTool(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = TRANSFORM_DEFAULT_CURSOR
+        self.cursor = make_transform_cursor()
         self.scale_factor = 1.0
         self.scale_x = 1.0
         self.scale_y = 1.0

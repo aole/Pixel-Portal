@@ -5,9 +5,9 @@ from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
 from ._transform_style import (
-    TRANSFORM_DEFAULT_CURSOR,
     TRANSFORM_GIZMO_BASE_COLOR,
     TRANSFORM_GIZMO_HOVER_COLOR,
+    make_transform_cursor,
 )
 
 
@@ -23,7 +23,7 @@ class RotateTool(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = TRANSFORM_DEFAULT_CURSOR
+        self.cursor = make_transform_cursor()
         self.angle = 0.0
         self.is_hovering_handle = False
         self.is_hovering_center = False

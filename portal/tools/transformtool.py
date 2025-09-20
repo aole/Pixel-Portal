@@ -7,7 +7,7 @@ from .basetool import BaseTool
 from .movetool import MoveTool
 from .rotatetool import RotateTool
 from .scaletool import ScaleTool
-from ._transform_style import TRANSFORM_DEFAULT_CURSOR
+from ._transform_style import make_transform_cursor
 
 
 Operation = Literal["move", "rotate", "scale"]
@@ -33,7 +33,7 @@ class TransformTool(BaseTool):
         scale_tool: Optional[BaseTool] = None,
     ):
         super().__init__(canvas)
-        self.cursor = TRANSFORM_DEFAULT_CURSOR
+        self.cursor = make_transform_cursor()
 
         self._move_tool = move_tool or MoveTool(canvas)
         self._rotate_tool = rotate_tool or RotateTool(canvas)
