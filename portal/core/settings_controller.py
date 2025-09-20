@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
@@ -23,6 +24,8 @@ class SettingsController(QObject):
         self.grid_minor_visible = self._get_grid_bool('minor_visible', True)
         self.grid_major_spacing = self._get_grid_int('major_spacing', 8)
         self.grid_minor_spacing = self._get_grid_int('minor_spacing', 1)
+        self.grid_major_color = self._get_grid_color('major_color', '#64000000')
+        self.grid_minor_color = self._get_grid_color('minor_color', '#64808080')
         self._sync_grid_settings_to_config()
 
         if not self.config.has_section('Background'):
@@ -75,11 +78,20 @@ class SettingsController(QObject):
         except (configparser.NoOptionError, ValueError):
             return fallback
 
+    def _get_grid_color(self, option, fallback):
+        raw_value = self.config.get('Grid', option, fallback=fallback)
+        color = QColor(raw_value)
+        if not color.isValid():
+            color = QColor(fallback)
+        return color.name(QColor.NameFormat.HexArgb)
+
     def _sync_grid_settings_to_config(self):
         self.config.set('Grid', 'major_visible', str(self.grid_major_visible))
         self.config.set('Grid', 'minor_visible', str(self.grid_minor_visible))
         self.config.set('Grid', 'major_spacing', str(int(self.grid_major_spacing)))
         self.config.set('Grid', 'minor_spacing', str(int(self.grid_minor_spacing)))
+        self.config.set('Grid', 'major_color', self.grid_major_color)
+        self.config.set('Grid', 'minor_color', self.grid_minor_color)
 
     def _sync_background_settings_to_config(self):
         if not self.config.has_section('Background'):
@@ -93,6 +105,8 @@ class SettingsController(QObject):
             'minor_visible': self.grid_minor_visible,
             'major_spacing': int(self.grid_major_spacing),
             'minor_spacing': int(self.grid_minor_spacing),
+            'major_color': self.grid_major_color,
+            'minor_color': self.grid_minor_color,
         }
 
     def get_background_settings(self):
@@ -108,11 +122,21 @@ class SettingsController(QObject):
         major_spacing,
         minor_visible,
         minor_spacing,
+        major_color=None,
+        minor_color=None,
     ):
         self.grid_major_visible = bool(major_visible)
         self.grid_minor_visible = bool(minor_visible)
         self.grid_major_spacing = max(1, int(major_spacing))
         self.grid_minor_spacing = max(1, int(minor_spacing))
+        if major_color is not None:
+            color = QColor(major_color)
+            if color.isValid():
+                self.grid_major_color = color.name(QColor.NameFormat.HexArgb)
+        if minor_color is not None:
+            color = QColor(minor_color)
+            if color.isValid():
+                self.grid_minor_color = color.name(QColor.NameFormat.HexArgb)
         self._sync_grid_settings_to_config()
 
     def update_background_settings(self, *, image_mode=None, image_alpha=None):

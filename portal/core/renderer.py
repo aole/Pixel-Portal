@@ -367,11 +367,8 @@ class CanvasRenderer:
         doc_height = self.canvas._document_size.height()
 
         # Define colors for grid lines
-        palette = self.canvas.palette()
-        minor_color = palette.color(QPalette.ColorRole.Mid)
-        minor_color.setAlpha(100)
-        major_color = palette.color(QPalette.ColorRole.Text)
-        major_color.setAlpha(100)
+        minor_color = QColor(self.canvas.grid_minor_color)
+        major_color = QColor(self.canvas.grid_major_color)
 
         major_spacing = max(1, int(self.canvas.grid_major_spacing))
         minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
