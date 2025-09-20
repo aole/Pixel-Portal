@@ -130,12 +130,17 @@ class AIPanel(QWidget):
         self.layout.addLayout(model_layout)
 
         # --- Document Dimensions ---
-        self.dimensions_label = QLabel()
-        self.dimensions_label.setObjectName("ai-dimensions-label")
-        self.layout.addWidget(self.dimensions_label)
-        self.model_combo.currentTextChanged.connect(self.update_dimensions_label)
-        self.app.document_changed.connect(self.update_dimensions_label)
-        self.update_dimensions_label()
+        self.native_render_label = QLabel()
+        self.native_render_label.setObjectName("ai-dimensions-label")
+        self.layout.addWidget(self.native_render_label)
+
+        self.output_size_label = QLabel()
+        self.output_size_label.setObjectName("ai-output-dimensions-label")
+        self.layout.addWidget(self.output_size_label)
+
+        self.model_combo.currentTextChanged.connect(self.update_dimension_labels)
+        self.app.document_changed.connect(self.update_dimension_labels)
+        self.update_dimension_labels()
 
         # --- Background Removal ---
         self.remove_bg_checkbox = QCheckBox("Remove BG")
@@ -233,19 +238,33 @@ class AIPanel(QWidget):
             self.set_buttons_enabled(False)
 
 
-    def update_dimensions_label(self, *_):
+    def update_dimension_labels(self, *_):
         model_name = self.model_combo.currentText() if self.model_combo else None
-        if not model_name:
-            self.dimensions_label.setText("Generation Size: —")
-            return
+        size = (
+            self.image_generator.get_generation_size(model_name)
+            if model_name
+            else None
+        )
 
-        size = self.image_generator.get_generation_size(model_name)
-        if not size:
-            self.dimensions_label.setText("Generation Size: —")
-            return
+        if size:
+            width, height = size
+            self.native_render_label.setText(
+                f"Native Render Size: {width} × {height}px"
+            )
+        else:
+            self.native_render_label.setText("Native Render Size: —")
 
-        width, height = size
-        self.dimensions_label.setText(f"Generation Size: {width} × {height}px")
+        document = getattr(self.app, "document", None)
+        if document:
+            doc_width = getattr(document, "width", None)
+            doc_height = getattr(document, "height", None)
+            if doc_width is not None and doc_height is not None:
+                self.output_size_label.setText(
+                    f"Output Size: {doc_width} × {doc_height}px"
+                )
+                return
+
+        self.output_size_label.setText("Output Size: —")
 
 
     def start_generation(self, mode: GenerationMode):
