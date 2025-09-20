@@ -1,12 +1,56 @@
-from PySide6.QtCore import Qt, QPoint
+from __future__ import annotations
+
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QWheelEvent
+
+from portal.tools.baseselecttool import BaseSelectTool
 
 
 class CanvasInputHandler:
     def __init__(self, canvas):
         self.canvas = canvas
         self.drawing_context = canvas.drawing_context
-        self._ctrl_forced_move = False
+        self._forced_tools: dict[int, tuple[str | None, str]] = {}
+
+    def _active_tool(self):
+        return getattr(self.canvas, "current_tool", None)
+
+    def _is_selection_tool_active(self) -> bool:
+        current_tool = self._active_tool()
+        if isinstance(current_tool, BaseSelectTool):
+            return True
+        category = getattr(current_tool, "category", None)
+        return isinstance(category, str) and category == BaseSelectTool.category
+
+    def _force_tool(self, key: int, tool_name: str):
+        """Switch to *tool_name* and remember the previous tool for *key*."""
+
+        if key in self._forced_tools:
+            return
+
+        current_tool_name = getattr(self.drawing_context, "tool", None)
+        if current_tool_name == tool_name:
+            return
+
+        previous_tool = current_tool_name
+        self.drawing_context.set_tool(tool_name)
+
+        self._forced_tools[key] = (previous_tool, tool_name)
+
+    def _clear_forced_tool(self, key: int):
+        self._forced_tools.pop(key, None)
+
+    def _release_forced_tool(self, key: int):
+        forced = self._forced_tools.pop(key, None)
+        if not forced:
+            return
+
+        previous_tool, forced_tool = forced
+        if getattr(self.drawing_context, "tool", None) != forced_tool:
+            return
+
+        if previous_tool is not None:
+            self.drawing_context.set_tool(previous_tool)
 
     def keyPressEvent(self, event):
         key_text = event.text()
@@ -16,24 +60,21 @@ class CanvasInputHandler:
                 return
 
         if event.key() == Qt.Key_Alt:
-            self.drawing_context.set_tool("Picker")
-        elif event.key() == Qt.Key_Control:
-            current_tool = getattr(self.canvas, "current_tool", None)
-            category = getattr(current_tool, "category", None)
-            is_select_tool = isinstance(category, str) and category == "select"
-            if is_select_tool:
-                self._ctrl_forced_move = False
+            if self._is_selection_tool_active():
+                self._clear_forced_tool(Qt.Key_Alt)
             else:
-                self.drawing_context.set_tool("Move")
-                self._ctrl_forced_move = True
+                self._force_tool(Qt.Key_Alt, "Picker")
+        elif event.key() == Qt.Key_Control:
+            if self._is_selection_tool_active():
+                self._clear_forced_tool(Qt.Key_Control)
+            else:
+                self._force_tool(Qt.Key_Control, "Move")
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
-            self.drawing_context.set_tool(self.drawing_context.previous_tool)
+            self._release_forced_tool(Qt.Key_Alt)
         elif event.key() == Qt.Key_Control:
-            if self._ctrl_forced_move:
-                self.drawing_context.set_tool(self.drawing_context.previous_tool)
-            self._ctrl_forced_move = False
+            self._release_forced_tool(Qt.Key_Control)
 
     def mousePressEvent(self, event):
         current_tool = getattr(self.canvas, "current_tool", None)

@@ -119,10 +119,12 @@ def _collect_global_matches(image: QImage, target_rgba: int) -> RowMatches:
 
     rows: RowMatches = defaultdict(list)
     for y in range(height):
-        append_to_row = rows[y].append
+        matches: list[int] = []
         for x in range(width):
             if int(image.pixel(x, y)) == target_rgba:
-                append_to_row(x)
+                matches.append(x)
+        if matches:
+            rows[y].extend(matches)
     return rows
 
 
@@ -133,6 +135,8 @@ def _path_from_row_matches(rows: RowMatches) -> QPainterPath | None:
     path = QPainterPath()
     for y in sorted(rows.keys()):
         xs = sorted(rows[y])
+        if not xs:
+            continue
         start = xs[0]
         run_end = xs[0]
         for x in xs[1:]:
