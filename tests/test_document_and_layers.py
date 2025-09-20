@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QMouseEvent
 from unittest.mock import MagicMock, patch, Mock
 import os
+import zipfile
 from portal.commands.layer_commands import (
     RotateLayerCommand,
     MergeLayerDownCommand,
@@ -162,6 +163,15 @@ def test_save_load_aole(tmp_path):
         loaded.layer_manager.active_layer_index,
     )
     assert loaded.layer_manager.active_layer.uid > top_layer.uid
+
+
+def test_load_aole_missing_metadata(tmp_path):
+    archive_path = tmp_path / "broken.aole"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("frames/0/layers/0_0.png", b"")
+
+    with pytest.raises(ValueError):
+        Document.load_aole(str(archive_path))
 
 def test_flip_horizontal_vertical(document):
     """Test that all layers in the document are flipped correctly."""

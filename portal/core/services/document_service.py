@@ -1,7 +1,6 @@
 import json
 import math
 import os
-import zipfile
 
 from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
@@ -55,7 +54,7 @@ class DocumentService:
                     document = Document(image.width(), image.height())
                     document.layer_manager.layers[0].image = image
                 document.file_path = file_path
-            except (ValueError, OSError, json.JSONDecodeError, zipfile.BadZipFile):
+            except (ValueError, OSError, json.JSONDecodeError):
                 message_box = QMessageBox()
                 message_box.setText("Unable to open the selected document.")
                 message_box.setInformativeText("The file appears to be corrupted or in an unsupported format.")
