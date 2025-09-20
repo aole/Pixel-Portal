@@ -36,6 +36,36 @@ class ImageGenerator:
         self.is_img2img = None
         self.is_inpaint = None
 
+    def get_generation_size(self, model_name: str) -> tuple[int, int] | None:
+        """Return the size (width, height) the model generates before resizing."""
+
+        model_cfg = self.model_configs.get(model_name)
+        if not model_cfg:
+            return None
+
+        size = model_cfg.get("generation_size") or model_cfg.get("image_size")
+        if size:
+            if isinstance(size, dict):
+                width = size.get("width")
+                height = size.get("height")
+            elif isinstance(size, (list, tuple)) and len(size) == 2:
+                width, height = size
+            else:
+                width = height = None
+            if width and height:
+                return int(width), int(height)
+
+        width = model_cfg.get("generation_width") or model_cfg.get("width")
+        height = model_cfg.get("generation_height") or model_cfg.get("height")
+        if width and height:
+            return int(width), int(height)
+
+        model_name_upper = model_name.upper()
+        if "XL" in model_name_upper:
+            return 1024, 1024
+
+        return 512, 512
+
     def load_pipeline(self, model_name: str, is_img2img: bool = False, is_inpaint: bool = False):
         """Load and cache the requested pipeline."""
         if (

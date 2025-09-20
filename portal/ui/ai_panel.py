@@ -133,6 +133,7 @@ class AIPanel(QWidget):
         self.dimensions_label = QLabel()
         self.dimensions_label.setObjectName("ai-dimensions-label")
         self.layout.addWidget(self.dimensions_label)
+        self.model_combo.currentTextChanged.connect(self.update_dimensions_label)
         self.app.document_changed.connect(self.update_dimensions_label)
         self.update_dimensions_label()
 
@@ -232,19 +233,18 @@ class AIPanel(QWidget):
             self.set_buttons_enabled(False)
 
 
-    def update_dimensions_label(self):
-        document = getattr(self.app, "document", None)
-        if not document:
+    def update_dimensions_label(self, *_):
+        model_name = self.model_combo.currentText() if self.model_combo else None
+        if not model_name:
             self.dimensions_label.setText("Generation Size: —")
             return
 
-        width = getattr(document, "width", None)
-        height = getattr(document, "height", None)
-
-        if width is None or height is None:
+        size = self.image_generator.get_generation_size(model_name)
+        if not size:
             self.dimensions_label.setText("Generation Size: —")
             return
 
+        width, height = size
         self.dimensions_label.setText(f"Generation Size: {width} × {height}px")
 
 
