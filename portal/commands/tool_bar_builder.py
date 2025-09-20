@@ -4,7 +4,7 @@ from importlib import resources
 from pathlib import Path
 
 from PySide6.QtWidgets import QToolBar, QLabel, QSlider, QToolButton, QMenu
-from PySide6.QtGui import QPixmap, QIcon, QAction, QActionGroup
+from PySide6.QtGui import QPixmap, QIcon, QAction, QActionGroup, QKeySequence
 from PySide6.QtCore import Qt
 from portal.ui.color_button import ActiveColorButton
 
@@ -23,6 +23,56 @@ class ToolBarBuilder:
     def setup_toolbars(self):
         self._setup_top_toolbar()
         self._setup_left_toolbar()
+
+    def _format_shortcut_hint(self, shortcut):
+        if not shortcut:
+            return None
+
+        sequence = QKeySequence(shortcut)
+        text = sequence.toString(QKeySequence.NativeText)
+        if text:
+            return text
+
+        if isinstance(shortcut, str):
+            formatted = shortcut.strip()
+            if formatted:
+                return formatted.upper()
+
+        return None
+
+    def _button_tooltip_from_actions(self, entry_name, actions):
+        if not actions:
+            return entry_name or ""
+
+        if len(actions) == 1:
+            tooltip = actions[0].toolTip()
+            if tooltip:
+                return tooltip
+            if entry_name:
+                return entry_name
+            return (actions[0].text() or "").replace("&", "").strip()
+
+        hints = []
+        for action in actions:
+            hint = action.property("shortcut_hint") or ""
+            hint = str(hint).strip()
+            if hint and hint not in hints:
+                hints.append(hint)
+
+        if hints and entry_name:
+            return f"{entry_name} ({', '.join(hints)})"
+
+        if hints:
+            return ", ".join(hints)
+
+        tooltip = actions[0].toolTip()
+        if tooltip:
+            return tooltip
+
+        if entry_name:
+            return entry_name
+
+        return (actions[0].text() or "").replace("&", "").strip()
 
     def _setup_top_toolbar(self):
         self.top_toolbar = QToolBar("Top Toolbar")
@@ -129,8 +179,10 @@ class ToolBarBuilder:
             if len(normalized_tools) == 1:
                 tool_info = normalized_tools[0]
                 button = QToolButton(self.main_window)
-                button.setToolTip(entry_name)
                 action = tool_info["action"]
+                button.setToolTip(
+                    self._button_tooltip_from_actions(entry_name, [action])
+                )
                 button.setDefaultAction(action)
 
                 fallback_icon = entry_icon or tool_info.get("icon")
@@ -148,17 +200,18 @@ class ToolBarBuilder:
                 configured_tools.add(tool_info["name"])
             else:
                 button = QToolButton(self.main_window)
-                button.setToolTip(entry_name)
                 button.setPopupMode(QToolButton.MenuButtonPopup)
                 menu = QMenu(button)
                 button.setMenu(menu)
 
                 first_action = None
+                actions_for_button = []
                 for tool_info in normalized_tools:
                     action = tool_info["action"]
                     menu.addAction(action)
                     if first_action is None:
                         first_action = action
+                    actions_for_button.append(action)
                     self.tool_buttons[tool_info["name"]] = button
                     configured_tools.add(tool_info["name"])
 
@@ -166,6 +219,9 @@ class ToolBarBuilder:
                     continue
 
                 button.setDefaultAction(first_action)
+                button.setToolTip(
+                    self._button_tooltip_from_actions(entry_name, actions_for_button)
+                )
 
                 fallback_icon = entry_icon or normalized_tools[0].get("icon")
                 icon = first_action.icon()
@@ -186,7 +242,9 @@ class ToolBarBuilder:
 
             action = self._get_or_create_tool_action(tool)
             button = QToolButton(self.main_window)
-            button.setToolTip(tool_name)
+            button.setToolTip(
+                self._button_tooltip_from_actions(tool_name, [action])
+            )
             button.setDefaultAction(action)
 
             fallback_icon = tool.get("icon")
@@ -215,6 +273,12 @@ class ToolBarBuilder:
         icon_path = tool.get("icon") or ""
         action = QAction(QIcon(icon_path), tool_name, self.main_window)
         action.setCheckable(True)
+        shortcut_hint = self._format_shortcut_hint(tool.get("shortcut"))
+        if shortcut_hint:
+            action.setProperty("shortcut_hint", shortcut_hint)
+            action.setToolTip(f"{tool_name} ({shortcut_hint})")
+        else:
+            action.setToolTip(tool_name)
         action.triggered.connect(
             functools.partial(self.app.drawing_context.set_tool, tool_name)
         )
