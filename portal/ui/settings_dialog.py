@@ -1,11 +1,16 @@
+from typing import Any
+
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QGridLayout,
     QLabel,
+    QPushButton,
     QSlider,
     QSpinBox,
     QTabWidget,
@@ -21,6 +26,11 @@ class SettingsDialog(QDialog):
 
     settings_applied = Signal()
 
+    GRID_COLOR_FALLBACKS = {
+        "major": "#64000000",
+        "minor": "#64808080",
+    }
+
     def __init__(self, settings_controller, parent=None):
         super().__init__(parent)
         self.settings_controller = settings_controller
@@ -28,6 +38,8 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
 
         layout = QVBoxLayout(self)
+
+        self._grid_rows: dict[str, dict[str, Any]] = {}
 
         self.tab_widget = QTabWidget(self)
         layout.addWidget(self.tab_widget)
@@ -55,29 +67,101 @@ class SettingsDialog(QDialog):
         grid_layout = QGridLayout(grid_tab)
         grid_layout.setColumnStretch(0, 1)
 
-        self.major_grid_checkbox = QCheckBox("Show major grid lines", grid_tab)
-        self.major_grid_spacing = QSpinBox(grid_tab)
-        self.major_grid_spacing.setMinimum(1)
-        self.major_grid_spacing.setMaximum(1024)
-        self.major_grid_spacing.setEnabled(self.major_grid_checkbox.isChecked())
-        self.major_grid_checkbox.toggled.connect(self.major_grid_spacing.setEnabled)
+        defaults = self.settings_controller.get_default_grid_settings()
 
-        self.minor_grid_checkbox = QCheckBox("Show minor grid lines", grid_tab)
-        self.minor_grid_spacing = QSpinBox(grid_tab)
-        self.minor_grid_spacing.setMinimum(1)
-        self.minor_grid_spacing.setMaximum(1024)
-        self.minor_grid_spacing.setEnabled(self.minor_grid_checkbox.isChecked())
-        self.minor_grid_checkbox.toggled.connect(self.minor_grid_spacing.setEnabled)
+        (
+            self.major_grid_checkbox,
+            self.major_grid_spacing,
+            self.major_grid_color_button,
+        ) = self._create_grid_row(
+            parent=grid_tab,
+            layout=grid_layout,
+            key="major",
+            label="Major",
+            row_index=0,
+            defaults=defaults,
+        )
 
-        grid_layout.addWidget(self.major_grid_checkbox, 0, 0)
-        grid_layout.addWidget(QLabel("Spacing (px)", grid_tab), 0, 1)
-        grid_layout.addWidget(self.major_grid_spacing, 0, 2)
+        (
+            self.minor_grid_checkbox,
+            self.minor_grid_spacing,
+            self.minor_grid_color_button,
+        ) = self._create_grid_row(
+            parent=grid_tab,
+            layout=grid_layout,
+            key="minor",
+            label="Minor",
+            row_index=1,
+            defaults=defaults,
+        )
 
-        grid_layout.addWidget(self.minor_grid_checkbox, 1, 0)
-        grid_layout.addWidget(QLabel("Spacing (px)", grid_tab), 1, 1)
-        grid_layout.addWidget(self.minor_grid_spacing, 1, 2)
+        self.grid_reset_button = QPushButton("Reset to Defaults", grid_tab)
+        self.grid_reset_button.clicked.connect(self._reset_grid_tab)
+        grid_layout.addWidget(
+            self.grid_reset_button,
+            2,
+            0,
+            1,
+            4,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        grid_layout.setRowStretch(3, 1)
 
         self.tab_widget.addTab(grid_tab, "Grid")
+
+    def _create_grid_row(
+        self,
+        *,
+        parent: QWidget,
+        layout: QGridLayout,
+        key: str,
+        label: str,
+        row_index: int,
+        defaults: dict[str, Any],
+    ):
+        checkbox = QCheckBox(label, parent)
+        default_visible = bool(defaults.get(f"{key}_visible", True))
+        checkbox.setChecked(default_visible)
+
+        spacing = QSpinBox(parent)
+        spacing.setRange(1, 1024)
+        default_spacing = defaults.get(f"{key}_spacing", spacing.minimum())
+        spacing.setValue(
+            self._sanitize_spacing_value(
+                default_spacing, spacing.minimum(), spacing.maximum()
+            )
+        )
+        spacing.setEnabled(checkbox.isChecked())
+        checkbox.toggled.connect(spacing.setEnabled)
+
+        color_button = QPushButton(parent)
+        color_button.setAutoDefault(False)
+        color_button.setEnabled(checkbox.isChecked())
+        checkbox.toggled.connect(color_button.setEnabled)
+        color_button.clicked.connect(
+            lambda _checked=False, row_key=key: self._choose_grid_color(row_key)
+        )
+
+        layout.addWidget(checkbox, row_index, 0)
+        layout.addWidget(QLabel("Spacing (px)", parent), row_index, 1)
+        layout.addWidget(spacing, row_index, 2)
+        layout.addWidget(color_button, row_index, 3)
+
+        fallback_color = defaults.get(
+            f"{key}_color", self.GRID_COLOR_FALLBACKS[key]
+        )
+        normalized_color = self._normalize_color_value(
+            fallback_color, self.GRID_COLOR_FALLBACKS[key]
+        )
+        self._grid_rows[key] = {
+            "checkbox": checkbox,
+            "spacing": spacing,
+            "color_button": color_button,
+            "color": normalized_color,
+        }
+        self._update_color_button(color_button, normalized_color)
+
+        return checkbox, spacing, color_button
 
     def _build_canvas_tab(self):
         canvas_tab = QWidget(self)
@@ -112,16 +196,26 @@ class SettingsDialog(QDialog):
         self.background_alpha_slider.valueChanged.connect(
             self._update_background_alpha_label
         )
-        canvas_layout.setRowStretch(2, 1)
+
+        self.canvas_reset_button = QPushButton("Reset to Defaults", canvas_tab)
+        self.canvas_reset_button.clicked.connect(self._reset_canvas_tab)
+        canvas_layout.addWidget(
+            self.canvas_reset_button,
+            2,
+            0,
+            1,
+            3,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        canvas_layout.setRowStretch(3, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
     def _apply_settings_to_widgets(self):
         grid_settings = self.settings_controller.get_grid_settings()
-        self.major_grid_checkbox.setChecked(grid_settings["major_visible"])
-        self.major_grid_spacing.setValue(grid_settings["major_spacing"])
-        self.minor_grid_checkbox.setChecked(grid_settings["minor_visible"])
-        self.minor_grid_spacing.setValue(grid_settings["minor_spacing"])
+        defaults = self.settings_controller.get_default_grid_settings()
+        self._apply_grid_row_settings("major", grid_settings, defaults)
+        self._apply_grid_row_settings("minor", grid_settings, defaults)
 
         background_settings = self.settings_controller.get_background_settings()
         background_mode = background_settings.get("image_mode")
@@ -160,11 +254,15 @@ class SettingsDialog(QDialog):
         self.background_alpha_value_label.setText(f"{int(value)}%")
 
     def get_grid_settings(self):
+        major_row = self._grid_rows["major"]
+        minor_row = self._grid_rows["minor"]
         return {
-            "major_visible": self.major_grid_checkbox.isChecked(),
-            "major_spacing": self.major_grid_spacing.value(),
-            "minor_visible": self.minor_grid_checkbox.isChecked(),
-            "minor_spacing": self.minor_grid_spacing.value(),
+            "major_visible": major_row["checkbox"].isChecked(),
+            "major_spacing": major_row["spacing"].value(),
+            "minor_visible": minor_row["checkbox"].isChecked(),
+            "minor_spacing": minor_row["spacing"].value(),
+            "major_color": major_row["color"],
+            "minor_color": minor_row["color"],
         }
 
     def _apply_settings(self):
@@ -173,6 +271,137 @@ class SettingsDialog(QDialog):
             image_mode=self.get_background_image_mode(),
             image_alpha=self.get_background_image_alpha(),
         )
+
+    def _reset_grid_tab(self):
+        defaults = self.settings_controller.get_default_grid_settings()
+        self._apply_grid_row_settings("major", defaults, defaults)
+        self._apply_grid_row_settings("minor", defaults, defaults)
+
+    def _reset_canvas_tab(self):
+        defaults = self.settings_controller.get_default_background_settings()
+        mode = defaults.get("image_mode", BackgroundImageMode.FIT)
+        if not isinstance(mode, BackgroundImageMode):
+            try:
+                mode = BackgroundImageMode(mode)
+            except ValueError:
+                mode = BackgroundImageMode.FIT
+        index = self.background_mode_combo.findData(mode)
+        if index >= 0:
+            self.background_mode_combo.setCurrentIndex(index)
+
+        alpha_value = defaults.get("image_alpha", 1.0)
+        try:
+            percent = int(round(float(alpha_value) * 100))
+        except (TypeError, ValueError):
+            percent = 100
+        clamped_percent = max(0, min(100, percent))
+        self.background_alpha_slider.setValue(clamped_percent)
+        self._update_background_alpha_label(clamped_percent)
+
+    def _choose_major_grid_color(self):
+        self._choose_grid_color("major")
+
+    def _choose_minor_grid_color(self):
+        self._choose_grid_color("minor")
+
+    def _choose_grid_color(self, key: str):
+        row = self._grid_rows[key]
+        defaults = self.settings_controller.get_default_grid_settings()
+        fallback = defaults.get(f"{key}_color", self.GRID_COLOR_FALLBACKS[key])
+        current_value = row["color"]
+        base_color = QColor(
+            self._normalize_color_value(current_value, fallback)
+        )
+        if not base_color.isValid():
+            base_color = QColor(fallback)
+        if not base_color.isValid():
+            base_color = QColor("#000000")
+
+        chosen_color = QColorDialog.getColor(
+            base_color,
+            self,
+            "Select grid color",
+            QColorDialog.ColorDialogOption.ShowAlphaChannel,
+        )
+        if not chosen_color.isValid():
+            chosen_color = base_color
+
+        color_name = self._normalize_color_value(
+            chosen_color.name(QColor.NameFormat.HexArgb), fallback
+        )
+        row["color"] = color_name
+        self._update_color_button(row["color_button"], color_name)
+        return color_name
+
+    def _apply_grid_row_settings(
+        self,
+        key: str,
+        settings: dict[str, Any],
+        defaults: dict[str, Any],
+    ):
+        row = self._grid_rows[key]
+        checkbox: QCheckBox = row["checkbox"]
+        spacing: QSpinBox = row["spacing"]
+        color_button: QPushButton = row["color_button"]
+
+        visible_value = settings.get(
+            f"{key}_visible", defaults.get(f"{key}_visible", True)
+        )
+        checkbox.setChecked(bool(visible_value))
+        spacing.setEnabled(checkbox.isChecked())
+        color_button.setEnabled(checkbox.isChecked())
+
+        spacing_value = settings.get(
+            f"{key}_spacing", defaults.get(f"{key}_spacing", spacing.value())
+        )
+        spacing.setValue(
+            self._sanitize_spacing_value(
+                spacing_value, spacing.minimum(), spacing.maximum()
+            )
+        )
+
+        fallback_color = defaults.get(
+            f"{key}_color", self.GRID_COLOR_FALLBACKS[key]
+        )
+        color_value = settings.get(f"{key}_color", fallback_color)
+        normalized_color = self._normalize_color_value(color_value, fallback_color)
+        row["color"] = normalized_color
+        self._update_color_button(color_button, normalized_color)
+
+    @staticmethod
+    def _sanitize_spacing_value(value, minimum: int, maximum: int) -> int:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return minimum
+        return max(minimum, min(maximum, numeric))
+
+    @staticmethod
+    def _normalize_color_value(color_value, fallback: str) -> str:
+        color = QColor(color_value) if color_value is not None else QColor()
+        if not color.isValid():
+            color = QColor(fallback)
+        if not color.isValid():
+            color = QColor("#000000")
+        return color.name(QColor.NameFormat.HexArgb)
+
+    def _update_color_button(self, button, color_value):
+        color = QColor(color_value)
+        if not color.isValid():
+            color = QColor("#000000")
+        rgba = f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
+        brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
+        text_color = "#000000" if brightness > 160 else "#FFFFFF"
+        button.setStyleSheet(
+            "QPushButton {"
+            f"background-color: {rgba};"
+            "border: 1px solid palette(mid);"
+            "min-width: 72px;"
+            f"color: {text_color};"
+            "}"
+        )
+        button.setText(color.name(QColor.NameFormat.HexRgb).upper())
+        button.setToolTip(color.name(QColor.NameFormat.HexArgb))
 
     def _apply_and_emit(self):
         self._apply_settings()

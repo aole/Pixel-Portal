@@ -71,6 +71,10 @@ class Canvas(QWidget):
         self.grid_minor_visible = True
         self.grid_major_spacing = 8
         self.grid_minor_spacing = 1
+        self.grid_major_color = self.palette().color(QPalette.ColorRole.Text)
+        self.grid_major_color.setAlpha(100)
+        self.grid_minor_color = self.palette().color(QPalette.ColorRole.Mid)
+        self.grid_minor_color.setAlpha(100)
         self.tile_preview_enabled = False
         self.tile_preview_rows = 3
         self.tile_preview_cols = 3
@@ -634,6 +638,8 @@ class Canvas(QWidget):
         major_spacing=None,
         minor_visible=None,
         minor_spacing=None,
+        major_color=None,
+        minor_color=None,
     ):
         if major_visible is not None:
             self.grid_major_visible = bool(major_visible)
@@ -643,6 +649,14 @@ class Canvas(QWidget):
             self.grid_minor_visible = bool(minor_visible)
         if minor_spacing is not None:
             self.grid_minor_spacing = max(1, int(minor_spacing))
+        if major_color is not None:
+            color = QColor(major_color)
+            if color.isValid():
+                self.grid_major_color = color
+        if minor_color is not None:
+            color = QColor(minor_color)
+            if color.isValid():
+                self.grid_minor_color = color
         self.update()
 
     def get_grid_settings(self):
@@ -651,6 +665,8 @@ class Canvas(QWidget):
             "major_spacing": self.grid_major_spacing,
             "minor_visible": self.grid_minor_visible,
             "minor_spacing": self.grid_minor_spacing,
+            "major_color": self.grid_major_color.name(QColor.NameFormat.HexArgb),
+            "minor_color": self.grid_minor_color.name(QColor.NameFormat.HexArgb),
         }
 
     def resizeEvent(self, event):
