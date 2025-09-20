@@ -115,7 +115,9 @@ class CanvasRenderer:
         self.draw_grid(painter, target_rect)
         self.draw_cursor(painter, target_rect, image_to_draw_on)
         self.canvas.current_tool.draw_overlay(painter)
-        if self.canvas.selection_shape:
+        if self.canvas.selection_shape and not getattr(
+            self.canvas, "selection_overlay_hidden", False
+        ):
             self.draw_selection_overlay(painter, target_rect)
         self._draw_ai_output_overlay(painter, target_rect)
 
