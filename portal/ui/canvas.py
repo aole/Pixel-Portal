@@ -71,6 +71,10 @@ class Canvas(QWidget):
         self.grid_minor_visible = True
         self.grid_major_spacing = 8
         self.grid_minor_spacing = 1
+        self.grid_major_color = self.palette().color(QPalette.ColorRole.Text)
+        self.grid_major_color.setAlpha(100)
+        self.grid_minor_color = self.palette().color(QPalette.ColorRole.Mid)
+        self.grid_minor_color.setAlpha(100)
         self.tile_preview_enabled = False
         self.tile_preview_rows = 3
         self.tile_preview_cols = 3
@@ -85,6 +89,13 @@ class Canvas(QWidget):
 
         # Properties that were previously in App
         self._document_size = QSize(64, 64)
+
+        # Onion skin settings
+        self.onion_skin_enabled = False
+        self.onion_skin_prev_frames = 1
+        self.onion_skin_next_frames = 1
+        self.onion_skin_prev_color = QColor(255, 96, 96, 168)
+        self.onion_skin_next_color = QColor(96, 160, 255, 168)
 
         tool_defs = get_tools()
         self.tools = {tool_def["name"]: tool_def["class"](self) for tool_def in tool_defs}
@@ -811,6 +822,40 @@ class Canvas(QWidget):
         self.set_document_size(QSize(document.width, document.height))
         self.update()
 
+    def set_onion_skin_enabled(self, enabled: bool) -> None:
+        normalized = bool(enabled)
+        if normalized == self.onion_skin_enabled:
+            return
+        self.onion_skin_enabled = normalized
+        self.update()
+
+    def set_onion_skin_range(
+        self, *, previous: int | None = None, next: int | None = None
+    ) -> None:
+        changed = False
+        if previous is not None:
+            try:
+                normalized_prev = int(previous)
+            except (TypeError, ValueError):
+                normalized_prev = self.onion_skin_prev_frames
+            else:
+                normalized_prev = max(0, normalized_prev)
+            if normalized_prev != self.onion_skin_prev_frames:
+                self.onion_skin_prev_frames = normalized_prev
+                changed = True
+        if next is not None:
+            try:
+                normalized_next = int(next)
+            except (TypeError, ValueError):
+                normalized_next = self.onion_skin_next_frames
+            else:
+                normalized_next = max(0, normalized_next)
+            if normalized_next != self.onion_skin_next_frames:
+                self.onion_skin_next_frames = normalized_next
+                changed = True
+        if changed:
+            self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         self.renderer.paint(painter, self.document)
@@ -826,6 +871,8 @@ class Canvas(QWidget):
         major_spacing=None,
         minor_visible=None,
         minor_spacing=None,
+        major_color=None,
+        minor_color=None,
     ):
         if major_visible is not None:
             self.grid_major_visible = bool(major_visible)
@@ -835,6 +882,14 @@ class Canvas(QWidget):
             self.grid_minor_visible = bool(minor_visible)
         if minor_spacing is not None:
             self.grid_minor_spacing = max(1, int(minor_spacing))
+        if major_color is not None:
+            color = QColor(major_color)
+            if color.isValid():
+                self.grid_major_color = color
+        if minor_color is not None:
+            color = QColor(minor_color)
+            if color.isValid():
+                self.grid_minor_color = color
         self.update()
 
     def set_ruler_settings(self, *, interval=None):
@@ -859,6 +914,8 @@ class Canvas(QWidget):
             "major_spacing": self.grid_major_spacing,
             "minor_visible": self.grid_minor_visible,
             "minor_spacing": self.grid_minor_spacing,
+            "major_color": self.grid_major_color.name(QColor.NameFormat.HexArgb),
+            "minor_color": self.grid_minor_color.name(QColor.NameFormat.HexArgb),
         }
 
     def resizeEvent(self, event):
