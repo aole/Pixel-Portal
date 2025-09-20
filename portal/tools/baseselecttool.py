@@ -45,7 +45,9 @@ class BaseSelectTool(BaseTool):
         )
         self._selection_combine_mode = self._determine_combine_mode(event.modifiers())
         self._draft_selection_path = None
-        if self.is_on_selection_border(doc_pos):
+
+        on_border = self.is_on_selection_border(doc_pos)
+        if on_border and self._selection_combine_mode is SelectionCombineMode.REPLACE:
             self.moving_selection = True
             self.selection_move_start_point = doc_pos
         else:
@@ -78,14 +80,26 @@ class BaseSelectTool(BaseTool):
     def _determine_combine_mode(self, modifiers: Qt.KeyboardModifiers):
         if modifiers & Qt.AltModifier:
             return SelectionCombineMode.SUBTRACT
-        if modifiers & Qt.ShiftModifier:
+        if modifiers & Qt.ControlModifier:
             return SelectionCombineMode.ADD
         return SelectionCombineMode.REPLACE
 
-    def _preview_selection_path(self, path: QPainterPath | None) -> None:
+    def _preview_selection_path(
+        self, path: QPainterPath | None
+    ) -> QPainterPath | None:
         self._draft_selection_path = path
         preview = self._build_preview_path()
         self.canvas._update_selection_and_emit_size(preview)
+        return preview
+
+    def _emit_preview_selection_changed(
+        self, preview: QPainterPath | None = None
+    ) -> QPainterPath | None:
+        if preview is None:
+            preview = self._build_preview_path()
+        has_selection = preview is not None and not preview.isEmpty()
+        self.canvas.selection_changed.emit(has_selection)
+        return preview
 
     def _build_preview_path(self) -> QPainterPath | None:
         mode = self._selection_combine_mode

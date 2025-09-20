@@ -1,5 +1,5 @@
-from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QMouseEvent, QPainterPath
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QMouseEvent
 
 from portal.commands.selection_commands import (
     SelectionChangeCommand,
@@ -7,6 +7,7 @@ from portal.commands.selection_commands import (
     selection_paths_equal,
 )
 from portal.tools.basetool import BaseTool
+from portal.tools.color_selection import build_color_selection_path
 
 
 class SelectColorTool(BaseTool):
@@ -19,25 +20,22 @@ class SelectColorTool(BaseTool):
         super().__init__(canvas)
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        rendered_image = self.canvas.document.render()
-        if not rendered_image.rect().contains(doc_pos):
+        document = getattr(self.canvas, "document", None)
+        if document is None:
             return
 
-        target_color = rendered_image.pixelColor(doc_pos)
-        path = QPainterPath()
+        image = document.render()
 
-        for x in range(rendered_image.width()):
-            for y in range(rendered_image.height()):
-                if rendered_image.pixelColor(x, y) == target_color:
-                    path.addRect(QRect(x, y, 1, 1))
-        new_selection = path.simplified()
-        if new_selection.isEmpty():
-            new_selection = None
+        contiguous = not bool(event.modifiers() & Qt.ControlModifier)
+        new_selection = build_color_selection_path(
+            image, doc_pos, contiguous=contiguous
+        )
         previous_selection = clone_selection_path(getattr(self.canvas, "selection_shape", None))
+        next_selection = clone_selection_path(new_selection)
 
         if selection_paths_equal(previous_selection, new_selection):
             self.canvas._update_selection_and_emit_size(
-                clone_selection_path(new_selection)
+                next_selection
             )
             return
 
@@ -45,7 +43,7 @@ class SelectColorTool(BaseTool):
             self.canvas, previous_selection, new_selection
         )
         self.canvas._update_selection_and_emit_size(
-            clone_selection_path(new_selection)
+            next_selection
         )
         self.command_generated.emit(command)
 
