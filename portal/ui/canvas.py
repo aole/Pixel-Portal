@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QPalette,
     QMouseEvent,
 )
-from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, Signal, Slot, QSize
 from portal.core.drawing import Drawing
 from portal.core.renderer import CanvasRenderer
 from portal.ui.background import Background, BackgroundImageMode
@@ -111,6 +111,16 @@ class Canvas(QWidget):
         self._mirror_handle_drag: str | None = None
         self._mirror_handle_prev_cursor: QCursor | None = None
 
+        self.ruler_enabled = False
+        self._ruler_start: QPointF | None = None
+        self._ruler_end: QPointF | None = None
+        self._ruler_handle_radius = 8
+        self._ruler_handle_hit_padding = 4
+        self._ruler_handle_hover: str | None = None
+        self._ruler_handle_drag: str | None = None
+        self._ruler_handle_prev_cursor: QCursor | None = None
+        self._ruler_interval = 8
+
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
         self._reset_mirror_axes(force_center=True)
@@ -129,6 +139,10 @@ class Canvas(QWidget):
 
         self._document_size = size
         self._reset_mirror_axes(force_center=size_changed)
+        if size_changed or self._ruler_start is None or self._ruler_end is None:
+            self._initialize_ruler_handles()
+        else:
+            self._clamp_ruler_points_to_document()
         self.update()
 
     def is_auto_key_enabled(self) -> bool:
@@ -323,6 +337,9 @@ class Canvas(QWidget):
     def leaveEvent(self, event):
         self.mouse_over_canvas = False
         self.unsetCursor()
+        if self._ruler_handle_drag is None:
+            self._ruler_handle_prev_cursor = None
+        self._ruler_handle_hover = None
         self.update()
 
     def get_doc_coords(self, canvas_pos, wrap=True):
@@ -361,13 +378,188 @@ class Canvas(QWidget):
             doc_pos.y() * self.zoom + y_offset,
         )
 
+    def _initialize_ruler_handles(self) -> None:
+        width = float(max(0, self._document_size.width()))
+        height = float(max(0, self._document_size.height()))
+
+        if width <= 0 and height <= 0:
+            self._ruler_start = QPointF(0.0, 0.0)
+            self._ruler_end = QPointF(0.0, 0.0)
+            return
+
+        center_x = width / 2.0
+        center_y = height / 2.0
+        span = max(1.0, max(width, height) / 3.0)
+        start_x = center_x - span / 2.0
+        end_x = center_x + span / 2.0
+
+        if start_x < 0.0:
+            end_x -= start_x
+            start_x = 0.0
+        if end_x > width:
+            start_x -= end_x - width
+            end_x = width
+
+        start_point = QPointF(start_x, center_y)
+        end_point = QPointF(end_x, center_y)
+
+        start_point = self._clamp_point_to_document(start_point)
+        end_point = self._clamp_point_to_document(end_point)
+
+        if (
+            math.isclose(start_point.x(), end_point.x())
+            and math.isclose(start_point.y(), end_point.y())
+        ):
+            fallback = self._clamp_point_to_document(
+                QPointF(end_point.x() + 1.0, end_point.y())
+            )
+            if (
+                math.isclose(fallback.x(), end_point.x())
+                and math.isclose(fallback.y(), end_point.y())
+            ):
+                fallback = self._clamp_point_to_document(
+                    QPointF(end_point.x(), end_point.y() + 1.0)
+                )
+            end_point = fallback
+
+        self._ruler_start = start_point
+        self._ruler_end = end_point
+
+    def _clamp_point_to_document(self, point: QPointF) -> QPointF:
+        width = float(max(0, self._document_size.width()))
+        height = float(max(0, self._document_size.height()))
+        clamped_x = min(max(point.x(), 0.0), width)
+        clamped_y = min(max(point.y(), 0.0), height)
+        return QPointF(clamped_x, clamped_y)
+
+    def _clamp_ruler_points_to_document(self) -> None:
+        if self._ruler_start is not None:
+            self._ruler_start = self._clamp_point_to_document(self._ruler_start)
+        if self._ruler_end is not None:
+            self._ruler_end = self._clamp_point_to_document(self._ruler_end)
+
+    def _doc_point_to_canvas(self, point: QPointF) -> QPointF:
+        target_rect = self.get_target_rect()
+        return QPointF(
+            target_rect.x() + point.x() * self.zoom,
+            target_rect.y() + point.y() * self.zoom,
+        )
+
+    def _canvas_pos_to_doc_point(self, canvas_pos: QPoint) -> QPointF:
+        zoom = self.zoom
+        if zoom == 0:
+            return QPointF(0.0, 0.0)
+        target_rect = self.get_target_rect()
+        doc_x = (canvas_pos.x() - target_rect.x()) / zoom
+        doc_y = (canvas_pos.y() - target_rect.y()) / zoom
+        return QPointF(doc_x, doc_y)
+
+    def _ruler_handle_centers(self) -> dict[str, QPointF]:
+        if not self.ruler_enabled:
+            return {}
+        if self._ruler_start is None or self._ruler_end is None:
+            return {}
+        if self.zoom <= 0:
+            return {}
+        return {
+            "start": self._doc_point_to_canvas(self._ruler_start),
+            "end": self._doc_point_to_canvas(self._ruler_end),
+        }
+
+    def _hit_test_ruler_handles(self, pos: QPoint) -> str | None:
+        if not self.ruler_enabled:
+            return None
+        hit_radius = float(self._ruler_handle_radius + self._ruler_handle_hit_padding)
+        if hit_radius <= 0:
+            return None
+        for name, center in self._ruler_handle_centers().items():
+            dx = pos.x() - center.x()
+            dy = pos.y() - center.y()
+            if math.hypot(dx, dy) <= hit_radius:
+                return name
+        return None
+
+    def _update_ruler_handle_from_position(
+        self,
+        pos: QPoint,
+        handle: str,
+        modifiers: Qt.KeyboardModifiers = Qt.NoModifier,
+    ) -> None:
+        point = self._canvas_pos_to_doc_point(pos)
+        if modifiers & Qt.ControlModifier:
+            point = QPointF(round(point.x()), round(point.y()))
+        point = self._clamp_point_to_document(point)
+        if handle == "start":
+            self._ruler_start = point
+        elif handle == "end":
+            self._ruler_end = point
+        self.update()
+
+    def _update_ruler_hover_state(self, handle: str | None) -> None:
+        if handle == self._ruler_handle_hover:
+            return
+
+        if handle is not None:
+            if self._ruler_handle_prev_cursor is None:
+                self._ruler_handle_prev_cursor = self.cursor()
+            if self._ruler_handle_drag is None:
+                self.setCursor(Qt.OpenHandCursor)
+        elif self._ruler_handle_hover is not None:
+            if self._ruler_handle_drag is None:
+                if self._ruler_handle_prev_cursor is not None:
+                    self.setCursor(self._ruler_handle_prev_cursor)
+                else:
+                    self.setCursor(self.current_tool.cursor)
+            self._ruler_handle_prev_cursor = None
+
+        self._ruler_handle_hover = handle
+
+    @Slot(bool)
+    def toggle_ruler(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if enabled == self.ruler_enabled:
+            return
+
+        self.ruler_enabled = enabled
+
+        if enabled:
+            if self._ruler_start is None or self._ruler_end is None:
+                self._initialize_ruler_handles()
+            else:
+                self._clamp_ruler_points_to_document()
+        else:
+            self._ruler_handle_drag = None
+            self._ruler_handle_hover = None
+            if self.mouse_over_canvas:
+                if self._ruler_handle_prev_cursor is not None:
+                    self.setCursor(self._ruler_handle_prev_cursor)
+                else:
+                    self.setCursor(self.current_tool.cursor)
+            self._ruler_handle_prev_cursor = None
+
+        self.update()
+
     def mousePressEvent(self, event):
+        pos = event.position().toPoint()
         if event.button() == Qt.LeftButton:
-            handle = self._hit_test_mirror_handles(event.position().toPoint())
+            if self.ruler_enabled:
+                handle = self._hit_test_ruler_handles(pos)
+                if handle is not None:
+                    self._ruler_handle_drag = handle
+                    self._ruler_handle_hover = handle
+                    if self._ruler_handle_prev_cursor is None:
+                        self._ruler_handle_prev_cursor = self.cursor()
+                    self.setCursor(Qt.ClosedHandCursor)
+                    self._update_ruler_handle_from_position(
+                        pos, handle, modifiers=event.modifiers()
+                    )
+                    return
+
+            handle = self._hit_test_mirror_handles(pos)
             if handle is not None:
                 self._mirror_handle_drag = handle
                 self._mirror_handle_hover = handle
-                self._update_mirror_axis_from_position(event.position().toPoint(), handle)
+                self._update_mirror_axis_from_position(pos, handle)
                 if self._mirror_handle_prev_cursor is None:
                     self._mirror_handle_prev_cursor = self.cursor()
                 self.setCursor(Qt.ClosedHandCursor)
@@ -376,21 +568,38 @@ class Canvas(QWidget):
         self.input_handler.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        pos = event.position().toPoint()
+        if self._ruler_handle_drag is not None:
+            self._update_cursor_position_from_event(event)
+            self._update_ruler_handle_from_position(
+                pos,
+                self._ruler_handle_drag,
+                modifiers=event.modifiers(),
+            )
+            return
+
         if self._mirror_handle_drag is not None:
             self._update_cursor_position_from_event(event)
-            self._update_mirror_axis_from_position(
-                event.position().toPoint(), self._mirror_handle_drag
-            )
+            self._update_mirror_axis_from_position(pos, self._mirror_handle_drag)
             return
 
         self.input_handler.mouseMoveEvent(event)
 
-        handle = self._hit_test_mirror_handles(event.position().toPoint())
+        ruler_handle = None
+        if self.ruler_enabled:
+            ruler_handle = self._hit_test_ruler_handles(pos)
+            self._update_ruler_hover_state(ruler_handle)
+
+        if ruler_handle is not None:
+            return
+
+        handle = self._hit_test_mirror_handles(pos)
         if handle != self._mirror_handle_hover:
             if handle is not None:
                 if self._mirror_handle_drag is None:
-                    self._mirror_handle_prev_cursor = self.cursor()
-                self.setCursor(Qt.OpenHandCursor)
+                    if self._mirror_handle_prev_cursor is None:
+                        self._mirror_handle_prev_cursor = self.cursor()
+                    self.setCursor(Qt.OpenHandCursor)
             elif self._mirror_handle_hover is not None:
                 if self._mirror_handle_prev_cursor is not None:
                     self.setCursor(self._mirror_handle_prev_cursor)
@@ -400,15 +609,39 @@ class Canvas(QWidget):
         self._mirror_handle_hover = handle
 
     def mouseReleaseEvent(self, event):
+        pos = event.position().toPoint()
+        if (
+            self._ruler_handle_drag is not None
+            and event.button() == Qt.LeftButton
+        ):
+            self._update_cursor_position_from_event(event)
+            self._update_ruler_handle_from_position(
+                pos,
+                self._ruler_handle_drag,
+                modifiers=event.modifiers(),
+            )
+            self._ruler_handle_drag = None
+            handle = None
+            if self.ruler_enabled:
+                handle = self._hit_test_ruler_handles(pos)
+            if handle is not None:
+                self.setCursor(Qt.OpenHandCursor)
+            else:
+                if self._ruler_handle_prev_cursor is not None:
+                    self.setCursor(self._ruler_handle_prev_cursor)
+                else:
+                    self.setCursor(self.current_tool.cursor)
+                self._ruler_handle_prev_cursor = None
+            self._ruler_handle_hover = handle
+            return
+
         if (
             self._mirror_handle_drag is not None
             and event.button() == Qt.LeftButton
         ):
-            self._update_mirror_axis_from_position(
-                event.position().toPoint(), self._mirror_handle_drag
-            )
+            self._update_mirror_axis_from_position(pos, self._mirror_handle_drag)
             self._mirror_handle_drag = None
-            handle = self._hit_test_mirror_handles(event.position().toPoint())
+            handle = self._hit_test_mirror_handles(pos)
             if handle is not None:
                 self.setCursor(Qt.OpenHandCursor)
             else:
@@ -658,6 +891,22 @@ class Canvas(QWidget):
             if color.isValid():
                 self.grid_minor_color = color
         self.update()
+
+    def set_ruler_settings(self, *, interval=None):
+        if interval is None:
+            return
+        try:
+            interval_value = int(interval)
+        except (TypeError, ValueError):
+            return
+        interval_value = max(1, interval_value)
+        if interval_value == self._ruler_interval:
+            return
+        self._ruler_interval = interval_value
+        self.update()
+
+    def get_ruler_settings(self):
+        return {"interval": int(self._ruler_interval)}
 
     def get_grid_settings(self):
         return {

@@ -73,6 +73,11 @@ class SettingsController(QObject):
         self.background_image_alpha = max(0.0, min(1.0, float(alpha_value)))
         self._sync_background_settings_to_config()
 
+        if not self.config.has_section('Ruler'):
+            self.config.add_section('Ruler')
+        self.ruler_interval = self._get_ruler_int('interval', 8)
+        self._sync_ruler_settings_to_config()
+
     def save_settings(self, ai_settings=None):
         """Persist settings to disk."""
         try:
@@ -83,6 +88,7 @@ class SettingsController(QObject):
 
             self._sync_grid_settings_to_config()
             self._sync_background_settings_to_config()
+            self._sync_ruler_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
@@ -103,6 +109,12 @@ class SettingsController(QObject):
     def _get_grid_int(self, option, fallback):
         try:
             return max(1, self.config.getint('Grid', option))
+        except (configparser.NoOptionError, ValueError):
+            return fallback
+
+    def _get_ruler_int(self, option, fallback):
+        try:
+            return max(1, self.config.getint('Ruler', option))
         except (configparser.NoOptionError, ValueError):
             return fallback
 
@@ -127,6 +139,11 @@ class SettingsController(QObject):
         self.config.set('Background', 'image_mode', self.background_image_mode.value)
         self.config.set('Background', 'image_alpha', f"{self.background_image_alpha:.3f}")
 
+    def _sync_ruler_settings_to_config(self):
+        if not self.config.has_section('Ruler'):
+            self.config.add_section('Ruler')
+        self.config.set('Ruler', 'interval', str(int(self.ruler_interval)))
+
     def get_grid_settings(self):
         return {
             'major_visible': self.grid_major_visible,
@@ -141,6 +158,11 @@ class SettingsController(QObject):
         return {
             'image_mode': self.background_image_mode,
             'image_alpha': self.background_image_alpha,
+        }
+
+    def get_ruler_settings(self):
+        return {
+            'interval': int(self.ruler_interval),
         }
 
     def get_default_grid_settings(self):
@@ -189,3 +211,12 @@ class SettingsController(QObject):
                 alpha_value = self.background_image_alpha
             self.background_image_alpha = max(0.0, min(1.0, alpha_value))
         self._sync_background_settings_to_config()
+
+    def update_ruler_settings(self, *, interval=None):
+        if interval is not None:
+            try:
+                interval_value = int(interval)
+            except (TypeError, ValueError):
+                interval_value = self.ruler_interval
+            self.ruler_interval = max(1, interval_value)
+        self._sync_ruler_settings_to_config()

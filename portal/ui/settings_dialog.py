@@ -197,6 +197,13 @@ class SettingsDialog(QDialog):
             self._update_background_alpha_label
         )
 
+        canvas_layout.addWidget(QLabel("Ruler interval", canvas_tab), 2, 0)
+        self.ruler_interval_spinbox = QSpinBox(canvas_tab)
+        self.ruler_interval_spinbox.setMinimum(1)
+        self.ruler_interval_spinbox.setMaximum(4096)
+        canvas_layout.addWidget(self.ruler_interval_spinbox, 2, 1)
+        canvas_layout.addWidget(QLabel("px", canvas_tab), 2, 2)
+
         self.canvas_reset_button = QPushButton("Reset to Defaults", canvas_tab)
         self.canvas_reset_button.clicked.connect(self._reset_canvas_tab)
         canvas_layout.addWidget(
@@ -237,6 +244,14 @@ class SettingsDialog(QDialog):
         self.background_alpha_slider.setValue(clamped_percent)
         self._update_background_alpha_label(clamped_percent)
 
+        ruler_settings = self.settings_controller.get_ruler_settings()
+        interval = ruler_settings.get("interval", 8)
+        try:
+            interval_value = int(interval)
+        except (TypeError, ValueError):
+            interval_value = 8
+        self.ruler_interval_spinbox.setValue(max(1, interval_value))
+
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
         if isinstance(data, BackgroundImageMode):
@@ -265,12 +280,18 @@ class SettingsDialog(QDialog):
             "minor_color": minor_row["color"],
         }
 
+    def get_ruler_settings(self):
+        return {
+            "interval": self.ruler_interval_spinbox.value(),
+        }
+
     def _apply_settings(self):
         self.settings_controller.update_grid_settings(**self.get_grid_settings())
         self.settings_controller.update_background_settings(
             image_mode=self.get_background_image_mode(),
             image_alpha=self.get_background_image_alpha(),
         )
+        self.settings_controller.update_ruler_settings(**self.get_ruler_settings())
 
     def _reset_grid_tab(self):
         defaults = self.settings_controller.get_default_grid_settings()
