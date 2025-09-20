@@ -36,6 +36,87 @@ class ImageGenerator:
         self.is_img2img = None
         self.is_inpaint = None
 
+    @staticmethod
+    def _coerce_dimension(value) -> int | None:
+        """Convert raw config values into a positive integer dimension."""
+
+        try:
+            dimension = int(value)
+        except (TypeError, ValueError):
+            return None
+        if dimension <= 0:
+            return None
+        return dimension
+
+    def _coerce_size(self, candidate) -> tuple[int, int] | None:
+        """Normalise a variety of config size formats to (width, height)."""
+
+        if candidate is None:
+            return None
+
+        if isinstance(candidate, dict):
+            width = self._coerce_dimension(candidate.get("width"))
+            height = self._coerce_dimension(candidate.get("height"))
+            if width and height:
+                return width, height
+            return None
+
+        if isinstance(candidate, (list, tuple)) and len(candidate) == 2:
+            width = self._coerce_dimension(candidate[0])
+            height = self._coerce_dimension(candidate[1])
+            if width and height:
+                return width, height
+            return None
+
+        if isinstance(candidate, str):
+            normalized = (
+                candidate.lower()
+                .strip()
+                .replace("×", "x")
+                .replace(",", "x")
+            )
+            if "x" in normalized:
+                parts = [part for part in normalized.split("x") if part]
+                if len(parts) == 2:
+                    width = self._coerce_dimension(parts[0])
+                    height = self._coerce_dimension(parts[1])
+                    if width and height:
+                        return width, height
+            return None
+
+        return None
+
+    def get_generation_size(self, model_name: str) -> tuple[int, int] | None:
+        """Return the size (width, height) the model generates before resizing."""
+
+        if not model_name:
+            return None
+
+        model_cfg = self.model_configs.get(model_name)
+        if not model_cfg:
+            return None
+
+        for key in ("generation_size", "image_size"):
+            size = self._coerce_size(model_cfg.get(key))
+            if size:
+                return size
+
+        width = self._coerce_dimension(model_cfg.get("generation_width"))
+        height = self._coerce_dimension(model_cfg.get("generation_height"))
+        if width and height:
+            return width, height
+
+        width = self._coerce_dimension(model_cfg.get("width"))
+        height = self._coerce_dimension(model_cfg.get("height"))
+        if width and height:
+            return width, height
+
+        model_name_upper = str(model_name).upper()
+        if "XL" in model_name_upper:
+            return 1024, 1024
+
+        return 512, 512
+
     def load_pipeline(self, model_name: str, is_img2img: bool = False, is_inpaint: bool = False):
         """Load and cache the requested pipeline."""
         if (

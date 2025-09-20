@@ -117,6 +117,7 @@ class CanvasRenderer:
         self.canvas.current_tool.draw_overlay(painter)
         if self.canvas.selection_shape:
             self.draw_selection_overlay(painter, target_rect)
+        self._draw_ai_output_overlay(painter, target_rect)
 
         self._draw_document_dimensions(painter, target_rect, document)
         self._draw_ruler_helper(painter, target_rect)
@@ -715,6 +716,42 @@ class CanvasRenderer:
         pen2.setDashOffset(4)
         painter.setPen(pen2)
         painter.drawPath(self.canvas.selection_shape)
+
+        painter.restore()
+
+    def _draw_ai_output_overlay(self, painter, target_rect):
+        if not getattr(self.canvas, "ai_output_edit_enabled", False):
+            return
+
+        overlay_rect = self.canvas._ai_output_overlay_rect()
+        if overlay_rect is None:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, False)
+
+        border_pen = QPen(QColor(220, 0, 0))
+        border_pen.setCosmetic(True)
+        border_pen.setWidth(1)
+        painter.setPen(border_pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(overlay_rect)
+
+        handle_pen = QPen(QColor(0, 0, 0, 200))
+        handle_pen.setCosmetic(True)
+        handle_pen.setWidth(1)
+        painter.setPen(handle_pen)
+
+        handle_rects = self.canvas._ai_output_handle_rects()
+        for name, rect in handle_rects.items():
+            if name == self.canvas._ai_output_active_handle:
+                brush = QColor(255, 200, 0)
+            elif name == self.canvas._ai_output_hover_handle:
+                brush = QColor(220, 220, 220)
+            else:
+                brush = QColor(255, 255, 255)
+            painter.setBrush(brush)
+            painter.drawRect(rect)
 
         painter.restore()
 

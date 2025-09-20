@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QPalette,
     QMouseEvent,
 )
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, Signal, Slot, QSize
+from PySide6.QtCore import Qt, QPoint, QRect, Signal, Slot, QSize, QPointF, QRectF
 from portal.core.drawing import Drawing
 from portal.core.renderer import CanvasRenderer
 from portal.ui.background import Background, BackgroundImageMode
@@ -111,6 +111,14 @@ class Canvas(QWidget):
         self._mirror_handle_drag: str | None = None
         self._mirror_handle_prev_cursor: QCursor | None = None
 
+        self.ai_output_rect = QRect(0, 0, 1, 1)
+        self.ai_output_edit_enabled = False
+        self._ai_output_handle_size = 14.0
+        self._ai_output_active_handle: str | None = None
+        self._ai_output_hover_handle: str | None = None
+        self._ai_output_initial_edges: dict[str, int] | None = None
+        self._ai_output_move_offset = QPointF(0, 0)
+        
         self.ruler_enabled = False
         self._ruler_start: QPointF | None = None
         self._ruler_end: QPointF | None = None
@@ -378,6 +386,200 @@ class Canvas(QWidget):
             doc_pos.y() * self.zoom + y_offset,
         )
 
+    def _ai_output_edges_from_rect(self, rect: QRect) -> dict[str, int]:
+        width = max(1, int(rect.width()))
+        height = max(1, int(rect.height()))
+        left = int(rect.x())
+        top = int(rect.y())
+        return {
+            "left": left,
+            "top": top,
+            "right": left + width - 1,
+            "bottom": top + height - 1,
+        }
+
+    def _ai_output_rect_from_edges(self, edges: dict[str, int]) -> QRect:
+        left = int(edges.get("left", 0))
+        top = int(edges.get("top", 0))
+        right = int(edges.get("right", left))
+        bottom = int(edges.get("bottom", top))
+        width = max(1, right - left + 1)
+        height = max(1, bottom - top + 1)
+        return QRect(left, top, width, height)
+
+    def _ai_output_clamp_edges(self, edges: dict[str, int]) -> dict[str, int]:
+        doc_width = max(1, int(self._document_size.width()))
+        doc_height = max(1, int(self._document_size.height()))
+
+        left = max(0, min(int(edges.get("left", 0)), doc_width - 1))
+        right = max(left, min(int(edges.get("right", left)), doc_width - 1))
+        top = max(0, min(int(edges.get("top", 0)), doc_height - 1))
+        bottom = max(top, min(int(edges.get("bottom", top)), doc_height - 1))
+
+        return {"left": left, "top": top, "right": right, "bottom": bottom}
+
+    def _ai_output_overlay_rect(self) -> QRectF | None:
+        rect = self.ai_output_rect
+        if rect.width() <= 0 or rect.height() <= 0:
+            return None
+
+        top_left = self.get_canvas_coords(rect.topLeft())
+        bottom_right_point = QPoint(
+            rect.x() + rect.width(),
+            rect.y() + rect.height(),
+        )
+        bottom_right = self.get_canvas_coords(bottom_right_point)
+        return QRectF(QPointF(top_left), QPointF(bottom_right)).normalized()
+
+    def _ai_output_handle_rects(self) -> dict[str, QRectF]:
+        overlay_rect = self._ai_output_overlay_rect()
+        if overlay_rect is None:
+            return {}
+
+        center = overlay_rect.center()
+        points = {
+            "left": QPointF(overlay_rect.left(), center.y()),
+            "right": QPointF(overlay_rect.right(), center.y()),
+            "top": QPointF(center.x(), overlay_rect.top()),
+            "bottom": QPointF(center.x(), overlay_rect.bottom()),
+        }
+
+        half = self._ai_output_handle_size / 2.0
+        rects: dict[str, QRectF] = {}
+        for name, point in points.items():
+            rects[name] = QRectF(
+                point.x() - half,
+                point.y() - half,
+                self._ai_output_handle_size,
+                self._ai_output_handle_size,
+            )
+        return rects
+
+    def _ai_output_hit_test_handles(self, pos: QPointF) -> str | None:
+        for name, rect in self._ai_output_handle_rects().items():
+            if rect.contains(pos):
+                return name
+        return None
+
+    def _set_ai_output_cursor(self, handle: str | None):
+        if handle in {"left", "right"}:
+            self.setCursor(Qt.SizeHorCursor)
+        elif handle in {"top", "bottom"}:
+            self.setCursor(Qt.SizeVerCursor)
+        elif handle == "move":
+            self.setCursor(Qt.SizeAllCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def _ai_output_doc_pos_from_event(self, pos: QPointF) -> QPoint:
+        doc_point = self.get_doc_coords(pos.toPoint(), wrap=False)
+        doc_width = max(1, int(self._document_size.width()))
+        doc_height = max(1, int(self._document_size.height()))
+        x = max(0, min(doc_point.x(), doc_width - 1))
+        y = max(0, min(doc_point.y(), doc_height - 1))
+        return QPoint(x, y)
+
+    def _update_ai_output_hover(self, pos: QPointF):
+        if not self.ai_output_edit_enabled or self._ai_output_active_handle:
+            return
+
+        handle = self._ai_output_hit_test_handles(pos)
+        if handle != self._ai_output_hover_handle:
+            self._ai_output_hover_handle = handle
+            self.update()
+
+        overlay_rect = self._ai_output_overlay_rect()
+        if handle:
+            self._set_ai_output_cursor(handle)
+        elif overlay_rect and overlay_rect.contains(pos):
+            self._set_ai_output_cursor("move")
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def _handle_ai_output_mouse_press(self, event: QMouseEvent) -> bool:
+        if not self.ai_output_edit_enabled or event.button() != Qt.LeftButton:
+            return False
+
+        overlay_rect = self._ai_output_overlay_rect()
+        handle = self._ai_output_hit_test_handles(event.position())
+        inside = overlay_rect.contains(event.position()) if overlay_rect else False
+
+        if handle is None and not inside:
+            self._ai_output_hover_handle = None
+            self._ai_output_active_handle = None
+            self.setCursor(Qt.ArrowCursor)
+            return True
+
+        self._ai_output_active_handle = handle or "move"
+        self._ai_output_hover_handle = handle
+        self._ai_output_initial_edges = self._ai_output_edges_from_rect(self.ai_output_rect)
+        doc_point = self._ai_output_doc_pos_from_event(event.position())
+
+        if self._ai_output_active_handle == "move":
+            self._ai_output_move_offset = QPointF(
+                doc_point.x() - self._ai_output_initial_edges["left"],
+                doc_point.y() - self._ai_output_initial_edges["top"],
+            )
+            self._set_ai_output_cursor("move")
+        else:
+            self._set_ai_output_cursor(self._ai_output_active_handle)
+        return True
+
+    def _drag_ai_output(self, pos: QPointF):
+        if self._ai_output_active_handle is None:
+            return
+
+        if self._ai_output_initial_edges is None:
+            self._ai_output_initial_edges = self._ai_output_edges_from_rect(
+                self.ai_output_rect
+            )
+
+        doc_point = self._ai_output_doc_pos_from_event(pos)
+        edges = dict(self._ai_output_initial_edges)
+        handle = self._ai_output_active_handle
+
+        if handle == "left":
+            edges["left"] = min(doc_point.x(), edges["right"])
+        elif handle == "right":
+            edges["right"] = max(doc_point.x(), edges["left"])
+        elif handle == "top":
+            edges["top"] = min(doc_point.y(), edges["bottom"])
+        elif handle == "bottom":
+            edges["bottom"] = max(doc_point.y(), edges["top"])
+        elif handle == "move":
+            width = edges["right"] - edges["left"] + 1
+            height = edges["bottom"] - edges["top"] + 1
+            offset_x = int(round(self._ai_output_move_offset.x()))
+            offset_y = int(round(self._ai_output_move_offset.y()))
+            left = doc_point.x() - offset_x
+            top = doc_point.y() - offset_y
+
+            doc_width = max(1, int(self._document_size.width()))
+            doc_height = max(1, int(self._document_size.height()))
+
+            left = max(0, min(left, doc_width - width))
+            top = max(0, min(top, doc_height - height))
+
+            edges["left"] = left
+            edges["right"] = left + width - 1
+            edges["top"] = top
+            edges["bottom"] = top + height - 1
+
+        edges = self._ai_output_clamp_edges(edges)
+        rect = self._ai_output_rect_from_edges(edges)
+        if rect == self.ai_output_rect:
+            return
+
+        self.ai_output_rect = rect
+        self.update()
+        if self.app is not None:
+            self.app.set_ai_output_rect(rect)
+
+    def mousePressEvent(self, event):
+        if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:
+            if self._handle_ai_output_mouse_press(event):
+                return
+              
     def _initialize_ruler_handles(self) -> None:
         width = float(max(0, self._document_size.width()))
         height = float(max(0, self._document_size.height()))
@@ -568,8 +770,17 @@ class Canvas(QWidget):
         self.input_handler.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        if self.ai_output_edit_enabled:
+            self._update_cursor_position_from_event(event)
+            if event.buttons() & Qt.LeftButton:
+                if self._ai_output_active_handle is not None:
+                    self._drag_ai_output(event.position())
+                    self._set_ai_output_cursor(self._ai_output_active_handle)
+                return
+            self._update_ai_output_hover(event.position())
+            return
         pos = event.position().toPoint()
-        if self._ruler_handle_drag is not None:
+        if self._mirror_handle_drag is not None or self._ruler_handle_drag is not None:
             self._update_cursor_position_from_event(event)
             self._update_ruler_handle_from_position(
                 pos,
@@ -609,6 +820,14 @@ class Canvas(QWidget):
         self._mirror_handle_hover = handle
 
     def mouseReleaseEvent(self, event):
+        if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:
+            if self._ai_output_active_handle is not None:
+                self._drag_ai_output(event.position())
+                self._ai_output_active_handle = None
+                self._ai_output_initial_edges = None
+                self._ai_output_move_offset = QPointF(0, 0)
+            self._update_ai_output_hover(event.position())
+            return
         pos = event.position().toPoint()
         if (
             self._ruler_handle_drag is not None
@@ -820,6 +1039,38 @@ class Canvas(QWidget):
     def set_document(self, document):
         self.document = document
         self.set_document_size(QSize(document.width, document.height))
+        if hasattr(document, "get_ai_output_rect"):
+            rect = document.get_ai_output_rect()
+            if rect is not None:
+                self.set_ai_output_rect(rect)
+        self.update()
+
+    def set_ai_output_rect(self, rect: QRect | None):
+        if rect is None:
+            rect = QRect(0, 0, self._document_size.width(), self._document_size.height())
+        normalized = QRect(rect)
+        if normalized == self.ai_output_rect:
+            return
+        self.ai_output_rect = normalized
+        if not self.ai_output_edit_enabled:
+            self._ai_output_active_handle = None
+            self._ai_output_hover_handle = None
+        self.update()
+
+    def enable_ai_output_editing(self, enabled: bool):
+        normalized = bool(enabled)
+        if normalized == self.ai_output_edit_enabled:
+            return
+        self.ai_output_edit_enabled = normalized
+        self._ai_output_active_handle = None
+        self._ai_output_hover_handle = None
+        self._ai_output_initial_edges = None
+        self._ai_output_move_offset = QPointF(0, 0)
+        if normalized:
+            self.setCursor(Qt.ArrowCursor)
+        else:
+            if self.current_tool is not None:
+                self.setCursor(self.current_tool.cursor)
         self.update()
 
     def set_onion_skin_enabled(self, enabled: bool) -> None:

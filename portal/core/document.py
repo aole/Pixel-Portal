@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Mapping
 import io
 import json
 
-from PySide6.QtCore import QBuffer, QSize, Qt
+from PySide6.QtCore import QBuffer, QSize, Qt, QRect
 from PySide6.QtGui import QImage, QPainter
 from PIL import Image, ImageSequence, ImageQt
 
@@ -22,6 +22,70 @@ class Document:
         self._layer_manager_listeners: list[Callable[[LayerManager], None]] = []
         self._notify_layer_manager_changed()
         self.file_path: str | None = None
+        self.ai_output_rect = QRect(0, 0, max(1, int(width)), max(1, int(height)))
+
+    # ------------------------------------------------------------------
+    def get_ai_output_rect(self) -> QRect:
+        """Return the clamped rectangle the AI output should occupy."""
+
+        return QRect(self._normalize_ai_output_rect(self.ai_output_rect))
+
+    # ------------------------------------------------------------------
+    def set_ai_output_rect(self, rect: QRect | None) -> QRect:
+        """Clamp and store the preferred AI output rectangle."""
+
+        normalized = self._normalize_ai_output_rect(rect)
+        if normalized == self.ai_output_rect:
+            return QRect(self.ai_output_rect)
+        self.ai_output_rect = normalized
+        return QRect(self.ai_output_rect)
+
+    # ------------------------------------------------------------------
+    def reset_ai_output_rect(self) -> QRect:
+        """Reset the AI output rectangle to the full document bounds."""
+
+        self.ai_output_rect = QRect(
+            0,
+            0,
+            max(1, int(self.width)),
+            max(1, int(self.height)),
+        )
+        return QRect(self.ai_output_rect)
+
+    # ------------------------------------------------------------------
+    def ensure_ai_output_rect(self) -> QRect:
+        """Clamp the stored AI rectangle to the current document bounds."""
+
+        self.ai_output_rect = self._normalize_ai_output_rect(self.ai_output_rect)
+        return QRect(self.ai_output_rect)
+
+    # ------------------------------------------------------------------
+    def _normalize_ai_output_rect(self, rect: QRect | None) -> QRect:
+        doc_width = max(1, int(self.width))
+        doc_height = max(1, int(self.height))
+
+        if rect is None:
+            left = 0
+            top = 0
+            right = doc_width - 1
+            bottom = doc_height - 1
+        else:
+            normalized = QRect(rect).normalized()
+            width = max(1, int(normalized.width()))
+            height = max(1, int(normalized.height()))
+            left = int(normalized.x())
+            top = int(normalized.y())
+            right = left + width - 1
+            bottom = top + height - 1
+
+        left = max(0, min(left, doc_width - 1))
+        top = max(0, min(top, doc_height - 1))
+        right = max(left, min(right, doc_width - 1))
+        bottom = max(top, min(bottom, doc_height - 1))
+
+        width = max(1, right - left + 1)
+        height = max(1, bottom - top + 1)
+        return QRect(left, top, width, height)
 
     @property
     def layer_manager(self) -> LayerManager:
@@ -62,6 +126,7 @@ class Document:
         new_doc = Document(self.width, self.height)
         new_doc.frame_manager = self.frame_manager.clone()
         new_doc._notify_layer_manager_changed()
+        new_doc.ai_output_rect = new_doc._normalize_ai_output_rect(self.ai_output_rect)
         return new_doc
 
     def render(self) -> QImage:
@@ -312,6 +377,7 @@ class Document:
             for layer in layer_manager.layers:
                 layer.image = layer.image.scaled(QSize(width, height), Qt.IgnoreAspectRatio, mode)
                 layer.on_image_change.emit()
+        self.ensure_ai_output_rect()
 
     def crop(self, rect):
         rect = rect.normalized()
@@ -333,6 +399,7 @@ class Document:
             for layer in layer_manager.layers:
                 layer.image = layer.image.copy(rect)
                 layer.on_image_change.emit()
+        self.ensure_ai_output_rect()
 
     def _notify_layer_manager_changed(self) -> None:
         manager = self.frame_manager.current_layer_manager

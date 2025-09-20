@@ -393,6 +393,7 @@ class MainWindow(QMainWindow):
 
         self.app.document_changed.connect(self.preview_panel.handle_document_changed)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
+        self.app.ai_output_rect_changed.connect(self.canvas.set_ai_output_rect)
 
         self.app.drawing_context.mirror_x_changed.connect(self.on_mirror_changed)
         self.app.drawing_context.mirror_y_changed.connect(self.on_mirror_changed)

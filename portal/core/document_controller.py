@@ -6,6 +6,8 @@ from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QMessageBox
 
+from PIL.ImageQt import ImageQt
+
 from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
 from portal.core.document import Document
 from portal.core.undo import UndoManager
@@ -46,6 +48,7 @@ class DocumentController(QObject):
 
     undo_stack_changed = Signal()
     document_changed = Signal()
+    ai_output_rect_changed = Signal(QRect)
 
     def __init__(self, settings: SettingsController, document_service: DocumentService | None = None, clipboard_service: ClipboardService | None = None):
         super().__init__()
@@ -70,6 +73,9 @@ class DocumentController(QObject):
         self._copied_key_state = None
         self.auto_key_enabled = False
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
+
+        self._last_ai_output_rect = QRect()
+        self.document_changed.connect(self._on_document_mutated)
 
         self.attach_document(Document(64, 64))
 
@@ -129,6 +135,23 @@ class DocumentController(QObject):
         if normalized == self.auto_key_enabled:
             return
         self.auto_key_enabled = normalized
+
+    # ------------------------------------------------------------------
+    def get_ai_output_rect(self) -> QRect | None:
+        document = self.document
+        if document is None:
+            return None
+        return document.get_ai_output_rect()
+
+    # ------------------------------------------------------------------
+    def set_ai_output_rect(self, rect: QRect | None) -> None:
+        document = self.document
+        if document is None:
+            return
+        normalized = document.set_ai_output_rect(rect)
+        if normalized != self._last_ai_output_rect:
+            self._last_ai_output_rect = normalized
+            self.ai_output_rect_changed.emit(normalized)
 
     @property
     def playback_total_frames(self) -> int:
@@ -230,6 +253,16 @@ class DocumentController(QObject):
             return
         command = MoveKeyframesCommand(document, normalized)
         self.execute_command(command)
+
+    # ------------------------------------------------------------------
+    def _on_document_mutated(self):
+        document = self.document
+        if document is None:
+            return
+        rect = document.ensure_ai_output_rect()
+        if rect != self._last_ai_output_rect:
+            self._last_ai_output_rect = rect
+            self.ai_output_rect_changed.emit(rect)
 
     def execute_command(self, command):
         command.execute()
@@ -484,7 +517,42 @@ class DocumentController(QObject):
         return command.applied
 
     def add_new_layer_with_image(self, image):
-        command = AddLayerCommand(self.document, image, "AI Generated Layer")
+        document = self.document
+        if document is None:
+            return
+
+        target_rect = document.get_ai_output_rect() or QRect(
+            0, 0, max(1, int(document.width)), max(1, int(document.height))
+        )
+
+        if isinstance(image, QImage):
+            q_image = image
+        else:
+            q_image = QImage(ImageQt(image.convert("RGBA")))
+
+        if (
+            q_image.width() != target_rect.width()
+            or q_image.height() != target_rect.height()
+        ):
+            q_image = q_image.scaled(
+                target_rect.width(),
+                target_rect.height(),
+                Qt.IgnoreAspectRatio,
+                Qt.FastTransformation,
+            )
+
+        composed = QImage(
+            max(1, int(document.width)),
+            max(1, int(document.height)),
+            QImage.Format_ARGB32,
+        )
+        composed.fill(Qt.transparent)
+
+        painter = QPainter(composed)
+        painter.drawImage(target_rect.topLeft(), q_image)
+        painter.end()
+
+        command = AddLayerCommand(document, composed, "AI Generated Layer")
         self.execute_command(command)
 
     @Slot(object)
@@ -506,6 +574,9 @@ class DocumentController(QObject):
             self._bind_layer_manager
         )
         self._refresh_window_title()
+        rect = self.document.ensure_ai_output_rect()
+        self._last_ai_output_rect = rect
+        self.ai_output_rect_changed.emit(rect)
 
     def update_main_window_title(self) -> None:
         self._refresh_window_title()

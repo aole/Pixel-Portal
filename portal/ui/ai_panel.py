@@ -129,6 +129,25 @@ class AIPanel(QWidget):
         model_layout.addWidget(self.model_combo)
         self.layout.addLayout(model_layout)
 
+        # --- Document Dimensions ---
+        self.native_render_label = QLabel()
+        self.native_render_label.setObjectName("ai-dimensions-label")
+        self.layout.addWidget(self.native_render_label)
+
+        self.output_size_label = QLabel()
+        self.output_size_label.setObjectName("ai-output-dimensions-label")
+        self.layout.addWidget(self.output_size_label)
+
+        self.edit_output_button = QPushButton("Edit Output Area")
+        self.edit_output_button.setCheckable(True)
+        self.edit_output_button.toggled.connect(self.toggle_output_editing)
+        self.layout.addWidget(self.edit_output_button)
+
+        self.model_combo.currentTextChanged.connect(self.update_dimension_labels)
+        self.app.document_changed.connect(self.update_dimension_labels)
+        self.app.ai_output_rect_changed.connect(self.update_dimension_labels)
+        self.update_dimension_labels()
+
         # --- Background Removal ---
         self.remove_bg_checkbox = QCheckBox("Remove BG")
         if not self.image_generator.is_background_removal_available():
@@ -225,6 +244,79 @@ class AIPanel(QWidget):
             self.set_buttons_enabled(False)
 
 
+    @staticmethod
+    def _normalize_dimensions(size) -> tuple[int, int] | None:
+        if size is None:
+            return None
+
+        width = height = None
+        if hasattr(size, "width") and hasattr(size, "height"):
+            width_attr = getattr(size, "width")
+            height_attr = getattr(size, "height")
+            width = width_attr() if callable(width_attr) else width_attr
+            height = height_attr() if callable(height_attr) else height_attr
+        elif isinstance(size, (tuple, list)) and len(size) == 2:
+            width, height = size
+        else:
+            return None
+
+        try:
+            width = int(width)
+            height = int(height)
+        except (TypeError, ValueError):
+            return None
+
+        if width <= 0 or height <= 0:
+            return None
+        return width, height
+
+    def _resolve_generation_dimensions(
+        self, model_name: str | None = None
+    ) -> tuple[tuple[int, int] | None, tuple[int, int] | None]:
+        if model_name is None and self.model_combo is not None:
+            model_name = self.model_combo.currentText()
+
+        native_size = None
+        if model_name:
+            native_size = self._normalize_dimensions(
+                self.image_generator.get_generation_size(model_name)
+            )
+
+        output_size = None
+        if hasattr(self.app, "get_ai_output_rect"):
+            rect = self.app.get_ai_output_rect()
+        else:
+            rect = None
+        if rect is not None:
+            output_size = self._normalize_dimensions((rect.width(), rect.height()))
+
+        if output_size is None:
+            document = getattr(self.app, "document", None)
+            if document is not None:
+                output_size = self._normalize_dimensions(
+                    (getattr(document, "width", None), getattr(document, "height", None))
+                )
+
+        return native_size, output_size
+
+    @staticmethod
+    def _format_dimension_label(prefix: str, size: tuple[int, int] | None) -> str:
+        if size:
+            return f"{prefix}: {size[0]} × {size[1]}px"
+        return f"{prefix}: —"
+
+    def update_dimension_labels(self, *_):
+        model_name = self.model_combo.currentText() if self.model_combo else None
+        native_size, output_size = self._resolve_generation_dimensions(model_name)
+
+        self.native_render_label.setText(
+            self._format_dimension_label("Native Render Size", native_size)
+        )
+        self.output_size_label.setText(
+            self._format_dimension_label("Output Size", output_size)
+        )
+
+
     def start_generation(self, mode: GenerationMode):
         prompt = self.prompt_input.toPlainText()
         if not prompt:
@@ -240,11 +332,19 @@ class AIPanel(QWidget):
         self.app.config.set('AI', 'last_prompt', prompt)
         self.app.save_settings()
 
+        model_name = self.model_combo.currentText() if self.model_combo else None
+        native_size, output_size = self._resolve_generation_dimensions(model_name)
+
+        original_size = output_size or native_size
+        if original_size is None:
+            original_size = (512, 512)
+
+        if not model_name:
+            QMessageBox.warning(self, "Warning", "No AI model selected.")
+            return
+
         input_image = None
         mask_image = None
-        original_size = (self.app.document.width, self.app.document.height)
-
-        model_name = self.model_combo.currentText()
 
         is_inpaint = False
         if mode == GenerationMode.IMAGE_TO_IMAGE:
@@ -292,6 +392,20 @@ class AIPanel(QWidget):
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.generation_step.connect(self.on_generation_step)
         self.thread.start()
+
+    def toggle_output_editing(self, enabled: bool):
+        main_window = getattr(self.app, "main_window", None)
+        canvas = getattr(main_window, "canvas", None)
+        enable_method = getattr(canvas, "enable_ai_output_editing", None)
+
+        if not callable(enable_method):
+            if enabled:
+                self.edit_output_button.blockSignals(True)
+                self.edit_output_button.setChecked(False)
+                self.edit_output_button.blockSignals(False)
+            return
+
+        enable_method(bool(enabled))
 
     def on_generation_step(self, image):
         if isinstance(image, Image.Image):
