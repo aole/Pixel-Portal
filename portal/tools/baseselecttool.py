@@ -84,10 +84,22 @@ class BaseSelectTool(BaseTool):
             return SelectionCombineMode.ADD
         return SelectionCombineMode.REPLACE
 
-    def _preview_selection_path(self, path: QPainterPath | None) -> None:
+    def _preview_selection_path(
+        self, path: QPainterPath | None
+    ) -> QPainterPath | None:
         self._draft_selection_path = path
         preview = self._build_preview_path()
         self.canvas._update_selection_and_emit_size(preview)
+        return preview
+
+    def _emit_preview_selection_changed(
+        self, preview: QPainterPath | None = None
+    ) -> QPainterPath | None:
+        if preview is None:
+            preview = self._build_preview_path()
+        has_selection = preview is not None and not preview.isEmpty()
+        self.canvas.selection_changed.emit(has_selection)
+        return preview
 
     def _build_preview_path(self) -> QPainterPath | None:
         mode = self._selection_combine_mode
