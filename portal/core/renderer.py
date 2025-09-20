@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import QPoint, QRect, QRectF, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -68,6 +68,7 @@ class CanvasRenderer:
             self.draw_selection_overlay(painter, target_rect)
 
         self._draw_document_dimensions(painter, target_rect, document)
+        self._draw_ruler_helper(painter, target_rect)
 
     def _draw_tile_preview(self, painter, target_rect, image):
         rows = self.canvas.tile_preview_rows
@@ -352,6 +353,113 @@ class CanvasRenderer:
         height_x = target_rect.left() - height_rect.width() - 5
         height_y = target_rect.bottom()
         painter.drawText(height_x, height_y, height_text)
+
+    def _draw_ruler_helper(self, painter: QPainter, target_rect: QRect) -> None:
+        if not getattr(self.canvas, "ruler_enabled", False):
+            return
+
+        start_doc = getattr(self.canvas, "_ruler_start", None)
+        end_doc = getattr(self.canvas, "_ruler_end", None)
+        if start_doc is None or end_doc is None:
+            return
+
+        centers = self.canvas._ruler_handle_centers()
+        start_center = centers.get("start")
+        end_center = centers.get("end")
+        if start_center is None or end_center is None:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        dark_pen = QPen(QColor(0, 0, 0, 200))
+        dark_pen.setWidth(4)
+        dark_pen.setCapStyle(Qt.RoundCap)
+        dark_pen.setJoinStyle(Qt.RoundJoin)
+        dark_pen.setCosmetic(True)
+        painter.setPen(dark_pen)
+        painter.drawLine(start_center, end_center)
+
+        light_pen = QPen(QColor(255, 255, 255, 220))
+        light_pen.setWidth(2)
+        light_pen.setCapStyle(Qt.RoundCap)
+        light_pen.setJoinStyle(Qt.RoundJoin)
+        light_pen.setCosmetic(True)
+        painter.setPen(light_pen)
+        painter.drawLine(start_center, end_center)
+
+        handle_radius = max(2.0, float(getattr(self.canvas, "_ruler_handle_radius", 8)))
+        hover_name = getattr(self.canvas, "_ruler_handle_hover", None)
+        drag_name = getattr(self.canvas, "_ruler_handle_drag", None)
+
+        for name, center in centers.items():
+            rect = QRectF(
+                center.x() - handle_radius,
+                center.y() - handle_radius,
+                handle_radius * 2,
+                handle_radius * 2,
+            )
+            border_pen = QPen(QColor(0, 0, 0, 220))
+            border_pen.setWidth(2)
+            border_pen.setCosmetic(True)
+            painter.setPen(border_pen)
+
+            is_active = name == hover_name or name == drag_name
+            fill_color = QColor(255, 255, 255, 235)
+            if is_active:
+                fill_color = QColor(255, 214, 170, 235)
+            painter.setBrush(fill_color)
+            painter.drawEllipse(rect)
+
+        dx_doc = end_doc.x() - start_doc.x()
+        dy_doc = end_doc.y() - start_doc.y()
+        distance = math.hypot(dx_doc, dy_doc)
+        if math.isfinite(distance):
+            if math.isclose(distance, round(distance), abs_tol=0.05):
+                distance_text = f"{int(round(distance))} px"
+            else:
+                distance_text = f"{distance:.1f} px"
+        else:
+            distance_text = "0 px"
+
+        mid_point = QPointF(
+            (start_center.x() + end_center.x()) / 2.0,
+            (start_center.y() + end_center.y()) / 2.0,
+        )
+        delta_x = end_center.x() - start_center.x()
+        delta_y = end_center.y() - start_center.y()
+        screen_length = math.hypot(delta_x, delta_y)
+        if screen_length <= 0:
+            normal_x, normal_y = 0.0, -1.0
+        else:
+            normal_x = -delta_y / screen_length
+            normal_y = delta_x / screen_length
+
+        metrics = painter.fontMetrics()
+        text_bounds = metrics.boundingRect(distance_text)
+        padding_x = 8
+        padding_y = 4
+        label_rect = QRectF(
+            0,
+            0,
+            text_bounds.width() + padding_x * 2,
+            text_bounds.height() + padding_y * 2,
+        )
+        offset = handle_radius + label_rect.height() / 2.0 + 6
+        label_center = QPointF(
+            mid_point.x() + normal_x * offset,
+            mid_point.y() + normal_y * offset,
+        )
+        label_rect.moveCenter(label_center)
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 190))
+        painter.drawRoundedRect(label_rect, 4, 4)
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(label_rect, Qt.AlignCenter, distance_text)
+
+        painter.restore()
 
     def draw_grid(self, painter, target_rect):
         if self.canvas.zoom < 2 or not self.canvas.grid_visible:

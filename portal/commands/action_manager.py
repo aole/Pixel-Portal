@@ -183,6 +183,10 @@ class ActionManager:
         self.tile_preview_action.setCheckable(True)
         self.tile_preview_action.toggled.connect(canvas.toggle_tile_preview)
 
+        self.ruler_action = QAction(QIcon("icons/ruler.png"), "Ruler Helper", self.main_window)
+        self.ruler_action.setCheckable(True)
+        self.ruler_action.toggled.connect(canvas.toggle_ruler)
+
     def _build_tool_actions(self):
         """Create actions for selecting and configuring tools."""
         self.circular_brush_action = QAction(QIcon("icons/brush_cirular.png"), "Circular", self.main_window)
