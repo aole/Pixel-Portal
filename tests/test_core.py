@@ -330,6 +330,7 @@ def test_setup_actions(mock_main_window):
     assert action_manager.open_action is not None
     assert action_manager.open_as_key_action is not None
     assert action_manager.save_action is not None
+    assert action_manager.save_as_action is not None
     assert action_manager.load_palette_action is not None
     assert action_manager.save_palette_as_png_action is not None
     assert action_manager.exit_action is not None
@@ -368,6 +369,9 @@ def test_setup_actions(mock_main_window):
 
     action_manager.save_action.trigger()
     mock_main_window.app.document_service.save_document.assert_called_once()
+
+    action_manager.save_as_action.trigger()
+    mock_main_window.app.document_service.save_document_as.assert_called_once()
 
     action_manager.load_palette_action.trigger()
     mock_main_window.load_palette_from_image.assert_called_once()

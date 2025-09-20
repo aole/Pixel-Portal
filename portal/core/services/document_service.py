@@ -103,6 +103,29 @@ class DocumentService:
 
     def save_document(self):
         app = self.app
+        if app is None:
+            return
+
+        document = getattr(app, "document", None)
+        if document is None:
+            return
+
+        file_path = getattr(document, "file_path", None)
+        if not file_path:
+            self.save_document_as()
+            return
+
+        if not self._save_document_to_path(file_path):
+            self.save_document_as()
+            return
+
+        self._finalize_save(file_path)
+
+    def save_document_as(self):
+        app = self.app
+        if app is None:
+            return
+
         file_filters = (
             "Pixel Portal Document (*.aole);;"
             "PNG (*.png);;"
@@ -116,39 +139,70 @@ class DocumentService:
             app.last_directory,
             file_filters,
         )
-        if file_path:
-            app.last_directory = os.path.dirname(file_path)
-            app.config.set('General', 'last_directory', app.last_directory)
+        if not file_path:
+            return
 
-            base_path, extension = os.path.splitext(file_path)
-            extension = extension.lower()
+        normalized_path = self._normalize_save_path(file_path, selected_filter)
+        if not self._save_document_to_path(normalized_path):
+            return
 
-            selected_filter_lower = (selected_filter or "").lower()
+        document = getattr(app, "document", None)
+        if document is not None and hasattr(document, "file_path"):
+            document.file_path = normalized_path
 
-            if "pixel portal document" in selected_filter_lower or extension == ".aole":
-                if extension != ".aole":
-                    file_path = base_path + ".aole"
-                app.document.save_aole(file_path)
-            elif "tiff" in selected_filter_lower or extension in (".tif", ".tiff"):
-                if extension not in (".tif", ".tiff"):
-                    file_path = base_path + ".tiff"
-                app.document.save_tiff(file_path)
-            else:
-                if not extension:
-                    if "jpeg" in selected_filter_lower or "jpg" in selected_filter_lower:
-                        extension = ".jpg"
-                    elif "bmp" in selected_filter_lower:
-                        extension = ".bmp"
-                    else:
-                        extension = ".png"
-                    file_path = base_path + extension
-                image = app.document.render()
-                image.save(file_path)
-            if hasattr(app.document, "file_path"):
-                app.document.file_path = file_path
-            app.is_dirty = False
-            if hasattr(app, "update_main_window_title"):
-                app.update_main_window_title()
+        self._finalize_save(normalized_path)
+
+    def _normalize_save_path(self, file_path: str, selected_filter: str | None) -> str:
+        base_path, extension = os.path.splitext(file_path)
+        extension = extension.lower()
+        selected_filter_lower = (selected_filter or "").lower()
+
+        if "pixel portal document" in selected_filter_lower or extension == ".aole":
+            return base_path + ".aole"
+
+        if "tiff" in selected_filter_lower or extension in (".tif", ".tiff"):
+            return base_path + ".tiff"
+
+        if extension:
+            return file_path
+
+        if "jpeg" in selected_filter_lower or "jpg" in selected_filter_lower:
+            return base_path + ".jpg"
+        if "bmp" in selected_filter_lower:
+            return base_path + ".bmp"
+        return base_path + ".png"
+
+    def _save_document_to_path(self, file_path: str) -> bool:
+        app = self.app
+        if app is None:
+            return False
+
+        document = getattr(app, "document", None)
+        if document is None:
+            return False
+
+        extension = os.path.splitext(file_path)[1].lower()
+        if extension == ".aole":
+            document.save_aole(file_path)
+            return True
+        if extension in (".tif", ".tiff"):
+            document.save_tiff(file_path)
+            return True
+        if extension in (".png", ".jpg", ".jpeg", ".bmp"):
+            image = document.render()
+            return bool(image.save(file_path))
+        return False
+
+    def _finalize_save(self, file_path: str) -> None:
+        app = self.app
+        if app is None:
+            return
+
+        app.last_directory = os.path.dirname(file_path)
+        app.config.set('General', 'last_directory', app.last_directory)
+        app.is_dirty = False
+        if hasattr(app, "update_main_window_title"):
+            app.update_main_window_title()
 
     def export_animation(self):
         app = self.app

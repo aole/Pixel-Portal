@@ -516,12 +516,18 @@ class DocumentController(QObject):
             return
         base_title = self._base_window_title or "Pixel Portal"
         document = self.document
-        file_path = getattr(document, "file_path", None) if document is not None else None
+        display_name = ""
+        if document is not None:
+            file_path = getattr(document, "file_path", None)
+            if file_path:
+                display_name = os.path.basename(str(file_path)) or str(file_path)
+                if self.is_dirty:
+                    display_name = f"{display_name}*"
+            else:
+                display_name = "<unsaved>"
         title = base_title
-        if file_path:
-            display_name = os.path.basename(str(file_path))
-            if display_name:
-                title = f"{base_title} - {display_name}"
+        if display_name:
+            title = f"{base_title} - {display_name}"
         setter = getattr(window, "setWindowTitle", None)
         if not callable(setter):
             return
