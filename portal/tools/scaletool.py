@@ -20,9 +20,11 @@ from portal.tools.basetool import BaseTool
 
 
 class ScaleTool(BaseTool):
-    """Interactive scaling tool that honours pixel-art constraints."""
+    """Interactive scaling helper composed by :class:`TransformTool`."""
 
-    name = "Scale"
+    # ``name`` is ``None`` so discovery skips this helper. The public transform
+    # tool exposes scaling alongside move and rotate.
+    name = None
     icon = "icons/toolscale.png"
     category = "draw"
     scale_changed = Signal(float)

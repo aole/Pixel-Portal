@@ -34,9 +34,9 @@ class CanvasRenderer:
 
         # Explicitly handle rotation preview to override normal document drawing
         if (
-            self.drawing_context.tool == "Rotate"
-            and self.canvas.temp_image
+            self.canvas.temp_image
             and self.canvas.temp_image_replaces_active_layer
+            and self.drawing_context.tool in {"Rotate", "Scale", "Transform"}
         ):
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
@@ -434,7 +434,7 @@ class CanvasRenderer:
             not self.canvas.mouse_over_canvas
             or (active_layer and not active_layer.visible)
             or self.canvas.drawing_context.tool
-            in ["Bucket", "Picker", "Move", "Rotate", "Scale"]
+            in ["Bucket", "Picker", "Move", "Rotate", "Scale", "Transform"]
             or self.canvas.drawing_context.tool.startswith("Select")
             or self.canvas.ctrl_pressed
         ):

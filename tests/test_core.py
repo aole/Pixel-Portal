@@ -747,8 +747,8 @@ def test_add_layer_command(document):
 
 from portal.commands.canvas_input_handler import CanvasInputHandler
 
-def test_ctrl_key_activates_move_tool(app, qtbot):
-    """Test that pressing Ctrl activates the Move tool and releasing it reverts to the previous tool."""
+def test_ctrl_key_activates_transform_tool(app, qtbot):
+    """Test that pressing Ctrl activates the Transform tool and releasing it reverts to the previous tool."""
     # Set initial tool
     app.drawing_context.set_tool("Pen")
     assert app.drawing_context.tool == "Pen"
@@ -766,7 +766,7 @@ def test_ctrl_key_activates_move_tool(app, qtbot):
     mock_event.text.return_value = ""
     handler.keyPressEvent(mock_event)
 
-    assert app.drawing_context.tool == "Move"
+    assert app.drawing_context.tool == "Transform"
     assert app.drawing_context.previous_tool == "Pen"
 
     # Simulate Ctrl release
@@ -775,7 +775,7 @@ def test_ctrl_key_activates_move_tool(app, qtbot):
 
 
 def test_ctrl_key_does_not_override_selection_tool(app):
-    """Ctrl should not switch to the Move tool when a selection tool is active."""
+    """Ctrl should not switch to the Transform tool when a selection tool is active."""
 
     app.drawing_context.set_tool("Select Rectangle")
 

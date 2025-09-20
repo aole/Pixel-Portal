@@ -24,7 +24,7 @@ class CanvasInputHandler:
             if is_select_tool:
                 self._ctrl_forced_move = False
             else:
-                self.drawing_context.set_tool("Move")
+                self.drawing_context.set_tool("Transform")
                 self._ctrl_forced_move = True
 
     def keyReleaseEvent(self, event):

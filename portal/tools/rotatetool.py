@@ -7,10 +7,11 @@ from portal.commands.layer_commands import RotateLayerCommand
 
 
 class RotateTool(BaseTool):
-    """
-    A tool for rotating the layer.
-    """
-    name = "Rotate"
+    """Internal rotate helper used by :class:`TransformTool`."""
+
+    # ``name`` is ``None`` so registry discovery ignores this helper. The
+    # combined transform tool exposes rotation alongside move and scale.
+    name = None
     icon = "icons/toolrotate.png"
     category = "draw"
     angle_changed = Signal(float)
