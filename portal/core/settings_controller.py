@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
@@ -8,6 +9,20 @@ from portal.ui.background import BackgroundImageMode
 
 class SettingsController(QObject):
     """Manages application settings persistence."""
+
+    DEFAULT_GRID_SETTINGS = {
+        "major_visible": True,
+        "minor_visible": True,
+        "major_spacing": 8,
+        "minor_spacing": 1,
+        "major_color": "#64000000",
+        "minor_color": "#64808080",
+    }
+
+    DEFAULT_BACKGROUND_SETTINGS = {
+        "image_mode": BackgroundImageMode.FIT,
+        "image_alpha": 1.0,
+    }
 
     def __init__(self):
         super().__init__()
@@ -19,16 +34,32 @@ class SettingsController(QObject):
 
         if not self.config.has_section('Grid'):
             self.config.add_section('Grid')
-        self.grid_major_visible = self._get_grid_bool('major_visible', True)
-        self.grid_minor_visible = self._get_grid_bool('minor_visible', True)
-        self.grid_major_spacing = self._get_grid_int('major_spacing', 8)
-        self.grid_minor_spacing = self._get_grid_int('minor_spacing', 1)
+        self.grid_major_visible = self._get_grid_bool(
+            'major_visible', self.DEFAULT_GRID_SETTINGS["major_visible"]
+        )
+        self.grid_minor_visible = self._get_grid_bool(
+            'minor_visible', self.DEFAULT_GRID_SETTINGS["minor_visible"]
+        )
+        self.grid_major_spacing = self._get_grid_int(
+            'major_spacing', self.DEFAULT_GRID_SETTINGS["major_spacing"]
+        )
+        self.grid_minor_spacing = self._get_grid_int(
+            'minor_spacing', self.DEFAULT_GRID_SETTINGS["minor_spacing"]
+        )
+        self.grid_major_color = self._get_grid_color(
+            'major_color', self.DEFAULT_GRID_SETTINGS["major_color"]
+        )
+        self.grid_minor_color = self._get_grid_color(
+            'minor_color', self.DEFAULT_GRID_SETTINGS["minor_color"]
+        )
         self._sync_grid_settings_to_config()
 
         if not self.config.has_section('Background'):
             self.config.add_section('Background')
         raw_mode = self.config.get(
-            'Background', 'image_mode', fallback=BackgroundImageMode.FIT.value
+            'Background',
+            'image_mode',
+            fallback=self.DEFAULT_BACKGROUND_SETTINGS["image_mode"].value,
         )
         try:
             self.background_image_mode = BackgroundImageMode(raw_mode)
@@ -38,9 +69,14 @@ class SettingsController(QObject):
         try:
             alpha_value = self.config.getfloat('Background', 'image_alpha')
         except (configparser.NoOptionError, ValueError):
-            alpha_value = 1.0
+            alpha_value = self.DEFAULT_BACKGROUND_SETTINGS["image_alpha"]
         self.background_image_alpha = max(0.0, min(1.0, float(alpha_value)))
         self._sync_background_settings_to_config()
+
+        if not self.config.has_section('Ruler'):
+            self.config.add_section('Ruler')
+        self.ruler_interval = self._get_ruler_int('interval', 8)
+        self._sync_ruler_settings_to_config()
 
     def save_settings(self, ai_settings=None):
         """Persist settings to disk."""
@@ -52,6 +88,7 @@ class SettingsController(QObject):
 
             self._sync_grid_settings_to_config()
             self._sync_background_settings_to_config()
+            self._sync_ruler_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
@@ -75,11 +112,26 @@ class SettingsController(QObject):
         except (configparser.NoOptionError, ValueError):
             return fallback
 
+    def _get_ruler_int(self, option, fallback):
+        try:
+            return max(1, self.config.getint('Ruler', option))
+        except (configparser.NoOptionError, ValueError):
+            return fallback
+
+    def _get_grid_color(self, option, fallback):
+        raw_value = self.config.get('Grid', option, fallback=fallback)
+        color = QColor(raw_value)
+        if not color.isValid():
+            color = QColor(fallback)
+        return color.name(QColor.NameFormat.HexArgb)
+
     def _sync_grid_settings_to_config(self):
         self.config.set('Grid', 'major_visible', str(self.grid_major_visible))
         self.config.set('Grid', 'minor_visible', str(self.grid_minor_visible))
         self.config.set('Grid', 'major_spacing', str(int(self.grid_major_spacing)))
         self.config.set('Grid', 'minor_spacing', str(int(self.grid_minor_spacing)))
+        self.config.set('Grid', 'major_color', self.grid_major_color)
+        self.config.set('Grid', 'minor_color', self.grid_minor_color)
 
     def _sync_background_settings_to_config(self):
         if not self.config.has_section('Background'):
@@ -87,12 +139,19 @@ class SettingsController(QObject):
         self.config.set('Background', 'image_mode', self.background_image_mode.value)
         self.config.set('Background', 'image_alpha', f"{self.background_image_alpha:.3f}")
 
+    def _sync_ruler_settings_to_config(self):
+        if not self.config.has_section('Ruler'):
+            self.config.add_section('Ruler')
+        self.config.set('Ruler', 'interval', str(int(self.ruler_interval)))
+
     def get_grid_settings(self):
         return {
             'major_visible': self.grid_major_visible,
             'minor_visible': self.grid_minor_visible,
             'major_spacing': int(self.grid_major_spacing),
             'minor_spacing': int(self.grid_minor_spacing),
+            'major_color': self.grid_major_color,
+            'minor_color': self.grid_minor_color,
         }
 
     def get_background_settings(self):
@@ -101,6 +160,17 @@ class SettingsController(QObject):
             'image_alpha': self.background_image_alpha,
         }
 
+    def get_ruler_settings(self):
+        return {
+            'interval': int(self.ruler_interval),
+        }
+
+    def get_default_grid_settings(self):
+        return dict(self.DEFAULT_GRID_SETTINGS)
+
+    def get_default_background_settings(self):
+        return dict(self.DEFAULT_BACKGROUND_SETTINGS)
+
     def update_grid_settings(
         self,
         *,
@@ -108,11 +178,21 @@ class SettingsController(QObject):
         major_spacing,
         minor_visible,
         minor_spacing,
+        major_color=None,
+        minor_color=None,
     ):
         self.grid_major_visible = bool(major_visible)
         self.grid_minor_visible = bool(minor_visible)
         self.grid_major_spacing = max(1, int(major_spacing))
         self.grid_minor_spacing = max(1, int(minor_spacing))
+        if major_color is not None:
+            color = QColor(major_color)
+            if color.isValid():
+                self.grid_major_color = color.name(QColor.NameFormat.HexArgb)
+        if minor_color is not None:
+            color = QColor(minor_color)
+            if color.isValid():
+                self.grid_minor_color = color.name(QColor.NameFormat.HexArgb)
         self._sync_grid_settings_to_config()
 
     def update_background_settings(self, *, image_mode=None, image_alpha=None):
@@ -131,3 +211,12 @@ class SettingsController(QObject):
                 alpha_value = self.background_image_alpha
             self.background_image_alpha = max(0.0, min(1.0, alpha_value))
         self._sync_background_settings_to_config()
+
+    def update_ruler_settings(self, *, interval=None):
+        if interval is not None:
+            try:
+                interval_value = int(interval)
+            except (TypeError, ValueError):
+                interval_value = self.ruler_interval
+            self.ruler_interval = max(1, interval_value)
+        self._sync_ruler_settings_to_config()

@@ -1,6 +1,8 @@
 import math
+from dataclasses import dataclass
+from typing import Iterable, List, Optional, Sequence, Tuple
 
-from PySide6.QtCore import QPoint, QRect, QRectF, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -14,6 +16,53 @@ from PySide6.QtGui import (
 
 from portal.core.frame_manager import resolve_active_layer_manager
 from portal.ui.background import BackgroundImageMode
+
+
+@dataclass(frozen=True)
+class _OnionSkinSettings:
+    prev_count: int
+    next_count: int
+    prev_color: Optional[QColor]
+    next_color: Optional[QColor]
+
+    @property
+    def has_previous(self) -> bool:
+        return self.prev_count > 0 and self.prev_color is not None
+
+    @property
+    def has_next(self) -> bool:
+        return self.next_count > 0 and self.next_color is not None
+
+
+@dataclass(frozen=True)
+class _OnionSkinContext:
+    frames: Sequence
+    active_index: int
+    resolved_index: Optional[int]
+    key_indices: Tuple[int, ...]
+
+    @property
+    def active_is_key(self) -> bool:
+        return self.resolved_index is not None and self.resolved_index == self.active_index
+
+    @property
+    def should_overlay_previous_on_top(self) -> bool:
+        return (
+            self.resolved_index is not None
+            and self.resolved_index != self.active_index
+        )
+
+    def iter_keys(self, direction: int) -> Iterable[int]:
+        if direction < 0:
+            for key in reversed(self.key_indices):
+                if key >= self.active_index:
+                    continue
+                yield key
+        else:
+            for key in self.key_indices:
+                if key <= self.active_index:
+                    continue
+                yield key
 
 
 class CanvasRenderer:
@@ -40,6 +89,7 @@ class CanvasRenderer:
         ):
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
+            self._draw_onion_skin_background(final_image, document)
             image_painter = QPainter(final_image)
             layer_manager = resolve_active_layer_manager(document)
             if layer_manager is not None:
@@ -52,6 +102,7 @@ class CanvasRenderer:
                         image_painter.setOpacity(layer.opacity)
                         image_painter.drawImage(0, 0, image_to_draw)
             image_painter.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             image_to_draw_on = final_image
         else:
@@ -69,6 +120,7 @@ class CanvasRenderer:
         self._draw_ai_output_overlay(painter, target_rect)
 
         self._draw_document_dimensions(painter, target_rect, document)
+        self._draw_ruler_helper(painter, target_rect)
 
     def _draw_tile_preview(self, painter, target_rect, image):
         rows = self.canvas.tile_preview_rows
@@ -241,6 +293,8 @@ class CanvasRenderer:
         if layer_manager is None:
             empty_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             empty_image.fill(Qt.transparent)
+            self._draw_onion_skin_background(empty_image, document)
+            self._draw_onion_skin_foreground(empty_image, document)
             painter.drawImage(target_rect, empty_image)
             return empty_image
 
@@ -255,6 +309,7 @@ class CanvasRenderer:
                 QImage.Format_ARGB32,
             )
             final_image.fill(QColor("transparent"))
+            self._draw_onion_skin_background(final_image, document)
             image_painter = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -268,12 +323,14 @@ class CanvasRenderer:
                     image_painter.drawImage(0, 0, image_to_draw)
 
             image_painter.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             return final_image
         else:
             # This path handles the standard document rendering and optional tool previews.
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
+            self._draw_onion_skin_background(final_image, document)
             p = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -302,8 +359,335 @@ class CanvasRenderer:
                         p.drawImage(0, 0, self.canvas.temp_image)
 
             p.end()
+            self._draw_onion_skin_foreground(final_image, document)
             painter.drawImage(target_rect, final_image)
             return final_image
+
+    def _draw_onion_skin_background(self, target: QImage, document) -> None:
+        state = self._resolve_onion_skin_state(document)
+        if state is None:
+            return
+        settings, context = state
+        include_previous = settings.has_previous and not context.should_overlay_previous_on_top
+        include_next = settings.has_next
+        if not include_previous and not include_next:
+            return
+        self._apply_onion_skin(
+            target,
+            document,
+            include_previous=include_previous,
+            include_next=include_next,
+            settings=settings,
+            context=context,
+        )
+
+    def _draw_onion_skin_foreground(self, target: QImage, document) -> None:
+        state = self._resolve_onion_skin_state(document)
+        if state is None:
+            return
+        settings, context = state
+        if not context.should_overlay_previous_on_top or not settings.has_previous:
+            return
+        self._apply_onion_skin(
+            target,
+            document,
+            include_previous=True,
+            include_next=False,
+            settings=settings,
+            context=context,
+        )
+
+    def _apply_onion_skin(
+        self,
+        target: QImage,
+        document,
+        *,
+        include_previous: bool = True,
+        include_next: bool = True,
+        settings: Optional[_OnionSkinSettings] = None,
+        context: Optional[_OnionSkinContext] = None,
+    ) -> None:
+        if not include_previous and not include_next:
+            return
+
+        if settings is None:
+            settings = self._resolve_onion_skin_settings()
+        if settings is None:
+            return
+
+        include_previous = include_previous and settings.has_previous
+        include_next = include_next and settings.has_next
+        if not include_previous and not include_next:
+            return
+
+        if context is None:
+            context = self._build_onion_skin_context(document)
+        if context is None:
+            return
+
+        drawn_indices: set[int] = set()
+        if context.active_is_key:
+            drawn_indices.add(context.active_index)
+
+        previous_images: List[Tuple[int, QImage]] = []
+        next_images: List[Tuple[int, QImage]] = []
+
+        if include_previous and settings.prev_color is not None:
+            previous_images = self._collect_onion_images(
+                context,
+                direction=-1,
+                drawn_indices=drawn_indices,
+                frame_limit=settings.prev_count,
+                tint_color=settings.prev_color,
+            )
+
+        if include_next and settings.next_color is not None:
+            next_images = self._collect_onion_images(
+                context,
+                direction=1,
+                drawn_indices=drawn_indices,
+                frame_limit=settings.next_count,
+                tint_color=settings.next_color,
+            )
+
+        if not previous_images and not next_images:
+            return
+
+        painter = QPainter(target)
+        try:
+            for _, image in previous_images:
+                painter.drawImage(0, 0, image)
+            for _, image in next_images:
+                painter.drawImage(0, 0, image)
+        finally:
+            painter.end()
+
+    def _resolve_onion_skin_state(
+        self, document
+    ) -> Optional[Tuple[_OnionSkinSettings, _OnionSkinContext]]:
+        settings = self._resolve_onion_skin_settings()
+        if settings is None:
+            return None
+
+        context = self._build_onion_skin_context(document)
+        if context is None:
+            return None
+
+        return settings, context
+
+    def _resolve_onion_skin_settings(self) -> Optional[_OnionSkinSettings]:
+        if not getattr(self.canvas, "onion_skin_enabled", False):
+            return None
+
+        prev_count = self._normalize_onion_count(
+            getattr(self.canvas, "onion_skin_prev_frames", 0)
+        )
+        next_count = self._normalize_onion_count(
+            getattr(self.canvas, "onion_skin_next_frames", 0)
+        )
+
+        prev_color: Optional[QColor] = None
+        if prev_count > 0:
+            prev_color = self._normalize_onion_color(
+                getattr(self.canvas, "onion_skin_prev_color", None)
+            )
+            if prev_color is None:
+                prev_count = 0
+
+        next_color: Optional[QColor] = None
+        if next_count > 0:
+            next_color = self._normalize_onion_color(
+                getattr(self.canvas, "onion_skin_next_color", None)
+            )
+            if next_color is None:
+                next_count = 0
+
+        if prev_count <= 0 and next_count <= 0:
+            return None
+
+        return _OnionSkinSettings(prev_count, next_count, prev_color, next_color)
+
+    def _build_onion_skin_context(
+        self, document
+    ) -> Optional[_OnionSkinContext]:
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return None
+
+        frames = getattr(frame_manager, "frames", None)
+        if not frames:
+            return None
+
+        total_frames = len(frames)
+        if total_frames <= 0:
+            return None
+
+        active_raw = getattr(frame_manager, "active_frame_index", 0)
+        try:
+            active_index = int(active_raw)
+        except (TypeError, ValueError):
+            active_index = 0
+        active_index = max(0, min(active_index, total_frames - 1))
+
+        resolved_index: Optional[int] = None
+        if hasattr(frame_manager, "resolve_key_frame_index"):
+            try:
+                resolved_candidate = frame_manager.resolve_key_frame_index(active_index)
+            except (TypeError, ValueError):
+                resolved_candidate = None
+            if resolved_candidate is not None:
+                try:
+                    resolved_index = int(resolved_candidate)
+                except (TypeError, ValueError):
+                    resolved_index = None
+                else:
+                    if resolved_index < 0 or resolved_index >= total_frames:
+                        resolved_index = None
+
+        markers_raw = getattr(frame_manager, "frame_markers", None)
+        normalized_markers: List[int] = []
+        if markers_raw:
+            for marker in markers_raw:
+                try:
+                    normalized = int(marker)
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= normalized < total_frames:
+                    normalized_markers.append(normalized)
+
+        if not normalized_markers:
+            normalized_markers = list(range(total_frames))
+
+        if (
+            resolved_index is not None
+            and 0 <= resolved_index < total_frames
+            and resolved_index not in normalized_markers
+        ):
+            normalized_markers.append(resolved_index)
+
+        normalized_markers = sorted(set(normalized_markers))
+
+        return _OnionSkinContext(
+            frames=frames,
+            active_index=active_index,
+            resolved_index=resolved_index,
+            key_indices=tuple(normalized_markers),
+        )
+
+    @staticmethod
+    def _normalize_onion_count(raw_value) -> int:
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, value)
+
+    @staticmethod
+    def _normalize_onion_color(raw_color) -> Optional[QColor]:
+        if raw_color is None:
+            return None
+
+        if isinstance(raw_color, QColor):
+            color = QColor(raw_color)
+        else:
+            try:
+                color = QColor(raw_color)
+            except TypeError:
+                return None
+
+        if not color.isValid():
+            return None
+
+        return color
+
+    def _collect_onion_images(
+        self,
+        context: _OnionSkinContext,
+        *,
+        direction: int,
+        drawn_indices: set[int],
+        frame_limit: int,
+        tint_color: QColor,
+    ) -> List[Tuple[int, QImage]]:
+        if frame_limit <= 0:
+            return []
+
+        if tint_color.alpha() <= 0:
+            return []
+
+        frames = context.frames
+        total_frames = len(frames)
+        if total_frames <= 0:
+            return []
+
+        images: List[Tuple[int, QImage]] = []
+        step = 0
+        for key_index in context.iter_keys(direction):
+            if key_index in drawn_indices:
+                continue
+            if key_index < 0 or key_index >= total_frames:
+                continue
+
+            frame = frames[key_index]
+            if frame is None:
+                continue
+
+            render_fn = getattr(frame, "render", None)
+            if render_fn is None:
+                continue
+
+            try:
+                source = render_fn()
+            except Exception:
+                continue
+
+            if source is None or source.isNull():
+                continue
+
+            tentative_step = step + 1
+            tint_step_color = self._scaled_onion_color(tint_color, tentative_step)
+            if tint_step_color.alpha() <= 0:
+                continue
+
+            tinted = self._create_tinted_onion_image(source, tint_step_color)
+            if tinted is None or tinted.isNull():
+                continue
+
+            step = tentative_step
+            drawn_indices.add(key_index)
+            images.append((step, tinted))
+            if step >= frame_limit:
+                break
+
+        images.sort(key=lambda item: item[0], reverse=True)
+        return images
+
+    @staticmethod
+    def _create_tinted_onion_image(source: QImage, tint_color: QColor) -> QImage | None:
+        if source is None or source.isNull():
+            return None
+
+        tinted = QImage(source.size(), QImage.Format_ARGB32_Premultiplied)
+        tinted.fill(Qt.transparent)
+        painter = QPainter(tinted)
+        try:
+            painter.drawImage(0, 0, source)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.fillRect(source.rect(), tint_color)
+        finally:
+            painter.end()
+        return tinted
+
+    @staticmethod
+    def _scaled_onion_color(color: QColor, step: int) -> QColor:
+        scaled = QColor(color)
+        if step <= 1:
+            return scaled
+        alpha = scaled.alphaF()
+        alpha /= float(step)
+        alpha = max(0.0, min(1.0, alpha))
+        scaled.setAlphaF(alpha)
+        return scaled
 
     def _draw_border(self, painter, target_rect):
         border_color = self.canvas.palette().color(QPalette.ColorRole.Text)
@@ -390,12 +774,168 @@ class CanvasRenderer:
         height_y = target_rect.bottom()
         painter.drawText(height_x, height_y, height_text)
 
-    def draw_grid(self, painter, target_rect):
-        if self.canvas.zoom < 2 or not self.canvas.grid_visible:
+    def _draw_ruler_helper(self, painter: QPainter, target_rect: QRect) -> None:
+        if not getattr(self.canvas, "ruler_enabled", False):
             return
 
-        major_visible = self.canvas.grid_major_visible and self.canvas.grid_major_spacing > 0
-        minor_visible = self.canvas.grid_minor_visible and self.canvas.grid_minor_spacing > 0
+        start_doc = getattr(self.canvas, "_ruler_start", None)
+        end_doc = getattr(self.canvas, "_ruler_end", None)
+        if start_doc is None or end_doc is None:
+            return
+
+        centers = self.canvas._ruler_handle_centers()
+        start_center = centers.get("start")
+        end_center = centers.get("end")
+        if start_center is None or end_center is None:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        handle_radius = max(2.0, float(getattr(self.canvas, "_ruler_handle_radius", 8)))
+        hover_name = getattr(self.canvas, "_ruler_handle_hover", None)
+        drag_name = getattr(self.canvas, "_ruler_handle_drag", None)
+
+        dark_pen = QPen(QColor(0, 0, 0, 200))
+        dark_pen.setWidth(4)
+        dark_pen.setCapStyle(Qt.RoundCap)
+        dark_pen.setJoinStyle(Qt.RoundJoin)
+        dark_pen.setCosmetic(True)
+        painter.setPen(dark_pen)
+        painter.drawLine(start_center, end_center)
+
+        light_pen = QPen(QColor(255, 255, 255, 220))
+        light_pen.setWidth(2)
+        light_pen.setCapStyle(Qt.RoundCap)
+        light_pen.setJoinStyle(Qt.RoundJoin)
+        light_pen.setCosmetic(True)
+        painter.setPen(light_pen)
+        painter.drawLine(start_center, end_center)
+
+        dx_doc = end_doc.x() - start_doc.x()
+        dy_doc = end_doc.y() - start_doc.y()
+        distance = math.hypot(dx_doc, dy_doc)
+
+        delta_x = end_center.x() - start_center.x()
+        delta_y = end_center.y() - start_center.y()
+        screen_length = math.hypot(delta_x, delta_y)
+        if screen_length <= 0:
+            normal_x, normal_y = 0.0, -1.0
+        else:
+            normal_x = -delta_y / screen_length
+            normal_y = delta_x / screen_length
+
+        def draw_tick_line(center_point: QPointF, length: float) -> None:
+            if length <= 0 or screen_length <= 0:
+                return
+            half = length / 2.0
+            start_tick = QPointF(
+                center_point.x() + normal_x * half,
+                center_point.y() + normal_y * half,
+            )
+            end_tick = QPointF(
+                center_point.x() - normal_x * half,
+                center_point.y() - normal_y * half,
+            )
+            painter.setPen(dark_pen)
+            painter.drawLine(start_tick, end_tick)
+            painter.setPen(light_pen)
+            painter.drawLine(start_tick, end_tick)
+
+        major_tick_length = max(handle_radius * 2.5, 12.0)
+        draw_tick_line(start_center, major_tick_length)
+        draw_tick_line(end_center, major_tick_length)
+
+        interval_value = float(max(1, getattr(self.canvas, "_ruler_interval", 8)))
+        minor_tick_length = max(handle_radius * 1.4, 8.0)
+        if distance > 0 and interval_value > 0 and screen_length > 0:
+            steps = int(distance // interval_value)
+            for step_index in range(1, steps + 1):
+                distance_along = step_index * interval_value
+                if distance_along >= distance:
+                    break
+                ratio = distance_along / distance
+                doc_point = QPointF(
+                    start_doc.x() + dx_doc * ratio,
+                    start_doc.y() + dy_doc * ratio,
+                )
+                interval_center = self.canvas._doc_point_to_canvas(doc_point)
+                draw_tick_line(interval_center, minor_tick_length)
+
+        for name, center in centers.items():
+            rect = QRectF(
+                center.x() - handle_radius,
+                center.y() - handle_radius,
+                handle_radius * 2,
+                handle_radius * 2,
+            )
+            border_pen = QPen(QColor(0, 0, 0, 220))
+            border_pen.setWidth(2)
+            border_pen.setCosmetic(True)
+            painter.setPen(border_pen)
+
+            is_active = name == hover_name or name == drag_name
+            fill_color = QColor(255, 255, 255, 235)
+            if is_active:
+                fill_color = QColor(255, 214, 170, 235)
+            painter.setBrush(fill_color)
+            painter.drawEllipse(rect)
+
+        if math.isfinite(distance):
+            if math.isclose(distance, round(distance), abs_tol=0.05):
+                distance_text = f"{int(round(distance))} px"
+            else:
+                distance_text = f"{distance:.1f} px"
+        else:
+            distance_text = "0 px"
+
+        mid_point = QPointF(
+            (start_center.x() + end_center.x()) / 2.0,
+            (start_center.y() + end_center.y()) / 2.0,
+        )
+
+        metrics = painter.fontMetrics()
+        text_bounds = metrics.boundingRect(distance_text)
+        padding_x = 8
+        padding_y = 4
+        label_rect = QRectF(
+            0,
+            0,
+            text_bounds.width() + padding_x * 2,
+            text_bounds.height() + padding_y * 2,
+        )
+        offset = handle_radius + label_rect.height() / 2.0 + 6
+        label_center = QPointF(
+            mid_point.x() + normal_x * offset,
+            mid_point.y() + normal_y * offset,
+        )
+        label_rect.moveCenter(label_center)
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 190))
+        painter.drawRoundedRect(label_rect, 4, 4)
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(label_rect, Qt.AlignCenter, distance_text)
+
+        painter.restore()
+
+    def draw_grid(self, painter, target_rect):
+        if (
+            self.canvas.zoom < 2
+            or not self.canvas.grid_visible
+            or target_rect.isNull()
+        ):
+            return
+
+        major_visible = (
+            self.canvas.grid_major_visible
+            and self.canvas.grid_major_spacing > 0
+        )
+        minor_visible = (
+            self.canvas.grid_minor_visible
+            and self.canvas.grid_minor_spacing > 0
+        )
 
         if not major_visible and not minor_visible:
             return
@@ -403,66 +943,109 @@ class CanvasRenderer:
         doc_width = self.canvas._document_size.width()
         doc_height = self.canvas._document_size.height()
 
-        # Define colors for grid lines
-        palette = self.canvas.palette()
-        minor_color = palette.color(QPalette.ColorRole.Mid)
-        minor_color.setAlpha(100)
-        major_color = palette.color(QPalette.ColorRole.Text)
-        major_color.setAlpha(100)
+        if doc_width <= 0 or doc_height <= 0:
+            return
 
-        major_spacing = max(1, int(self.canvas.grid_major_spacing))
-        minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
+        zoom = float(self.canvas.zoom)
 
-        # Find the range of document coordinates currently visible on the canvas
         doc_top_left = self.canvas.get_doc_coords(QPoint(0, 0))
         doc_bottom_right = self.canvas.get_doc_coords(
             QPoint(self.canvas.width(), self.canvas.height())
         )
 
-        start_x = max(0, math.floor(doc_top_left.x()))
-        end_x = min(doc_width, math.ceil(doc_bottom_right.x()))
-        start_y = max(0, math.floor(doc_top_left.y()))
-        end_y = min(doc_height, math.ceil(doc_bottom_right.y()))
+        start_x = max(0, int(math.floor(doc_top_left.x())))
+        end_x = min(doc_width, int(math.ceil(doc_bottom_right.x())))
+        start_y = max(0, int(math.floor(doc_top_left.y())))
+        end_y = min(doc_height, int(math.ceil(doc_bottom_right.y())))
 
-        # Draw vertical lines
-        for dx in range(start_x, end_x + 1):
-            canvas_x = target_rect.x() + dx * self.canvas.zoom
-            pen = None
-            if major_visible and dx % major_spacing == 0:
-                pen = major_color
-            elif minor_visible and dx % minor_spacing == 0:
-                pen = minor_color
+        if start_x > end_x or start_y > end_y:
+            return
 
-            if pen is None:
-                continue
+        major_spacing = max(1, int(self.canvas.grid_major_spacing))
+        minor_spacing = max(1, int(self.canvas.grid_minor_spacing))
 
-            painter.setPen(pen)
-            painter.drawLine(
-                round(canvas_x),
-                target_rect.top(),
-                round(canvas_x),
-                target_rect.bottom(),
-            )
+        def create_pen(color_value):
+            color = QColor(color_value)
+            if not color.isValid():
+                return None
+            pen = QPen(color)
+            pen.setCosmetic(True)
+            pen.setWidth(0)
+            return pen
 
-        # Draw horizontal lines
-        for dy in range(start_y, end_y + 1):
-            canvas_y = target_rect.y() + dy * self.canvas.zoom
-            pen = None
-            if major_visible and dy % major_spacing == 0:
-                pen = major_color
-            elif minor_visible and dy % minor_spacing == 0:
-                pen = minor_color
+        major_pen = create_pen(self.canvas.grid_major_color) if major_visible else None
+        minor_pen = create_pen(self.canvas.grid_minor_color) if minor_visible else None
 
-            if pen is None:
-                continue
+        major_visible = major_visible and major_pen is not None
+        minor_visible = minor_visible and minor_pen is not None
 
-            painter.setPen(pen)
-            painter.drawLine(
-                target_rect.left(),
-                round(canvas_y),
-                target_rect.right(),
-                round(canvas_y),
-            )
+        if not major_visible and not minor_visible:
+            return
+
+        left = target_rect.left()
+        right = target_rect.right()
+        top = target_rect.top()
+        bottom = target_rect.bottom()
+
+        def first_multiple(start: int, spacing: int) -> int:
+            remainder = start % spacing
+            return start if remainder == 0 else start + (spacing - remainder)
+
+        if major_visible:
+            first_major_x = first_multiple(start_x, major_spacing)
+            if first_major_x <= end_x:
+                painter.setPen(major_pen)
+                for dx in range(first_major_x, end_x + 1, major_spacing):
+                    canvas_x = left + dx * zoom
+                    painter.drawLine(
+                        int(round(canvas_x)),
+                        top,
+                        int(round(canvas_x)),
+                        bottom,
+                    )
+
+        if minor_visible:
+            first_minor_x = first_multiple(start_x, minor_spacing)
+            if first_minor_x <= end_x:
+                painter.setPen(minor_pen)
+                for dx in range(first_minor_x, end_x + 1, minor_spacing):
+                    if major_visible and dx % major_spacing == 0:
+                        continue
+                    canvas_x = left + dx * zoom
+                    painter.drawLine(
+                        int(round(canvas_x)),
+                        top,
+                        int(round(canvas_x)),
+                        bottom,
+                    )
+
+        if major_visible:
+            first_major_y = first_multiple(start_y, major_spacing)
+            if first_major_y <= end_y:
+                painter.setPen(major_pen)
+                for dy in range(first_major_y, end_y + 1, major_spacing):
+                    canvas_y = top + dy * zoom
+                    painter.drawLine(
+                        left,
+                        int(round(canvas_y)),
+                        right,
+                        int(round(canvas_y)),
+                    )
+
+        if minor_visible:
+            first_minor_y = first_multiple(start_y, minor_spacing)
+            if first_minor_y <= end_y:
+                painter.setPen(minor_pen)
+                for dy in range(first_minor_y, end_y + 1, minor_spacing):
+                    if major_visible and dy % major_spacing == 0:
+                        continue
+                    canvas_y = top + dy * zoom
+                    painter.drawLine(
+                        left,
+                        int(round(canvas_y)),
+                        right,
+                        int(round(canvas_y)),
+                    )
 
     def draw_cursor(self, painter, target_rect, doc_image):
         layer_manager = resolve_active_layer_manager(self.canvas.document)

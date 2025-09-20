@@ -71,6 +71,8 @@ class ToolBarBuilder:
 
         self.top_toolbar.addSeparator()
 
+        self.top_toolbar.addAction(self.action_manager.ruler_action)
+
         self.action_manager.grid_action.triggered.connect(self.main_window.canvas.toggle_grid)
         self.top_toolbar.addAction(self.action_manager.grid_action)
 
