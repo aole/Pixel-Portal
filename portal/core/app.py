@@ -1,7 +1,7 @@
 import os
 from typing import Iterable, Optional
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QRect
 
 from portal.core.document_controller import DocumentController, BackgroundRemovalScope
 from portal.core.settings_controller import SettingsController
@@ -21,6 +21,7 @@ class App(QObject):
     crop_to_selection_triggered = Signal()
     clear_layer_triggered = Signal()
     exit_triggered = Signal()
+    ai_output_rect_changed = Signal(QRect)
 
     def __init__(self, document_service=None, clipboard_service=None):
         super().__init__()
@@ -32,6 +33,9 @@ class App(QObject):
         )
         self.document_controller.undo_stack_changed.connect(self.undo_stack_changed.emit)
         self.document_controller.document_changed.connect(self.document_changed.emit)
+        self.document_controller.ai_output_rect_changed.connect(
+            self.ai_output_rect_changed.emit
+        )
 
         self.scripting_api = ScriptingAPI(self)
 
@@ -133,6 +137,12 @@ class App(QObject):
 
     def set_auto_key_enabled(self, enabled: bool) -> None:
         self.document_controller.set_auto_key_enabled(enabled)
+
+    def get_ai_output_rect(self) -> QRect | None:
+        return self.document_controller.get_ai_output_rect()
+
+    def set_ai_output_rect(self, rect: QRect | None) -> None:
+        self.document_controller.set_ai_output_rect(rect)
 
     @property
     def playback_total_frames(self) -> int:

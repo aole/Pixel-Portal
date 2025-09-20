@@ -138,8 +138,14 @@ class AIPanel(QWidget):
         self.output_size_label.setObjectName("ai-output-dimensions-label")
         self.layout.addWidget(self.output_size_label)
 
+        self.edit_output_button = QPushButton("Edit Output Area")
+        self.edit_output_button.setCheckable(True)
+        self.edit_output_button.toggled.connect(self.toggle_output_editing)
+        self.layout.addWidget(self.edit_output_button)
+
         self.model_combo.currentTextChanged.connect(self.update_dimension_labels)
         self.app.document_changed.connect(self.update_dimension_labels)
+        self.app.ai_output_rect_changed.connect(self.update_dimension_labels)
         self.update_dimension_labels()
 
         # --- Background Removal ---
@@ -254,17 +260,30 @@ class AIPanel(QWidget):
         else:
             self.native_render_label.setText("Native Render Size: —")
 
-        document = getattr(self.app, "document", None)
-        if document:
-            doc_width = getattr(document, "width", None)
-            doc_height = getattr(document, "height", None)
-            if doc_width is not None and doc_height is not None:
-                self.output_size_label.setText(
-                    f"Output Size: {doc_width} × {doc_height}px"
-                )
-                return
+        rect = None
+        if hasattr(self.app, "get_ai_output_rect"):
+            rect = self.app.get_ai_output_rect()
 
-        self.output_size_label.setText("Output Size: —")
+        if rect is not None:
+            rect_width = max(1, int(rect.width()))
+            rect_height = max(1, int(rect.height()))
+            self.output_size_label.setText(
+                f"Output Size: {rect_width} × {rect_height}px"
+            )
+        else:
+            document = getattr(self.app, "document", None)
+            if document:
+                doc_width = getattr(document, "width", None)
+                doc_height = getattr(document, "height", None)
+                if doc_width is not None and doc_height is not None:
+                    self.output_size_label.setText(
+                        f"Output Size: {doc_width} × {doc_height}px"
+                    )
+                    return
+            self.output_size_label.setText("Output Size: —")
+
+        if not self.edit_output_button.isEnabled():
+            self.edit_output_button.setEnabled(True)
 
 
     def start_generation(self, mode: GenerationMode):
@@ -284,7 +303,17 @@ class AIPanel(QWidget):
 
         input_image = None
         mask_image = None
-        original_size = (self.app.document.width, self.app.document.height)
+        output_rect = None
+        if hasattr(self.app, "get_ai_output_rect"):
+            output_rect = self.app.get_ai_output_rect()
+
+        if output_rect is not None:
+            original_size = (
+                max(1, int(output_rect.width())),
+                max(1, int(output_rect.height())),
+            )
+        else:
+            original_size = (self.app.document.width, self.app.document.height)
 
         model_name = self.model_combo.currentText()
 
@@ -334,6 +363,18 @@ class AIPanel(QWidget):
         self.thread.generation_failed.connect(self.on_generation_failed)
         self.thread.generation_step.connect(self.on_generation_step)
         self.thread.start()
+
+    def toggle_output_editing(self, enabled: bool):
+        canvas = getattr(getattr(self.app, "main_window", None), "canvas", None)
+        if canvas is None:
+            # Reset the button if the canvas is unavailable
+            if enabled:
+                self.edit_output_button.blockSignals(True)
+                self.edit_output_button.setChecked(False)
+                self.edit_output_button.blockSignals(False)
+            return
+
+        canvas.enable_ai_output_editing(enabled)
 
     def on_generation_step(self, image):
         if isinstance(image, Image.Image):
