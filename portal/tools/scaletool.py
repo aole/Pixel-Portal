@@ -20,9 +20,11 @@ from portal.tools.basetool import BaseTool
 
 
 class ScaleTool(BaseTool):
-    """Interactive scaling tool that honours pixel-art constraints."""
+    """Interactive scaling helper composed by :class:`TransformTool`."""
 
-    name = "Scale"
+    # ``name`` is ``None`` so discovery skips this helper. The public transform
+    # tool exposes scaling alongside move and rotate.
+    name = None
     icon = "icons/toolscale.png"
     category = "draw"
     scale_changed = Signal(float)
@@ -243,6 +245,15 @@ class ScaleTool(BaseTool):
         self._current_pivot_doc = None
         self._bounds_dirty = True
         self._update_cursor()
+        self.canvas.update()
+
+    # ------------------------------------------------------------------
+    def refresh_handles_from_document(self) -> None:
+        """Sync handle geometry with the latest selection or layer bounds."""
+
+        self._drag_base_edge_rect_doc = None
+        self._current_pivot_doc = None
+        self._refresh_base_rect()
         self.canvas.update()
 
     # ------------------------------------------------------------------

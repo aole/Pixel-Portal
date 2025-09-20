@@ -12,7 +12,9 @@ from portal.core.command import CompositeCommand, MoveCommand
 
 
 class MoveTool(BaseTool):
-    name = "Move"
+    # ``name`` is ``None`` so the tool is not auto-registered. The public
+    # transform tool composes this helper and exposes the combined gizmos.
+    name = None
     icon = "icons/toolmove.png"
     shortcut = "m"
     category = "draw"

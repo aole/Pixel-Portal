@@ -68,6 +68,8 @@ class CanvasInputHandler:
             if self._is_selection_tool_active():
                 self._clear_forced_tool(Qt.Key_Control)
             else:
+                self.drawing_context.set_tool("Transform")
+                self._ctrl_forced_move = True
                 self._force_tool(Qt.Key_Control, "Move")
 
     def keyReleaseEvent(self, event):

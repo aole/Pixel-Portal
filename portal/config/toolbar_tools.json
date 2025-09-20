@@ -29,24 +29,10 @@
       ]
     },
     {
-      "name": "Move",
+      "name": "Transform",
       "icon": "icons/toolmove.png",
       "tools": [
-        {"name": "Move", "icon": "icons/toolmove.png"}
-      ]
-    },
-    {
-      "name": "Rotate",
-      "icon": "icons/toolrotate.png",
-      "tools": [
-        {"name": "Rotate", "icon": "icons/toolrotate.png"}
-      ]
-    },
-    {
-      "name": "Scale",
-      "icon": "icons/toolscale.png",
-      "tools": [
-        {"name": "Scale", "icon": "icons/toolscale.png"}
+        {"name": "Transform", "icon": "icons/toolmove.png"}
       ]
     },
     {

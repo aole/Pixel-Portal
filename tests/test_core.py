@@ -749,6 +749,62 @@ def test_add_layer_command(document):
     assert len(document.layer_manager.layers) == initial_layer_count
 
 
+from portal.commands.canvas_input_handler import CanvasInputHandler
+
+def test_ctrl_key_activates_transform_tool(app, qtbot):
+    """Test that pressing Ctrl activates the Transform tool and releasing it reverts to the previous tool."""
+    # Set initial tool
+    app.drawing_context.set_tool("Pen")
+    assert app.drawing_context.tool == "Pen"
+
+    # Mock a canvas to instantiate the handler
+    mock_canvas = MagicMock()
+    mock_canvas.drawing_context = app.drawing_context
+    mock_canvas.tools = {}
+    mock_canvas.current_tool = None
+    handler = CanvasInputHandler(mock_canvas)
+
+    # Simulate Ctrl press
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Control
+    mock_event.text.return_value = ""
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Transform"
+    assert app.drawing_context.previous_tool == "Pen"
+
+    # Simulate Ctrl release
+    handler.keyReleaseEvent(mock_event)
+    assert app.drawing_context.tool == "Pen"
+
+
+def test_ctrl_key_does_not_override_selection_tool(app):
+    """Ctrl should not switch to the Transform tool when a selection tool is active."""
+
+    app.drawing_context.set_tool("Select Rectangle")
+
+    dummy_canvas = SimpleNamespace(
+        drawing_context=app.drawing_context,
+        tools={},
+        selection_shape=None,
+        _document_size=None,
+    )
+    dummy_canvas.current_tool = SelectRectangleTool(dummy_canvas)
+
+    handler = CanvasInputHandler(dummy_canvas)
+
+    mock_event = MagicMock()
+    mock_event.key.return_value = Qt.Key_Control
+    mock_event.text.return_value = ""
+
+    handler.keyPressEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
+
+    handler.keyReleaseEvent(mock_event)
+
+    assert app.drawing_context.tool == "Select Rectangle"
+
 
 def test_add_command():
     """Test that a command is added to the undo stack and that the redo stack is cleared."""
