@@ -1,6 +1,8 @@
 import json
 import math
 import os
+from pathlib import Path
+from typing import Callable, Iterable
 
 from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
@@ -10,79 +12,89 @@ from portal.core.document import Document
 
 
 class DocumentService:
+    """High level operations for loading, saving, and exporting documents."""
+
+    _OPEN_FILE_FILTERS: tuple[str, ...] = (
+        "Pixel Portal Document (*.aole)",
+        "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff)",
+        "Image Files (*.png *.jpg *.bmp)",
+        "TIFF Files (*.tif *.tiff)",
+    )
+
+    _SAVE_FILE_FILTERS: tuple[str, ...] = (
+        "Pixel Portal Document (*.aole)",
+        "PNG (*.png)",
+        "JPEG (*.jpg *.jpeg)",
+        "Bitmap (*.bmp)",
+        "TIFF (*.tif *.tiff)",
+    )
+
+    _FILTER_EXTENSION_HINTS: tuple[tuple[str, str], ...] = (
+        ("pixel portal document", ".aole"),
+        ("aole", ".aole"),
+        ("tiff", ".tiff"),
+        ("tif", ".tiff"),
+        ("jpeg", ".jpg"),
+        ("jpg", ".jpg"),
+        ("png", ".png"),
+        ("bmp", ".bmp"),
+    )
+
+    _RASTER_EXTENSIONS: frozenset[str] = frozenset({
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+    })
+
+    _ARCHIVE_SAVE_HANDLERS: dict[str, Callable[[Document, str], None]] = {
+        ".aole": Document.save_aole,
+        ".tif": Document.save_tiff,
+        ".tiff": Document.save_tiff,
+    }
+
     def __init__(self, app=None):
         self.app = app
 
     def open_document(self):
         app = self.app
+        if app is None:
+            return
         if not app.check_for_unsaved_changes():
             return
 
-        file_filters = (
-            "Pixel Portal Document (*.aole);;"
-            "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff);;"
-            "Image Files (*.png *.jpg *.bmp);;"
-            "TIFF Files (*.tif *.tiff)"
-        )
         file_path, selected_filter = QFileDialog.getOpenFileName(
-            None,
+            self._dialog_parent(),
             "Open Document",
             app.last_directory,
-            file_filters,
+            self._build_filter_string(self._OPEN_FILE_FILTERS),
         )
-        if file_path:
-            app.last_directory = os.path.dirname(file_path)
-            app.config.set('General', 'last_directory', app.last_directory)
+        if not file_path:
+            return
 
-            extension = os.path.splitext(file_path)[1].lower()
-            selected_filter_lower = (selected_filter or "").lower()
-            if not extension:
-                if "pixel portal document" in selected_filter_lower:
-                    extension = ".aole"
-                elif "tiff" in selected_filter_lower:
-                    extension = ".tiff"
+        extension_hint = self._extract_extension_hint(selected_filter)
+        document = self._load_document_from_path(file_path, extension_hint)
+        if document is None:
+            self._show_message(
+                QMessageBox.Warning,
+                "Unable to open the selected document.",
+                "The file appears to be corrupted or in an unsupported format.",
+            )
+            return
 
-            try:
-                if extension == ".aole":
-                    document = Document.load_aole(file_path)
-                elif extension in ('.tif', '.tiff'):
-                    document = Document.load_tiff(file_path)
-                else:
-                    image = QImage(file_path)
-                    if image.isNull():
-                        return
-                    document = Document(image.width(), image.height())
-                    document.layer_manager.layers[0].image = image
-                document.file_path = file_path
-            except (ValueError, OSError, json.JSONDecodeError):
-                message_box = QMessageBox()
-                message_box.setText("Unable to open the selected document.")
-                message_box.setInformativeText("The file appears to be corrupted or in an unsupported format.")
-                message_box.setIcon(QMessageBox.Warning)
-                message_box.exec()
-                return
-
-            app.attach_document(document)
-            app.undo_manager.clear()
-            app.is_dirty = False
-            app.undo_stack_changed.emit()
-            app.document_changed.emit()
-            if app.main_window:
-                app.main_window.canvas.set_initial_zoom()
-            if hasattr(app, "update_main_window_title"):
-                app.update_main_window_title()
+        self._attach_opened_document(document, file_path)
 
     def open_as_key(self):
         app = self.app
         if app is None:
             return
 
-        document = getattr(app, "document", None)
+        _app, document = self._require_document()
         if document is None:
             return
 
         file_path, _ = QFileDialog.getOpenFileName(
-            None,
+            self._dialog_parent(),
             "Open Image as Key",
             app.last_directory,
             "Image Files (*.png *.jpg *.bmp *.tif *.tiff);;All Files (*)",
@@ -94,19 +106,14 @@ class DocumentService:
         if image.isNull():
             return
 
-        app.last_directory = os.path.dirname(file_path)
-        app.config.set('General', 'last_directory', app.last_directory)
+        self._update_last_directory(file_path)
 
         paste_key = getattr(app, "paste_key_from_image", None)
         if callable(paste_key):
             paste_key(image)
 
     def save_document(self):
-        app = self.app
-        if app is None:
-            return
-
-        document = getattr(app, "document", None)
+        app, document = self._require_document()
         if document is None:
             return
 
@@ -115,94 +122,219 @@ class DocumentService:
             self.save_document_as()
             return
 
-        if not self._save_document_to_path(file_path):
+        if not self._save_document_to_path(document, file_path):
             self.save_document_as()
             return
 
-        self._finalize_save(file_path)
+        self._finalize_save(document, file_path)
 
     def save_document_as(self):
-        app = self.app
-        if app is None:
+        app, document = self._require_document()
+        if document is None:
             return
 
-        file_filters = (
-            "Pixel Portal Document (*.aole);;"
-            "PNG (*.png);;"
-            "JPEG (*.jpg *.jpeg);;"
-            "Bitmap (*.bmp);;"
-            "TIFF (*.tif *.tiff)"
-        )
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            None,
+            self._dialog_parent(),
             "Save Document",
             app.last_directory,
-            file_filters,
+            self._build_filter_string(self._SAVE_FILE_FILTERS),
         )
         if not file_path:
             return
 
         normalized_path = self._normalize_save_path(file_path, selected_filter)
-        if not self._save_document_to_path(normalized_path):
+        if not self._save_document_to_path(document, normalized_path):
             return
 
-        document = getattr(app, "document", None)
-        if document is not None and hasattr(document, "file_path"):
-            document.file_path = normalized_path
-
-        self._finalize_save(normalized_path)
+        document.file_path = normalized_path
+        self._finalize_save(document, normalized_path)
 
     def _normalize_save_path(self, file_path: str, selected_filter: str | None) -> str:
-        base_path, extension = os.path.splitext(file_path)
-        extension = extension.lower()
-        selected_filter_lower = (selected_filter or "").lower()
+        base_path = Path(file_path)
+        extension = base_path.suffix.lower()
+        if extension in self._ARCHIVE_SAVE_HANDLERS or extension in self._RASTER_EXTENSIONS:
+            return str(base_path.with_suffix(extension or base_path.suffix))
 
-        if "pixel portal document" in selected_filter_lower or extension == ".aole":
-            return base_path + ".aole"
+        filter_extension = self._extract_extension_hint(selected_filter)
+        if filter_extension:
+            extension = filter_extension
 
-        if "tiff" in selected_filter_lower or extension in (".tif", ".tiff"):
-            return base_path + ".tiff"
+        if not extension:
+            extension = ".png"
 
-        if extension:
-            return file_path
+        if extension == ".jpeg":
+            extension = ".jpg"
 
-        if "jpeg" in selected_filter_lower or "jpg" in selected_filter_lower:
-            return base_path + ".jpg"
-        if "bmp" in selected_filter_lower:
-            return base_path + ".bmp"
-        return base_path + ".png"
+        return str(base_path.with_suffix(extension))
 
-    def _save_document_to_path(self, file_path: str) -> bool:
-        app = self.app
-        if app is None:
-            return False
-
-        document = getattr(app, "document", None)
-        if document is None:
-            return False
-
-        extension = os.path.splitext(file_path)[1].lower()
-        if extension == ".aole":
-            document.save_aole(file_path)
+    def _save_document_to_path(self, document: Document, file_path: str) -> bool:
+        extension = Path(file_path).suffix.lower()
+        handler = self._ARCHIVE_SAVE_HANDLERS.get(extension)
+        if handler is not None:
+            try:
+                handler(document, file_path)
+            except (OSError, ValueError, RuntimeError) as exc:
+                self._show_message(
+                    QMessageBox.Critical,
+                    "Failed to save document.",
+                    str(exc),
+                )
+                return False
             return True
-        if extension in (".tif", ".tiff"):
-            document.save_tiff(file_path)
-            return True
-        if extension in (".png", ".jpg", ".jpeg", ".bmp"):
+
+        if extension in self._RASTER_EXTENSIONS:
             image = document.render()
-            return bool(image.save(file_path))
+            if image.isNull():
+                self._show_message(
+                    QMessageBox.Critical,
+                    "Failed to save document.",
+                    "The document could not be rendered for saving.",
+                )
+                return False
+            if image.save(file_path):
+                return True
+            self._show_message(
+                QMessageBox.Critical,
+                "Failed to save document.",
+                "Qt was unable to write the image to disk.",
+            )
+            return False
+
+        self._show_message(
+            QMessageBox.Critical,
+            "Unsupported file type.",
+            f"Pixel Portal cannot save files with the '{extension or 'unknown'}' extension.",
+        )
         return False
 
-    def _finalize_save(self, file_path: str) -> None:
+    def _finalize_save(self, document: Document, file_path: str) -> None:
+        app = self.app
+        if document is not None:
+            document.file_path = file_path
+
+        self._update_last_directory(file_path)
+
+        if app is None:
+            return
+
+        setattr(app, "is_dirty", False)
+        updater = getattr(app, "update_main_window_title", None)
+        if callable(updater):
+            updater()
+
+    @staticmethod
+    def _build_filter_string(filters: Iterable[str]) -> str:
+        return ";;".join(filters)
+
+    def _extract_extension_hint(self, selected_filter: str | None) -> str | None:
+        if not selected_filter:
+            return None
+        lowered = selected_filter.lower()
+        for token, extension in self._FILTER_EXTENSION_HINTS:
+            if token in lowered:
+                return extension
+        return None
+
+    def _load_document_from_path(
+        self, file_path: str, extension_hint: str | None
+    ) -> Document | None:
+        extension = (extension_hint or Path(file_path).suffix).lower()
+        try:
+            if extension == ".aole":
+                return Document.load_aole(file_path)
+            if extension in {".tif", ".tiff"}:
+                return Document.load_tiff(file_path)
+        except (ValueError, OSError, json.JSONDecodeError):
+            return None
+
+        image = QImage(file_path)
+        if image.isNull():
+            return None
+
+        document = Document(image.width(), image.height())
+        document.layer_manager.layers[0].image = image
+        return document
+
+    def _attach_opened_document(self, document: Document, file_path: str) -> None:
+        app = self.app
+        document.file_path = file_path
+        self._update_last_directory(file_path)
+
+        if app is None:
+            return
+
+        attach = getattr(app, "attach_document", None)
+        if callable(attach):
+            attach(document)
+
+        undo_manager = getattr(app, "undo_manager", None)
+        if hasattr(undo_manager, "clear"):
+            undo_manager.clear()
+
+        if hasattr(app, "is_dirty"):
+            app.is_dirty = False
+
+        for signal_name in ("undo_stack_changed", "document_changed"):
+            signal = getattr(app, signal_name, None)
+            if hasattr(signal, "emit"):
+                signal.emit()
+
+        main_window = getattr(app, "main_window", None)
+        canvas = getattr(main_window, "canvas", None) if main_window else None
+        if hasattr(canvas, "set_initial_zoom"):
+            canvas.set_initial_zoom()
+
+        updater = getattr(app, "update_main_window_title", None)
+        if callable(updater):
+            updater()
+
+    def _require_document(self) -> tuple[object | None, Document | None]:
+        app = self.app
+        document = getattr(app, "document", None) if app is not None else None
+        return app, document
+
+    def _dialog_parent(self):
+        app = self.app
+        return getattr(app, "main_window", None) if app is not None else None
+
+    def _update_last_directory(self, reference_path: str) -> None:
         app = self.app
         if app is None:
             return
 
-        app.last_directory = os.path.dirname(file_path)
-        app.config.set('General', 'last_directory', app.last_directory)
-        app.is_dirty = False
-        if hasattr(app, "update_main_window_title"):
-            app.update_main_window_title()
+        directory = os.path.dirname(reference_path)
+        if not directory:
+            return
+
+        try:
+            app.last_directory = directory
+        except AttributeError:
+            return
+
+        config = getattr(app, "config", None)
+        if config is None:
+            return
+
+        try:
+            has_section = getattr(config, "has_section", None)
+            if callable(has_section) and not config.has_section('General'):
+                config.add_section('General')
+            config.set('General', 'last_directory', directory)
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+    def _show_message(
+        self,
+        icon: QMessageBox.Icon,
+        text: str,
+        informative_text: str = "",
+    ) -> None:
+        message_box = QMessageBox(self._dialog_parent())
+        message_box.setIcon(icon)
+        message_box.setText(text)
+        if informative_text:
+            message_box.setInformativeText(informative_text)
+        message_box.exec()
 
     def export_animation(self):
         app = self.app
@@ -257,10 +389,7 @@ class DocumentService:
             file_path = base_path + extension
         format_name = format_map[extension]
 
-        export_directory = os.path.dirname(file_path)
-        if export_directory:
-            app.last_directory = export_directory
-            app.config.set("General", "last_directory", app.last_directory)
+        self._update_last_directory(file_path)
 
         main_window = getattr(app, "main_window", None)
         total_frames = None
