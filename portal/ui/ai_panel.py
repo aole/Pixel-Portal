@@ -35,6 +35,7 @@ class GenerationThread(QThread):
         image,
         prompt,
         original_size,
+        generation_size,
         num_inference_steps,
         guidance_scale,
         strength,
@@ -48,6 +49,7 @@ class GenerationThread(QThread):
         self.mask_image = mask_image
         self.prompt = prompt
         self.original_size = original_size
+        self.generation_size = generation_size
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.strength = strength
@@ -74,6 +76,7 @@ class GenerationThread(QThread):
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
                         remove_background=self.remove_background,
+                        generation_size=self.generation_size,
                     )
                 else:
                     generated_image = self.generator.image_to_image(
@@ -85,11 +88,13 @@ class GenerationThread(QThread):
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
                         remove_background=self.remove_background,
+                        generation_size=self.generation_size,
                     )
             else:
                 generated_image = self.generator.prompt_to_image(
                     self.prompt,
                     original_size=self.original_size,
+                    generation_size=self.generation_size,
                     num_inference_steps=self.num_inference_steps,
                     guidance_scale=self.guidance_scale,
                     step_callback=step_callback,
@@ -276,12 +281,6 @@ class AIPanel(QWidget):
         if model_name is None and self.model_combo is not None:
             model_name = self.model_combo.currentText()
 
-        native_size = None
-        if model_name:
-            native_size = self._normalize_dimensions(
-                self.image_generator.get_generation_size(model_name)
-            )
-
         output_size = None
         if hasattr(self.app, "get_ai_output_rect"):
             rect = self.app.get_ai_output_rect()
@@ -296,6 +295,14 @@ class AIPanel(QWidget):
                 output_size = self._normalize_dimensions(
                     (getattr(document, "width", None), getattr(document, "height", None))
                 )
+
+        native_size = None
+        if model_name:
+            generation_size = self.image_generator.calculate_generation_size(
+                model_name,
+                output_size,
+            )
+            native_size = self._normalize_dimensions(generation_size)
 
         return native_size, output_size
 
@@ -335,9 +342,15 @@ class AIPanel(QWidget):
         model_name = self.model_combo.currentText() if self.model_combo else None
         native_size, output_size = self._resolve_generation_dimensions(model_name)
 
-        original_size = output_size or native_size
-        if original_size is None:
-            original_size = (512, 512)
+        generation_size = native_size
+        if generation_size is None and model_name:
+            generation_size = self._normalize_dimensions(
+                self.image_generator.get_generation_size(model_name)
+            )
+        if generation_size is None:
+            generation_size = (512, 512)
+
+        original_size = output_size or native_size or generation_size
 
         if not model_name:
             QMessageBox.warning(self, "Warning", "No AI model selected.")
@@ -382,6 +395,7 @@ class AIPanel(QWidget):
             input_image,
             prompt,
             original_size,
+            generation_size,
             num_inference_steps,
             guidance_scale,
             strength,

@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from datetime import datetime
 
@@ -18,6 +19,12 @@ except Exception:  # ImportError or runtime errors such as missing onnxruntime
     rembg_remove = None
 
 REMBG_AVAILABLE = rembg_remove is not None
+
+
+MODEL_DIMENSION_CONSTRAINTS: dict[str, tuple[int, int]] = {
+    "SD1.5": (512, 1024),
+    "SDXL": (768, 1526),
+}
 
 
 class ImageGenerator:
@@ -85,6 +92,128 @@ class ImageGenerator:
             return None
 
         return None
+
+    @staticmethod
+    def _calculate_step_for_ratio(ratio_width: int, ratio_height: int, multiple: int = 8) -> int:
+        """Return the multiplier that keeps the ratio while snapping to `multiple`."""
+
+        ratio_width = max(1, int(ratio_width))
+        ratio_height = max(1, int(ratio_height))
+        gcd_width = math.gcd(ratio_width, multiple)
+        gcd_height = math.gcd(ratio_height, multiple)
+        width_factor = multiple // gcd_width
+        height_factor = multiple // gcd_height
+        return math.lcm(width_factor, height_factor)
+
+    def _get_model_constraints(self, model_name: str | None) -> tuple[int, int] | None:
+        if not model_name:
+            return None
+        key = str(model_name).upper()
+        return MODEL_DIMENSION_CONSTRAINTS.get(key)
+
+    def calculate_generation_size(
+        self,
+        model_name: str,
+        desired_size: tuple[int, int] | None,
+    ) -> tuple[int, int]:
+        """Derive a native generation size that respects model limits."""
+
+        fallback = self.get_generation_size(model_name)
+        normalized = self._coerce_size(desired_size)
+        if normalized is None:
+            return fallback
+
+        width, height = normalized
+        width = max(1, int(width))
+        height = max(1, int(height))
+
+        constraints = self._get_model_constraints(model_name)
+        if constraints:
+            min_dim, max_dim = constraints
+        else:
+            min_dim = max_dim = None
+
+        width_f = float(width)
+        height_f = float(height)
+        scale = 1.0
+
+        if min_dim:
+            smallest = min(width_f, height_f)
+            if smallest < min_dim:
+                scale = min_dim / smallest
+
+        scaled_width = width_f * scale
+        scaled_height = height_f * scale
+
+        allow_exceed_max = False
+        if max_dim:
+            largest = max(scaled_width, scaled_height)
+            if largest > max_dim:
+                reduction = max_dim / largest
+                candidate_width = scaled_width * reduction
+                candidate_height = scaled_height * reduction
+                if min_dim and min(candidate_width, candidate_height) < min_dim - 1e-6:
+                    allow_exceed_max = True
+                else:
+                    scale *= reduction
+                    scaled_width = candidate_width
+                    scaled_height = candidate_height
+
+        target_width = scaled_width
+        target_height = scaled_height
+
+        ratio_gcd = math.gcd(width, height)
+        ratio_width = width // ratio_gcd
+        ratio_height = height // ratio_gcd
+
+        step = self._calculate_step_for_ratio(ratio_width, ratio_height)
+        width_unit = ratio_width * step
+        height_unit = ratio_height * step
+        if width_unit <= 0 or height_unit <= 0:
+            return fallback
+
+        min_unit = min(width_unit, height_unit)
+        max_unit = max(width_unit, height_unit)
+
+        required_multiplier = 1
+        if min_dim:
+            required_multiplier = max(required_multiplier, math.ceil(min_dim / min_unit))
+
+        approx_multiplier = target_width / width_unit if width_unit else target_height / height_unit
+        if approx_multiplier <= 0:
+            approx_multiplier = float(required_multiplier)
+
+        multiplier = max(required_multiplier, int(round(approx_multiplier)))
+        if multiplier < 1:
+            multiplier = required_multiplier
+
+        enforce_max = bool(max_dim) and not allow_exceed_max
+        if enforce_max:
+            max_multiplier = max(1, math.floor(max_dim / max_unit))
+            if max_multiplier < required_multiplier:
+                multiplier = required_multiplier
+                enforce_max = False
+            elif multiplier > max_multiplier:
+                multiplier = max_multiplier
+
+        final_width = width_unit * multiplier
+        final_height = height_unit * multiplier
+
+        if min_dim and min(final_width, final_height) < min_dim:
+            multiplier = max(multiplier, math.ceil(min_dim / min_unit))
+            final_width = width_unit * multiplier
+            final_height = height_unit * multiplier
+
+        if enforce_max and max_dim and max(final_width, final_height) > max_dim:
+            max_multiplier = max(1, math.floor(max_dim / max_unit))
+            multiplier = max_multiplier
+            final_width = width_unit * multiplier
+            final_height = height_unit * multiplier
+
+        if final_width <= 0 or final_height <= 0:
+            return fallback
+
+        return int(final_width), int(final_height)
 
     def get_generation_size(self, model_name: str) -> tuple[int, int] | None:
         """Return the size (width, height) the model generates before resizing."""
@@ -200,6 +329,7 @@ class ImageGenerator:
         self,
         prompt: str,
         original_size: tuple[int, int],
+        generation_size: tuple[int, int] | None = None,
         num_inference_steps: int | None = None,
         guidance_scale: float | None = None,
         output_dir: str | None = None,
@@ -226,13 +356,21 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        coerced_generation_size = self._coerce_size(generation_size)
+        if coerced_generation_size is None:
+            coerced_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
+        pipe_kwargs = {
+            "prompt": prompt,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if coerced_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = coerced_generation_size
+
         print("Generating image from prompt...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
@@ -254,6 +392,7 @@ class ImageGenerator:
         step_callback=None,
         cancellation_token=None,
         remove_background: bool = False,
+        generation_size: tuple[int, int] | None = None,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -276,21 +415,29 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        target_generation_size = self._coerce_size(generation_size)
+        if target_generation_size is None:
+            target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
         print("Preparing input image for img2img...")
-        if isinstance(self.pipe, StableDiffusionXLImg2ImgPipeline):
-            model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-        else:
-            model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
+        model_input_image = input_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
 
         print("Generating image from image...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            image=model_input_image,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        pipe_kwargs = {
+            "prompt": prompt,
+            "image": model_input_image,
+            "strength": strength,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if target_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
@@ -313,6 +460,7 @@ class ImageGenerator:
         step_callback=None,
         cancellation_token=None,
         remove_background: bool = False,
+        generation_size: tuple[int, int] | None = None,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -335,24 +483,34 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        target_generation_size = self._coerce_size(generation_size)
+        if target_generation_size is None:
+            target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
         print("Preparing input image for inpainting...")
-        if isinstance(self.pipe, StableDiffusionXLInpaintPipeline):
-            model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-            mask_image = mask_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-        else:
-            model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
-            mask_image = mask_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
+        model_input_image = input_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
+        mask_image = mask_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
 
         print("Generating image from image...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            image=model_input_image,
-            mask_image=mask_image,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        pipe_kwargs = {
+            "prompt": prompt,
+            "image": model_input_image,
+            "mask_image": mask_image,
+            "strength": strength,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if target_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
