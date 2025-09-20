@@ -218,6 +218,7 @@ def select_lasso_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(64, 64)
+    mock_canvas.zoom = 1.0
     mock_canvas.selection_changed = Mock()
     mock_document = Mock()
     image = QImage(64, 64, QImage.Format_ARGB32)
@@ -362,6 +363,7 @@ def select_rectangle_tool(qtbot):
     mock_canvas = Mock()
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(64, 64)
+    mock_canvas.zoom = 1.0
     tool = SelectRectangleTool(mock_canvas)
     tool.moving_selection = False
     return tool
