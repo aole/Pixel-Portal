@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtGui import QCursor
 
 from .basetool import BaseTool
@@ -88,12 +88,32 @@ class TransformTool(BaseTool):
         if event.button() != Qt.LeftButton:
             return
 
-        if self._active_operation == "rotate":
+        operation = self._active_operation
+
+        if operation == "rotate":
+            previous_mode = self._rotate_tool.drag_mode
             self._rotate_tool.mouseReleaseEvent(event, doc_pos)
-        elif self._active_operation == "scale":
+            if previous_mode == "rotate":
+                self._scale_tool.refresh_handles_from_document()
+                self._rotate_tool.refresh_pivot_from_document()
+        elif operation == "scale":
             self._scale_tool.mouseReleaseEvent(event, doc_pos)
+            self._scale_tool.refresh_handles_from_document()
+            self._rotate_tool.refresh_pivot_from_document()
+        elif operation == "move":
+            start_point = QPoint(self._move_tool.start_point)
+            self._move_tool.mouseReleaseEvent(event, doc_pos)
+            delta = doc_pos - start_point
+            if self._rotate_tool.pivot_is_manual():
+                if not delta.isNull():
+                    self._rotate_tool.offset_pivot(delta)
+            else:
+                self._rotate_tool.refresh_pivot_from_document()
+            self._scale_tool.refresh_handles_from_document()
         else:
             self._move_tool.mouseReleaseEvent(event, doc_pos)
+            self._scale_tool.refresh_handles_from_document()
+            self._rotate_tool.refresh_pivot_from_document()
 
         self._active_operation = None
 

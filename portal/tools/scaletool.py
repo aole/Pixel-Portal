@@ -248,6 +248,15 @@ class ScaleTool(BaseTool):
         self.canvas.update()
 
     # ------------------------------------------------------------------
+    def refresh_handles_from_document(self) -> None:
+        """Sync handle geometry with the latest selection or layer bounds."""
+
+        self._drag_base_edge_rect_doc = None
+        self._current_pivot_doc = None
+        self._refresh_base_rect()
+        self.canvas.update()
+
+    # ------------------------------------------------------------------
     def _update_preview_image(self):
         if self.original_image is None:
             return

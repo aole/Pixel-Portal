@@ -27,6 +27,7 @@ class RotateTool(BaseTool):
         self.pivot_doc = QPoint(0, 0)
         self.original_selection_shape: QPainterPath | None = None
         self.selection_source_image: QImage | None = None
+        self._manual_pivot = False
         self._layer_tracker = ActiveLayerTracker(canvas)
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
@@ -41,6 +42,7 @@ class RotateTool(BaseTool):
         self.angle = 0.0
         self._layer_tracker.reset()
         self._sync_active_layer(force=True)
+        self._manual_pivot = False
 
     def calculate_default_pivot_doc(self) -> QPoint:
         if self.canvas.selection_shape:
@@ -86,6 +88,7 @@ class RotateTool(BaseTool):
         new_pivot = self.calculate_default_pivot_doc()
         pivot_changed = new_pivot != self.pivot_doc
         self.pivot_doc = new_pivot
+        self._manual_pivot = False
 
         angle_changed = not math.isclose(self.angle, 0.0, abs_tol=1e-6)
         self.angle = 0.0
@@ -112,6 +115,7 @@ class RotateTool(BaseTool):
         if new_pivot != self.pivot_doc:
             self.pivot_doc = new_pivot
             self.canvas.update()
+        self._manual_pivot = False
 
     def _update_hover_state_from_point(
         self, canvas_pos: QPointF, *, request_update: bool = True
@@ -266,6 +270,7 @@ class RotateTool(BaseTool):
             self.canvas.update()
         elif self.drag_mode == 'pivot':
             self.pivot_doc = doc_pos
+            self._manual_pivot = True
             self.canvas.update()
 
     def mouseReleaseEvent(self, event, doc_pos):
@@ -343,6 +348,7 @@ class RotateTool(BaseTool):
         self.is_hovering_handle = False
         self.is_hovering_center = False
         self._layer_tracker.reset()
+        self._manual_pivot = False
 
     def draw_overlay(self, painter):
         self._sync_active_layer(suppress_update=True)
@@ -374,3 +380,30 @@ class RotateTool(BaseTool):
         painter.drawEllipse(handle_pos, 6, 6)
 
         painter.restore()
+
+    # ------------------------------------------------------------------
+    def refresh_pivot_from_document(self) -> None:
+        """Recompute the default pivot when no manual pivot is set."""
+
+        if self._manual_pivot:
+            return
+
+        new_pivot = self.calculate_default_pivot_doc()
+        if new_pivot != self.pivot_doc:
+            self.pivot_doc = new_pivot
+            self.canvas.update()
+
+    # ------------------------------------------------------------------
+    def pivot_is_manual(self) -> bool:
+        return self._manual_pivot
+
+    # ------------------------------------------------------------------
+    def offset_pivot(self, delta: QPoint) -> None:
+        if delta.isNull():
+            return
+
+        self.pivot_doc = QPoint(
+            self.pivot_doc.x() + delta.x(),
+            self.pivot_doc.y() + delta.y(),
+        )
+        self.canvas.update()
