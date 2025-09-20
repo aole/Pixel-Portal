@@ -1,4 +1,5 @@
 import math
+from typing import List, Tuple
 
 from PySide6.QtCore import QPoint, QRect, QRectF, Qt
 from PySide6.QtGui import (
@@ -40,6 +41,7 @@ class CanvasRenderer:
         ):
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(QColor("transparent"))
+            self._apply_onion_skin(final_image, document)
             image_painter = QPainter(final_image)
             layer_manager = resolve_active_layer_manager(document)
             if layer_manager is not None:
@@ -240,6 +242,7 @@ class CanvasRenderer:
         if layer_manager is None:
             empty_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             empty_image.fill(Qt.transparent)
+            self._apply_onion_skin(empty_image, document)
             painter.drawImage(target_rect, empty_image)
             return empty_image
 
@@ -254,6 +257,7 @@ class CanvasRenderer:
                 QImage.Format_ARGB32,
             )
             final_image.fill(QColor("transparent"))
+            self._apply_onion_skin(final_image, document)
             image_painter = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -273,6 +277,7 @@ class CanvasRenderer:
             # This path handles the standard document rendering and optional tool previews.
             final_image = QImage(document.width, document.height, QImage.Format_ARGB32)
             final_image.fill(Qt.transparent)
+            self._apply_onion_skin(final_image, document)
             p = QPainter(final_image)
 
             active_layer = layer_manager.active_layer
@@ -303,6 +308,132 @@ class CanvasRenderer:
             p.end()
             painter.drawImage(target_rect, final_image)
             return final_image
+
+    def _apply_onion_skin(self, target: QImage, document) -> None:
+        if not getattr(self.canvas, "onion_skin_enabled", False):
+            return
+
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return
+
+        frames = getattr(frame_manager, "frames", None)
+        if not frames:
+            return
+
+        frame_count = len(frames)
+        active_index = getattr(frame_manager, "active_frame_index", 0)
+        if active_index is None:
+            active_index = 0
+        if frame_count <= 0:
+            return
+        active_index = max(0, min(active_index, frame_count - 1))
+
+        resolved_active = frame_manager.resolve_key_frame_index(active_index)
+        drawn_indices: set[int] = set()
+        if resolved_active is not None and 0 <= resolved_active < frame_count:
+            drawn_indices.add(resolved_active)
+
+        previous_images = self._collect_onion_images(
+            frame_manager,
+            active_index,
+            -1,
+            drawn_indices,
+            self.canvas.onion_skin_prev_frames,
+            self.canvas.onion_skin_prev_color,
+        )
+        next_images = self._collect_onion_images(
+            frame_manager,
+            active_index,
+            1,
+            drawn_indices,
+            self.canvas.onion_skin_next_frames,
+            self.canvas.onion_skin_next_color,
+        )
+
+        if not previous_images and not next_images:
+            return
+
+        painter = QPainter(target)
+        try:
+            for _, image in previous_images:
+                painter.drawImage(0, 0, image)
+            for _, image in next_images:
+                painter.drawImage(0, 0, image)
+        finally:
+            painter.end()
+
+    def _collect_onion_images(
+        self,
+        frame_manager,
+        active_index: int,
+        direction: int,
+        drawn_indices: set[int],
+        frame_count: int,
+        base_color: QColor,
+    ) -> List[Tuple[int, QImage]]:
+        if frame_count <= 0:
+            return []
+
+        total_frames = len(getattr(frame_manager, "frames", []))
+        if total_frames <= 0:
+            return []
+
+        images: List[Tuple[int, QImage]] = []
+        for step in range(1, frame_count + 1):
+            candidate = active_index + direction * step
+            if candidate < 0 or candidate >= total_frames:
+                continue
+
+            resolved = frame_manager.resolve_key_frame_index(candidate)
+            if resolved is None or resolved in drawn_indices:
+                continue
+            if resolved < 0 or resolved >= total_frames:
+                continue
+
+            frame = frame_manager.frames[resolved]
+            source = frame.render()
+            if source is None or source.isNull():
+                continue
+
+            tint_color = self._scaled_onion_color(base_color, step)
+            if tint_color.alpha() <= 0:
+                continue
+
+            tinted = self._create_tinted_onion_image(source, tint_color)
+            if tinted is None or tinted.isNull():
+                continue
+
+            drawn_indices.add(resolved)
+            images.append((step, tinted))
+
+        images.sort(key=lambda item: item[0], reverse=True)
+        return images
+
+    @staticmethod
+    def _create_tinted_onion_image(source: QImage, tint_color: QColor) -> QImage | None:
+        if source is None or source.isNull():
+            return None
+
+        tinted = QImage(source.size(), QImage.Format_ARGB32)
+        tinted.fill(Qt.transparent)
+        painter = QPainter(tinted)
+        painter.drawImage(0, 0, source)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(source.rect(), tint_color)
+        painter.end()
+        return tinted
+
+    @staticmethod
+    def _scaled_onion_color(color: QColor, step: int) -> QColor:
+        scaled = QColor(color)
+        if step <= 1:
+            return scaled
+        alpha = scaled.alphaF()
+        alpha /= float(step)
+        alpha = max(0.0, min(1.0, alpha))
+        scaled.setAlphaF(alpha)
+        return scaled
 
     def _draw_border(self, painter, target_rect):
         border_color = self.canvas.palette().color(QPalette.ColorRole.Text)

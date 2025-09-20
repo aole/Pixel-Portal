@@ -86,6 +86,13 @@ class Canvas(QWidget):
         # Properties that were previously in App
         self._document_size = QSize(64, 64)
 
+        # Onion skin settings
+        self.onion_skin_enabled = False
+        self.onion_skin_prev_frames = 1
+        self.onion_skin_next_frames = 1
+        self.onion_skin_prev_color = QColor(255, 96, 96, 168)
+        self.onion_skin_next_color = QColor(96, 160, 255, 168)
+
         tool_defs = get_tools()
         self.tools = {tool_def["name"]: tool_def["class"](self) for tool_def in tool_defs}
         for tool in self.tools.values():
@@ -577,6 +584,40 @@ class Canvas(QWidget):
         self.document = document
         self.set_document_size(QSize(document.width, document.height))
         self.update()
+
+    def set_onion_skin_enabled(self, enabled: bool) -> None:
+        normalized = bool(enabled)
+        if normalized == self.onion_skin_enabled:
+            return
+        self.onion_skin_enabled = normalized
+        self.update()
+
+    def set_onion_skin_range(
+        self, *, previous: int | None = None, next: int | None = None
+    ) -> None:
+        changed = False
+        if previous is not None:
+            try:
+                normalized_prev = int(previous)
+            except (TypeError, ValueError):
+                normalized_prev = self.onion_skin_prev_frames
+            else:
+                normalized_prev = max(0, normalized_prev)
+            if normalized_prev != self.onion_skin_prev_frames:
+                self.onion_skin_prev_frames = normalized_prev
+                changed = True
+        if next is not None:
+            try:
+                normalized_next = int(next)
+            except (TypeError, ValueError):
+                normalized_next = self.onion_skin_next_frames
+            else:
+                normalized_next = max(0, normalized_next)
+            if normalized_next != self.onion_skin_next_frames:
+                self.onion_skin_next_frames = normalized_next
+                changed = True
+        if changed:
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)

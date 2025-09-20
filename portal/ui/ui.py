@@ -159,6 +159,45 @@ class MainWindow(QMainWindow):
         self.timeline_autokey_button.setChecked(self.app.is_auto_key_enabled())
         timeline_header_layout.addWidget(self.timeline_autokey_button)
 
+        self.timeline_onion_button = QToolButton(self.timeline_panel)
+        self.timeline_onion_button.setCheckable(True)
+        self.timeline_onion_button.setText("Onion")
+        self.timeline_onion_button.setToolTip("Toggle onion skinning preview")
+        self.timeline_onion_button.setAutoRaise(True)
+        self.timeline_onion_button.setFocusPolicy(Qt.NoFocus)
+        self.timeline_onion_button.setChecked(self.canvas.onion_skin_enabled)
+        if self.canvas.onion_skin_enabled:
+            self.timeline_onion_button.setText("Onion On")
+        timeline_header_layout.addWidget(self.timeline_onion_button)
+
+        self.timeline_onion_settings = QWidget(self.timeline_panel)
+        onion_settings_layout = QHBoxLayout(self.timeline_onion_settings)
+        onion_settings_layout.setContentsMargins(0, 0, 0, 0)
+        onion_settings_layout.setSpacing(4)
+
+        onion_prev_label = QLabel("Prev", self.timeline_onion_settings)
+        onion_prev_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        onion_settings_layout.addWidget(onion_prev_label)
+
+        self.timeline_onion_prev_spinbox = QSpinBox(self.timeline_onion_settings)
+        self.timeline_onion_prev_spinbox.setRange(0, 6)
+        self.timeline_onion_prev_spinbox.setFixedWidth(48)
+        self.timeline_onion_prev_spinbox.setValue(self.canvas.onion_skin_prev_frames)
+        onion_settings_layout.addWidget(self.timeline_onion_prev_spinbox)
+
+        onion_next_label = QLabel("Next", self.timeline_onion_settings)
+        onion_next_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        onion_settings_layout.addWidget(onion_next_label)
+
+        self.timeline_onion_next_spinbox = QSpinBox(self.timeline_onion_settings)
+        self.timeline_onion_next_spinbox.setRange(0, 6)
+        self.timeline_onion_next_spinbox.setFixedWidth(48)
+        self.timeline_onion_next_spinbox.setValue(self.canvas.onion_skin_next_frames)
+        onion_settings_layout.addWidget(self.timeline_onion_next_spinbox)
+
+        self.timeline_onion_settings.setEnabled(self.canvas.onion_skin_enabled)
+        timeline_header_layout.addWidget(self.timeline_onion_settings)
+
         self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
         self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
         self.timeline_current_frame_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -207,6 +246,13 @@ class MainWindow(QMainWindow):
         self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
+        self.timeline_onion_button.toggled.connect(self._on_timeline_onion_toggled)
+        self.timeline_onion_prev_spinbox.valueChanged.connect(
+            self._on_timeline_onion_prev_changed
+        )
+        self.timeline_onion_next_spinbox.valueChanged.connect(
+            self._on_timeline_onion_next_changed
+        )
 
         self.play_pause_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
         self.play_pause_shortcut.setAutoRepeat(False)
@@ -401,6 +447,20 @@ class MainWindow(QMainWindow):
         )
         self.timeline_autokey_button.setIcon(icon)
         self.app.set_auto_key_enabled(enabled)
+
+    @Slot(bool)
+    def _on_timeline_onion_toggled(self, enabled: bool) -> None:
+        self.canvas.set_onion_skin_enabled(enabled)
+        self.timeline_onion_settings.setEnabled(enabled)
+        self.timeline_onion_button.setText("Onion On" if enabled else "Onion")
+
+    @Slot(int)
+    def _on_timeline_onion_prev_changed(self, value: int) -> None:
+        self.canvas.set_onion_skin_range(previous=value)
+
+    @Slot(int)
+    def _on_timeline_onion_next_changed(self, value: int) -> None:
+        self.canvas.set_onion_skin_range(next=value)
 
     @Slot(bool)
     def _on_timeline_play_toggled(self, checked: bool) -> None:
