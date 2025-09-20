@@ -112,7 +112,15 @@ class SettingsDialog(QDialog):
         self.background_alpha_slider.valueChanged.connect(
             self._update_background_alpha_label
         )
-        canvas_layout.setRowStretch(2, 1)
+
+        canvas_layout.addWidget(QLabel("Ruler interval", canvas_tab), 2, 0)
+        self.ruler_interval_spinbox = QSpinBox(canvas_tab)
+        self.ruler_interval_spinbox.setMinimum(1)
+        self.ruler_interval_spinbox.setMaximum(4096)
+        canvas_layout.addWidget(self.ruler_interval_spinbox, 2, 1)
+        canvas_layout.addWidget(QLabel("px", canvas_tab), 2, 2)
+
+        canvas_layout.setRowStretch(3, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
@@ -143,6 +151,14 @@ class SettingsDialog(QDialog):
         self.background_alpha_slider.setValue(clamped_percent)
         self._update_background_alpha_label(clamped_percent)
 
+        ruler_settings = self.settings_controller.get_ruler_settings()
+        interval = ruler_settings.get("interval", 8)
+        try:
+            interval_value = int(interval)
+        except (TypeError, ValueError):
+            interval_value = 8
+        self.ruler_interval_spinbox.setValue(max(1, interval_value))
+
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
         if isinstance(data, BackgroundImageMode):
@@ -167,12 +183,18 @@ class SettingsDialog(QDialog):
             "minor_spacing": self.minor_grid_spacing.value(),
         }
 
+    def get_ruler_settings(self):
+        return {
+            "interval": self.ruler_interval_spinbox.value(),
+        }
+
     def _apply_settings(self):
         self.settings_controller.update_grid_settings(**self.get_grid_settings())
         self.settings_controller.update_background_settings(
             image_mode=self.get_background_image_mode(),
             image_alpha=self.get_background_image_alpha(),
         )
+        self.settings_controller.update_ruler_settings(**self.get_ruler_settings())
 
     def _apply_and_emit(self):
         self._apply_settings()

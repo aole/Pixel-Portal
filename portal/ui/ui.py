@@ -250,6 +250,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_container)
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
+        self.apply_ruler_settings_from_settings()
         self._current_document_id = id(self.app.document)
 
         # Connect DrawingContext signals to Canvas slots
@@ -794,6 +795,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def apply_settings_from_controller(self):
         self.apply_grid_settings_from_settings()
+        self.apply_ruler_settings_from_settings()
 
         controller = self.app.settings_controller
         new_alpha = controller.background_image_alpha
@@ -810,6 +812,7 @@ class MainWindow(QMainWindow):
             image_mode=self.canvas.background_mode,
             image_alpha=self.canvas.background_image_alpha,
         )
+        controller.update_ruler_settings(**self.canvas.get_ruler_settings())
         self.app.save_settings()
 
     def open_background_color_dialog(self):
@@ -877,6 +880,11 @@ class MainWindow(QMainWindow):
 
     def apply_grid_settings_from_settings(self):
         self.canvas.set_grid_settings(**self.app.settings_controller.get_grid_settings())
+
+    def apply_ruler_settings_from_settings(self):
+        self.canvas.set_ruler_settings(
+            **self.app.settings_controller.get_ruler_settings()
+        )
 
     def get_palette(self):
         return [button.color for button in self.main_palette_buttons]

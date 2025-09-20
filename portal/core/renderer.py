@@ -372,6 +372,10 @@ class CanvasRenderer:
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
 
+        handle_radius = max(2.0, float(getattr(self.canvas, "_ruler_handle_radius", 8)))
+        hover_name = getattr(self.canvas, "_ruler_handle_hover", None)
+        drag_name = getattr(self.canvas, "_ruler_handle_drag", None)
+
         dark_pen = QPen(QColor(0, 0, 0, 200))
         dark_pen.setWidth(4)
         dark_pen.setCapStyle(Qt.RoundCap)
@@ -388,9 +392,55 @@ class CanvasRenderer:
         painter.setPen(light_pen)
         painter.drawLine(start_center, end_center)
 
-        handle_radius = max(2.0, float(getattr(self.canvas, "_ruler_handle_radius", 8)))
-        hover_name = getattr(self.canvas, "_ruler_handle_hover", None)
-        drag_name = getattr(self.canvas, "_ruler_handle_drag", None)
+        dx_doc = end_doc.x() - start_doc.x()
+        dy_doc = end_doc.y() - start_doc.y()
+        distance = math.hypot(dx_doc, dy_doc)
+
+        delta_x = end_center.x() - start_center.x()
+        delta_y = end_center.y() - start_center.y()
+        screen_length = math.hypot(delta_x, delta_y)
+        if screen_length <= 0:
+            normal_x, normal_y = 0.0, -1.0
+        else:
+            normal_x = -delta_y / screen_length
+            normal_y = delta_x / screen_length
+
+        def draw_tick_line(center_point: QPointF, length: float) -> None:
+            if length <= 0 or screen_length <= 0:
+                return
+            half = length / 2.0
+            start_tick = QPointF(
+                center_point.x() + normal_x * half,
+                center_point.y() + normal_y * half,
+            )
+            end_tick = QPointF(
+                center_point.x() - normal_x * half,
+                center_point.y() - normal_y * half,
+            )
+            painter.setPen(dark_pen)
+            painter.drawLine(start_tick, end_tick)
+            painter.setPen(light_pen)
+            painter.drawLine(start_tick, end_tick)
+
+        major_tick_length = max(handle_radius * 2.5, 12.0)
+        draw_tick_line(start_center, major_tick_length)
+        draw_tick_line(end_center, major_tick_length)
+
+        interval_value = float(max(1, getattr(self.canvas, "_ruler_interval", 8)))
+        minor_tick_length = max(handle_radius * 1.4, 8.0)
+        if distance > 0 and interval_value > 0 and screen_length > 0:
+            steps = int(distance // interval_value)
+            for step_index in range(1, steps + 1):
+                distance_along = step_index * interval_value
+                if distance_along >= distance:
+                    break
+                ratio = distance_along / distance
+                doc_point = QPointF(
+                    start_doc.x() + dx_doc * ratio,
+                    start_doc.y() + dy_doc * ratio,
+                )
+                interval_center = self.canvas._doc_point_to_canvas(doc_point)
+                draw_tick_line(interval_center, minor_tick_length)
 
         for name, center in centers.items():
             rect = QRectF(
@@ -411,9 +461,6 @@ class CanvasRenderer:
             painter.setBrush(fill_color)
             painter.drawEllipse(rect)
 
-        dx_doc = end_doc.x() - start_doc.x()
-        dy_doc = end_doc.y() - start_doc.y()
-        distance = math.hypot(dx_doc, dy_doc)
         if math.isfinite(distance):
             if math.isclose(distance, round(distance), abs_tol=0.05):
                 distance_text = f"{int(round(distance))} px"
@@ -426,14 +473,6 @@ class CanvasRenderer:
             (start_center.x() + end_center.x()) / 2.0,
             (start_center.y() + end_center.y()) / 2.0,
         )
-        delta_x = end_center.x() - start_center.x()
-        delta_y = end_center.y() - start_center.y()
-        screen_length = math.hypot(delta_x, delta_y)
-        if screen_length <= 0:
-            normal_x, normal_y = 0.0, -1.0
-        else:
-            normal_x = -delta_y / screen_length
-            normal_y = delta_x / screen_length
 
         metrics = painter.fontMetrics()
         text_bounds = metrics.boundingRect(distance_text)

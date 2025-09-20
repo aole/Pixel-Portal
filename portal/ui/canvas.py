@@ -108,6 +108,7 @@ class Canvas(QWidget):
         self._ruler_handle_hover: str | None = None
         self._ruler_handle_drag: str | None = None
         self._ruler_handle_prev_cursor: QCursor | None = None
+        self._ruler_interval = 8
 
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
@@ -467,8 +468,16 @@ class Canvas(QWidget):
                 return name
         return None
 
-    def _update_ruler_handle_from_position(self, pos: QPoint, handle: str) -> None:
-        point = self._clamp_point_to_document(self._canvas_pos_to_doc_point(pos))
+    def _update_ruler_handle_from_position(
+        self,
+        pos: QPoint,
+        handle: str,
+        modifiers: Qt.KeyboardModifiers = Qt.NoModifier,
+    ) -> None:
+        point = self._canvas_pos_to_doc_point(pos)
+        if modifiers & Qt.ControlModifier:
+            point = QPointF(round(point.x()), round(point.y()))
+        point = self._clamp_point_to_document(point)
         if handle == "start":
             self._ruler_start = point
         elif handle == "end":
@@ -530,7 +539,9 @@ class Canvas(QWidget):
                     if self._ruler_handle_prev_cursor is None:
                         self._ruler_handle_prev_cursor = self.cursor()
                     self.setCursor(Qt.ClosedHandCursor)
-                    self._update_ruler_handle_from_position(pos, handle)
+                    self._update_ruler_handle_from_position(
+                        pos, handle, modifiers=event.modifiers()
+                    )
                     return
 
             handle = self._hit_test_mirror_handles(pos)
@@ -549,7 +560,11 @@ class Canvas(QWidget):
         pos = event.position().toPoint()
         if self._ruler_handle_drag is not None:
             self._update_cursor_position_from_event(event)
-            self._update_ruler_handle_from_position(pos, self._ruler_handle_drag)
+            self._update_ruler_handle_from_position(
+                pos,
+                self._ruler_handle_drag,
+                modifiers=event.modifiers(),
+            )
             return
 
         if self._mirror_handle_drag is not None:
@@ -589,7 +604,11 @@ class Canvas(QWidget):
             and event.button() == Qt.LeftButton
         ):
             self._update_cursor_position_from_event(event)
-            self._update_ruler_handle_from_position(pos, self._ruler_handle_drag)
+            self._update_ruler_handle_from_position(
+                pos,
+                self._ruler_handle_drag,
+                modifiers=event.modifiers(),
+            )
             self._ruler_handle_drag = None
             handle = None
             if self.ruler_enabled:
@@ -817,6 +836,22 @@ class Canvas(QWidget):
         if minor_spacing is not None:
             self.grid_minor_spacing = max(1, int(minor_spacing))
         self.update()
+
+    def set_ruler_settings(self, *, interval=None):
+        if interval is None:
+            return
+        try:
+            interval_value = int(interval)
+        except (TypeError, ValueError):
+            return
+        interval_value = max(1, interval_value)
+        if interval_value == self._ruler_interval:
+            return
+        self._ruler_interval = interval_value
+        self.update()
+
+    def get_ruler_settings(self):
+        return {"interval": int(self._ruler_interval)}
 
     def get_grid_settings(self):
         return {
