@@ -1,3 +1,4 @@
+import json
 import math
 import os
 
@@ -184,8 +185,8 @@ class DocumentService:
             fps_value = 12.0
 
         rendered_cache = {}
-        pil_frames = []
         frame_count = len(frame_manager.frames)
+        frame_chunks: list[dict[str, object]] = []
         for playback_index in range(total_frames):
             resolved_index = frame_manager.resolve_key_frame_index(playback_index)
             if resolved_index is None:
@@ -197,9 +198,12 @@ class DocumentService:
                 qimage = frame_manager.frames[resolved_index].render()
                 cached = Document.qimage_to_pil(qimage).convert("RGBA")
                 rendered_cache[resolved_index] = cached
-            pil_frames.append(cached.copy())
+            if frame_chunks and frame_chunks[-1]["index"] == resolved_index:
+                frame_chunks[-1]["repeats"] = int(frame_chunks[-1]["repeats"]) + 1
+            else:
+                frame_chunks.append({"index": resolved_index, "image": cached, "repeats": 1})
 
-        if not pil_frames:
+        if not frame_chunks:
             QMessageBox.information(
                 parent,
                 "Export Animation",
@@ -208,16 +212,19 @@ class DocumentService:
             return
 
         frame_duration = max(1, int(round(1000.0 / fps_value)))
+        frame_repeats = [int(chunk["repeats"]) for chunk in frame_chunks]
+        durations = [max(1, repeat * frame_duration) for repeat in frame_repeats]
 
         def _frame_has_transparency(image):
             alpha = image.getchannel("A")
             extrema = alpha.getextrema()
             return extrema is not None and extrema[0] < 255
 
-        needs_transparency = any(_frame_has_transparency(frame) for frame in pil_frames)
+        needs_transparency = any(
+            _frame_has_transparency(chunk["image"]) for chunk in frame_chunks
+        )
 
-        base_frame = pil_frames[0]
-        append_frames = [frame.copy() for frame in pil_frames[1:]]
+        converted_frames = []
         gif_transparency_index = None
 
         if format_name == "GIF":
@@ -244,14 +251,16 @@ class DocumentService:
 
                 return pal_frame, transparency_index
 
-            base_frame, gif_transparency_index = _convert_frame_to_gif(base_frame)
-            converted_append_frames = []
-            for frame in append_frames:
-                converted_frame, frame_transparency_index = _convert_frame_to_gif(frame)
-                converted_append_frames.append(converted_frame)
+            for chunk in frame_chunks:
+                converted_frame, frame_transparency_index = _convert_frame_to_gif(
+                    chunk["image"].copy()
+                )
+                converted_frames.append(converted_frame)
                 if gif_transparency_index is None and frame_transparency_index is not None:
                     gif_transparency_index = frame_transparency_index
-            append_frames = converted_append_frames
+
+            base_frame = converted_frames[0]
+            append_frames = converted_frames[1:]
             if gif_transparency_index is not None:
                 try:
                     base_frame.info["background"] = gif_transparency_index
@@ -263,6 +272,11 @@ class DocumentService:
                     except (AttributeError, TypeError):
                         pass
 
+        else:
+            converted_frames = [chunk["image"].copy() for chunk in frame_chunks]
+            base_frame = converted_frames[0]
+            append_frames = converted_frames[1:]
+
         save_kwargs = {}
         if gif_transparency_index is not None:
             save_kwargs["transparency"] = gif_transparency_index
@@ -273,19 +287,30 @@ class DocumentService:
                     "save_all": True,
                     "append_images": append_frames,
                     "loop": 0,
-                    "duration": frame_duration,
+                    "duration": durations if len(durations) > 1 else durations[0],
                 }
             )
             if format_name in {"GIF", "PNG"}:
                 save_kwargs["disposal"] = 2
         else:
             if format_name in {"GIF", "PNG"}:
-                save_kwargs["duration"] = frame_duration
+                save_kwargs["duration"] = durations[0]
 
         if format_name == "WEBP":
             save_kwargs["lossless"] = True
             if append_frames:
                 save_kwargs.setdefault("save_all", True)
+
+        if format_name == "GIF":
+            metadata = {
+                "version": 1,
+                "total_frames": int(total_frames),
+                "frame_repeats": frame_repeats,
+                "frame_duration_ms": frame_duration,
+                "fps": fps_value,
+            }
+            comment = json.dumps({"pixel_portal": metadata}, separators=(",", ":"))
+            save_kwargs["comment"] = comment.encode("utf-8")
 
         try:
             base_frame.save(file_path, format=format_name, **save_kwargs)
@@ -399,31 +424,131 @@ class DocumentService:
                 last_valid_delay = int(delay)
             normalized_delays.append(last_valid_delay)
 
-        if not normalized_delays:
-            return normalized_frames, 12.0
-
-        frame_unit = normalized_delays[0]
-        for delay in normalized_delays[1:]:
-            frame_unit = math.gcd(frame_unit, delay)
-        frame_unit = max(1, frame_unit)
+        metadata = self._extract_animation_metadata(file_path)
+        metadata_repeats = metadata.get("frame_repeats") if isinstance(metadata, dict) else None
+        metadata_total_frames = metadata.get("total_frames") if isinstance(metadata, dict) else None
+        metadata_frame_duration = metadata.get("frame_duration_ms") if isinstance(metadata, dict) else None
+        metadata_fps = metadata.get("fps") if isinstance(metadata, dict) else None
 
         frame_entries: list[tuple[QImage, int]] = []
         total_playback_frames = 0
-        last_frame_bytes = None
-        for frame, delay in zip(normalized_frames, normalized_delays):
-            repeats = max(1, delay // frame_unit)
-            frame_bytes = frame.bits().tobytes()
-            if frame_entries and last_frame_bytes is not None and frame_bytes == last_frame_bytes:
-                previous_frame, previous_repeats = frame_entries[-1]
-                frame_entries[-1] = (previous_frame, previous_repeats + repeats)
-            else:
-                frame_entries.append((frame, repeats))
-            total_playback_frames += repeats
-            last_frame_bytes = frame_bytes
 
-        fps = 1000.0 / frame_unit if frame_unit > 0 else 12.0
+        if (
+            isinstance(metadata_repeats, list)
+            and len(metadata_repeats) == len(normalized_frames)
+        ):
+            parsed_repeats: list[int] = []
+            for value in metadata_repeats:
+                try:
+                    repeat_value = int(value)
+                except (TypeError, ValueError):
+                    parsed_repeats = []
+                    break
+                if repeat_value <= 0:
+                    parsed_repeats = []
+                    break
+                parsed_repeats.append(repeat_value)
+            if parsed_repeats:
+                for frame, repeats in zip(normalized_frames, parsed_repeats):
+                    repeats = max(1, repeats)
+                    frame_entries.append((frame, repeats))
+                    total_playback_frames += repeats
 
-        return frame_entries, total_playback_frames or len(frame_entries), fps
+        if not frame_entries:
+            if not normalized_delays:
+                fallback_entries = [(frame, 1) for frame in normalized_frames]
+                return fallback_entries, len(fallback_entries), 12.0
+
+            frame_unit = normalized_delays[0]
+            for delay in normalized_delays[1:]:
+                frame_unit = math.gcd(frame_unit, delay)
+            frame_unit = max(1, frame_unit)
+
+            last_frame_bytes = None
+            for frame, delay in zip(normalized_frames, normalized_delays):
+                repeats = max(1, delay // frame_unit)
+                frame_bytes = frame.bits().tobytes()
+                if (
+                    frame_entries
+                    and last_frame_bytes is not None
+                    and frame_bytes == last_frame_bytes
+                ):
+                    previous_frame, previous_repeats = frame_entries[-1]
+                    frame_entries[-1] = (previous_frame, previous_repeats + repeats)
+                else:
+                    frame_entries.append((frame, repeats))
+                total_playback_frames += repeats
+                last_frame_bytes = frame_bytes
+        else:
+            frame_unit = None
+
+        if not frame_entries:
+            # Fallback to treating every frame as unique with a single repeat.
+            for frame in normalized_frames:
+                frame_entries.append((frame, 1))
+            total_playback_frames = len(frame_entries)
+            frame_unit = None
+
+        if frame_unit is None and metadata_frame_duration:
+            try:
+                frame_unit = int(metadata_frame_duration)
+            except (TypeError, ValueError):
+                frame_unit = None
+            if frame_unit is not None and frame_unit <= 0:
+                frame_unit = None
+
+        if frame_unit is None and normalized_delays:
+            frame_unit = normalized_delays[0]
+            for delay in normalized_delays[1:]:
+                frame_unit = math.gcd(frame_unit, delay)
+            frame_unit = max(1, frame_unit)
+
+        fps_value = None
+        if metadata_fps is not None:
+            try:
+                fps_candidate = float(metadata_fps)
+            except (TypeError, ValueError):
+                fps_candidate = None
+            if fps_candidate and math.isfinite(fps_candidate) and fps_candidate > 0:
+                fps_value = fps_candidate
+        if fps_value is None and frame_unit and frame_unit > 0:
+            fps_value = 1000.0 / frame_unit
+        if fps_value is None:
+            fps_value = 12.0
+
+        if metadata_total_frames:
+            try:
+                total_hint = int(metadata_total_frames)
+            except (TypeError, ValueError):
+                total_hint = None
+            if total_hint and total_hint > 0:
+                total_playback_frames = max(total_playback_frames, total_hint)
+
+        return frame_entries, total_playback_frames or len(frame_entries), fps_value
+
+    @staticmethod
+    def _extract_animation_metadata(file_path):
+        if not file_path.lower().endswith(".gif"):
+            return None
+        try:
+            with Image.open(file_path) as image:
+                comment = image.info.get("comment")
+                if not comment:
+                    return None
+                if isinstance(comment, bytes):
+                    try:
+                        comment = comment.decode("utf-8")
+                    except UnicodeDecodeError:
+                        return None
+                data = json.loads(comment)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        payload = data.get("pixel_portal")
+        if not isinstance(payload, dict):
+            return None
+        return payload
 
     def _populate_document_with_frames(self, frame_entries, total_frames, filename):
         if not frame_entries:
