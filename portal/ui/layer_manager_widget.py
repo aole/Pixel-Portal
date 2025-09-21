@@ -264,12 +264,11 @@ class LayerManagerWidget(QWidget):
             except ValueError:
                 return
 
-            from portal.core.command import ClearLayerCommand
+            from portal.core.command import ClearLayerAndKeysCommand
 
             active_layer = layer_manager.active_layer
             if active_layer:
-                selection = self.canvas.selection_shape
-                command = ClearLayerCommand(active_layer, selection)
+                command = ClearLayerAndKeysCommand(self.app.document, active_layer)
                 self.app.execute_command(command)
         else:
             from portal.core.command import RemoveLayerCommand

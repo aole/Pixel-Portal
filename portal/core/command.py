@@ -10,6 +10,7 @@ from portal.core.drawing import Drawing
 
 if TYPE_CHECKING:
     from portal.core.document import Document
+    from portal.core.frame_manager import FrameManager
 
 
 class Command(ABC):
@@ -911,6 +912,59 @@ class ClearLayerCommand(Command):
             painter.drawImage(0, 0, self.before_image)
             painter.end()
             self.layer.on_image_change.emit()
+
+
+class ClearLayerAndKeysCommand(Command):
+    """Clear a layer across all frames and reset its keyframes."""
+
+    def __init__(self, document: 'Document', layer: Layer):
+        self.document = document
+        self.layer = layer
+        self._before_state: 'Optional[FrameManager]' = None
+        self._after_state: 'Optional[FrameManager]' = None
+
+    def execute(self):
+        document = self.document
+        layer = self.layer
+        if document is None or layer is None:
+            return
+
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return
+
+        layer_uid = getattr(layer, "uid", None)
+        if layer_uid is None:
+            return
+
+        if self._before_state is None:
+            self._before_state = frame_manager.clone()
+            working_state = frame_manager.clone()
+            self._clear_layer_and_keys(working_state, layer_uid)
+            document.apply_frame_manager_snapshot(working_state)
+            self._after_state = document.frame_manager.clone()
+        else:
+            if self._after_state is None:
+                return
+            document.apply_frame_manager_snapshot(self._after_state)
+
+    def undo(self):
+        if self._before_state is None:
+            return
+        self.document.apply_frame_manager_snapshot(self._before_state)
+
+    @staticmethod
+    def _clear_layer_and_keys(frame_manager: 'FrameManager', layer_uid: int) -> None:
+        if frame_manager is None:
+            return
+
+        frame_indices = range(len(frame_manager.frames))
+        for instance in frame_manager.iter_layer_instances(layer_uid, frame_indices):
+            instance.clear()
+
+        if layer_uid not in frame_manager.layer_keys:
+            frame_manager.add_layer_key(layer_uid, 0)
+        frame_manager.set_layer_key_frames(layer_uid, [0])
             
 class RemoveLayerCommand(Command):
     def __init__(self, document: 'Document', index: int):

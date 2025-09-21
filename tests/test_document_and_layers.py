@@ -3,6 +3,7 @@ from PySide6.QtGui import QImage, QColor, QPainterPath, QTransform
 from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QCursor
 from portal.core.document import Document
+from portal.core.command import ClearLayerAndKeysCommand
 from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
 from portal.core.drawing import Drawing
@@ -399,6 +400,76 @@ def test_merge_layer_down(layer_manager):
     layer_to_merge_index = 2
     layer_manager.merge_layer_down(layer_to_merge_index)
     assert len(layer_manager.layers) == initial_layer_count - 1
+
+
+def test_clear_last_layer_resets_keys_and_pixels():
+    document = Document(16, 16)
+    layer_manager = document.layer_manager
+    assert len(layer_manager.layers) == 1
+
+    active_layer = layer_manager.active_layer
+    assert active_layer is not None
+    layer_uid = active_layer.uid
+
+    active_layer.image.fill(QColor("red"))
+    active_layer.on_image_change.emit()
+
+    document.add_key_frame(2)
+    document.select_frame(2)
+    keyed_layer = document.layer_manager.active_layer
+    assert keyed_layer is not None
+    keyed_layer.image.fill(QColor("blue"))
+    keyed_layer.on_image_change.emit()
+
+    document.add_key_frame(4)
+    document.select_frame(4)
+    keyed_layer = document.layer_manager.active_layer
+    assert keyed_layer is not None
+    keyed_layer.image.fill(QColor("green"))
+    keyed_layer.on_image_change.emit()
+
+    document.select_frame(0)
+    command = ClearLayerAndKeysCommand(document, active_layer)
+    command.execute()
+
+    document.select_frame(0)
+    cleared_layer = document.layer_manager.active_layer
+    assert cleared_layer is not None
+    assert cleared_layer.image.pixelColor(0, 0).alpha() == 0
+
+    document.select_frame(4)
+    cleared_layer = document.layer_manager.active_layer
+    assert cleared_layer is not None
+    assert cleared_layer.image.pixelColor(0, 0).alpha() == 0
+
+    assert document.frame_manager.layer_keys.get(layer_uid) == {0}
+
+    command.undo()
+
+    document.select_frame(0)
+    restored_layer = document.layer_manager.active_layer
+    assert restored_layer is not None
+    assert restored_layer.image.pixelColor(0, 0) == QColor("red")
+
+    document.select_frame(2)
+    restored_layer = document.layer_manager.active_layer
+    assert restored_layer is not None
+    assert restored_layer.image.pixelColor(0, 0) == QColor("blue")
+
+    document.select_frame(4)
+    restored_layer = document.layer_manager.active_layer
+    assert restored_layer is not None
+    assert restored_layer.image.pixelColor(0, 0) == QColor("green")
+
+    assert document.frame_manager.layer_keys.get(layer_uid) == {0, 2, 4}
+
+    command.execute()
+
+    document.select_frame(0)
+    cleared_layer = document.layer_manager.active_layer
+    assert cleared_layer is not None
+    assert cleared_layer.image.pixelColor(0, 0).alpha() == 0
+    assert document.frame_manager.layer_keys.get(layer_uid) == {0}
 
 
 def test_toggle_visibility(layer_manager):
