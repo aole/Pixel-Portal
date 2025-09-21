@@ -25,6 +25,12 @@ class SettingsController(QObject):
         "image_alpha": 1.0,
     }
 
+    DEFAULT_AI_SETTINGS = {
+        "negative_prompt": (
+            "blurry, low quality, distorted, deformed, extra limbs, watermark, text"
+        ),
+    }
+
     def __init__(self):
         super().__init__()
         self.config = configparser.ConfigParser()
@@ -81,6 +87,15 @@ class SettingsController(QObject):
         )
         self._sync_ruler_settings_to_config()
 
+        if not self.config.has_section('AI'):
+            self.config.add_section('AI')
+        self.ai_negative_prompt = self.config.get(
+            'AI',
+            'negative_prompt',
+            fallback=self.DEFAULT_AI_SETTINGS["negative_prompt"],
+        )
+        self._sync_ai_settings_to_config()
+
     def save_settings(self, ai_settings=None):
         """Persist settings to disk."""
         try:
@@ -88,10 +103,13 @@ class SettingsController(QObject):
                 if not self.config.has_section('AI'):
                     self.config.add_section('AI')
                 self.config.set('AI', 'last_prompt', ai_settings.get('prompt', ''))
+                if 'negative_prompt' in ai_settings:
+                    self.ai_negative_prompt = str(ai_settings['negative_prompt'])
 
             self._sync_grid_settings_to_config()
             self._sync_background_settings_to_config()
             self._sync_ruler_settings_to_config()
+            self._sync_ai_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
                 self.config.write(configfile)
@@ -156,6 +174,11 @@ class SettingsController(QObject):
         if self.config.has_option('Ruler', 'interval'):
             self.config.remove_option('Ruler', 'interval')
 
+    def _sync_ai_settings_to_config(self):
+        if not self.config.has_section('AI'):
+            self.config.add_section('AI')
+        self.config.set('AI', 'negative_prompt', self.ai_negative_prompt or '')
+
     def get_grid_settings(self):
         return {
             'major_visible': self.grid_major_visible,
@@ -177,11 +200,19 @@ class SettingsController(QObject):
             'segments': int(self.ruler_segments),
         }
 
+    def get_ai_settings(self):
+        return {
+            'negative_prompt': self.ai_negative_prompt,
+        }
+
     def get_default_grid_settings(self):
         return dict(self.DEFAULT_GRID_SETTINGS)
 
     def get_default_background_settings(self):
         return dict(self.DEFAULT_BACKGROUND_SETTINGS)
+
+    def get_default_ai_settings(self):
+        return dict(self.DEFAULT_AI_SETTINGS)
 
     def update_grid_settings(
         self,
@@ -234,3 +265,8 @@ class SettingsController(QObject):
                 segments_value = self.ruler_segments
             self.ruler_segments = max(1, segments_value)
         self._sync_ruler_settings_to_config()
+
+    def update_ai_settings(self, *, negative_prompt=None):
+        if negative_prompt is not None:
+            self.ai_negative_prompt = str(negative_prompt)
+        self._sync_ai_settings_to_config()

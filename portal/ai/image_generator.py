@@ -547,6 +547,8 @@ class ImageGenerator:
     def prompt_to_image(
         self,
         prompt: str,
+        *,
+        negative_prompt: str | None = None,
         original_size: tuple[int, int],
         generation_size: tuple[int, int] | None = None,
         num_inference_steps: int | None = None,
@@ -587,6 +589,8 @@ class ImageGenerator:
         }
         if coerced_generation_size:
             pipe_kwargs["width"], pipe_kwargs["height"] = coerced_generation_size
+        if negative_prompt is not None:
+            pipe_kwargs["negative_prompt"] = str(negative_prompt)
 
         print("Generating image from prompt...")
         generated_image = self.pipe(**pipe_kwargs).images[0]
@@ -604,6 +608,8 @@ class ImageGenerator:
         self,
         input_image: Image.Image,
         prompt: str,
+        *,
+        negative_prompt: str | None = None,
         strength: float | None = None,
         num_inference_steps: int | None = None,
         guidance_scale: float | None = None,
@@ -656,6 +662,8 @@ class ImageGenerator:
         }
         if target_generation_size:
             pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+        if negative_prompt is not None:
+            pipe_kwargs["negative_prompt"] = str(negative_prompt)
 
         generated_image = self.pipe(**pipe_kwargs).images[0]
 
@@ -673,6 +681,8 @@ class ImageGenerator:
         input_image: Image.Image,
         mask_image: Image.Image,
         prompt: str,
+        *,
+        negative_prompt: str | None = None,
         strength: float | None = None,
         num_inference_steps: int | None = None,
         guidance_scale: float | None = None,
@@ -729,6 +739,8 @@ class ImageGenerator:
         }
         if target_generation_size:
             pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+        if negative_prompt is not None:
+            pipe_kwargs["negative_prompt"] = str(negative_prompt)
 
         generated_image = self.pipe(**pipe_kwargs).images[0]
 

@@ -40,6 +40,7 @@ class GenerationThread(QThread):
         mode: GenerationMode,
         image,
         prompt,
+        negative_prompt,
         original_size,
         generation_size,
         num_inference_steps,
@@ -54,6 +55,7 @@ class GenerationThread(QThread):
         self.image = image
         self.mask_image = mask_image
         self.prompt = prompt
+        self.negative_prompt = negative_prompt
         self.original_size = original_size
         self.generation_size = generation_size
         self.num_inference_steps = num_inference_steps
@@ -76,6 +78,7 @@ class GenerationThread(QThread):
                         self.image,
                         self.mask_image,
                         self.prompt,
+                        negative_prompt=self.negative_prompt,
                         strength=self.strength,
                         num_inference_steps=self.num_inference_steps,
                         guidance_scale=self.guidance_scale,
@@ -88,6 +91,7 @@ class GenerationThread(QThread):
                     generated_image = self.generator.image_to_image(
                         self.image,
                         self.prompt,
+                        negative_prompt=self.negative_prompt,
                         strength=self.strength,
                         num_inference_steps=self.num_inference_steps,
                         guidance_scale=self.guidance_scale,
@@ -99,6 +103,7 @@ class GenerationThread(QThread):
             else:
                 generated_image = self.generator.prompt_to_image(
                     self.prompt,
+                    negative_prompt=self.negative_prompt,
                     original_size=self.original_size,
                     generation_size=self.generation_size,
                     num_inference_steps=self.num_inference_steps,
@@ -364,6 +369,12 @@ class AIPanel(QWidget):
         if additions not in prompt:
             prompt = f"{prompt}, {additions}"
 
+        negative_prompt = ""
+        controller = getattr(self.app, "settings_controller", None)
+        if controller is not None and hasattr(controller, "get_ai_settings"):
+            ai_settings = controller.get_ai_settings()
+            negative_prompt = str(ai_settings.get("negative_prompt", "") or "")
+
         if not self.app.config.has_section('AI'):
             self.app.config.add_section('AI')
         self.app.config.set('AI', 'last_prompt', prompt)
@@ -475,6 +486,7 @@ class AIPanel(QWidget):
             mode,
             input_image,
             prompt,
+            negative_prompt,
             original_size,
             generation_size,
             num_inference_steps,
@@ -570,10 +582,18 @@ class AIPanel(QWidget):
         return QPixmap.fromImage(image_qt)
 
     def get_settings(self):
+        negative_prompt = ""
+        controller = getattr(self.app, "settings_controller", None)
+        if controller is not None and hasattr(controller, "get_ai_settings"):
+            negative_prompt = str(
+                controller.get_ai_settings().get("negative_prompt", "") or ""
+            )
+
         return {
             "prompt": self.prompt_input.toPlainText(),
             "model": self.model_combo.currentText(),
             "steps": self.steps_slider.value(),
             "guidance": self.guidance_slider.value(),
             "strength": self.strength_slider.value(),
+            "negative_prompt": negative_prompt,
         }

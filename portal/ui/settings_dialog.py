@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QGridLayout,
     QLabel,
+    QPlainTextEdit,
     QPushButton,
     QSlider,
     QSpinBox,
@@ -46,6 +47,7 @@ class SettingsDialog(QDialog):
 
         self._build_grid_tab()
         self._build_canvas_tab()
+        self._build_ai_tab()
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Ok
@@ -218,6 +220,37 @@ class SettingsDialog(QDialog):
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
+    def _build_ai_tab(self):
+        ai_tab = QWidget(self)
+        ai_layout = QVBoxLayout(ai_tab)
+
+        description_label = QLabel(
+            "Negative prompts reduce the likelihood of unwanted details in generated images.",
+            ai_tab,
+        )
+        description_label.setWordWrap(True)
+        ai_layout.addWidget(description_label)
+
+        self.negative_prompt_edit = QPlainTextEdit(ai_tab)
+        self.negative_prompt_edit.setPlaceholderText(
+            "Enter comma-separated concepts to avoid (e.g. blurry, low quality)"
+        )
+        self.negative_prompt_edit.setMinimumHeight(
+            self.fontMetrics().lineSpacing() * 4
+        )
+        ai_layout.addWidget(self.negative_prompt_edit)
+
+        self.ai_reset_button = QPushButton("Reset to Defaults", ai_tab)
+        self.ai_reset_button.clicked.connect(self._reset_ai_tab)
+        ai_layout.addWidget(
+            self.ai_reset_button,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+
+        ai_layout.addStretch(1)
+
+        self.tab_widget.addTab(ai_tab, "AI")
+
     def _apply_settings_to_widgets(self):
         grid_settings = self.settings_controller.get_grid_settings()
         defaults = self.settings_controller.get_default_grid_settings()
@@ -263,6 +296,11 @@ class SettingsDialog(QDialog):
             )
         self.ruler_segments_spinbox.setValue(max(1, segments_value))
 
+        ai_settings = self.settings_controller.get_ai_settings()
+        self.negative_prompt_edit.setPlainText(
+            str(ai_settings.get("negative_prompt", "") or "")
+        )
+
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
         if isinstance(data, BackgroundImageMode):
@@ -303,6 +341,9 @@ class SettingsDialog(QDialog):
             image_alpha=self.get_background_image_alpha(),
         )
         self.settings_controller.update_ruler_settings(**self.get_ruler_settings())
+        self.settings_controller.update_ai_settings(
+            negative_prompt=self.negative_prompt_edit.toPlainText()
+        )
 
     def _reset_grid_tab(self):
         defaults = self.settings_controller.get_default_grid_settings()
@@ -331,6 +372,12 @@ class SettingsDialog(QDialog):
         self._update_background_alpha_label(clamped_percent)
         self.ruler_segments_spinbox.setValue(
             getattr(self.settings_controller, "DEFAULT_RULER_SEGMENTS", 2)
+        )
+
+    def _reset_ai_tab(self):
+        defaults = self.settings_controller.get_default_ai_settings()
+        self.negative_prompt_edit.setPlainText(
+            str(defaults.get("negative_prompt", "") or "")
         )
 
     def _choose_major_grid_color(self):
