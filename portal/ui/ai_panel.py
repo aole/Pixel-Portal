@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -20,8 +22,12 @@ from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
-from portal.ai.image_generator import ImageGenerator
-import torch
+from portal.ai.image_generator import (
+    ImageGenerator,
+    is_cuda_available,
+    is_diffusers_available,
+    is_torch_available,
+)
 
 class GenerationThread(QThread):
     generation_complete = Signal(object)
@@ -116,6 +122,7 @@ class AIPanel(QWidget):
         self.setWindowTitle("AI Image Generation")
         self.setMinimumWidth(128)
         self.generated_image = None
+        self.thread: Optional[GenerationThread] = None
 
         self.layout = QVBoxLayout(self)
 
@@ -244,9 +251,7 @@ class AIPanel(QWidget):
         self.variations_button.clicked.connect(self.generate_variations)
         self.cancel_button.clicked.connect(self.cancel_generation)
 
-        if not torch.cuda.is_available():
-            QMessageBox.warning(self, "CUDA Not Available", "CUDA is not available. AI features will be disabled.")
-            self.set_buttons_enabled(False)
+        self._dependencies_ready(show_dialog=True, disable=True)
 
 
     @staticmethod
@@ -274,6 +279,28 @@ class AIPanel(QWidget):
         if width <= 0 or height <= 0:
             return None
         return width, height
+
+    def _dependencies_ready(self, *, show_dialog: bool = False, disable: bool = False) -> bool:
+        message = None
+        title = "AI Dependencies Missing"
+
+        if not is_torch_available():
+            message = "PyTorch is not installed. Install torch to enable AI features."
+        elif not is_diffusers_available():
+            message = (
+                "diffusers is not installed or missing required pipelines. Install diffusers to enable AI features."
+            )
+        elif not is_cuda_available():
+            title = "CUDA Not Available"
+            message = "CUDA is not available. AI features will be disabled."
+
+        if message:
+            if show_dialog:
+                QMessageBox.warning(self, title, message)
+            if disable:
+                self.set_buttons_enabled(False)
+            return False
+        return True
 
     def _resolve_generation_dimensions(
         self, model_name: str | None = None
@@ -325,6 +352,9 @@ class AIPanel(QWidget):
 
 
     def start_generation(self, mode: GenerationMode):
+        if not self._dependencies_ready(show_dialog=True, disable=True):
+            return
+
         prompt = self.prompt_input.toPlainText()
         if not prompt:
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
@@ -440,6 +470,7 @@ class AIPanel(QWidget):
             self.generated_image = result
             self.image_generated.emit(self.generated_image)
 
+        self.thread = None
         self.progress_bar.setVisible(False)
         self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
@@ -455,7 +486,10 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
-        if not self.thread.is_cancelled:
+        thread = self.thread
+        should_alert = thread is None or not getattr(thread, "is_cancelled", False)
+        self.thread = None
+        if should_alert and error_message:
             QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
 
     def generate_variations(self):
