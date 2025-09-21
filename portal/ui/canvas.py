@@ -33,6 +33,7 @@ class Canvas(QWidget):
     zoom_changed = Signal(float)
     selection_changed = Signal(bool)
     selection_size_changed = Signal(int, int)
+    ruler_distance_changed = Signal(object)
     canvas_updated = Signal()
     command_generated = Signal(object)
     background_mode_changed = Signal(object)
@@ -128,7 +129,7 @@ class Canvas(QWidget):
         self._ruler_handle_hover: str | None = None
         self._ruler_handle_drag: str | None = None
         self._ruler_handle_prev_cursor: QCursor | None = None
-        self._ruler_interval = 8
+        self._ruler_segments = 2
 
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
@@ -634,6 +635,7 @@ class Canvas(QWidget):
         if width <= 0 and height <= 0:
             self._ruler_start = QPointF(0.0, 0.0)
             self._ruler_end = QPointF(0.0, 0.0)
+            self._emit_ruler_distance()
             return
 
         center_x = width / 2.0
@@ -673,6 +675,7 @@ class Canvas(QWidget):
 
         self._ruler_start = start_point
         self._ruler_end = end_point
+        self._emit_ruler_distance()
 
     def _clamp_point_to_document(self, point: QPointF) -> QPointF:
         width = float(max(0, self._document_size.width()))
@@ -686,6 +689,20 @@ class Canvas(QWidget):
             self._ruler_start = self._clamp_point_to_document(self._ruler_start)
         if self._ruler_end is not None:
             self._ruler_end = self._clamp_point_to_document(self._ruler_end)
+        self._emit_ruler_distance()
+
+    def _emit_ruler_distance(self) -> None:
+        if not self.ruler_enabled:
+            self.ruler_distance_changed.emit(None)
+            return
+        if self._ruler_start is None or self._ruler_end is None:
+            self.ruler_distance_changed.emit(None)
+            return
+
+        dx = float(self._ruler_end.x() - self._ruler_start.x())
+        dy = float(self._ruler_end.y() - self._ruler_start.y())
+        distance = math.hypot(dx, dy)
+        self.ruler_distance_changed.emit(distance)
 
     def _doc_point_to_canvas(self, point: QPointF) -> QPointF:
         target_rect = self.get_target_rect()
@@ -738,11 +755,49 @@ class Canvas(QWidget):
         if modifiers & Qt.ControlModifier:
             point = QPointF(round(point.x()), round(point.y()))
         point = self._clamp_point_to_document(point)
-        if handle == "start":
-            self._ruler_start = point
-        elif handle == "end":
-            self._ruler_end = point
+        if (
+            modifiers & Qt.ShiftModifier
+            and handle in {"start", "end"}
+            and self._ruler_start is not None
+            and self._ruler_end is not None
+        ):
+            start_point = self._ruler_start
+            end_point = self._ruler_end
+            if handle == "start":
+                current_point = start_point
+            else:
+                current_point = end_point
+
+            delta_x = point.x() - current_point.x()
+            delta_y = point.y() - current_point.y()
+
+            doc_width = float(max(0, self._document_size.width()))
+            doc_height = float(max(0, self._document_size.height()))
+
+            min_allowed_x = -min(start_point.x(), end_point.x())
+            max_allowed_x = doc_width - max(start_point.x(), end_point.x())
+            min_allowed_y = -min(start_point.y(), end_point.y())
+            max_allowed_y = doc_height - max(start_point.y(), end_point.y())
+
+            delta_x = max(min(delta_x, max_allowed_x), min_allowed_x)
+            delta_y = max(min(delta_y, max_allowed_y), min_allowed_y)
+
+            translated_start = QPointF(
+                start_point.x() + delta_x, start_point.y() + delta_y
+            )
+            translated_end = QPointF(
+                end_point.x() + delta_x, end_point.y() + delta_y
+            )
+
+            self._ruler_start = self._clamp_point_to_document(translated_start)
+            self._ruler_end = self._clamp_point_to_document(translated_end)
+        else:
+            if handle == "start":
+                self._ruler_start = point
+            elif handle == "end":
+                self._ruler_end = point
         self.update()
+        self._emit_ruler_distance()
 
     def _update_ruler_hover_state(self, handle: str | None) -> None:
         if handle == self._ruler_handle_hover:
@@ -787,6 +842,7 @@ class Canvas(QWidget):
             self._ruler_handle_prev_cursor = None
 
         self.update()
+        self._emit_ruler_distance()
 
     def mousePressEvent(self, event):
         if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:
@@ -1194,21 +1250,23 @@ class Canvas(QWidget):
                 self.grid_minor_color = color
         self.update()
 
-    def set_ruler_settings(self, *, interval=None):
-        if interval is None:
+    def set_ruler_settings(self, *, segments=None, interval=None):
+        if segments is None and interval is not None:
+            segments = interval
+        if segments is None:
             return
         try:
-            interval_value = int(interval)
+            segments_value = int(segments)
         except (TypeError, ValueError):
             return
-        interval_value = max(1, interval_value)
-        if interval_value == self._ruler_interval:
+        segments_value = max(1, segments_value)
+        if segments_value == self._ruler_segments:
             return
-        self._ruler_interval = interval_value
+        self._ruler_segments = segments_value
         self.update()
 
     def get_ruler_settings(self):
-        return {"interval": int(self._ruler_interval)}
+        return {"segments": int(self._ruler_segments)}
 
     def get_grid_settings(self):
         return {

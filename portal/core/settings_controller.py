@@ -18,6 +18,7 @@ class SettingsController(QObject):
         "major_color": "#64000000",
         "minor_color": "#64808080",
     }
+    DEFAULT_RULER_SEGMENTS = 2
 
     DEFAULT_BACKGROUND_SETTINGS = {
         "image_mode": BackgroundImageMode.FIT,
@@ -75,7 +76,9 @@ class SettingsController(QObject):
 
         if not self.config.has_section('Ruler'):
             self.config.add_section('Ruler')
-        self.ruler_interval = self._get_ruler_int('interval', 8)
+        self.ruler_segments = self._get_ruler_int(
+            'segments', self.DEFAULT_RULER_SEGMENTS
+        )
         self._sync_ruler_settings_to_config()
 
     def save_settings(self, ai_settings=None):
@@ -113,10 +116,17 @@ class SettingsController(QObject):
             return fallback
 
     def _get_ruler_int(self, option, fallback):
-        try:
-            return max(1, self.config.getint('Ruler', option))
-        except (configparser.NoOptionError, ValueError):
-            return fallback
+        keys_to_try: tuple[str, ...]
+        if option == 'segments':
+            keys_to_try = ('segments', 'interval')
+        else:
+            keys_to_try = (option,)
+        for key in keys_to_try:
+            try:
+                return max(1, self.config.getint('Ruler', key))
+            except (configparser.NoOptionError, ValueError):
+                continue
+        return fallback
 
     def _get_grid_color(self, option, fallback):
         raw_value = self.config.get('Grid', option, fallback=fallback)
@@ -142,7 +152,9 @@ class SettingsController(QObject):
     def _sync_ruler_settings_to_config(self):
         if not self.config.has_section('Ruler'):
             self.config.add_section('Ruler')
-        self.config.set('Ruler', 'interval', str(int(self.ruler_interval)))
+        self.config.set('Ruler', 'segments', str(int(self.ruler_segments)))
+        if self.config.has_option('Ruler', 'interval'):
+            self.config.remove_option('Ruler', 'interval')
 
     def get_grid_settings(self):
         return {
@@ -162,7 +174,7 @@ class SettingsController(QObject):
 
     def get_ruler_settings(self):
         return {
-            'interval': int(self.ruler_interval),
+            'segments': int(self.ruler_segments),
         }
 
     def get_default_grid_settings(self):
@@ -212,11 +224,13 @@ class SettingsController(QObject):
             self.background_image_alpha = max(0.0, min(1.0, alpha_value))
         self._sync_background_settings_to_config()
 
-    def update_ruler_settings(self, *, interval=None):
-        if interval is not None:
+    def update_ruler_settings(self, *, segments=None, interval=None):
+        if segments is None and interval is not None:
+            segments = interval
+        if segments is not None:
             try:
-                interval_value = int(interval)
+                segments_value = int(segments)
             except (TypeError, ValueError):
-                interval_value = self.ruler_interval
-            self.ruler_interval = max(1, interval_value)
+                segments_value = self.ruler_segments
+            self.ruler_segments = max(1, segments_value)
         self._sync_ruler_settings_to_config()

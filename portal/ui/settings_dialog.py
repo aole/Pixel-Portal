@@ -197,24 +197,24 @@ class SettingsDialog(QDialog):
             self._update_background_alpha_label
         )
 
-        canvas_layout.addWidget(QLabel("Ruler interval", canvas_tab), 2, 0)
-        self.ruler_interval_spinbox = QSpinBox(canvas_tab)
-        self.ruler_interval_spinbox.setMinimum(1)
-        self.ruler_interval_spinbox.setMaximum(4096)
-        canvas_layout.addWidget(self.ruler_interval_spinbox, 2, 1)
-        canvas_layout.addWidget(QLabel("px", canvas_tab), 2, 2)
+        canvas_layout.addWidget(QLabel("Ruler segments", canvas_tab), 2, 0)
+        self.ruler_segments_spinbox = QSpinBox(canvas_tab)
+        self.ruler_segments_spinbox.setMinimum(1)
+        self.ruler_segments_spinbox.setMaximum(4096)
+        canvas_layout.addWidget(self.ruler_segments_spinbox, 2, 1)
+        canvas_layout.addWidget(QLabel("segments", canvas_tab), 2, 2)
 
         self.canvas_reset_button = QPushButton("Reset to Defaults", canvas_tab)
         self.canvas_reset_button.clicked.connect(self._reset_canvas_tab)
         canvas_layout.addWidget(
             self.canvas_reset_button,
-            2,
+            3,
             0,
             1,
             3,
             alignment=Qt.AlignmentFlag.AlignRight,
         )
-        canvas_layout.setRowStretch(3, 1)
+        canvas_layout.setRowStretch(4, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
@@ -245,12 +245,23 @@ class SettingsDialog(QDialog):
         self._update_background_alpha_label(clamped_percent)
 
         ruler_settings = self.settings_controller.get_ruler_settings()
-        interval = ruler_settings.get("interval", 8)
+        segments = ruler_settings.get(
+            "segments",
+            getattr(
+                self.settings_controller,
+                "DEFAULT_RULER_SEGMENTS",
+                2,
+            ),
+        )
         try:
-            interval_value = int(interval)
+            segments_value = int(segments)
         except (TypeError, ValueError):
-            interval_value = 8
-        self.ruler_interval_spinbox.setValue(max(1, interval_value))
+            segments_value = getattr(
+                self.settings_controller,
+                "DEFAULT_RULER_SEGMENTS",
+                2,
+            )
+        self.ruler_segments_spinbox.setValue(max(1, segments_value))
 
     def get_background_image_mode(self):
         data = self.background_mode_combo.currentData()
@@ -282,7 +293,7 @@ class SettingsDialog(QDialog):
 
     def get_ruler_settings(self):
         return {
-            "interval": self.ruler_interval_spinbox.value(),
+            "segments": self.ruler_segments_spinbox.value(),
         }
 
     def _apply_settings(self):
@@ -318,6 +329,9 @@ class SettingsDialog(QDialog):
         clamped_percent = max(0, min(100, percent))
         self.background_alpha_slider.setValue(clamped_percent)
         self._update_background_alpha_label(clamped_percent)
+        self.ruler_segments_spinbox.setValue(
+            getattr(self.settings_controller, "DEFAULT_RULER_SEGMENTS", 2)
+        )
 
     def _choose_major_grid_color(self):
         self._choose_grid_color("major")
