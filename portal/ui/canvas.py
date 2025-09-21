@@ -696,10 +696,47 @@ class Canvas(QWidget):
         if modifiers & Qt.ControlModifier:
             point = QPointF(round(point.x()), round(point.y()))
         point = self._clamp_point_to_document(point)
-        if handle == "start":
-            self._ruler_start = point
-        elif handle == "end":
-            self._ruler_end = point
+        if (
+            modifiers & Qt.ShiftModifier
+            and handle in {"start", "end"}
+            and self._ruler_start is not None
+            and self._ruler_end is not None
+        ):
+            start_point = self._ruler_start
+            end_point = self._ruler_end
+            if handle == "start":
+                current_point = start_point
+            else:
+                current_point = end_point
+
+            delta_x = point.x() - current_point.x()
+            delta_y = point.y() - current_point.y()
+
+            doc_width = float(max(0, self._document_size.width()))
+            doc_height = float(max(0, self._document_size.height()))
+
+            min_allowed_x = -min(start_point.x(), end_point.x())
+            max_allowed_x = doc_width - max(start_point.x(), end_point.x())
+            min_allowed_y = -min(start_point.y(), end_point.y())
+            max_allowed_y = doc_height - max(start_point.y(), end_point.y())
+
+            delta_x = max(min(delta_x, max_allowed_x), min_allowed_x)
+            delta_y = max(min(delta_y, max_allowed_y), min_allowed_y)
+
+            translated_start = QPointF(
+                start_point.x() + delta_x, start_point.y() + delta_y
+            )
+            translated_end = QPointF(
+                end_point.x() + delta_x, end_point.y() + delta_y
+            )
+
+            self._ruler_start = self._clamp_point_to_document(translated_start)
+            self._ruler_end = self._clamp_point_to_document(translated_end)
+        else:
+            if handle == "start":
+                self._ruler_start = point
+            elif handle == "end":
+                self._ruler_end = point
         self.update()
 
     def _update_ruler_hover_state(self, handle: str | None) -> None:
