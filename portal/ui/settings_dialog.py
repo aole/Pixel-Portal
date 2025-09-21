@@ -208,13 +208,13 @@ class SettingsDialog(QDialog):
         self.canvas_reset_button.clicked.connect(self._reset_canvas_tab)
         canvas_layout.addWidget(
             self.canvas_reset_button,
-            2,
+            3,
             0,
             1,
             3,
             alignment=Qt.AlignmentFlag.AlignRight,
         )
-        canvas_layout.setRowStretch(3, 1)
+        canvas_layout.setRowStretch(4, 1)
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
