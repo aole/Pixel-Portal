@@ -410,11 +410,53 @@ class Canvas(QWidget):
     def _ai_output_clamp_edges(self, edges: dict[str, int]) -> dict[str, int]:
         doc_width = max(1, int(self._document_size.width()))
         doc_height = max(1, int(self._document_size.height()))
+        min_width = min(32, doc_width)
+        min_height = min(32, doc_height)
 
         left = max(0, min(int(edges.get("left", 0)), doc_width - 1))
         right = max(left, min(int(edges.get("right", left)), doc_width - 1))
         top = max(0, min(int(edges.get("top", 0)), doc_height - 1))
         bottom = max(top, min(int(edges.get("bottom", top)), doc_height - 1))
+
+        width = right - left + 1
+        if width < min_width:
+            handle = self._ai_output_active_handle
+            if handle == "left":
+                left = max(0, right - (min_width - 1))
+                if right - left + 1 < min_width:
+                    right = min(doc_width - 1, left + min_width - 1)
+            elif handle == "right":
+                right = min(doc_width - 1, left + min_width - 1)
+                if right - left + 1 < min_width:
+                    left = max(0, right - (min_width - 1))
+            else:
+                deficit = min_width - width
+                proposed_left = left - deficit // 2
+                proposed_left = max(0, min(proposed_left, doc_width - min_width))
+                left = proposed_left
+                right = min(doc_width - 1, left + min_width - 1)
+                if right - left + 1 < min_width:
+                    left = max(0, right - (min_width - 1))
+
+        height = bottom - top + 1
+        if height < min_height:
+            handle = self._ai_output_active_handle
+            if handle == "top":
+                top = max(0, bottom - (min_height - 1))
+                if bottom - top + 1 < min_height:
+                    bottom = min(doc_height - 1, top + min_height - 1)
+            elif handle == "bottom":
+                bottom = min(doc_height - 1, top + min_height - 1)
+                if bottom - top + 1 < min_height:
+                    top = max(0, bottom - (min_height - 1))
+            else:
+                deficit = min_height - height
+                proposed_top = top - deficit // 2
+                proposed_top = max(0, min(proposed_top, doc_height - min_height))
+                top = proposed_top
+                bottom = min(doc_height - 1, top + min_height - 1)
+                if bottom - top + 1 < min_height:
+                    top = max(0, bottom - (min_height - 1))
 
         return {"left": left, "top": top, "right": right, "bottom": bottom}
 

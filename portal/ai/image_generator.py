@@ -336,17 +336,6 @@ class ImageGenerator:
             if valid_strict or valid_relaxed:
                 best_width, best_height, _ = min(selection_pool, key=score)
 
-        min_output_dim = max(32, multiple)
-
-        def ensure_min_dimension(value: int) -> int:
-            if value >= min_output_dim:
-                return value
-            steps = math.ceil(min_output_dim / multiple)
-            return steps * multiple
-
-        best_width = ensure_min_dimension(int(best_width))
-        best_height = ensure_min_dimension(int(best_height))
-
         if max_dim:
             max_allowed = max_dim - (max_dim % multiple)
             if max_allowed <= 0:
