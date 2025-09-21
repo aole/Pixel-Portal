@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -20,8 +22,12 @@ from PySide6.QtGui import QPixmap
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
-from portal.ai.image_generator import ImageGenerator
-import torch
+from portal.ai.image_generator import (
+    ImageGenerator,
+    is_cuda_available,
+    is_diffusers_available,
+    is_torch_available,
+)
 
 class GenerationThread(QThread):
     generation_complete = Signal(object)
@@ -35,6 +41,7 @@ class GenerationThread(QThread):
         image,
         prompt,
         original_size,
+        generation_size,
         num_inference_steps,
         guidance_scale,
         strength,
@@ -48,6 +55,7 @@ class GenerationThread(QThread):
         self.mask_image = mask_image
         self.prompt = prompt
         self.original_size = original_size
+        self.generation_size = generation_size
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.strength = strength
@@ -74,6 +82,7 @@ class GenerationThread(QThread):
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
                         remove_background=self.remove_background,
+                        generation_size=self.generation_size,
                     )
                 else:
                     generated_image = self.generator.image_to_image(
@@ -85,11 +94,13 @@ class GenerationThread(QThread):
                         step_callback=step_callback,
                         cancellation_token=cancellation_token,
                         remove_background=self.remove_background,
+                        generation_size=self.generation_size,
                     )
             else:
                 generated_image = self.generator.prompt_to_image(
                     self.prompt,
                     original_size=self.original_size,
+                    generation_size=self.generation_size,
                     num_inference_steps=self.num_inference_steps,
                     guidance_scale=self.guidance_scale,
                     step_callback=step_callback,
@@ -111,6 +122,7 @@ class AIPanel(QWidget):
         self.setWindowTitle("AI Image Generation")
         self.setMinimumWidth(128)
         self.generated_image = None
+        self.thread: Optional[GenerationThread] = None
 
         self.layout = QVBoxLayout(self)
 
@@ -239,9 +251,7 @@ class AIPanel(QWidget):
         self.variations_button.clicked.connect(self.generate_variations)
         self.cancel_button.clicked.connect(self.cancel_generation)
 
-        if not torch.cuda.is_available():
-            QMessageBox.warning(self, "CUDA Not Available", "CUDA is not available. AI features will be disabled.")
-            self.set_buttons_enabled(False)
+        self._dependencies_ready(show_dialog=True, disable=True)
 
 
     @staticmethod
@@ -270,17 +280,33 @@ class AIPanel(QWidget):
             return None
         return width, height
 
+    def _dependencies_ready(self, *, show_dialog: bool = False, disable: bool = False) -> bool:
+        message = None
+        title = "AI Dependencies Missing"
+
+        if not is_torch_available():
+            message = "PyTorch is not installed. Install torch to enable AI features."
+        elif not is_diffusers_available():
+            message = (
+                "diffusers is not installed or missing required pipelines. Install diffusers to enable AI features."
+            )
+        elif not is_cuda_available():
+            title = "CUDA Not Available"
+            message = "CUDA is not available. AI features will be disabled."
+
+        if message:
+            if show_dialog:
+                QMessageBox.warning(self, title, message)
+            if disable:
+                self.set_buttons_enabled(False)
+            return False
+        return True
+
     def _resolve_generation_dimensions(
         self, model_name: str | None = None
     ) -> tuple[tuple[int, int] | None, tuple[int, int] | None]:
         if model_name is None and self.model_combo is not None:
             model_name = self.model_combo.currentText()
-
-        native_size = None
-        if model_name:
-            native_size = self._normalize_dimensions(
-                self.image_generator.get_generation_size(model_name)
-            )
 
         output_size = None
         if hasattr(self.app, "get_ai_output_rect"):
@@ -296,6 +322,14 @@ class AIPanel(QWidget):
                 output_size = self._normalize_dimensions(
                     (getattr(document, "width", None), getattr(document, "height", None))
                 )
+
+        native_size = None
+        if model_name:
+            generation_size = self.image_generator.calculate_generation_size(
+                model_name,
+                output_size,
+            )
+            native_size = self._normalize_dimensions(generation_size)
 
         return native_size, output_size
 
@@ -318,6 +352,9 @@ class AIPanel(QWidget):
 
 
     def start_generation(self, mode: GenerationMode):
+        if not self._dependencies_ready(show_dialog=True, disable=True):
+            return
+
         prompt = self.prompt_input.toPlainText()
         if not prompt:
             QMessageBox.warning(self, "Warning", "Please enter a prompt.")
@@ -335,9 +372,15 @@ class AIPanel(QWidget):
         model_name = self.model_combo.currentText() if self.model_combo else None
         native_size, output_size = self._resolve_generation_dimensions(model_name)
 
-        original_size = output_size or native_size
-        if original_size is None:
-            original_size = (512, 512)
+        generation_size = native_size
+        if generation_size is None and model_name:
+            generation_size = self._normalize_dimensions(
+                self.image_generator.get_generation_size(model_name)
+            )
+        if generation_size is None:
+            generation_size = (512, 512)
+
+        original_size = output_size or native_size or generation_size
 
         if not model_name:
             QMessageBox.warning(self, "Warning", "No AI model selected.")
@@ -382,6 +425,7 @@ class AIPanel(QWidget):
             input_image,
             prompt,
             original_size,
+            generation_size,
             num_inference_steps,
             guidance_scale,
             strength,
@@ -409,11 +453,15 @@ class AIPanel(QWidget):
 
     def on_generation_step(self, image):
         if isinstance(image, Image.Image):
-            # If the image is larger than 128px in width or height, scale it down.
-            if image.width > 128 or image.height > 128:
-                image = image.resize((128, 128), Image.Resampling.NEAREST)
-
             pixmap = self.pil_to_pixmap(image)
+            if pixmap.width() > 128 or pixmap.height() > 128:
+                pixmap = pixmap.scaled(
+                    128,
+                    128,
+                    Qt.KeepAspectRatio,
+                    Qt.FastTransformation,
+                )
+
             self.preview_panel.preview_label.setPixmap(pixmap)
             self.preview_panel.preview_label.setFixedSize(pixmap.size())
 
@@ -422,6 +470,7 @@ class AIPanel(QWidget):
             self.generated_image = result
             self.image_generated.emit(self.generated_image)
 
+        self.thread = None
         self.progress_bar.setVisible(False)
         self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
@@ -437,7 +486,10 @@ class AIPanel(QWidget):
         self.progress_bar.setVisible(False)
         self.cancel_button.setVisible(False)
         self.set_buttons_enabled(True)
-        if not self.thread.is_cancelled:
+        thread = self.thread
+        should_alert = thread is None or not getattr(thread, "is_cancelled", False)
+        self.thread = None
+        if should_alert and error_message:
             QMessageBox.critical(self, "Error", f"Image generation failed:\n{error_message}")
 
     def generate_variations(self):

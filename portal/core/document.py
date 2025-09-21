@@ -64,27 +64,29 @@ class Document:
         doc_width = max(1, int(self.width))
         doc_height = max(1, int(self.height))
 
+        min_width = min(32, doc_width)
+        min_height = min(32, doc_height)
+
         if rect is None:
             left = 0
             top = 0
-            right = doc_width - 1
-            bottom = doc_height - 1
+            width = doc_width
+            height = doc_height
         else:
             normalized = QRect(rect).normalized()
             width = max(1, int(normalized.width()))
             height = max(1, int(normalized.height()))
             left = int(normalized.x())
             top = int(normalized.y())
-            right = left + width - 1
-            bottom = top + height - 1
 
-        left = max(0, min(left, doc_width - 1))
-        top = max(0, min(top, doc_height - 1))
-        right = max(left, min(right, doc_width - 1))
-        bottom = max(top, min(bottom, doc_height - 1))
+        width = max(min_width, min(width, doc_width))
+        height = max(min_height, min(height, doc_height))
 
-        width = max(1, right - left + 1)
-        height = max(1, bottom - top + 1)
+        max_left = doc_width - width
+        max_top = doc_height - height
+        left = max(0, min(left, max_left))
+        top = max(0, min(top, max_top))
+
         return QRect(left, top, width, height)
 
     @property

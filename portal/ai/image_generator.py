@@ -1,23 +1,97 @@
+import importlib
+import importlib.util
 import json
+import math
 import os
+from dataclasses import dataclass
 from datetime import datetime
+from fractions import Fraction
+from typing import Any, TYPE_CHECKING
 
-import torch
-from diffusers import (
-    StableDiffusionImg2ImgPipeline,
-    StableDiffusionInpaintPipeline,
-    StableDiffusionPipeline,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLPipeline,
-)
 from PIL import Image
-try:
-    from rembg import remove as rembg_remove
-except Exception:  # ImportError or runtime errors such as missing onnxruntime
-    rembg_remove = None
 
-REMBG_AVAILABLE = rembg_remove is not None
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    import torch as torch_module  # noqa: F401
+
+
+def _import_optional_module(name: str) -> Any | None:
+    """Return the imported module when available, otherwise ``None``."""
+
+    spec = importlib.util.find_spec(name)
+    if spec is None:
+        return None
+    return importlib.import_module(name)
+
+
+torch = _import_optional_module("torch")
+_diffusers_module = _import_optional_module("diffusers")
+_rembg_module = _import_optional_module("rembg")
+
+
+PIPELINE_CLASS_NAMES = (
+    "StableDiffusionPipeline",
+    "StableDiffusionImg2ImgPipeline",
+    "StableDiffusionInpaintPipeline",
+    "StableDiffusionXLPipeline",
+    "StableDiffusionXLImg2ImgPipeline",
+    "StableDiffusionXLInpaintPipeline",
+)
+
+_PIPELINES: dict[str, Any] = {}
+if _diffusers_module is not None:
+    for class_name in PIPELINE_CLASS_NAMES:
+        _PIPELINES[class_name] = getattr(_diffusers_module, class_name, None)
+
+StableDiffusionPipeline = _PIPELINES.get("StableDiffusionPipeline")
+StableDiffusionImg2ImgPipeline = _PIPELINES.get("StableDiffusionImg2ImgPipeline")
+StableDiffusionInpaintPipeline = _PIPELINES.get("StableDiffusionInpaintPipeline")
+StableDiffusionXLPipeline = _PIPELINES.get("StableDiffusionXLPipeline")
+StableDiffusionXLImg2ImgPipeline = _PIPELINES.get("StableDiffusionXLImg2ImgPipeline")
+StableDiffusionXLInpaintPipeline = _PIPELINES.get("StableDiffusionXLInpaintPipeline")
+
+
+rembg_remove = getattr(_rembg_module, "remove", None)
+REMBG_AVAILABLE = callable(rembg_remove)
+
+
+@dataclass(frozen=True)
+class DimensionConstraints:
+    min_dim: int
+    max_dim: int
+
+
+MODEL_DIMENSION_CONSTRAINTS: dict[str, DimensionConstraints] = {
+    "SD1.5": DimensionConstraints(512, 1024),
+    "SD15": DimensionConstraints(512, 1024),
+    "SDXL": DimensionConstraints(768, 1526),
+}
+
+
+ASPECT_RATIO_DENOMINATOR_LIMIT = 64
+
+
+def is_torch_available() -> bool:
+    return torch is not None
+
+
+def is_cuda_available() -> bool:
+    return bool(
+        torch is not None
+        and hasattr(torch, "cuda")
+        and callable(getattr(torch.cuda, "is_available", None))
+        and torch.cuda.is_available()
+    )
+
+
+def is_diffusers_available() -> bool:
+    return _diffusers_module is not None and all(
+        _PIPELINES.get(name) is not None for name in PIPELINE_CLASS_NAMES
+    )
+
+
+def generation_dependencies_ready() -> bool:
+    return is_torch_available() and is_diffusers_available()
 
 
 class ImageGenerator:
@@ -86,6 +160,216 @@ class ImageGenerator:
 
         return None
 
+    @staticmethod
+    def _snap_generation_size(
+        desired: tuple[int, int],
+        constraints: DimensionConstraints | None,
+        multiple: int = 8,
+    ) -> tuple[int, int] | None:
+        min_dim = constraints.min_dim if constraints else None
+        max_dim = constraints.max_dim if constraints else None
+
+        width = max(1, int(desired[0]))
+        height = max(1, int(desired[1]))
+        width_f = float(width)
+        height_f = float(height)
+
+        scale = 1.0
+        if min_dim:
+            smallest = min(width_f, height_f)
+            if smallest < min_dim:
+                scale = max(scale, min_dim / smallest)
+
+        scaled_width = width_f * scale
+        scaled_height = height_f * scale
+
+        if max_dim:
+            largest = max(scaled_width, scaled_height)
+            if largest > max_dim:
+                reduction = max_dim / largest
+                scaled_width *= reduction
+                scaled_height *= reduction
+
+        if scaled_width <= 0 or scaled_height <= 0:
+            return None
+
+        ratio = Fraction(width, height).limit_denominator(
+            ASPECT_RATIO_DENOMINATOR_LIMIT
+        )
+        base_width = ratio.numerator * multiple
+        base_height = ratio.denominator * multiple
+        if base_width <= 0 or base_height <= 0:
+            return None
+
+        base_min = min(base_width, base_height)
+        min_multiplier_required = 1
+        if min_dim:
+            min_multiplier_required = max(1, math.ceil(min_dim / base_min))
+
+        max_multiplier_raw = None
+        if max_dim:
+            max_unit = max(base_width, base_height)
+            if max_unit <= 0:
+                return None
+            max_multiplier_raw = math.floor(max_dim / max_unit)
+
+        conflict = (
+            bool(min_dim)
+            and bool(max_dim)
+            and max_multiplier_raw is not None
+            and max_multiplier_raw < min_multiplier_required
+        )
+
+        def _snap_scalar(value: float) -> int:
+            snapped = int(round(value / multiple)) * multiple
+            if snapped <= 0:
+                snapped = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped = min(snapped, max_allowed)
+            return snapped
+
+        if conflict:
+            ratio_value = width_f / height_f if height_f else 1.0
+            if ratio_value >= 1.0:
+                snapped_width = _snap_scalar(scaled_width)
+                snapped_height = snapped_width / ratio_value if ratio_value else scaled_height
+            else:
+                snapped_height = _snap_scalar(scaled_height)
+                snapped_width = snapped_height * ratio_value
+
+            snapped_width = int(round(snapped_width / multiple)) * multiple
+            if snapped_width <= 0:
+                snapped_width = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped_width = min(snapped_width, max_allowed)
+
+            snapped_height = int(round(snapped_height / multiple)) * multiple
+            if snapped_height <= 0:
+                snapped_height = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped_height = min(snapped_height, max_allowed)
+
+            best_width = snapped_width
+            best_height = snapped_height
+        else:
+            enforce_max = bool(max_dim)
+            max_multiplier = None
+            if enforce_max and max_multiplier_raw is not None:
+                if max_multiplier_raw < 1:
+                    max_multiplier = 1
+                else:
+                    max_multiplier = max_multiplier_raw
+
+            candidate_values: set[int] = {1, min_multiplier_required}
+
+            width_based = scaled_width / base_width
+            height_based = scaled_height / base_height
+            for value in (width_based, height_based):
+                if math.isfinite(value):
+                    candidate_values.update(
+                        {
+                            math.floor(value),
+                            math.ceil(value),
+                            int(round(value)),
+                        }
+                    )
+
+            if enforce_max and max_multiplier is not None:
+                candidate_values.add(max_multiplier)
+
+            valid_strict: list[tuple[int, int, int]] = []
+            valid_relaxed: list[tuple[int, int, int]] = []
+
+            for candidate in candidate_values:
+                current = candidate
+                if current <= 0:
+                    continue
+                if enforce_max and max_multiplier is not None and current > max_multiplier:
+                    continue
+
+                width_candidate = base_width * current
+                height_candidate = base_height * current
+
+                meets_min = not min_dim or min(width_candidate, height_candidate) >= min_dim
+                meets_max = not max_dim or max(width_candidate, height_candidate) <= max_dim
+                if not meets_max:
+                    continue
+
+                entry = (int(width_candidate), int(height_candidate), current)
+                if meets_min:
+                    valid_strict.append(entry)
+                else:
+                    valid_relaxed.append(entry)
+
+            def score(option: tuple[int, int, int]) -> float:
+                width_candidate, height_candidate, _ = option
+                return abs(width_candidate - scaled_width) + abs(height_candidate - scaled_height)
+
+            selection_pool: list[tuple[int, int, int]]
+            if valid_strict:
+                selection_pool = valid_strict
+            elif valid_relaxed:
+                selection_pool = valid_relaxed
+            else:
+                snapped_width = _snap_scalar(scaled_width)
+                snapped_height = int(round(scaled_height / multiple)) * multiple
+                if snapped_height <= 0:
+                    snapped_height = multiple
+                if max_dim:
+                    max_allowed = max_dim - (max_dim % multiple)
+                    if max_allowed <= 0:
+                        max_allowed = multiple
+                    snapped_height = min(snapped_height, max_allowed)
+                best_width = snapped_width
+                best_height = snapped_height
+                if best_width <= 0 or best_height <= 0:
+                    return None
+            if valid_strict or valid_relaxed:
+                best_width, best_height, _ = min(selection_pool, key=score)
+
+        if max_dim:
+            max_allowed = max_dim - (max_dim % multiple)
+            if max_allowed <= 0:
+                max_allowed = multiple
+            best_width = min(best_width, max_allowed)
+            best_height = min(best_height, max_allowed)
+
+        return int(best_width), int(best_height)
+
+    def _get_model_constraints(self, model_name: str | None) -> DimensionConstraints | None:
+        if not model_name:
+            return None
+        key = str(model_name).strip().upper()
+        return MODEL_DIMENSION_CONSTRAINTS.get(key)
+
+    def calculate_generation_size(
+        self,
+        model_name: str,
+        desired_size: tuple[int, int] | None,
+    ) -> tuple[int, int]:
+        """Derive a native generation size that respects model limits."""
+
+        fallback = self.get_generation_size(model_name)
+        normalized = self._coerce_size(desired_size)
+        if normalized is None:
+            return fallback or (512, 512)
+
+        normalized = (int(normalized[0]), int(normalized[1]))
+        constraints = self._get_model_constraints(model_name)
+        snapped = self._snap_generation_size(normalized, constraints)
+        if snapped is None:
+            return fallback or normalized
+        return snapped
+
     def get_generation_size(self, model_name: str) -> tuple[int, int] | None:
         """Return the size (width, height) the model generates before resizing."""
 
@@ -133,7 +417,16 @@ class ImageGenerator:
         if not model_cfg:
             raise ValueError("Invalid model name")
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if not is_torch_available():
+            raise RuntimeError(
+                "PyTorch is not installed. Install torch to enable AI image generation."
+            )
+        if not is_diffusers_available():
+            raise RuntimeError(
+                "diffusers is not installed or missing required pipelines. Install diffusers to enable AI image generation."
+            )
+
+        device = "cuda" if is_cuda_available() else "cpu"
         torch_dtype = torch.float16 if device == "cuda" else torch.float32
 
         pipeline_params = {
@@ -143,25 +436,32 @@ class ImageGenerator:
         if "clip_skip" in model_cfg:
             pipeline_params["clip_skip"] = model_cfg["clip_skip"]
 
-        if model_name == "SDXL":
+        pipeline_class = None
+        model_key = str(model_name).strip().upper()
+        if model_key == "SDXL":
             if is_inpaint:
-                PipelineClass = StableDiffusionXLInpaintPipeline
+                pipeline_class = StableDiffusionXLInpaintPipeline
             elif is_img2img:
-                PipelineClass = StableDiffusionXLImg2ImgPipeline
+                pipeline_class = StableDiffusionXLImg2ImgPipeline
             else:
-                PipelineClass = StableDiffusionXLPipeline
-        elif model_name == "SD1.5":
+                pipeline_class = StableDiffusionXLPipeline
+        elif model_key in {"SD1.5", "SD15"}:
             if is_inpaint:
-                PipelineClass = StableDiffusionInpaintPipeline
+                pipeline_class = StableDiffusionInpaintPipeline
             elif is_img2img:
-                PipelineClass = StableDiffusionImg2ImgPipeline
+                pipeline_class = StableDiffusionImg2ImgPipeline
             else:
-                PipelineClass = StableDiffusionPipeline
+                pipeline_class = StableDiffusionPipeline
         else:
             raise ValueError("Invalid model name")
 
+        if pipeline_class is None:
+            raise RuntimeError(
+                "The requested diffusion pipeline is unavailable. Update diffusers to a version that provides the required pipelines."
+            )
+
         print(f"Loading {model_name} AI pipeline...")
-        self.pipe = PipelineClass.from_single_file(
+        self.pipe = pipeline_class.from_single_file(
             model_cfg["path"],
             **pipeline_params,
         ).to(device)
@@ -176,7 +476,7 @@ class ImageGenerator:
         if self.pipe is not None:
             del self.pipe
             self.pipe = None
-            if torch.cuda.is_available():
+            if is_cuda_available() and hasattr(torch.cuda, "empty_cache"):
                 torch.cuda.empty_cache()
             print("AI pipeline and GPU cache cleared.")
 
@@ -200,6 +500,7 @@ class ImageGenerator:
         self,
         prompt: str,
         original_size: tuple[int, int],
+        generation_size: tuple[int, int] | None = None,
         num_inference_steps: int | None = None,
         guidance_scale: float | None = None,
         output_dir: str | None = None,
@@ -226,13 +527,21 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        coerced_generation_size = self._coerce_size(generation_size)
+        if coerced_generation_size is None:
+            coerced_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
+        pipe_kwargs = {
+            "prompt": prompt,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if coerced_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = coerced_generation_size
+
         print("Generating image from prompt...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
@@ -254,6 +563,7 @@ class ImageGenerator:
         step_callback=None,
         cancellation_token=None,
         remove_background: bool = False,
+        generation_size: tuple[int, int] | None = None,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -276,21 +586,29 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        target_generation_size = self._coerce_size(generation_size)
+        if target_generation_size is None:
+            target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
         print("Preparing input image for img2img...")
-        if isinstance(self.pipe, StableDiffusionXLImg2ImgPipeline):
-            model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-        else:
-            model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
+        model_input_image = input_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
 
         print("Generating image from image...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            image=model_input_image,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        pipe_kwargs = {
+            "prompt": prompt,
+            "image": model_input_image,
+            "strength": strength,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if target_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
@@ -313,6 +631,7 @@ class ImageGenerator:
         step_callback=None,
         cancellation_token=None,
         remove_background: bool = False,
+        generation_size: tuple[int, int] | None = None,
     ) -> Image.Image:
         output_dir = output_dir or self.defaults.get("output_dir", "output")
         num_inference_steps = num_inference_steps or self.defaults.get("num_inference_steps", 20)
@@ -335,24 +654,34 @@ class ImageGenerator:
                 step_callback(image)
             return callback_kwargs
 
+        target_generation_size = self._coerce_size(generation_size)
+        if target_generation_size is None:
+            target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
+
         print("Preparing input image for inpainting...")
-        if isinstance(self.pipe, StableDiffusionXLInpaintPipeline):
-            model_input_image = input_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-            mask_image = mask_image.convert("RGB").resize((1024, 1024), Image.Resampling.NEAREST)
-        else:
-            model_input_image = input_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
-            mask_image = mask_image.convert("RGB").resize((512, 512), Image.Resampling.NEAREST)
+        model_input_image = input_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
+        mask_image = mask_image.convert("RGB").resize(
+            target_generation_size,
+            Image.Resampling.NEAREST,
+        )
 
         print("Generating image from image...")
-        generated_image = self.pipe(
-            prompt=prompt,
-            image=model_input_image,
-            mask_image=mask_image,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            callback_on_step_end=callback,
-        ).images[0]
+        pipe_kwargs = {
+            "prompt": prompt,
+            "image": model_input_image,
+            "mask_image": mask_image,
+            "strength": strength,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "callback_on_step_end": callback,
+        }
+        if target_generation_size:
+            pipe_kwargs["width"], pipe_kwargs["height"] = target_generation_size
+
+        generated_image = self.pipe(**pipe_kwargs).images[0]
 
         if remove_background:
             generated_image = self._remove_background(generated_image)
