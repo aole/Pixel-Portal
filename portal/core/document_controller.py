@@ -686,27 +686,11 @@ class DocumentController(QObject):
             resolved = resolve_key(layer_uid, active_frame_index)
             keys = [resolved] if resolved is not None else []
 
-        visited_layers = set()
-        target_layers = []
-        frames = getattr(frame_manager, "frames", [])
-        for key_index in keys:
-            if key_index is None:
-                continue
-            if not (0 <= key_index < len(frames)):
-                continue
-            manager = frames[key_index].layer_manager
-            target_layer = None
-            for candidate in getattr(manager, "layers", []):
-                if getattr(candidate, "uid", None) == layer_uid:
-                    target_layer = candidate
-                    break
-            if target_layer is None:
-                continue
-            identity = id(target_layer)
-            if identity in visited_layers:
-                continue
-            visited_layers.add(identity)
-            target_layers.append(target_layer)
+        target_layers = list(
+            frame_manager.iter_layer_instances(
+                layer_uid, keys, ensure_frames=True
+            )
+        )
 
         if not target_layers:
             command = RemoveBackgroundCommand(layer)

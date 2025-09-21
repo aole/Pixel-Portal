@@ -70,6 +70,13 @@ class MoveTool(BaseTool):
             return
         self.before_image = active_layer.image.copy()
 
+        image_size = active_layer.image.size()
+        image_format = active_layer.image.format()
+        if self.canvas.temp_image is None or self.canvas.temp_image.size() != image_size:
+            self.canvas.temp_image = QImage(image_size, image_format)
+        self.canvas.temp_image.fill(Qt.transparent)
+        self.canvas.original_image = active_layer.image.copy()
+
         if self.canvas.selection_shape:
             self.moving_selection = True
             self.original_selection_shape = QPainterPath(self.canvas.selection_shape)

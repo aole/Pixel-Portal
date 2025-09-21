@@ -30,6 +30,29 @@ class LayerManager(QObject):
             return self.layers[self.active_layer_index]
         return None
 
+    # ------------------------------------------------------------------
+    # Layer lookup helpers
+    # ------------------------------------------------------------------
+    def index_for_layer_uid(self, layer_uid: int | None) -> int | None:
+        """Return the index of the layer with ``layer_uid`` if it exists."""
+
+        if layer_uid is None:
+            return None
+
+        for index, layer in enumerate(self.layers):
+            if getattr(layer, "uid", None) == layer_uid:
+                return index
+
+        return None
+
+    def find_layer_by_uid(self, layer_uid: int | None) -> Layer | None:
+        """Return the layer identified by ``layer_uid`` if present."""
+
+        index = self.index_for_layer_uid(layer_uid)
+        if index is None:
+            return None
+        return self.layers[index]
+
     def add_layer(self, name: str):
         """Adds a new layer to the top of the stack."""
         new_layer = Layer(self.width, self.height, name)

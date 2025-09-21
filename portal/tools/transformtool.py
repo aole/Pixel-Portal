@@ -48,6 +48,7 @@ class TransformTool(BaseTool):
 
         self._active_operation: Operation | None = None
         self._dragging_transform = False
+        self._last_move_delta = QPoint()
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -75,6 +76,7 @@ class TransformTool(BaseTool):
         self._invoke(self._rotate_tool, "activate")
         self._invoke(self._scale_tool, "activate")
         self.angle_changed.emit(0.0)
+        self._last_move_delta = QPoint()
 
     # ------------------------------------------------------------------
     def deactivate(self):
@@ -83,6 +85,7 @@ class TransformTool(BaseTool):
         self._invoke(self._move_tool, "deactivate")
         self._invoke(self._rotate_tool, "deactivate")
         self._invoke(self._scale_tool, "deactivate")
+        self._last_move_delta = QPoint()
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event, doc_pos):
@@ -91,6 +94,7 @@ class TransformTool(BaseTool):
 
         self._active_operation = None
         self._set_dragging_transform(False)
+        self._last_move_delta = QPoint()
 
         self._invoke(self._rotate_tool, "mousePressEvent", event, doc_pos)
         rotate_mode = getattr(self._rotate_tool, "drag_mode", None)
@@ -121,11 +125,17 @@ class TransformTool(BaseTool):
                 self._set_dragging_transform(False)
             self._invoke(self._scale_tool, "mouseMoveEvent", event, doc_pos)
         else:
-            if self._active_operation == "move":
+            dragging_move = bool(
+                self._active_operation == "move"
+                and event.buttons() & Qt.LeftButton
+            )
+            if dragging_move:
                 self._set_dragging_transform(True)
             else:
                 self._set_dragging_transform(False)
             self._invoke(self._move_tool, "mouseMoveEvent", event, doc_pos)
+            if dragging_move:
+                self._update_move_gizmos(doc_pos)
 
     # ------------------------------------------------------------------
     def mouseReleaseEvent(self, event, doc_pos):
@@ -153,6 +163,7 @@ class TransformTool(BaseTool):
             self._refresh_pivot()
 
         self._active_operation = None
+        self._last_move_delta = QPoint()
 
     # ------------------------------------------------------------------
     def mouseHoverEvent(self, event, doc_pos):
@@ -190,10 +201,16 @@ class TransformTool(BaseTool):
     def _handle_move_finished(self, delta: QPoint) -> None:
         pivot_is_manual = getattr(self._rotate_tool, "pivot_is_manual", None)
         pivot_manual = callable(pivot_is_manual) and pivot_is_manual()
-        if pivot_manual and not delta.isNull():
-            self._invoke(self._rotate_tool, "offset_pivot", delta)
-        elif not pivot_manual:
-            self._refresh_pivot()
+        remaining_delta = delta - self._last_move_delta
+        if pivot_manual:
+            if not remaining_delta.isNull():
+                self._invoke(self._rotate_tool, "offset_pivot", remaining_delta)
+        else:
+            if not remaining_delta.isNull():
+                self._invoke(self._rotate_tool, "offset_pivot", remaining_delta)
+            selection_shape = getattr(self.canvas, "selection_shape", None)
+            if selection_shape is not None:
+                self._refresh_pivot()
         self._refresh_scale_handles()
 
     # ------------------------------------------------------------------
@@ -203,4 +220,29 @@ class TransformTool(BaseTool):
     # ------------------------------------------------------------------
     def _refresh_pivot(self) -> None:
         self._invoke(self._rotate_tool, "refresh_pivot_from_document")
+
+    # ------------------------------------------------------------------
+    def _update_move_gizmos(self, doc_pos: QPoint) -> None:
+        start_point = getattr(self._move_tool, "start_point", None)
+        if start_point is None:
+            return
+        if not isinstance(start_point, QPoint):
+            try:
+                start_point = QPoint(start_point)
+            except TypeError:
+                return
+
+        delta = doc_pos - start_point
+        if delta == self._last_move_delta:
+            return
+
+        step = delta - self._last_move_delta
+        if not step.isNull():
+            self._invoke(self._rotate_tool, "offset_pivot", step)
+
+        self._last_move_delta = QPoint(delta)
+
+        selection_shape = getattr(self.canvas, "selection_shape", None)
+        if selection_shape is not None:
+            self._refresh_pivot()
 

@@ -108,7 +108,10 @@ class CanvasInputHandler:
             else:
                 self._force_tool(Qt.Key_Alt, "Picker")
         elif event.key() == Qt.Key_Control:
-            self._clear_forced_tool(Qt.Key_Control)
+            if self._is_selection_tool_active():
+                self._clear_forced_tool(Qt.Key_Control)
+            else:
+                self._force_tool(Qt.Key_Control, "Transform")
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
