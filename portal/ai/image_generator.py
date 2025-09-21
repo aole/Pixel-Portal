@@ -175,7 +175,6 @@ class ImageGenerator:
         height_f = float(height)
 
         scale = 1.0
-        allow_exceed_max = False
         if min_dim:
             smallest = min(width_f, height_f)
             if smallest < min_dim:
@@ -188,13 +187,8 @@ class ImageGenerator:
             largest = max(scaled_width, scaled_height)
             if largest > max_dim:
                 reduction = max_dim / largest
-                reduced_width = scaled_width * reduction
-                reduced_height = scaled_height * reduction
-                if min_dim and min(reduced_width, reduced_height) < min_dim - 1e-6:
-                    allow_exceed_max = True
-                else:
-                    scaled_width = reduced_width
-                    scaled_height = reduced_height
+                scaled_width *= reduction
+                scaled_height *= reduction
 
         if scaled_width <= 0 or scaled_height <= 0:
             return None
@@ -208,70 +202,158 @@ class ImageGenerator:
             return None
 
         base_min = min(base_width, base_height)
-        min_multiplier = 1
+        min_multiplier_required = 1
         if min_dim:
-            min_multiplier = max(min_multiplier, math.ceil(min_dim / base_min))
+            min_multiplier_required = max(1, math.ceil(min_dim / base_min))
 
-        enforce_max = bool(max_dim) and not allow_exceed_max
-        max_multiplier = None
-        if enforce_max:
+        max_multiplier_raw = None
+        if max_dim:
             max_unit = max(base_width, base_height)
-            max_multiplier = math.floor(max_dim / max_unit)
-            if max_multiplier < min_multiplier:
-                enforce_max = False
+            if max_unit <= 0:
+                return None
+            max_multiplier_raw = math.floor(max_dim / max_unit)
+
+        conflict = (
+            bool(min_dim)
+            and bool(max_dim)
+            and max_multiplier_raw is not None
+            and max_multiplier_raw < min_multiplier_required
+        )
+
+        def _snap_scalar(value: float) -> int:
+            snapped = int(round(value / multiple)) * multiple
+            if snapped <= 0:
+                snapped = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped = min(snapped, max_allowed)
+            return snapped
+
+        if conflict:
+            ratio_value = width_f / height_f if height_f else 1.0
+            if ratio_value >= 1.0:
+                snapped_width = _snap_scalar(scaled_width)
+                snapped_height = snapped_width / ratio_value if ratio_value else scaled_height
             else:
-                max_multiplier = max(1, max_multiplier)
+                snapped_height = _snap_scalar(scaled_height)
+                snapped_width = snapped_height * ratio_value
 
-        width_based = scaled_width / base_width
-        height_based = scaled_height / base_height
-        candidates = {min_multiplier}
-        for value in (width_based, height_based):
-            if math.isfinite(value):
-                candidates.update(
-                    {
-                        math.floor(value),
-                        math.ceil(value),
-                        int(round(value)),
-                    }
-                )
+            snapped_width = int(round(snapped_width / multiple)) * multiple
+            if snapped_width <= 0:
+                snapped_width = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped_width = min(snapped_width, max_allowed)
 
-        if enforce_max and max_multiplier is not None:
-            candidates.add(max_multiplier)
+            snapped_height = int(round(snapped_height / multiple)) * multiple
+            if snapped_height <= 0:
+                snapped_height = multiple
+            if max_dim:
+                max_allowed = max_dim - (max_dim % multiple)
+                if max_allowed <= 0:
+                    max_allowed = multiple
+                snapped_height = min(snapped_height, max_allowed)
 
-        valid: list[tuple[int, int, int]] = []
-        for candidate in candidates:
-            current = candidate
-            if current <= 0:
-                continue
-            if current < min_multiplier:
-                current = min_multiplier
-            if enforce_max and max_multiplier is not None and current > max_multiplier:
-                continue
+            best_width = snapped_width
+            best_height = snapped_height
+        else:
+            enforce_max = bool(max_dim)
+            max_multiplier = None
+            if enforce_max and max_multiplier_raw is not None:
+                if max_multiplier_raw < 1:
+                    max_multiplier = 1
+                else:
+                    max_multiplier = max_multiplier_raw
 
-            width_candidate = base_width * current
-            height_candidate = base_height * current
+            candidate_values: set[int] = {1, min_multiplier_required}
 
-            if min_dim and min(width_candidate, height_candidate) < min_dim:
-                continue
-            if enforce_max and max_dim and max(width_candidate, height_candidate) > max_dim:
-                continue
+            width_based = scaled_width / base_width
+            height_based = scaled_height / base_height
+            for value in (width_based, height_based):
+                if math.isfinite(value):
+                    candidate_values.update(
+                        {
+                            math.floor(value),
+                            math.ceil(value),
+                            int(round(value)),
+                        }
+                    )
 
-            valid.append((width_candidate, height_candidate, current))
+            if enforce_max and max_multiplier is not None:
+                candidate_values.add(max_multiplier)
 
-        if not valid:
-            if allow_exceed_max:
-                current = min_multiplier
-                return (
-                    int(base_width * current),
-                    int(base_height * current),
-                )
-            return None
+            valid_strict: list[tuple[int, int, int]] = []
+            valid_relaxed: list[tuple[int, int, int]] = []
 
-        def score(option: tuple[int, int, int]) -> float:
-            width_candidate, height_candidate, _ = option
-            return abs(width_candidate - scaled_width) + abs(height_candidate - scaled_height)
+            for candidate in candidate_values:
+                current = candidate
+                if current <= 0:
+                    continue
+                if enforce_max and max_multiplier is not None and current > max_multiplier:
+                    continue
 
-        best_width, best_height, _ = min(valid, key=score)
+                width_candidate = base_width * current
+                height_candidate = base_height * current
+
+                meets_min = not min_dim or min(width_candidate, height_candidate) >= min_dim
+                meets_max = not max_dim or max(width_candidate, height_candidate) <= max_dim
+                if not meets_max:
+                    continue
+
+                entry = (int(width_candidate), int(height_candidate), current)
+                if meets_min:
+                    valid_strict.append(entry)
+                else:
+                    valid_relaxed.append(entry)
+
+            def score(option: tuple[int, int, int]) -> float:
+                width_candidate, height_candidate, _ = option
+                return abs(width_candidate - scaled_width) + abs(height_candidate - scaled_height)
+
+            selection_pool: list[tuple[int, int, int]]
+            if valid_strict:
+                selection_pool = valid_strict
+            elif valid_relaxed:
+                selection_pool = valid_relaxed
+            else:
+                snapped_width = _snap_scalar(scaled_width)
+                snapped_height = int(round(scaled_height / multiple)) * multiple
+                if snapped_height <= 0:
+                    snapped_height = multiple
+                if max_dim:
+                    max_allowed = max_dim - (max_dim % multiple)
+                    if max_allowed <= 0:
+                        max_allowed = multiple
+                    snapped_height = min(snapped_height, max_allowed)
+                best_width = snapped_width
+                best_height = snapped_height
+                if best_width <= 0 or best_height <= 0:
+                    return None
+            if valid_strict or valid_relaxed:
+                best_width, best_height, _ = min(selection_pool, key=score)
+
+        min_output_dim = max(32, multiple)
+
+        def ensure_min_dimension(value: int) -> int:
+            if value >= min_output_dim:
+                return value
+            steps = math.ceil(min_output_dim / multiple)
+            return steps * multiple
+
+        best_width = ensure_min_dimension(int(best_width))
+        best_height = ensure_min_dimension(int(best_height))
+
+        if max_dim:
+            max_allowed = max_dim - (max_dim % multiple)
+            if max_allowed <= 0:
+                max_allowed = multiple
+            best_width = min(best_width, max_allowed)
+            best_height = min(best_height, max_allowed)
+
         return int(best_width), int(best_height)
 
     def _get_model_constraints(self, model_name: str | None) -> DimensionConstraints | None:
