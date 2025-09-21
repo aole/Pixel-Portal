@@ -111,7 +111,7 @@ class AnimationTimelineWidget(QWidget):
         self._has_copied_key = False
         self._scroll_offset = 0.0
         self._last_pan_x = 0.0
-        self._scrub_gap = 10.0
+        self._scrub_gap = 24.0
         self._scrub_channel_height = 12.0
         self._scrub_triangle_half_width = 8.0
         self._scrub_tolerance = 4.0
@@ -130,7 +130,7 @@ class AnimationTimelineWidget(QWidget):
         self._range_handle_rects: Dict[str, QRectF] = {}
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
 
@@ -668,16 +668,19 @@ class AnimationTimelineWidget(QWidget):
 
     def _build_range_geometry(self, layout: _TimelineLayout) -> Dict[str, object]:
         spacing = layout.spacing
-        base_y = layout.track_y - self._tick_height / 2
-        loop_y = base_y - self._range_track_gap
+        track_top = layout.track_y - self._tick_height / 2
+        track_bottom = layout.track_y + self._tick_height / 2
+        loop_y = track_top - self._range_track_gap
         if loop_y < 8.0:
             loop_y = 8.0
-        playback_y = loop_y - self._range_track_gap
-        min_playback = 4.0
+        handle_half_height = self._range_handle_height / 2.0
+        playback_y = track_bottom + self._range_track_gap
+        min_playback = track_bottom + handle_half_height + 2.0
         if playback_y < min_playback:
             playback_y = min_playback
-        if playback_y > loop_y - 4.0:
-            playback_y = max(4.0, loop_y - 4.0)
+        max_playback = layout.scrub_top - handle_half_height - 2.0
+        if playback_y > max_playback:
+            playback_y = max(min_playback, max_playback)
         if spacing <= 0:
             base_x = float(self._margin) - self._scroll_offset
             total_start_x = base_x
@@ -766,10 +769,6 @@ class AnimationTimelineWidget(QWidget):
             self._update_loop_range(frame, self._loop_end, emit_signal=True)
         elif handle == "loop_end":
             frame = self._frame_at_point(event, clamp=False)
-            is_linked = self._loop_end == playback_last_index
-            if is_linked:
-                new_total = max(1, frame + 1)
-                self._apply_playback_total_frames(new_total, from_user=True)
             self._update_loop_range(self._loop_start, frame, emit_signal=True)
 
     def _reset_range_handle_state(self) -> None:
