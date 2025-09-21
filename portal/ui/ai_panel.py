@@ -405,6 +405,7 @@ class AIPanel(QWidget):
         input_image = None
         mask_image = None
         transparency_mask = None
+        transparency_mask_applied = False
 
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
@@ -432,8 +433,10 @@ class AIPanel(QWidget):
 
             if mask_image and transparency_mask:
                 mask_image = ImageChops.lighter(mask_image, transparency_mask)
+                transparency_mask_applied = True
             elif transparency_mask and not mask_image:
                 mask_image = transparency_mask
+                transparency_mask_applied = True
 
             if mask_image and mask_image.getbbox() is None:
                 mask_image = None
@@ -456,6 +459,8 @@ class AIPanel(QWidget):
         num_inference_steps = self.steps_slider.value()
         guidance_scale = self.guidance_slider.value() / 10.0
         strength = self.strength_slider.value() / 100.0
+        if transparency_mask_applied:
+            strength = 1.0
 
         remove_background = self.remove_bg_checkbox.isChecked()
 
