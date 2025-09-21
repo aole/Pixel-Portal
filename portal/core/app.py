@@ -151,6 +151,13 @@ class App(QObject):
     def set_playback_total_frames(self, frame_count: int) -> None:
         self.document_controller.set_playback_total_frames(frame_count)
 
+    @property
+    def playback_loop_range(self) -> tuple[int, int]:
+        return self.document_controller.playback_loop_range
+
+    def set_playback_loop_range(self, start: int, end: int) -> None:
+        self.document_controller.set_playback_loop_range(start, end)
+
     def ensure_auto_key_for_active_layer(self) -> bool:
         return self.document_controller.ensure_auto_key_for_active_layer()
 
