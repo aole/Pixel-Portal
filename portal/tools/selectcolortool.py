@@ -13,7 +13,7 @@ from portal.tools.color_selection import build_color_selection_path
 class SelectColorTool(BaseTool):
     name = "Select Color"
     icon = "icons/toolselectcolor.png"
-    shortcut = "w"
+    shortcut = "v"
     category = "select"
 
     def __init__(self, canvas):

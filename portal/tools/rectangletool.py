@@ -8,7 +8,7 @@ from portal.core.command import ShapeCommand
 class RectangleTool(BaseTool):
     name = "Rectangle"
     icon = "icons/toolrect.png"
-    shortcut = "r"
+    shortcut = "s"
     category = "shape"
 
     def __init__(self, canvas):

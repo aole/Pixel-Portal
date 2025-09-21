@@ -8,7 +8,7 @@ from portal.core.command import ShapeCommand
 class EllipseTool(BaseTool):
     name = "Ellipse"
     icon = "icons/toolellipse.png"
-    shortcut = "c"
+    shortcut = "s"
     category = "shape"
 
     def __init__(self, canvas):

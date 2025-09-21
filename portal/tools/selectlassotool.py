@@ -9,7 +9,7 @@ from portal.tools.color_selection import build_color_selection_path
 class SelectLassoTool(BaseSelectTool):
     name = "Select Lasso"
     icon = "icons/toolselectlasso.png"
-    shortcut = "f"
+    shortcut = "v"
     category = "select"
 
     def __init__(self, canvas):

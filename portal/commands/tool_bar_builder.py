@@ -21,6 +21,7 @@ class ToolBarBuilder:
         self._button_fallback_icons = {}
         self._button_entry_names = {}
         self._button_actions_map = {}
+        self._shortcut_groups = {}
 
     def setup_toolbars(self):
         self._setup_top_toolbar()
@@ -210,6 +211,7 @@ class ToolBarBuilder:
         self.tool_actions = {}
         self.tool_buttons = {}
         self._button_fallback_icons = {}
+        self._shortcut_groups = {}
         self.tool_action_group = QActionGroup(self.main_window)
         self.tool_action_group.setExclusive(True)
 
@@ -234,6 +236,7 @@ class ToolBarBuilder:
                         "name": tool_name,
                         "action": action,
                         "icon": icon_path,
+                        "shortcut": tool.get("shortcut"),
                     }
                 )
 
@@ -294,6 +297,23 @@ class ToolBarBuilder:
                 self._button_actions_map[button] = list(actions_for_button)
                 self._refresh_button_tooltip(button, first_action)
 
+                group_shortcut = None
+                for tool_info in normalized_tools:
+                    candidate = tool_info.get("shortcut")
+                    if not candidate:
+                        group_shortcut = None
+                        break
+                    if group_shortcut is None:
+                        group_shortcut = candidate
+                    elif candidate != group_shortcut:
+                        group_shortcut = None
+                        break
+
+                if group_shortcut:
+                    self._register_shortcut_group(
+                        group_shortcut, [tool_info["name"] for tool_info in normalized_tools]
+                    )
+
                 fallback_icon = entry_icon or normalized_tools[0].get("icon")
                 icon = first_action.icon()
                 if icon.isNull():
@@ -336,6 +356,11 @@ class ToolBarBuilder:
         current_tool = getattr(self.app.drawing_context, "tool", None)
         if current_tool:
             self.update_tool_buttons(current_tool)
+
+        canvas = getattr(self.main_window, "canvas", None)
+        input_handler = getattr(canvas, "input_handler", None)
+        if input_handler and hasattr(input_handler, "set_tool_shortcut_groups"):
+            input_handler.set_tool_shortcut_groups(self._shortcut_groups)
 
     def _get_or_create_tool_action(self, tool):
         tool_name = tool["name"]
@@ -397,6 +422,19 @@ class ToolBarBuilder:
 
         if actions:
             self._button_actions_map[button] = ordered_actions
+
+    def _register_shortcut_group(self, shortcut, tool_names):
+        if not shortcut or not tool_names:
+            return
+
+        normalized_key = str(shortcut).strip().lower()
+        if not normalized_key:
+            return
+
+        existing = self._shortcut_groups.setdefault(normalized_key, [])
+        for name in tool_names:
+            if name and name not in existing:
+                existing.append(name)
 
     def _load_toolbar_layout(self, tools_by_name):
         config = self._read_toolbar_config()
