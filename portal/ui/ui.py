@@ -330,11 +330,18 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.drawing_context.tool_changed.connect(toolbar_builder.update_tool_buttons)
-        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
-        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
+        self.app.drawing_context.pen_width_changed.connect(self._on_pen_width_changed)
+        self.app.drawing_context.eraser_width_changed.connect(
+            self._on_eraser_width_changed
+        )
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
         self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
+        self.app.drawing_context.tool_changed.connect(
+            self._update_width_controls_for_tool
+        )
         self.app.drawing_context.tool_changed.connect(self.on_tool_changed_for_status_bar)
+
+        self._update_width_controls_for_tool()
 
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
@@ -575,6 +582,7 @@ class MainWindow(QMainWindow):
         self.timeline_play_button.setIcon(
             self._timeline_pause_icon if playing else self._timeline_play_icon
         )
+        self.canvas.set_animation_playback_active(playing)
         self._update_stop_button_state()
 
     @Slot(object)
@@ -815,11 +823,49 @@ class MainWindow(QMainWindow):
             for color in colors:
                 f.write(f"{color}\n")
 
-    def update_pen_width_label(self, width):
-        self.pen_width_label.setText(f"{width:02d}")
+    def _resolve_active_brush_width(self) -> int:
+        tool = getattr(self.app.drawing_context, "tool", "Pen")
+        if tool == "Eraser":
+            return int(
+                getattr(
+                    self.app.drawing_context,
+                    "eraser_width",
+                    self.app.drawing_context.pen_width,
+                )
+            )
+        return int(self.app.drawing_context.pen_width)
 
-    def update_pen_width_slider(self, width):
-        self.pen_width_slider.setValue(width)
+    def _set_width_controls(self, width: int) -> None:
+        width_value = int(width)
+        if hasattr(self, "pen_width_slider"):
+            with QSignalBlocker(self.pen_width_slider):
+                self.pen_width_slider.setValue(width_value)
+        if hasattr(self, "pen_width_label"):
+            self.pen_width_label.setText(f"{width_value:02d}")
+
+    @Slot(int)
+    def _on_pen_width_changed(self, width: int) -> None:
+        if getattr(self.app.drawing_context, "tool", "Pen") == "Eraser":
+            return
+        self._set_width_controls(width)
+
+    @Slot(int)
+    def _on_eraser_width_changed(self, width: int) -> None:
+        if getattr(self.app.drawing_context, "tool", "Pen") != "Eraser":
+            return
+        self._set_width_controls(width)
+
+    @Slot(str)
+    def _update_width_controls_for_tool(self, _tool: str | None = None) -> None:
+        self._set_width_controls(self._resolve_active_brush_width())
+
+    @Slot(int)
+    def on_width_slider_changed(self, value: int) -> None:
+        width_value = int(value)
+        if getattr(self.app.drawing_context, "tool", "Pen") == "Eraser":
+            self.app.drawing_context.set_eraser_width(width_value)
+        else:
+            self.app.drawing_context.set_pen_width(width_value)
 
     def update_undo_redo_actions(self):
         self.action_manager.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 0)

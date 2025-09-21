@@ -6,6 +6,7 @@ class DrawingContext(QObject):
     tool_changed = Signal(str)
     pen_color_changed = Signal(QColor)
     pen_width_changed = Signal(int)
+    eraser_width_changed = Signal(int)
     brush_type_changed = Signal(str)
     mirror_x_changed = Signal(bool)
     mirror_y_changed = Signal(bool)
@@ -19,6 +20,7 @@ class DrawingContext(QObject):
         self.previous_tool = "Pen"
         self.pen_color = QColor("black")
         self.pen_width = 1
+        self.eraser_width = 1
         self.brush_type = "Circular"
         self.pattern_brush: QImage | None = None
         self.mirror_x = False
@@ -54,6 +56,11 @@ class DrawingContext(QObject):
     def set_pen_width(self, width):
         self.pen_width = width
         self.pen_width_changed.emit(self.pen_width)
+
+    @Slot(int)
+    def set_eraser_width(self, width):
+        self.eraser_width = width
+        self.eraser_width_changed.emit(self.eraser_width)
 
     @Slot(str)
     def set_brush_type(self, brush_type):

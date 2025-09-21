@@ -167,7 +167,9 @@ class ToolBarBuilder:
         self.main_window.pen_width_slider.setMaximumWidth(100)
         self.main_window.pen_width_slider.setSingleStep(1)
         self.main_window.pen_width_slider.setPageStep(1)
-        self.main_window.pen_width_slider.valueChanged.connect(self.app.drawing_context.set_pen_width)
+        self.main_window.pen_width_slider.valueChanged.connect(
+            self.main_window.on_width_slider_changed
+        )
         self.top_toolbar.addWidget(self.main_window.pen_width_slider)
 
         self.action_manager.circular_brush_action.setChecked(self.app.drawing_context.brush_type == "Circular")

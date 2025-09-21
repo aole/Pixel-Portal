@@ -81,7 +81,7 @@ class EraserTool(BaseTool):
             layer=active_layer,
             points=self.points,
             color=self.canvas.drawing_context.pen_color,
-            width=self.canvas.drawing_context.pen_width,
+            width=self.canvas.drawing_context.eraser_width,
             brush_type=self.canvas.drawing_context.brush_type,
             document=self.canvas.document,
             selection_shape=self.canvas.selection_shape,
@@ -118,13 +118,15 @@ class EraserTool(BaseTool):
 
         painter.setPen(QPen(Qt.black))
 
+        brush_width = self.canvas.drawing_context.eraser_width
+
         if len(self.points) == 1:
             self.canvas.drawing.draw_brush(
                 painter,
                 self.points[0],
                 self.canvas._document_size,
                 self.canvas.drawing_context.brush_type,
-                self.canvas.drawing_context.pen_width,
+                brush_width,
                 self.canvas.drawing_context.mirror_x,
                 self.canvas.drawing_context.mirror_y,
                 wrap=wrap,
@@ -139,7 +141,7 @@ class EraserTool(BaseTool):
                     end,
                     self.canvas._document_size,
                     self.canvas.drawing_context.brush_type,
-                    self.canvas.drawing_context.pen_width,
+                    brush_width,
                     self.canvas.drawing_context.mirror_x,
                     self.canvas.drawing_context.mirror_y,
                     wrap=wrap,
