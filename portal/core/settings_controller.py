@@ -26,7 +26,9 @@ class SettingsController(QObject):
     }
 
     DEFAULT_AI_SETTINGS = {
-        "negative_prompt": "",
+        "negative_prompt": (
+            "blurry, low quality, distorted, deformed, extra limbs, watermark, text"
+        ),
     }
 
     def __init__(self):
