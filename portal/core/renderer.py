@@ -480,6 +480,8 @@ class CanvasRenderer:
     def _resolve_onion_skin_settings(self) -> Optional[_OnionSkinSettings]:
         if not getattr(self.canvas, "onion_skin_enabled", False):
             return None
+        if getattr(self.canvas, "animation_playback_active", False):
+            return None
 
         prev_count = self._normalize_onion_count(
             getattr(self.canvas, "onion_skin_prev_frames", 0)
@@ -1042,7 +1044,12 @@ class CanvasRenderer:
         )
 
         # Use the application's brush size
-        brush_size = self.canvas.drawing_context.pen_width
+        if is_eraser:
+            brush_size = getattr(
+                self.canvas.drawing_context, "eraser_width", self.canvas.drawing_context.pen_width
+            )
+        else:
+            brush_size = self.canvas.drawing_context.pen_width
 
         # Center the brush cursor around the mouse position
         doc_pos = self.canvas.cursor_doc_pos

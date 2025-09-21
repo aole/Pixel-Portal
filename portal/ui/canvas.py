@@ -99,6 +99,8 @@ class Canvas(QWidget):
         self.onion_skin_prev_color = QColor(255, 96, 96, 168)
         self.onion_skin_next_color = QColor(96, 160, 255, 168)
 
+        self.animation_playback_active = False
+
         tool_defs = get_tools()
         self.tools = {tool_def["name"]: tool_def["class"](self) for tool_def in tool_defs}
         for tool in self.tools.values():
@@ -152,7 +154,7 @@ class Canvas(QWidget):
         if size_changed or self._ruler_start is None or self._ruler_end is None:
             self._initialize_ruler_handles()
         else:
-            self._clamp_ruler_points_to_document()
+            self._emit_ruler_distance()
         self.update()
 
     def is_auto_key_enabled(self) -> bool:
@@ -677,19 +679,16 @@ class Canvas(QWidget):
         self._ruler_end = end_point
         self._emit_ruler_distance()
 
-    def _clamp_point_to_document(self, point: QPointF) -> QPointF:
+    def _clamp_point_to_document(
+        self, point: QPointF, *, allow_outside: bool = False
+    ) -> QPointF:
+        if allow_outside:
+            return QPointF(point)
         width = float(max(0, self._document_size.width()))
         height = float(max(0, self._document_size.height()))
         clamped_x = min(max(point.x(), 0.0), width)
         clamped_y = min(max(point.y(), 0.0), height)
         return QPointF(clamped_x, clamped_y)
-
-    def _clamp_ruler_points_to_document(self) -> None:
-        if self._ruler_start is not None:
-            self._ruler_start = self._clamp_point_to_document(self._ruler_start)
-        if self._ruler_end is not None:
-            self._ruler_end = self._clamp_point_to_document(self._ruler_end)
-        self._emit_ruler_distance()
 
     def _emit_ruler_distance(self) -> None:
         if not self.ruler_enabled:
@@ -754,7 +753,6 @@ class Canvas(QWidget):
         point = self._canvas_pos_to_doc_point(pos)
         if modifiers & Qt.ControlModifier:
             point = QPointF(round(point.x()), round(point.y()))
-        point = self._clamp_point_to_document(point)
         if (
             modifiers & Qt.ShiftModifier
             and handle in {"start", "end"}
@@ -771,17 +769,6 @@ class Canvas(QWidget):
             delta_x = point.x() - current_point.x()
             delta_y = point.y() - current_point.y()
 
-            doc_width = float(max(0, self._document_size.width()))
-            doc_height = float(max(0, self._document_size.height()))
-
-            min_allowed_x = -min(start_point.x(), end_point.x())
-            max_allowed_x = doc_width - max(start_point.x(), end_point.x())
-            min_allowed_y = -min(start_point.y(), end_point.y())
-            max_allowed_y = doc_height - max(start_point.y(), end_point.y())
-
-            delta_x = max(min(delta_x, max_allowed_x), min_allowed_x)
-            delta_y = max(min(delta_y, max_allowed_y), min_allowed_y)
-
             translated_start = QPointF(
                 start_point.x() + delta_x, start_point.y() + delta_y
             )
@@ -789,8 +776,8 @@ class Canvas(QWidget):
                 end_point.x() + delta_x, end_point.y() + delta_y
             )
 
-            self._ruler_start = self._clamp_point_to_document(translated_start)
-            self._ruler_end = self._clamp_point_to_document(translated_end)
+            self._ruler_start = translated_start
+            self._ruler_end = translated_end
         else:
             if handle == "start":
                 self._ruler_start = point
@@ -829,8 +816,6 @@ class Canvas(QWidget):
         if enabled:
             if self._ruler_start is None or self._ruler_end is None:
                 self._initialize_ruler_handles()
-            else:
-                self._clamp_ruler_points_to_document()
         else:
             self._ruler_handle_drag = None
             self._ruler_handle_hover = None
@@ -1190,6 +1175,13 @@ class Canvas(QWidget):
         if normalized == self.onion_skin_enabled:
             return
         self.onion_skin_enabled = normalized
+        self.update()
+
+    def set_animation_playback_active(self, playing: bool) -> None:
+        normalized = bool(playing)
+        if normalized == self.animation_playback_active:
+            return
+        self.animation_playback_active = normalized
         self.update()
 
     def set_onion_skin_range(
