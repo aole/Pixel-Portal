@@ -16,13 +16,6 @@ if TYPE_CHECKING:
 rembg_remove = None
 
 
-def _find_layer_with_uid(layer_manager, layer_uid):
-    for layer in layer_manager.layers:
-        if getattr(layer, "uid", None) == layer_uid:
-            return layer
-    return None
-
-
 def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool:
     layer_manager = document.layer_manager
     if not (0 < layer_index < len(layer_manager.layers)):
@@ -58,11 +51,8 @@ def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool
         if not (0 <= top_source_index < len(frame_manager.frames)):
             continue
 
-        top_manager = frame_manager.frames[top_source_index].layer_manager
-        target_manager = frame_manager.frames[frame_index].layer_manager
-
-        top_source_layer = _find_layer_with_uid(top_manager, top_uid)
-        bottom_target_layer = _find_layer_with_uid(target_manager, bottom_uid)
+        top_source_layer = frame_manager.layer_for_frame(top_source_index, top_uid)
+        bottom_target_layer = frame_manager.layer_for_frame(frame_index, bottom_uid)
 
         if top_source_layer is None or bottom_target_layer is None:
             continue
@@ -118,11 +108,8 @@ def _merge_layer_down_current_frame(document: 'Document', layer_index: int) -> b
     if frame_index not in keys:
         frame_manager.add_layer_key(bottom_uid, frame_index)
 
-    source_manager = frame_manager.frames[source_frame_index].layer_manager
-    target_manager = frame_manager.frames[frame_index].layer_manager
-
-    source_layer = _find_layer_with_uid(source_manager, top_uid)
-    target_layer = _find_layer_with_uid(target_manager, bottom_uid)
+    source_layer = frame_manager.layer_for_frame(source_frame_index, top_uid)
+    target_layer = frame_manager.layer_for_frame(frame_index, bottom_uid)
     if source_layer is None or target_layer is None:
         return False
 

@@ -435,10 +435,6 @@ class FlipCommand(Command):
         if frame_manager is None:
             return [layer]
 
-        frames = getattr(frame_manager, "frames", [])
-        if not frames:
-            return [layer]
-
         try:
             key_frames = frame_manager.layer_key_frames(layer.uid)
         except Exception:
@@ -446,16 +442,9 @@ class FlipCommand(Command):
 
         keyed_layers: list['Layer'] = []
         for frame_index in key_frames:
-            if not (0 <= frame_index < len(frames)):
-                continue
-            frame = frames[frame_index]
-            manager = getattr(frame, "layer_manager", None)
-            if manager is None:
-                continue
-            for candidate in getattr(manager, "layers", []):
-                if getattr(candidate, "uid", None) == layer.uid:
-                    keyed_layers.append(candidate)
-                    break
+            layer_instance = frame_manager.layer_for_frame(frame_index, layer.uid)
+            if layer_instance is not None:
+                keyed_layers.append(layer_instance)
 
         return keyed_layers or [layer]
 
@@ -1072,10 +1061,11 @@ class MoveLayerCommand(Command):
                 manager.active_layer_index = -1
             return
 
-        for index, layer in enumerate(manager.layers):
-            if getattr(layer, "uid", None) == active_uid:
-                manager.active_layer_index = index
-                return
+        finder = getattr(manager, "index_for_layer_uid", None)
+        index = finder(active_uid) if callable(finder) else None
+        if index is not None:
+            manager.active_layer_index = index
+            return
 
         if manager.layers:
             manager.active_layer_index = min(

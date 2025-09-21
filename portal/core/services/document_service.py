@@ -1124,13 +1124,7 @@ class DocumentService:
 
     @staticmethod
     def _layer_instance_for_frame(frame_manager, frame_index, layer_uid):
-        if not (0 <= frame_index < len(frame_manager.frames)):
-            return None
-        manager = frame_manager.frames[frame_index].layer_manager
-        for layer in manager.layers:
-            if getattr(layer, "uid", None) == layer_uid:
-                return layer
-        return None
+        return frame_manager.layer_for_frame(frame_index, layer_uid)
 
     def _get_selected_image(self):
         app = self.app

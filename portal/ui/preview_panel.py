@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtCore import Qt, QSignalBlocker
 
 from portal.core.animation_player import AnimationPlayer
@@ -12,6 +12,8 @@ class PreviewPanel(QWidget):
         self._playback_total_frames = 1
         self._current_playback_frame = 0
         self._current_document_id = None
+        self._loop_start = 0
+        self._loop_end = 0
 
         self.preview_player = AnimationPlayer(self)
         self.preview_player.frame_changed.connect(self._on_preview_frame_changed)
@@ -51,10 +53,40 @@ class PreviewPanel(QWidget):
         total_frames = max(1, int(total_frames))
         self._playback_total_frames = total_frames
         self.preview_player.set_total_frames(total_frames)
+        max_loop = max(0, self._playback_total_frames - 1)
+        if self._loop_end > max_loop:
+            self._loop_end = max_loop
+        if self._loop_start > self._loop_end:
+            self._loop_start = self._loop_end
+        self.preview_player.set_loop_range(self._loop_start, self._loop_end)
         self._current_playback_frame = self.preview_player.current_frame
 
     def set_playback_fps(self, fps: float) -> None:
         self.preview_player.set_fps(fps)
+
+    def set_loop_range(self, start: int, end: int) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_loop = max(0, self._playback_total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_loop:
+            end_value = max_loop
+        if start_value > end_value:
+            start_value = end_value
+        self._loop_start = start_value
+        self._loop_end = end_value
+        self.preview_player.set_loop_range(self._loop_start, self._loop_end)
+        if (
+            self.preview_player.current_frame < self._loop_start
+            or self.preview_player.current_frame > self._loop_end
+        ):
+            self.preview_player.set_current_frame(self._loop_start)
 
     def update_preview(self, playback_index: int | None = None) -> None:
         document = self.app.document
@@ -114,18 +146,32 @@ class PreviewPanel(QWidget):
         self.update_preview(playback_index=frame)
 
     def _pixmap_for_document(self, document, playback_index: int | None) -> QPixmap | None:
-        image = None
+        image: QImage | None = None
         frame_manager = getattr(document, "frame_manager", None)
         if playback_index is not None and frame_manager is not None:
             resolved_index = frame_manager.resolve_key_frame_index(playback_index)
             if resolved_index is not None and 0 <= resolved_index < len(frame_manager.frames):
-                image = frame_manager.frames[resolved_index].render()
+                candidate = frame_manager.frames[resolved_index].render()
+                image = self._coerce_qimage(candidate)
 
         if image is None:
-            try:
-                image = document.render_current_frame()
-            except ValueError:
-                image = None
+            render_current = getattr(document, "render_current_frame", None)
+            if callable(render_current):
+                try:
+                    candidate = render_current()
+                except ValueError:
+                    image = None
+                else:
+                    image = self._coerce_qimage(candidate)
+            if image is None:
+                render_fallback = getattr(document, "render", None)
+                if callable(render_fallback):
+                    try:
+                        candidate = render_fallback()
+                    except ValueError:
+                        image = None
+                    else:
+                        image = self._coerce_qimage(candidate)
 
         if image is None:
             return None
@@ -137,3 +183,11 @@ class PreviewPanel(QWidget):
         if pixmap.width() > 128 or pixmap.height() > 128:
             pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.FastTransformation)
         return pixmap
+
+    @staticmethod
+    def _coerce_qimage(image) -> QImage | None:
+        if isinstance(image, QImage):
+            return image
+        if isinstance(image, QPixmap):
+            return image.toImage()
+        return None

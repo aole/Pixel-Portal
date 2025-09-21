@@ -73,6 +73,8 @@ class DocumentController(QObject):
         self._copied_key_state = None
         self.auto_key_enabled = False
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
+        self._playback_loop_start = 0
+        self._playback_loop_end = max(0, self._playback_total_frames - 1)
 
         self._last_ai_output_rect = QRect()
         self.document_changed.connect(self._on_document_mutated)
@@ -165,6 +167,33 @@ class DocumentController(QObject):
         if normalized < 1:
             normalized = 1
         self._playback_total_frames = normalized
+        max_loop = max(0, self._playback_total_frames - 1)
+        if self._playback_loop_end > max_loop:
+            self._playback_loop_end = max_loop
+        if self._playback_loop_start > self._playback_loop_end:
+            self._playback_loop_start = self._playback_loop_end
+
+    @property
+    def playback_loop_range(self) -> tuple[int, int]:
+        return self._playback_loop_start, self._playback_loop_end
+
+    def set_playback_loop_range(self, start: int, end: int) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_loop = max(0, self._playback_total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_loop:
+            end_value = max_loop
+        if start_value > end_value:
+            start_value = end_value
+        self._playback_loop_start = start_value
+        self._playback_loop_end = end_value
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         """Create a keyframe on the active layer if auto-key is enabled."""
@@ -686,27 +715,11 @@ class DocumentController(QObject):
             resolved = resolve_key(layer_uid, active_frame_index)
             keys = [resolved] if resolved is not None else []
 
-        visited_layers = set()
-        target_layers = []
-        frames = getattr(frame_manager, "frames", [])
-        for key_index in keys:
-            if key_index is None:
-                continue
-            if not (0 <= key_index < len(frames)):
-                continue
-            manager = frames[key_index].layer_manager
-            target_layer = None
-            for candidate in getattr(manager, "layers", []):
-                if getattr(candidate, "uid", None) == layer_uid:
-                    target_layer = candidate
-                    break
-            if target_layer is None:
-                continue
-            identity = id(target_layer)
-            if identity in visited_layers:
-                continue
-            visited_layers.add(identity)
-            target_layers.append(target_layer)
+        target_layers = list(
+            frame_manager.iter_layer_instances(
+                layer_uid, keys, ensure_frames=True
+            )
+        )
 
         if not target_layers:
             command = RemoveBackgroundCommand(layer)

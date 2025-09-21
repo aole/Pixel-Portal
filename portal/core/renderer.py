@@ -850,16 +850,15 @@ class CanvasRenderer:
         draw_tick_line(start_center, major_tick_length)
         draw_tick_line(end_center, major_tick_length)
 
-        segments_value = int(
-            max(
-                1,
-                getattr(
-                    self.canvas,
-                    "_ruler_segments",
-                    getattr(self.canvas, "_ruler_interval", 2),
-                ),
-            )
+        raw_segments = getattr(
+            self.canvas,
+            "_ruler_segments",
+            getattr(self.canvas, "_ruler_interval", 2),
         )
+        try:
+            segments_value = max(1, int(raw_segments))
+        except (TypeError, ValueError):
+            segments_value = 1
         minor_tick_length = max(handle_radius * 1.4, 8.0)
         if distance > 0 and segments_value > 1 and screen_length > 0:
             for segment_index in range(1, segments_value):

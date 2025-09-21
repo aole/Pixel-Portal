@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
-from typing import Dict, Iterable, List, Mapping, Optional, Set
+from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Set
 
 from PySide6.QtGui import QImage
 
@@ -53,20 +53,6 @@ class FrameManager:
         else:
             self.frame_markers = set()
 
-    @staticmethod
-    def _find_layer_index(layer_manager: LayerManager, layer_uid: int) -> Optional[int]:
-        for index, layer in enumerate(layer_manager.layers):
-            if getattr(layer, "uid", None) == layer_uid:
-                return index
-        return None
-
-    @staticmethod
-    def _find_layer(layer_manager: LayerManager, layer_uid: int) -> Optional[Layer]:
-        index = FrameManager._find_layer_index(layer_manager, layer_uid)
-        if index is None:
-            return None
-        return layer_manager.layers[index]
-
     def _clone_layer_state(
         self, layer_uid: int, source_frame_index: int, target_frame_index: int
     ) -> None:
@@ -74,22 +60,25 @@ class FrameManager:
             return
         if not (0 <= target_frame_index < len(self.frames)):
             return
-        source_manager = self.frames[source_frame_index].layer_manager
-        target_manager = self.frames[target_frame_index].layer_manager
-        source_layer = self._find_layer(source_manager, layer_uid)
+        source_manager = self.layer_manager_for_frame(source_frame_index)
+        target_manager = self.layer_manager_for_frame(target_frame_index)
+        if source_manager is None or target_manager is None:
+            return
+
+        source_layer = source_manager.find_layer_by_uid(layer_uid)
         if source_layer is None:
             return
-        source_index = self._find_layer_index(source_manager, layer_uid)
+        source_index = source_manager.index_for_layer_uid(layer_uid)
         if source_index is None:
             return
 
         clone = source_layer.clone()
-        target_layer = self._find_layer(target_manager, layer_uid)
+        target_layer = target_manager.find_layer_by_uid(layer_uid)
         if target_layer is None:
             insertion_index = min(source_index, len(target_manager.layers))
             target_manager.layers.insert(insertion_index, clone)
         else:
-            target_index = self._find_layer_index(target_manager, layer_uid)
+            target_index = target_manager.index_for_layer_uid(layer_uid)
             if target_index is None:
                 target_index = min(source_index, len(target_manager.layers))
                 target_manager.layers.insert(target_index, clone)
@@ -102,9 +91,11 @@ class FrameManager:
     ) -> None:
         if not (0 <= frame_index < len(self.frames)):
             return
-        manager = self.frames[frame_index].layer_manager
-        source_layer = self._find_layer(manager, source_uid)
-        target_layer = self._find_layer(manager, target_uid)
+        manager = self.layer_manager_for_frame(frame_index)
+        if manager is None:
+            return
+        source_layer = manager.find_layer_by_uid(source_uid)
+        target_layer = manager.find_layer_by_uid(target_uid)
         if source_layer is None or target_layer is None or source_layer is target_layer:
             return
         target_layer.apply_key_state_from(source_layer)
@@ -132,21 +123,23 @@ class FrameManager:
                 continue
             if frame_index < fallback_index:
                 continue
-            source_manager = self.frames[fallback_index].layer_manager
-            target_manager = frame.layer_manager
-            source_layer = self._find_layer(source_manager, layer_uid)
+            source_manager = self.layer_manager_for_frame(fallback_index)
+            target_manager = self.layer_manager_for_frame(frame_index)
+            if source_manager is None or target_manager is None:
+                continue
+            source_layer = source_manager.find_layer_by_uid(layer_uid)
             if source_layer is None:
                 continue
-            source_index = self._find_layer_index(source_manager, layer_uid)
+            source_index = source_manager.index_for_layer_uid(layer_uid)
             if source_index is None:
                 continue
             if frame_index == fallback_index:
                 # Ensure the keyed frame hosts the layer entry.
-                if self._find_layer(target_manager, layer_uid) is None:
+                if target_manager.find_layer_by_uid(layer_uid) is None:
                     clone = source_layer.clone()
                     target_manager.layers.insert(source_index, clone)
                 continue
-            target_layer = self._find_layer(target_manager, layer_uid)
+            target_layer = target_manager.find_layer_by_uid(layer_uid)
             if target_layer is source_layer:
                 continue
             if target_layer is None:
@@ -157,6 +150,51 @@ class FrameManager:
     def _rebind_all_layers(self) -> None:
         for layer_uid in list(self.layer_keys.keys()):
             self._rebind_layer_fallbacks(layer_uid)
+
+    # ------------------------------------------------------------------
+    # Layer access helpers
+    # ------------------------------------------------------------------
+    def layer_manager_for_frame(self, frame_index: int) -> Optional[LayerManager]:
+        """Return the :class:`LayerManager` for *frame_index* if available."""
+
+        if not (0 <= frame_index < len(self.frames)):
+            return None
+        return self.frames[frame_index].layer_manager
+
+    def layer_for_frame(self, frame_index: int, layer_uid: int) -> Optional[Layer]:
+        """Return the layer identified by *layer_uid* on *frame_index* if present."""
+
+        manager = self.layer_manager_for_frame(frame_index)
+        if manager is None:
+            return None
+        return manager.find_layer_by_uid(layer_uid)
+
+    def iter_layer_instances(
+        self,
+        layer_uid: int,
+        frame_indices: Iterable[int],
+        *,
+        ensure_frames: bool = False,
+    ) -> Iterator[Layer]:
+        """Yield unique layer instances for *layer_uid* across *frame_indices*."""
+
+        seen: Set[int] = set()
+        for frame_index in frame_indices:
+            if frame_index is None:
+                continue
+            if ensure_frames:
+                self.ensure_frame(frame_index)
+            manager = self.layer_manager_for_frame(frame_index)
+            if manager is None:
+                continue
+            layer = manager.find_layer_by_uid(layer_uid)
+            if layer is None:
+                continue
+            identity = id(layer)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            yield layer
 
     # ------------------------------------------------------------------
     # Public API
@@ -478,7 +516,7 @@ class FrameManager:
         if not (0 <= frame_index < len(self.frames)):
             return None
         manager = self.frames[frame_index].layer_manager
-        layer = self._find_layer(manager, layer_uid)
+        layer = manager.find_layer_by_uid(layer_uid)
         if layer is None:
             return None
         return layer.clone(preserve_identity=False)
@@ -493,7 +531,7 @@ class FrameManager:
         if frame_index not in keys:
             self.add_layer_key(layer_uid, frame_index)
         manager = self.frames[frame_index].layer_manager
-        layer = self._find_layer(manager, layer_uid)
+        layer = manager.find_layer_by_uid(layer_uid)
         if layer is None:
             return False
         layer.apply_key_state_from(key_state)
@@ -529,7 +567,7 @@ class FrameManager:
                 insertion_index = 0
             if insertion_index > len(manager.layers):
                 insertion_index = len(manager.layers)
-            if self._find_layer(manager, layer.uid) is None:
+            if manager.find_layer_by_uid(layer.uid) is None:
                 clone = layer.clone()
                 manager.layers.insert(insertion_index, clone)
             if manager.layers:
@@ -543,12 +581,15 @@ class FrameManager:
         primary_key = min(keys)
         if 0 <= primary_key < len(self.frames):
             primary_manager = self.frames[primary_key].layer_manager
-            base_index = self._find_layer_index(base_manager, layer.uid)
+            base_index = base_manager.index_for_layer_uid(layer.uid)
             if base_index is not None:
-                if self._find_layer(primary_manager, layer.uid) is None:
-                    primary_manager.layers.insert(base_index, layer)
-                else:
+                if primary_manager.find_layer_by_uid(layer.uid) is None:
+                    insertion_index = min(base_index, len(primary_manager.layers))
+                    primary_manager.layers.insert(insertion_index, layer)
+                elif base_index < len(primary_manager.layers):
                     primary_manager.layers[base_index] = layer
+                else:
+                    primary_manager.layers.append(layer)
         for key in sorted(keys):
             self.ensure_frame(key)
             if key == primary_key:
@@ -560,7 +601,7 @@ class FrameManager:
     def unregister_layer(self, layer_uid: int) -> None:
         for frame in self.frames:
             manager = frame.layer_manager
-            index = self._find_layer_index(manager, layer_uid)
+            index = manager.index_for_layer_uid(layer_uid)
             if index is None:
                 continue
             del manager.layers[index]

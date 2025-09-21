@@ -90,6 +90,7 @@ class BaseSelectTool(BaseTool):
         self._draft_selection_path = path
         preview = self._build_preview_path()
         self.canvas._update_selection_and_emit_size(preview)
+        setattr(self.canvas, "selection_shape", preview)
         return preview
 
     def _emit_preview_selection_changed(
