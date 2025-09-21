@@ -111,6 +111,59 @@ class ImageGenerator:
         self.is_inpaint = None
 
     @staticmethod
+    def _normalize_mask_image(mask_image: Image.Image, size: tuple[int, int]) -> Image.Image:
+        """Resize and binarize the supplied mask so it matches the image dimensions."""
+
+        mask = mask_image.convert("L")
+        if mask.size != size:
+            mask = mask.resize(size, Image.Resampling.NEAREST)
+        # Ensure the mask is strictly binary so the diffusion pipeline treats it as opaque/transparent
+        mask = mask.point(lambda value: 255 if value >= 128 else 0)
+        return mask
+
+    @staticmethod
+    def _flatten_transparency(
+        image: Image.Image,
+        mask: Image.Image | None = None,
+        *,
+        fill_color: tuple[int, int, int] = (255, 255, 255),
+    ) -> Image.Image:
+        """Return an RGB image with transparent pixels filled using the provided colour."""
+
+        rgba_image = image.convert("RGBA")
+        if mask is not None:
+            fill_rgba = Image.new("RGBA", rgba_image.size, fill_color + (255,))
+            rgba_image = Image.composite(fill_rgba, rgba_image, mask)
+
+        alpha = rgba_image.getchannel("A")
+        if alpha.getextrema() != (255, 255):
+            background = Image.new("RGBA", rgba_image.size, fill_color + (255,))
+            rgba_image = Image.alpha_composite(background, rgba_image)
+
+        return rgba_image.convert("RGB")
+
+    def _prepare_model_inputs(
+        self,
+        image: Image.Image,
+        mask_image: Image.Image | None,
+        target_size: tuple[int, int],
+    ) -> tuple[Image.Image, Image.Image | None]:
+        """Prepare resized image/mask tuples for diffusion pipelines."""
+
+        prepared_mask = None
+        if mask_image is not None:
+            prepared_mask = self._normalize_mask_image(mask_image, image.size)
+
+        prepared_image = self._flatten_transparency(image, prepared_mask)
+        prepared_image = prepared_image.resize(target_size, Image.Resampling.NEAREST)
+
+        if prepared_mask is not None:
+            prepared_mask = prepared_mask.resize(target_size, Image.Resampling.NEAREST)
+            prepared_mask = prepared_mask.point(lambda value: 255 if value >= 128 else 0)
+
+        return prepared_image, prepared_mask
+
+    @staticmethod
     def _coerce_dimension(value) -> int | None:
         """Convert raw config values into a positive integer dimension."""
 
@@ -591,9 +644,10 @@ class ImageGenerator:
             target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
 
         print("Preparing input image for img2img...")
-        model_input_image = input_image.convert("RGB").resize(
+        model_input_image, _ = self._prepare_model_inputs(
+            input_image,
+            None,
             target_generation_size,
-            Image.Resampling.NEAREST,
         )
 
         print("Generating image from image...")
@@ -659,14 +713,14 @@ class ImageGenerator:
             target_generation_size = self.get_generation_size(self.current_model) or (512, 512)
 
         print("Preparing input image for inpainting...")
-        model_input_image = input_image.convert("RGB").resize(
+        model_input_image, prepared_mask = self._prepare_model_inputs(
+            input_image,
+            mask_image,
             target_generation_size,
-            Image.Resampling.NEAREST,
         )
-        mask_image = mask_image.convert("RGB").resize(
-            target_generation_size,
-            Image.Resampling.NEAREST,
-        )
+        if prepared_mask is None:
+            raise ValueError("Mask image is required for inpainting requests")
+        mask_image = prepared_mask
 
         print("Generating image from image...")
         pipe_kwargs = {
