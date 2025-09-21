@@ -30,6 +30,10 @@ def app(qapp):
         app_instance.drawing_context.set_pen_width(val)
     app_instance.set_pen_width = set_pen_width
 
+    def set_eraser_width(val):
+        app_instance.drawing_context.set_eraser_width(val)
+    app_instance.set_eraser_width = set_eraser_width
+
     def set_brush_type(val):
         app_instance.drawing_context.set_brush_type(val)
     app_instance.set_brush_type = set_brush_type
@@ -61,6 +65,13 @@ def test_set_pen_width(app, qtbot):
         app.set_pen_width(10)
     assert app.drawing_context.pen_width == 10
     assert blocker.args == [10]
+
+
+def test_set_eraser_width(app, qtbot):
+    with qtbot.waitSignal(app.drawing_context.eraser_width_changed) as blocker:
+        app.set_eraser_width(7)
+    assert app.drawing_context.eraser_width == 7
+    assert blocker.args == [7]
 
 def test_set_brush_type(app, qtbot):
     with qtbot.waitSignal(app.drawing_context.brush_type_changed) as blocker:

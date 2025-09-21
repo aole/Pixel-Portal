@@ -12,6 +12,8 @@ class PreviewPanel(QWidget):
         self._playback_total_frames = 1
         self._current_playback_frame = 0
         self._current_document_id = None
+        self._loop_start = 0
+        self._loop_end = 0
 
         self.preview_player = AnimationPlayer(self)
         self.preview_player.frame_changed.connect(self._on_preview_frame_changed)
@@ -51,10 +53,40 @@ class PreviewPanel(QWidget):
         total_frames = max(1, int(total_frames))
         self._playback_total_frames = total_frames
         self.preview_player.set_total_frames(total_frames)
+        max_loop = max(0, self._playback_total_frames - 1)
+        if self._loop_end > max_loop:
+            self._loop_end = max_loop
+        if self._loop_start > self._loop_end:
+            self._loop_start = self._loop_end
+        self.preview_player.set_loop_range(self._loop_start, self._loop_end)
         self._current_playback_frame = self.preview_player.current_frame
 
     def set_playback_fps(self, fps: float) -> None:
         self.preview_player.set_fps(fps)
+
+    def set_loop_range(self, start: int, end: int) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_loop = max(0, self._playback_total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_loop:
+            end_value = max_loop
+        if start_value > end_value:
+            start_value = end_value
+        self._loop_start = start_value
+        self._loop_end = end_value
+        self.preview_player.set_loop_range(self._loop_start, self._loop_end)
+        if (
+            self.preview_player.current_frame < self._loop_start
+            or self.preview_player.current_frame > self._loop_end
+        ):
+            self.preview_player.set_current_frame(self._loop_start)
 
     def update_preview(self, playback_index: int | None = None) -> None:
         document = self.app.document

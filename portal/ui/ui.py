@@ -84,7 +84,10 @@ class MainWindow(QMainWindow):
         self.timeline_widget = AnimationTimelineWidget(self)
         self.timeline_widget.set_playback_total_frames(self.animation_player.total_frames)
         self.timeline_widget.set_total_frames(max(0, self.animation_player.total_frames - 1))
+        self.timeline_widget.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
+        self.animation_player.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
         self.app.set_playback_total_frames(self.animation_player.total_frames)
+        self.app.set_playback_loop_range(0, max(0, self.animation_player.total_frames - 1))
 
         self.timeline_panel = QFrame(self)
         self.timeline_panel.setObjectName("animationTimelinePanel")
@@ -199,25 +202,6 @@ class MainWindow(QMainWindow):
         self.timeline_onion_settings.setEnabled(self.canvas.onion_skin_enabled)
         timeline_header_layout.addWidget(self.timeline_onion_settings)
 
-        self.timeline_current_frame_label = QLabel("Frame 0", self.timeline_panel)
-        self.timeline_current_frame_label.setObjectName("animationTimelineCurrentFrameLabel")
-        self.timeline_current_frame_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        timeline_header_layout.addWidget(self.timeline_current_frame_label, 0)
-
-        total_frames_text_label = QLabel("Total", self.timeline_panel)
-        total_frames_text_label.setObjectName("animationTimelineTotalFramesLabel")
-        total_frames_text_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        timeline_header_layout.addWidget(total_frames_text_label, 0)
-
-        self.timeline_total_frames_spinbox = QSpinBox(self.timeline_panel)
-        self.timeline_total_frames_spinbox.setObjectName("animationTimelineTotalFramesSpinBox")
-        self.timeline_total_frames_spinbox.setRange(1, 9999)
-        self.timeline_total_frames_spinbox.setAccelerated(True)
-        self.timeline_total_frames_spinbox.setKeyboardTracking(False)
-        self.timeline_total_frames_spinbox.setFixedWidth(80)
-        self.timeline_total_frames_spinbox.setValue(self.animation_player.total_frames)
-        timeline_header_layout.addWidget(self.timeline_total_frames_spinbox, 0)
-
         timeline_header_layout.addStretch()
 
         fps_label = QLabel("FPS", self.timeline_panel)
@@ -246,7 +230,6 @@ class MainWindow(QMainWindow):
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
         self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
         self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
-        self.timeline_total_frames_spinbox.valueChanged.connect(self._on_timeline_total_frames_changed)
         self.timeline_onion_button.toggled.connect(self._on_timeline_onion_toggled)
         self.timeline_onion_prev_spinbox.valueChanged.connect(
             self._on_timeline_onion_prev_changed
@@ -259,6 +242,10 @@ class MainWindow(QMainWindow):
         self.play_pause_shortcut.setAutoRepeat(False)
         self.play_pause_shortcut.activated.connect(self._toggle_timeline_playback)
 
+        self.timeline_widget.playback_total_frames_changed.connect(
+            self._on_timeline_total_frames_changed
+        )
+        self.timeline_widget.loop_range_changed.connect(self._on_timeline_loop_range_changed)
         self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
         self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
         self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
@@ -343,11 +330,18 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.canvas.selection_changed.connect(self.update_crop_action_state)
         self.app.drawing_context.tool_changed.connect(toolbar_builder.update_tool_buttons)
-        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_slider)
-        self.app.drawing_context.pen_width_changed.connect(self.update_pen_width_label)
+        self.app.drawing_context.pen_width_changed.connect(self._on_pen_width_changed)
+        self.app.drawing_context.eraser_width_changed.connect(
+            self._on_eraser_width_changed
+        )
         self.app.undo_stack_changed.connect(self.update_undo_redo_actions)
         self.app.drawing_context.brush_type_changed.connect(self.update_brush_button)
+        self.app.drawing_context.tool_changed.connect(
+            self._update_width_controls_for_tool
+        )
         self.app.drawing_context.tool_changed.connect(self.on_tool_changed_for_status_bar)
+
+        self._update_width_controls_for_tool()
 
         # Color Swatch Panel
         self.color_toolbar = QToolBar("Colors")
@@ -366,6 +360,7 @@ class MainWindow(QMainWindow):
 
         # Preview Panel
         self.preview_panel.set_playback_total_frames(self.animation_player.total_frames)
+        self.preview_panel.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
         self.preview_panel.set_playback_fps(self.animation_player.fps)
         self.preview_dock = QDockWidget("Preview", self)
         self.preview_dock.setWidget(self.preview_panel)
@@ -416,7 +411,6 @@ class MainWindow(QMainWindow):
         ])
 
     def _update_current_frame_label(self, frame: int) -> None:
-        self.timeline_current_frame_label.setText(f"Frame {frame}")
         self._update_stop_button_state()
 
     def _update_timeline_layer_label(self, layer_name: str | None) -> None:
@@ -506,27 +500,72 @@ class MainWindow(QMainWindow):
         self.timeline_widget.set_total_frames(target_base)
         self.timeline_widget.set_playback_total_frames(value)
         self.preview_panel.set_playback_total_frames(value)
-        timeline_blocker = QSignalBlocker(self.timeline_widget)
+        loop_start, loop_end = self.timeline_widget.loop_range()
+        max_loop_end = max(0, value - 1)
+        if loop_end > max_loop_end:
+            loop_end = max_loop_end
+        if loop_start > loop_end:
+            loop_start = loop_end
+        self.timeline_widget.set_loop_range(loop_start, loop_end)
+        self.preview_panel.set_loop_range(loop_start, loop_end)
         player_blocker = QSignalBlocker(self.animation_player)
         try:
             self.animation_player.set_total_frames(value)
+            self.animation_player.set_loop_range(loop_start, loop_end)
         finally:
             del player_blocker
-            del timeline_blocker
+        self.app.set_playback_total_frames(value)
+        self.app.set_playback_loop_range(loop_start, loop_end)
         current_frame = self.timeline_widget.current_frame()
+        if current_frame < loop_start:
+            self.timeline_widget.set_current_frame(loop_start)
+            current_frame = loop_start
+        elif current_frame > loop_end:
+            self.timeline_widget.set_current_frame(loop_end)
+            current_frame = loop_end
         if (
             current_frame < self.animation_player.total_frames
             and self.animation_player.current_frame != current_frame
         ):
             self.animation_player.set_current_frame(current_frame)
-        self.app.set_playback_total_frames(value)
+        self._update_stop_button_state()
+
+    @Slot(int, int)
+    def _on_timeline_loop_range_changed(self, start: int, end: int) -> None:
+        start_value = max(0, int(start))
+        end_value = max(start_value, int(end))
+        max_loop_end = max(0, self.timeline_widget.playback_total_frames() - 1)
+        if end_value > max_loop_end:
+            end_value = max_loop_end
+        if start_value > end_value:
+            start_value = end_value
+        if (start_value, end_value) != self.timeline_widget.loop_range():
+            self.timeline_widget.set_loop_range(start_value, end_value)
+        self.preview_panel.set_loop_range(start_value, end_value)
+        self.animation_player.set_loop_range(start_value, end_value)
+        self.app.set_playback_loop_range(start_value, end_value)
+        current_frame = self.timeline_widget.current_frame()
+        adjusted_frame = current_frame
+        if adjusted_frame < start_value:
+            adjusted_frame = start_value
+        elif adjusted_frame > end_value:
+            adjusted_frame = end_value
+        if adjusted_frame != current_frame:
+            self.timeline_widget.set_current_frame(adjusted_frame)
+            current_frame = adjusted_frame
+        if (
+            current_frame < self.animation_player.total_frames
+            and self.animation_player.current_frame != current_frame
+        ):
+            self.animation_player.set_current_frame(current_frame)
         self._update_stop_button_state()
 
     def apply_imported_animation_metadata(self, frame_count: int, fps: float) -> None:
         frame_total = max(1, int(frame_count))
-        with QSignalBlocker(self.timeline_total_frames_spinbox):
-            self.timeline_total_frames_spinbox.setValue(frame_total)
         self._on_timeline_total_frames_changed(frame_total)
+        loop_end = max(0, frame_total - 1)
+        self.timeline_widget.set_loop_range(0, loop_end)
+        self._on_timeline_loop_range_changed(0, loop_end)
 
         if isinstance(fps, (int, float)):
             fps_value = float(fps)
@@ -543,6 +582,7 @@ class MainWindow(QMainWindow):
         self.timeline_play_button.setIcon(
             self._timeline_pause_icon if playing else self._timeline_play_icon
         )
+        self.canvas.set_animation_playback_active(playing)
         self._update_stop_button_state()
 
     @Slot(object)
@@ -587,30 +627,43 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def sync_timeline_from_document(self):
-        playback_total = max(1, self.timeline_total_frames_spinbox.value())
+        playback_total = max(1, self.app.playback_total_frames)
+        loop_start, loop_end = self.app.playback_loop_range
+        loop_end = max(0, min(loop_end, playback_total - 1))
+        loop_start = max(0, min(loop_start, loop_end))
+
         self.timeline_widget.set_playback_total_frames(playback_total)
+        self.timeline_widget.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_total_frames(playback_total)
+        self.preview_panel.set_loop_range(loop_start, loop_end)
+        player_blocker = QSignalBlocker(self.animation_player)
+        try:
+            self.animation_player.set_total_frames(playback_total)
+            self.animation_player.set_loop_range(loop_start, loop_end)
+        finally:
+            del player_blocker
         self.app.set_playback_total_frames(playback_total)
+        self.app.set_playback_loop_range(loop_start, loop_end)
 
         document = self.app.document
         frame_manager = getattr(document, "frame_manager", None) if document else None
         if not document or frame_manager is None:
             self._update_timeline_layer_label(None)
             self.timeline_widget.set_document_frame_count(0)
+            loop_end_default = max(0, playback_total - 1)
             timeline_blocker = QSignalBlocker(self.timeline_widget)
             try:
-                self.timeline_widget.set_total_frames(max(0, playback_total - 1))
+                self.timeline_widget.set_total_frames(loop_end_default)
                 self.timeline_widget.set_keys([0])
-                self.timeline_widget.set_current_frame(0)
+                self.timeline_widget.set_current_frame(loop_start)
+                self.timeline_widget.set_loop_range(loop_start, loop_end_default)
             finally:
                 del timeline_blocker
-            player_blocker = QSignalBlocker(self.animation_player)
-            try:
-                self.animation_player.set_total_frames(playback_total)
-                if self.animation_player.current_frame != 0:
-                    self.animation_player.set_current_frame(0)
-            finally:
-                del player_blocker
+            if self.animation_player.current_frame != loop_start:
+                self.animation_player.set_current_frame(loop_start)
+            self.animation_player.set_loop_range(loop_start, loop_end_default)
+            self.preview_panel.set_loop_range(loop_start, loop_end_default)
+            self.app.set_playback_loop_range(loop_start, loop_end_default)
             self._update_current_frame_label(self.timeline_widget.current_frame())
             self._update_stop_button_state()
             return
@@ -638,12 +691,6 @@ class MainWindow(QMainWindow):
             self.timeline_widget.set_current_frame(current_frame)
         finally:
             del timeline_blocker
-
-        player_blocker = QSignalBlocker(self.animation_player)
-        try:
-            self.animation_player.set_total_frames(playback_total)
-        finally:
-            del player_blocker
 
         if (
             current_frame < self.animation_player.total_frames
@@ -776,11 +823,49 @@ class MainWindow(QMainWindow):
             for color in colors:
                 f.write(f"{color}\n")
 
-    def update_pen_width_label(self, width):
-        self.pen_width_label.setText(f"{width:02d}")
+    def _resolve_active_brush_width(self) -> int:
+        tool = getattr(self.app.drawing_context, "tool", "Pen")
+        if tool == "Eraser":
+            return int(
+                getattr(
+                    self.app.drawing_context,
+                    "eraser_width",
+                    self.app.drawing_context.pen_width,
+                )
+            )
+        return int(self.app.drawing_context.pen_width)
 
-    def update_pen_width_slider(self, width):
-        self.pen_width_slider.setValue(width)
+    def _set_width_controls(self, width: int) -> None:
+        width_value = int(width)
+        if hasattr(self, "pen_width_slider"):
+            with QSignalBlocker(self.pen_width_slider):
+                self.pen_width_slider.setValue(width_value)
+        if hasattr(self, "pen_width_label"):
+            self.pen_width_label.setText(f"{width_value:02d}")
+
+    @Slot(int)
+    def _on_pen_width_changed(self, width: int) -> None:
+        if getattr(self.app.drawing_context, "tool", "Pen") == "Eraser":
+            return
+        self._set_width_controls(width)
+
+    @Slot(int)
+    def _on_eraser_width_changed(self, width: int) -> None:
+        if getattr(self.app.drawing_context, "tool", "Pen") != "Eraser":
+            return
+        self._set_width_controls(width)
+
+    @Slot(str)
+    def _update_width_controls_for_tool(self, _tool: str | None = None) -> None:
+        self._set_width_controls(self._resolve_active_brush_width())
+
+    @Slot(int)
+    def on_width_slider_changed(self, value: int) -> None:
+        width_value = int(value)
+        if getattr(self.app.drawing_context, "tool", "Pen") == "Eraser":
+            self.app.drawing_context.set_eraser_width(width_value)
+        else:
+            self.app.drawing_context.set_pen_width(width_value)
 
     def update_undo_redo_actions(self):
         self.action_manager.undo_action.setEnabled(len(self.app.undo_manager.undo_stack) > 0)

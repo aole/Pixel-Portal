@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import ceil
-from typing import Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QBrush,
+    QFontMetrics,
     QMouseEvent,
     QPaintEvent,
     QPainter,
@@ -92,6 +93,8 @@ class AnimationTimelineWidget(QWidget):
     frame_insert_requested = Signal(int)
     frame_delete_requested = Signal(int)
     key_move_requested = Signal(list, int)
+    playback_total_frames_changed = Signal(int)
+    loop_range_changed = Signal(int, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -109,7 +112,7 @@ class AnimationTimelineWidget(QWidget):
         self._has_copied_key = False
         self._scroll_offset = 0.0
         self._last_pan_x = 0.0
-        self._scrub_gap = 10.0
+        self._scrub_gap = 24.0
         self._scrub_channel_height = 12.0
         self._scrub_triangle_half_width = 8.0
         self._scrub_tolerance = 4.0
@@ -117,9 +120,19 @@ class AnimationTimelineWidget(QWidget):
         self._document_frame_count = 1
         self._drag_state = _KeyDragState()
         self._drag_state.clear()
+        self._loop_start = 0
+        self._loop_end = max(0, self._playback_total_frames - 1)
+        self._range_track_gap = 12.0
+        self._range_handle_width = 12.0
+        self._range_handle_height = 18.0
+        self._range_handle_padding = 4.0
+        self._range_handle_label_padding = 6.0
+        self._active_range_handle: str | None = None
+        self._is_dragging_range_handle = False
+        self._range_handle_rects: Dict[str, QRectF] = {}
 
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
 
@@ -140,6 +153,11 @@ class AnimationTimelineWidget(QWidget):
 
         return self._playback_total_frames
 
+    def loop_range(self) -> Tuple[int, int]:
+        """Return the inclusive loop start/end frames."""
+
+        return self._loop_start, self._loop_end
+
     def set_total_frames(self, frame_count: int) -> None:
         """Define the minimum highest frame index displayed by the timeline."""
 
@@ -153,11 +171,12 @@ class AnimationTimelineWidget(QWidget):
     def set_playback_total_frames(self, frame_count: int) -> None:
         """Define the playback frame count used for colouring the timeline."""
 
-        frame_count = max(1, int(frame_count))
-        if frame_count == self._playback_total_frames:
-            return
-        self._playback_total_frames = frame_count
-        self.update()
+        self._apply_playback_total_frames(frame_count, from_user=False)
+
+    def set_loop_range(self, start: int, end: int) -> None:
+        """Define the loop start/end frames shown above the timeline."""
+
+        self._update_loop_range(start, end, emit_signal=False)
 
     def keys(self) -> List[int]:
         """Return the keyed frames sorted ascending."""
@@ -281,6 +300,9 @@ class AnimationTimelineWidget(QWidget):
         muted_selected_key_color = muted(selected_key_color)
         muted_selected_key_border = muted(selected_key_border)
 
+        total_range_color = palette.color(QPalette.Dark)
+        loop_range_color = palette.color(QPalette.Highlight)
+
         active_tick_pen = QPen(frame_color, 1.5)
         inactive_tick_pen = QPen(muted_frame_color, 1.5)
         active_number_pen = QPen(frame_color)
@@ -298,6 +320,64 @@ class AnimationTimelineWidget(QWidget):
 
         visible_start_x = self._margin
         visible_end_x = self.width() - self._margin
+
+        range_geometry = self._build_range_geometry(
+            layout, font_metrics=self.fontMetrics()
+        )
+        self._range_handle_rects = range_geometry["handles"]
+        playback_y = float(range_geometry["playback_y"])
+        loop_y = float(range_geometry["loop_y"])
+        total_start_x, total_end_x = range_geometry["total_line"]
+        loop_start_x, loop_end_x = range_geometry["loop_line"]
+        total_label_text = range_geometry.get("total_label")
+
+        total_pen = QPen(total_range_color, 3)
+        total_pen.setCapStyle(Qt.RoundCap)
+        loop_pen = QPen(loop_range_color, 3)
+        loop_pen.setCapStyle(Qt.RoundCap)
+
+        painter.setPen(total_pen)
+        painter.drawLine(QPointF(total_start_x, playback_y), QPointF(total_end_x, playback_y))
+
+        painter.setPen(loop_pen)
+        painter.drawLine(QPointF(loop_start_x, loop_y), QPointF(loop_end_x, loop_y))
+
+        handle_border_color = palette.color(QPalette.Window)
+        handle_pen = QPen(handle_border_color, 1.2)
+        painter.setPen(handle_pen)
+        active_handle = self._active_range_handle if self._is_dragging_range_handle else None
+
+        total_rect = self._range_handle_rects.get("total_end")
+        if total_rect is not None:
+            total_color = QColor(total_range_color)
+            if active_handle == "total_end":
+                total_color = total_color.lighter(120)
+            painter.setBrush(QBrush(total_color))
+            painter.drawRoundedRect(total_rect, 3, 3)
+            if isinstance(total_label_text, str) and total_label_text:
+                text_pen = QPen(palette.color(QPalette.BrightText))
+                painter.setPen(text_pen)
+                text_rect = total_rect.adjusted(2.0, 0.0, -2.0, 0.0)
+                painter.drawText(text_rect, Qt.AlignCenter, total_label_text)
+                painter.setPen(handle_pen)
+
+        loop_start_rect = self._range_handle_rects.get("loop_start")
+        if loop_start_rect is not None:
+            loop_color = QColor(loop_range_color)
+            if active_handle == "loop_start":
+                loop_color = loop_color.lighter(120)
+            painter.setBrush(QBrush(loop_color))
+            painter.drawRoundedRect(loop_start_rect, 3, 3)
+
+        loop_end_rect = self._range_handle_rects.get("loop_end")
+        if loop_end_rect is not None:
+            loop_end_color = QColor(loop_range_color)
+            if active_handle == "loop_end":
+                loop_end_color = loop_end_color.lighter(120)
+            painter.setBrush(QBrush(loop_end_color))
+            painter.drawRoundedRect(loop_end_rect, 3, 3)
+
+        painter.setBrush(Qt.NoBrush)
 
         # Draw the main timeline bar.
         painter.setPen(QPen(guide_color, 2))
@@ -382,6 +462,23 @@ class AnimationTimelineWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            layout = self._calculate_layout()
+            range_geometry = self._build_range_geometry(
+                layout, font_metrics=self.fontMetrics()
+            )
+            handle = self._hit_test_range_handle(event, range_geometry)
+            if handle:
+                self._active_range_handle = handle
+                self._is_dragging_range_handle = True
+                self._range_handle_initial_total = self._playback_total_frames
+                self._range_handle_initial_loop = (self._loop_start, self._loop_end)
+                self._clear_key_drag_state()
+                self._is_dragging = False
+                self.setCursor(Qt.SizeHorCursor)
+                self.update()
+                event.accept()
+                return
+            self._reset_range_handle_state()
             self._clear_key_drag_state()
             modifiers = event.modifiers()
             ctrl_down = self._is_control_modifier(modifiers)
@@ -423,6 +520,7 @@ class AnimationTimelineWidget(QWidget):
             event.accept()
             return
         if event.button() == Qt.MiddleButton:
+            self._reset_range_handle_state()
             self._is_panning = True
             self._last_pan_x = self._event_x(event)
             self.setCursor(Qt.ClosedHandCursor)
@@ -441,6 +539,12 @@ class AnimationTimelineWidget(QWidget):
         super().mouseDoubleClickEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
+        if self._is_dragging_range_handle:
+            if event.buttons() & Qt.LeftButton:
+                self._update_range_handle_drag(event)
+                event.accept()
+                return
+            self._reset_range_handle_state()
         if self._is_panning:
             if event.buttons() & Qt.MiddleButton:
                 self._update_pan(event)
@@ -468,6 +572,10 @@ class AnimationTimelineWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
+            if self._is_dragging_range_handle:
+                self._reset_range_handle_state()
+                event.accept()
+                return
             if self._finish_key_drag(event):
                 return
             if self._is_dragging:
@@ -554,15 +662,196 @@ class AnimationTimelineWidget(QWidget):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _frame_at_point(self, event) -> int:
+    def _frame_at_point(self, event, *, clamp: bool = True) -> int:
         x = self._event_x(event)
-        x = max(self._margin, min(x, self.width() - self._margin))
+        if clamp:
+            x = max(self._margin, min(x, self.width() - self._margin))
         layout = self._calculate_layout()
         if layout.spacing <= 0:
             return 0
         frame = round((x + self._scroll_offset - self._margin) / layout.spacing)
-        frame = max(0, min(frame, layout.max_frame))
+        if clamp:
+            frame = max(0, min(frame, layout.max_frame))
+        else:
+            frame = max(0, frame)
         return frame
+
+    def _frame_to_view_x(self, frame: float, layout: _TimelineLayout) -> float:
+        base = float(self._margin) + float(frame) * layout.spacing
+        return base - self._scroll_offset
+
+    def _build_range_geometry(
+        self, layout: _TimelineLayout, font_metrics: QFontMetrics | None = None
+    ) -> Dict[str, object]:
+        spacing = layout.spacing
+        track_top = layout.track_y - self._tick_height / 2
+        track_bottom = layout.track_y + self._tick_height / 2
+        loop_y = track_top - self._range_track_gap
+        if loop_y < 8.0:
+            loop_y = 8.0
+        handle_half_height = self._range_handle_height / 2.0
+        playback_y = track_bottom + self._range_track_gap
+        min_playback = track_bottom + handle_half_height + 2.0
+        if playback_y < min_playback:
+            playback_y = min_playback
+        max_playback = layout.scrub_top - handle_half_height - 2.0
+        if playback_y > max_playback:
+            playback_y = max(min_playback, max_playback)
+        if spacing <= 0:
+            base_x = float(self._margin) - self._scroll_offset
+            total_start_x = base_x
+            total_end_x = base_x
+            loop_start_x = base_x
+            loop_end_x = base_x
+        else:
+            total_last_index = max(0, self._playback_total_frames - 1)
+            total_start_x = self._frame_to_view_x(0, layout)
+            total_end_x = self._frame_to_view_x(total_last_index, layout)
+            if total_end_x < total_start_x:
+                total_end_x = total_start_x
+            loop_start_x = self._frame_to_view_x(self._loop_start, layout)
+            loop_end_x = self._frame_to_view_x(self._loop_end, layout)
+            if loop_end_x < loop_start_x:
+                loop_end_x = loop_start_x
+        total_last_index = max(0, self._playback_total_frames - 1)
+        total_label = str(total_last_index)
+        label_padding = float(self._range_handle_label_padding)
+        handle_width_total = float(self._range_handle_width)
+        if font_metrics is not None and total_label:
+            label_width = float(font_metrics.horizontalAdvance(total_label))
+            required_width = label_width + 2.0 * label_padding
+            if required_width > handle_width_total:
+                handle_width_total = required_width
+        handle_half_width_total = handle_width_total / 2.0
+        handle_half_width = self._range_handle_width / 2.0
+        handle_height = self._range_handle_height
+        total_rect = QRectF(
+            total_end_x - handle_half_width_total,
+            playback_y - handle_height / 2.0,
+            handle_width_total,
+            handle_height,
+        )
+        loop_start_rect = QRectF(
+            loop_start_x - handle_half_width,
+            loop_y - handle_height / 2.0,
+            self._range_handle_width,
+            handle_height,
+        )
+        loop_end_rect = QRectF(
+            loop_end_x - handle_half_width,
+            loop_y - handle_height / 2.0,
+            self._range_handle_width,
+            handle_height,
+        )
+        handles: Dict[str, QRectF] = {
+            "total_end": total_rect,
+            "loop_start": loop_start_rect,
+            "loop_end": loop_end_rect,
+        }
+        return {
+            "playback_y": playback_y,
+            "loop_y": loop_y,
+            "total_line": (total_start_x, total_end_x),
+            "loop_line": (loop_start_x, loop_end_x),
+            "handles": handles,
+            "total_label": total_label,
+        }
+
+    def _hit_test_range_handle(
+        self, event: QMouseEvent, geometry: Dict[str, object]
+    ) -> str | None:
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        handles = geometry.get("handles", {})
+        for name, rect in handles.items():
+            if not isinstance(rect, QRectF):
+                continue
+            expanded = rect.adjusted(
+                -self._range_handle_padding,
+                -self._range_handle_padding,
+                self._range_handle_padding,
+                self._range_handle_padding,
+            )
+            if expanded.contains(pos):
+                return name
+        return None
+
+    def _update_range_handle_drag(self, event: QMouseEvent) -> None:
+        handle = self._active_range_handle
+        if not handle:
+            return
+        playback_last_index = max(0, self._playback_total_frames - 1)
+        if handle == "total_end":
+            frame = self._frame_at_point(event, clamp=False)
+            new_total = max(1, frame + 1)
+            was_linked = self._loop_end == playback_last_index
+            self._apply_playback_total_frames(new_total, from_user=True)
+            if was_linked:
+                new_loop_end = max(0, self._playback_total_frames - 1)
+                if new_loop_end != self._loop_end:
+                    self._update_loop_range(
+                        self._loop_start, new_loop_end, emit_signal=True
+                    )
+        elif handle == "loop_start":
+            frame = self._frame_at_point(event, clamp=False)
+            self._update_loop_range(frame, self._loop_end, emit_signal=True)
+        elif handle == "loop_end":
+            frame = self._frame_at_point(event, clamp=False)
+            self._update_loop_range(self._loop_start, frame, emit_signal=True)
+
+    def _reset_range_handle_state(self) -> None:
+        if self._is_dragging_range_handle or self._active_range_handle is not None:
+            self._is_dragging_range_handle = False
+            self._active_range_handle = None
+            self.unsetCursor()
+            self.update()
+
+    def _apply_playback_total_frames(self, frame_count: int, *, from_user: bool) -> None:
+        try:
+            normalized = int(frame_count)
+        except (TypeError, ValueError):
+            return
+        if normalized < 1:
+            normalized = 1
+        if normalized == self._playback_total_frames:
+            return
+        self._playback_total_frames = normalized
+        doc_max_index = self._document_frame_count - 1 if self._document_frame_count else 0
+        highest_key = max(self._keys) if self._keys else 0
+        target_base = max(doc_max_index, highest_key, self._playback_total_frames - 1)
+        if target_base != self._base_total_frames:
+            self._base_total_frames = target_base
+            self.updateGeometry()
+        max_loop = max(0, self._playback_total_frames - 1)
+        if self._loop_end > max_loop:
+            self._loop_end = max_loop
+        if self._loop_start > self._loop_end:
+            self._loop_start = self._loop_end
+        if from_user:
+            self.playback_total_frames_changed.emit(self._playback_total_frames)
+        self.update()
+
+    def _update_loop_range(self, start: int, end: int, *, emit_signal: bool) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_loop = max(0, self._playback_total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_loop:
+            end_value = max_loop
+        if start_value > end_value:
+            start_value = end_value
+        if self._loop_start == start_value and self._loop_end == end_value:
+            return
+        self._loop_start = start_value
+        self._loop_end = end_value
+        self.update()
+        if emit_signal:
+            self.loop_range_changed.emit(self._loop_start, self._loop_end)
 
     def _key_at_point(self, event: QMouseEvent) -> int | None:
         layout = self._calculate_layout()

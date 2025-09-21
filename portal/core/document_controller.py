@@ -73,6 +73,8 @@ class DocumentController(QObject):
         self._copied_key_state = None
         self.auto_key_enabled = False
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
+        self._playback_loop_start = 0
+        self._playback_loop_end = max(0, self._playback_total_frames - 1)
 
         self._last_ai_output_rect = QRect()
         self.document_changed.connect(self._on_document_mutated)
@@ -168,6 +170,34 @@ class DocumentController(QObject):
         document = self.document
         if document is not None:
             document.set_playback_total_frames(normalized)
+            
+        max_loop = max(0, self._playback_total_frames - 1)
+        if self._playback_loop_end > max_loop:
+            self._playback_loop_end = max_loop
+        if self._playback_loop_start > self._playback_loop_end:
+            self._playback_loop_start = self._playback_loop_end
+
+    @property
+    def playback_loop_range(self) -> tuple[int, int]:
+        return self._playback_loop_start, self._playback_loop_end
+
+    def set_playback_loop_range(self, start: int, end: int) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_loop = max(0, self._playback_total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_loop:
+            end_value = max_loop
+        if start_value > end_value:
+            start_value = end_value
+        self._playback_loop_start = start_value
+        self._playback_loop_end = end_value
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         """Create a keyframe on the active layer if auto-key is enabled."""
