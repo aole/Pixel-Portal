@@ -10,6 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QBrush,
+    QFontMetrics,
     QMouseEvent,
     QPaintEvent,
     QPainter,
@@ -125,6 +126,7 @@ class AnimationTimelineWidget(QWidget):
         self._range_handle_width = 12.0
         self._range_handle_height = 18.0
         self._range_handle_padding = 4.0
+        self._range_handle_label_padding = 6.0
         self._active_range_handle: str | None = None
         self._is_dragging_range_handle = False
         self._range_handle_rects: Dict[str, QRectF] = {}
@@ -319,12 +321,15 @@ class AnimationTimelineWidget(QWidget):
         visible_start_x = self._margin
         visible_end_x = self.width() - self._margin
 
-        range_geometry = self._build_range_geometry(layout)
+        range_geometry = self._build_range_geometry(
+            layout, font_metrics=self.fontMetrics()
+        )
         self._range_handle_rects = range_geometry["handles"]
         playback_y = float(range_geometry["playback_y"])
         loop_y = float(range_geometry["loop_y"])
         total_start_x, total_end_x = range_geometry["total_line"]
         loop_start_x, loop_end_x = range_geometry["loop_line"]
+        total_label_text = range_geometry.get("total_label")
 
         total_pen = QPen(total_range_color, 3)
         total_pen.setCapStyle(Qt.RoundCap)
@@ -338,7 +343,8 @@ class AnimationTimelineWidget(QWidget):
         painter.drawLine(QPointF(loop_start_x, loop_y), QPointF(loop_end_x, loop_y))
 
         handle_border_color = palette.color(QPalette.Window)
-        painter.setPen(QPen(handle_border_color, 1.2))
+        handle_pen = QPen(handle_border_color, 1.2)
+        painter.setPen(handle_pen)
         active_handle = self._active_range_handle if self._is_dragging_range_handle else None
 
         total_rect = self._range_handle_rects.get("total_end")
@@ -348,6 +354,12 @@ class AnimationTimelineWidget(QWidget):
                 total_color = total_color.lighter(120)
             painter.setBrush(QBrush(total_color))
             painter.drawRoundedRect(total_rect, 3, 3)
+            if isinstance(total_label_text, str) and total_label_text:
+                text_pen = QPen(palette.color(QPalette.BrightText))
+                painter.setPen(text_pen)
+                text_rect = total_rect.adjusted(2.0, 0.0, -2.0, 0.0)
+                painter.drawText(text_rect, Qt.AlignCenter, total_label_text)
+                painter.setPen(handle_pen)
 
         loop_start_rect = self._range_handle_rects.get("loop_start")
         if loop_start_rect is not None:
@@ -451,7 +463,9 @@ class AnimationTimelineWidget(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt naming
         if event.button() == Qt.LeftButton:
             layout = self._calculate_layout()
-            range_geometry = self._build_range_geometry(layout)
+            range_geometry = self._build_range_geometry(
+                layout, font_metrics=self.fontMetrics()
+            )
             handle = self._hit_test_range_handle(event, range_geometry)
             if handle:
                 self._active_range_handle = handle
@@ -666,7 +680,9 @@ class AnimationTimelineWidget(QWidget):
         base = float(self._margin) + float(frame) * layout.spacing
         return base - self._scroll_offset
 
-    def _build_range_geometry(self, layout: _TimelineLayout) -> Dict[str, object]:
+    def _build_range_geometry(
+        self, layout: _TimelineLayout, font_metrics: QFontMetrics | None = None
+    ) -> Dict[str, object]:
         spacing = layout.spacing
         track_top = layout.track_y - self._tick_height / 2
         track_bottom = layout.track_y + self._tick_height / 2
@@ -697,12 +713,22 @@ class AnimationTimelineWidget(QWidget):
             loop_end_x = self._frame_to_view_x(self._loop_end, layout)
             if loop_end_x < loop_start_x:
                 loop_end_x = loop_start_x
+        total_last_index = max(0, self._playback_total_frames - 1)
+        total_label = str(total_last_index)
+        label_padding = float(self._range_handle_label_padding)
+        handle_width_total = float(self._range_handle_width)
+        if font_metrics is not None and total_label:
+            label_width = float(font_metrics.horizontalAdvance(total_label))
+            required_width = label_width + 2.0 * label_padding
+            if required_width > handle_width_total:
+                handle_width_total = required_width
+        handle_half_width_total = handle_width_total / 2.0
         handle_half_width = self._range_handle_width / 2.0
         handle_height = self._range_handle_height
         total_rect = QRectF(
-            total_end_x - handle_half_width,
+            total_end_x - handle_half_width_total,
             playback_y - handle_height / 2.0,
-            self._range_handle_width,
+            handle_width_total,
             handle_height,
         )
         loop_start_rect = QRectF(
@@ -728,6 +754,7 @@ class AnimationTimelineWidget(QWidget):
             "total_line": (total_start_x, total_end_x),
             "loop_line": (loop_start_x, loop_end_x),
             "handles": handles,
+            "total_label": total_label,
         }
 
     def _hit_test_range_handle(
