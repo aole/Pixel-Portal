@@ -21,6 +21,8 @@ class AnimationPlayer(QObject):
         self._total_frames = DEFAULT_TOTAL_FRAMES
         self._current_frame = 0
         self._is_playing = False
+        self._loop_start = 0
+        self._loop_end = max(0, self._total_frames - 1)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance_frame)
 
@@ -34,6 +36,14 @@ class AnimationPlayer(QObject):
     @property
     def total_frames(self) -> int:
         return self._total_frames
+
+    @property
+    def loop_start(self) -> int:
+        return self._loop_start
+
+    @property
+    def loop_end(self) -> int:
+        return self._loop_end
 
     @property
     def current_frame(self) -> int:
@@ -51,6 +61,11 @@ class AnimationPlayer(QObject):
             return
         if self._total_frames <= 0:
             return
+        if self._loop_start > self._loop_end:
+            self._loop_start = max(0, min(self._loop_start, self._total_frames - 1))
+            self._loop_end = self._loop_start
+        if self._current_frame < self._loop_start or self._current_frame > self._loop_end:
+            self.set_current_frame(self._loop_start)
         self._is_playing = True
         self._timer.start(self._interval_for_fps())
         self.playing_changed.emit(True)
@@ -65,8 +80,9 @@ class AnimationPlayer(QObject):
     def stop(self) -> None:
         was_playing = self._is_playing
         self.pause()
-        if self._current_frame != 0 or was_playing:
-            self.set_current_frame(0)
+        target = self._loop_start if self._loop_start <= self._loop_end else 0
+        if self._current_frame != target or was_playing:
+            self.set_current_frame(target)
 
     def set_fps(self, fps: float) -> None:
         try:
@@ -90,8 +106,36 @@ class AnimationPlayer(QObject):
             return
         self._total_frames = frame_count
         max_index = self._total_frames - 1
+        if self._loop_end > max_index:
+            self._loop_end = max_index
+        if self._loop_start > self._loop_end:
+            self._loop_start = self._loop_end
         if self._current_frame > max_index:
             self.set_current_frame(max_index)
+        elif self._current_frame < self._loop_start or self._current_frame > self._loop_end:
+            self.set_current_frame(self._loop_start)
+
+    def set_loop_range(self, start: int, end: int) -> None:
+        try:
+            start_value = int(start)
+            end_value = int(end)
+        except (TypeError, ValueError):
+            return
+        if start_value < 0:
+            start_value = 0
+        max_index = max(0, self._total_frames - 1)
+        if end_value < start_value:
+            end_value = start_value
+        if end_value > max_index:
+            end_value = max_index
+        if start_value > end_value:
+            start_value = end_value
+        if self._loop_start == start_value and self._loop_end == end_value:
+            return
+        self._loop_start = start_value
+        self._loop_end = end_value
+        if self._current_frame < self._loop_start or self._current_frame > self._loop_end:
+            self.set_current_frame(self._loop_start)
 
     def set_current_frame(self, frame: int) -> None:
         if self._total_frames <= 0:
@@ -121,8 +165,10 @@ class AnimationPlayer(QObject):
         if self._total_frames == 1:
             return
         next_frame = self._current_frame + 1
-        if next_frame >= self._total_frames:
-            next_frame = 0
+        if next_frame > self._loop_end or next_frame >= self._total_frames:
+            next_frame = self._loop_start
+        if next_frame < self._loop_start:
+            next_frame = self._loop_start
         if next_frame == self._current_frame:
             return
         self._current_frame = next_frame
