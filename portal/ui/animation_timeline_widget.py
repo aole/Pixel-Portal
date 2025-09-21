@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import ceil
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
@@ -321,7 +321,7 @@ class AnimationTimelineWidget(QWidget):
 
         range_geometry = self._build_range_geometry(layout)
         self._range_handle_rects = range_geometry["handles"]
-        extent_y = float(range_geometry["extent_y"])
+        playback_y = float(range_geometry["playback_y"])
         loop_y = float(range_geometry["loop_y"])
         total_start_x, total_end_x = range_geometry["total_line"]
         loop_start_x, loop_end_x = range_geometry["loop_line"]
@@ -332,7 +332,7 @@ class AnimationTimelineWidget(QWidget):
         loop_pen.setCapStyle(Qt.RoundCap)
 
         painter.setPen(total_pen)
-        painter.drawLine(QPointF(total_start_x, extent_y), QPointF(total_end_x, extent_y))
+        painter.drawLine(QPointF(total_start_x, playback_y), QPointF(total_end_x, playback_y))
 
         painter.setPen(loop_pen)
         painter.drawLine(QPointF(loop_start_x, loop_y), QPointF(loop_end_x, loop_y))
@@ -669,15 +669,15 @@ class AnimationTimelineWidget(QWidget):
     def _build_range_geometry(self, layout: _TimelineLayout) -> Dict[str, object]:
         spacing = layout.spacing
         base_y = layout.track_y - self._tick_height / 2
-        extent_y = base_y - self._range_track_gap
-        min_extent = 8.0 + self._range_track_gap
-        if extent_y < min_extent:
-            extent_y = min_extent
-        loop_y = extent_y - self._range_track_gap
+        loop_y = base_y - self._range_track_gap
         if loop_y < 8.0:
             loop_y = 8.0
-        if loop_y > extent_y - 4.0:
-            loop_y = max(4.0, extent_y - 4.0)
+        playback_y = loop_y - self._range_track_gap
+        min_playback = 4.0
+        if playback_y < min_playback:
+            playback_y = min_playback
+        if playback_y > loop_y - 4.0:
+            playback_y = max(4.0, loop_y - 4.0)
         if spacing <= 0:
             base_x = float(self._margin) - self._scroll_offset
             total_start_x = base_x
@@ -698,7 +698,7 @@ class AnimationTimelineWidget(QWidget):
         handle_height = self._range_handle_height
         total_rect = QRectF(
             total_end_x - handle_half_width,
-            extent_y - handle_height / 2.0,
+            playback_y - handle_height / 2.0,
             self._range_handle_width,
             handle_height,
         )
@@ -720,7 +720,7 @@ class AnimationTimelineWidget(QWidget):
             "loop_end": loop_end_rect,
         }
         return {
-            "extent_y": extent_y,
+            "playback_y": playback_y,
             "loop_y": loop_y,
             "total_line": (total_start_x, total_end_x),
             "loop_line": (loop_start_x, loop_end_x),
@@ -749,15 +749,27 @@ class AnimationTimelineWidget(QWidget):
         handle = self._active_range_handle
         if not handle:
             return
+        playback_last_index = max(0, self._playback_total_frames - 1)
         if handle == "total_end":
             frame = self._frame_at_point(event, clamp=False)
             new_total = max(1, frame + 1)
+            was_linked = self._loop_end == playback_last_index
             self._apply_playback_total_frames(new_total, from_user=True)
+            if was_linked:
+                new_loop_end = max(0, self._playback_total_frames - 1)
+                if new_loop_end != self._loop_end:
+                    self._update_loop_range(
+                        self._loop_start, new_loop_end, emit_signal=True
+                    )
         elif handle == "loop_start":
             frame = self._frame_at_point(event, clamp=False)
             self._update_loop_range(frame, self._loop_end, emit_signal=True)
         elif handle == "loop_end":
             frame = self._frame_at_point(event, clamp=False)
+            is_linked = self._loop_end == playback_last_index
+            if is_linked:
+                new_total = max(1, frame + 1)
+                self._apply_playback_total_frames(new_total, from_user=True)
             self._update_loop_range(self._loop_start, frame, emit_signal=True)
 
     def _reset_range_handle_state(self) -> None:
