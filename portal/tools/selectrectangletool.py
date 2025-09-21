@@ -7,7 +7,7 @@ from portal.tools.baseselecttool import BaseSelectTool
 class SelectRectangleTool(BaseSelectTool):
     name = "Select Rectangle"
     icon = "icons/toolselectrect.png"
-    shortcut = "s"
+    shortcut = "v"
     category = "select"
 
     def __init__(self, canvas):

@@ -123,3 +123,21 @@ def test_manual_tool_switch_during_modifier_press_is_respected(non_selection_can
 
     handler.keyReleaseEvent(event)
     assert non_selection_canvas.drawing_context.tool == "Eraser"
+
+
+def test_group_shortcut_cycles_tools(non_selection_canvas: DummyCanvas):
+    handler = CanvasInputHandler(non_selection_canvas)
+    non_selection_canvas.tools = {
+        "Pen": DummyTool(name="Pen", shortcut="b"),
+        "Rectangle": DummyTool(name="Rectangle", shortcut="s"),
+        "Ellipse": DummyTool(name="Ellipse", shortcut="s"),
+    }
+    non_selection_canvas.drawing_context.set_tool("Rectangle")
+
+    handler.set_tool_shortcut_groups({"s": ["Rectangle", "Ellipse"]})
+
+    handler.keyPressEvent(FakeKeyEvent(Qt.Key_S, "s"))
+    assert non_selection_canvas.drawing_context.tool == "Ellipse"
+
+    handler.keyPressEvent(FakeKeyEvent(Qt.Key_S, "s"))
+    assert non_selection_canvas.drawing_context.tool == "Rectangle"

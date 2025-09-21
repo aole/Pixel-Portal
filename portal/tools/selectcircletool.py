@@ -7,7 +7,7 @@ from portal.tools.baseselecttool import BaseSelectTool
 class SelectCircleTool(BaseSelectTool):
     name = "Select Circle"
     icon = "icons/toolselectcircle.png"
-    shortcut = "a"
+    shortcut = "v"
     category = "select"
 
     def __init__(self, canvas):

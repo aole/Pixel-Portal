@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import types
 
 from PySide6.QtWidgets import QMainWindow
@@ -12,6 +14,17 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
     main_window.action_manager = types.SimpleNamespace()
     main_window.add_color_to_palette = lambda *args, **kwargs: None
 
+    captured_groups: dict[str, list[str]] = {}
+
+    class DummyInputHandler:
+        def set_tool_shortcut_groups(self, groups):
+            captured_groups.clear()
+            captured_groups.update(groups)
+
+    main_window.canvas = types.SimpleNamespace(
+        input_handler=DummyInputHandler()
+    )
+
     app = types.SimpleNamespace(drawing_context=DrawingContext())
     builder = ToolBarBuilder(main_window, app)
 
@@ -24,25 +37,25 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
     class DummyShapeOneTool(BaseTool):
         name = "DummyShapeOne"
         icon = "icons/toolline.png"
-        shortcut = "2"
+        shortcut = "s"
         category = "shape"
 
     class DummyShapeTwoTool(BaseTool):
         name = "DummyShapeTwo"
         icon = "icons/toolellipse.png"
-        shortcut = "3"
+        shortcut = "s"
         category = "shape"
 
     class DummySelectTool(BaseTool):
         name = "DummySelect"
         icon = "icons/toolselectrect.png"
-        shortcut = "4"
+        shortcut = "v"
         category = "select"
 
     class DummySelectTwoTool(BaseTool):
         name = "DummySelectTwo"
         icon = "icons/toolselectcircle.png"
-        shortcut = "5"
+        shortcut = "v"
         category = "select"
 
     class DummyExtraTool(BaseTool):
@@ -140,11 +153,13 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
     assert shape_button is builder.tool_buttons[DummyShapeTwoTool.name]
     shape_action_names = [action.text() for action in shape_button.menu().actions()]
     assert shape_action_names == [DummyShapeOneTool.name, DummyShapeTwoTool.name]
+    assert shape_button.toolTip() == "Shape Tools (S)"
 
     selection_button = builder.tool_buttons[DummySelectTool.name]
     assert selection_button is builder.tool_buttons[DummySelectTwoTool.name]
     selection_action_names = [action.text() for action in selection_button.menu().actions()]
     assert selection_action_names == [DummySelectTool.name, DummySelectTwoTool.name]
+    assert selection_button.toolTip() == "Selection Tools (V)"
 
     direct_button = builder.tool_buttons[DummyDrawTool.name]
     assert direct_button.menu() is None
@@ -154,3 +169,13 @@ def test_toolbar_layout_config_drives_tool_buttons(qapp, monkeypatch):
 
     builder.update_tool_buttons(DummyShapeTwoTool.name)
     assert shape_button.defaultAction().text() == DummyShapeTwoTool.name
+    assert shape_button.toolTip() == "Shape Tools (S)"
+
+    builder.update_tool_buttons(DummySelectTwoTool.name)
+    assert selection_button.defaultAction().text() == DummySelectTwoTool.name
+    assert selection_button.toolTip() == "Selection Tools (V)"
+
+    assert captured_groups == {
+        "s": [DummyShapeOneTool.name, DummyShapeTwoTool.name],
+        "v": [DummySelectTool.name, DummySelectTwoTool.name],
+    }

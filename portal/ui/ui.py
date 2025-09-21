@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         self.timeline_play_button.setIcon(self._timeline_play_icon)
         self.timeline_play_button.setText("Play")
         self.timeline_play_button.setCheckable(True)
+        self.timeline_play_button.setToolTip("Play / Pause (Space)")
         timeline_header_layout.addWidget(self.timeline_play_button)
 
         self.timeline_stop_button = QToolButton(self.timeline_panel)

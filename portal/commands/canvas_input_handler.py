@@ -11,6 +11,30 @@ class CanvasInputHandler:
         self.canvas = canvas
         self.drawing_context = canvas.drawing_context
         self._forced_tools: dict[int, tuple[str | None, str]] = {}
+        self._shortcut_groups: dict[str, list[str]] = {}
+
+    def set_tool_shortcut_groups(self, groups: dict[str, list[str]]):
+        """Register shortcut cycling sequences for grouped tools."""
+
+        normalized: dict[str, list[str]] = {}
+        for shortcut, tool_names in groups.items():
+            if not shortcut:
+                continue
+            normalized_key = str(shortcut).strip().lower()
+            if not normalized_key:
+                continue
+            ordered_names: list[str] = []
+            for name in tool_names:
+                if not name:
+                    continue
+                if name not in self.canvas.tools:
+                    continue
+                if name not in ordered_names:
+                    ordered_names.append(name)
+            if ordered_names:
+                normalized[normalized_key] = ordered_names
+
+        self._shortcut_groups = normalized
 
     def _active_tool(self):
         return getattr(self.canvas, "current_tool", None)
@@ -53,9 +77,28 @@ class CanvasInputHandler:
             self.drawing_context.set_tool(previous_tool)
 
     def keyPressEvent(self, event):
-        key_text = event.text()
+        key_text = event.text() or ""
+        normalized_key = key_text.lower()
+        if normalized_key:
+            group = self._shortcut_groups.get(normalized_key)
+            if group:
+                current_tool_name = getattr(self.drawing_context, "tool", None)
+                if current_tool_name in group:
+                    current_index = group.index(current_tool_name)
+                    next_tool = group[(current_index + 1) % len(group)]
+                else:
+                    next_tool = group[0]
+                self.drawing_context.set_tool(next_tool)
+                return
+
         for tool in self.canvas.tools.values():
-            if tool.shortcut and key_text == tool.shortcut:
+            shortcut = getattr(tool, "shortcut", None)
+            if not shortcut:
+                continue
+            if normalized_key and normalized_key == str(shortcut).strip().lower():
+                self.drawing_context.set_tool(tool.name)
+                return
+            if not normalized_key and key_text and key_text == shortcut:
                 self.drawing_context.set_tool(tool.name)
                 return
 
