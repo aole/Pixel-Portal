@@ -161,10 +161,9 @@ class Document:
         if previous_active_uid is not None:
             new_manager = self.frame_manager.current_layer_manager
             if new_manager is not None:
-                for position, layer in enumerate(new_manager.layers):
-                    if layer.uid == previous_active_uid:
-                        new_manager.select_layer(position)
-                        break
+                index = new_manager.index_for_layer_uid(previous_active_uid)
+                if index is not None:
+                    new_manager.select_layer(index)
         self._notify_layer_manager_changed()
 
     def render_current_frame(self) -> QImage:

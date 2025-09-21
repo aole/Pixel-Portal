@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtCore import Qt, QSignalBlocker
 
 from portal.core.animation_player import AnimationPlayer
@@ -114,18 +114,32 @@ class PreviewPanel(QWidget):
         self.update_preview(playback_index=frame)
 
     def _pixmap_for_document(self, document, playback_index: int | None) -> QPixmap | None:
-        image = None
+        image: QImage | None = None
         frame_manager = getattr(document, "frame_manager", None)
         if playback_index is not None and frame_manager is not None:
             resolved_index = frame_manager.resolve_key_frame_index(playback_index)
             if resolved_index is not None and 0 <= resolved_index < len(frame_manager.frames):
-                image = frame_manager.frames[resolved_index].render()
+                candidate = frame_manager.frames[resolved_index].render()
+                image = self._coerce_qimage(candidate)
 
         if image is None:
-            try:
-                image = document.render_current_frame()
-            except ValueError:
-                image = None
+            render_current = getattr(document, "render_current_frame", None)
+            if callable(render_current):
+                try:
+                    candidate = render_current()
+                except ValueError:
+                    image = None
+                else:
+                    image = self._coerce_qimage(candidate)
+            if image is None:
+                render_fallback = getattr(document, "render", None)
+                if callable(render_fallback):
+                    try:
+                        candidate = render_fallback()
+                    except ValueError:
+                        image = None
+                    else:
+                        image = self._coerce_qimage(candidate)
 
         if image is None:
             return None
@@ -137,3 +151,11 @@ class PreviewPanel(QWidget):
         if pixmap.width() > 128 or pixmap.height() > 128:
             pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.FastTransformation)
         return pixmap
+
+    @staticmethod
+    def _coerce_qimage(image) -> QImage | None:
+        if isinstance(image, QImage):
+            return image
+        if isinstance(image, QPixmap):
+            return image.toImage()
+        return None
