@@ -306,6 +306,20 @@ class DocumentService:
         if callable(attach):
             attach(document)
 
+        playback_total = Document.normalize_playback_total_frames(
+            getattr(document, "playback_total_frames", 1)
+        )
+        setter = getattr(app, "set_playback_total_frames", None)
+        if callable(setter):
+            setter(playback_total)
+        main_window = getattr(app, "main_window", None)
+        if main_window is not None:
+            apply_metadata = getattr(main_window, "apply_imported_animation_metadata", None)
+            animation_player = getattr(main_window, "animation_player", None)
+            fps_value = getattr(animation_player, "fps", DEFAULT_PLAYBACK_FPS)
+            if callable(apply_metadata):
+                apply_metadata(playback_total, fps_value)
+
         undo_manager = getattr(app, "undo_manager", None)
         if hasattr(undo_manager, "clear"):
             undo_manager.clear()
@@ -1118,6 +1132,11 @@ class DocumentService:
             playback_index += repeats
             if playback_index >= total_frames:
                 break
+
+        if hasattr(document, "set_playback_total_frames"):
+            document.set_playback_total_frames(total_frames)
+        else:
+            document.playback_total_frames = max(1, int(total_frames))
 
         document.select_frame(0)
         return document
