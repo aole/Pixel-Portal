@@ -423,11 +423,15 @@ class AIPanel(QWidget):
 
     def on_generation_step(self, image):
         if isinstance(image, Image.Image):
-            # If the image is larger than 128px in width or height, scale it down.
-            if image.width > 128 or image.height > 128:
-                image = image.resize((128, 128), Image.Resampling.NEAREST)
-
             pixmap = self.pil_to_pixmap(image)
+            if pixmap.width() > 128 or pixmap.height() > 128:
+                pixmap = pixmap.scaled(
+                    128,
+                    128,
+                    Qt.KeepAspectRatio,
+                    Qt.FastTransformation,
+                )
+
             self.preview_panel.preview_label.setPixmap(pixmap)
             self.preview_panel.preview_label.setFixedSize(pixmap.size())
 
