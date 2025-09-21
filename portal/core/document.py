@@ -9,6 +9,7 @@ from PySide6.QtGui import QImage, QPainter
 from PIL import Image, ImageSequence, ImageQt
 
 from portal.core.aole_archive import AOLEArchive
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
@@ -23,6 +24,9 @@ class Document:
         self._notify_layer_manager_changed()
         self.file_path: str | None = None
         self.ai_output_rect = QRect(0, 0, max(1, int(width)), max(1, int(height)))
+        self.playback_total_frames = self.normalize_playback_total_frames(
+            DEFAULT_TOTAL_FRAMES
+        )
 
     # ------------------------------------------------------------------
     def get_ai_output_rect(self) -> QRect:
@@ -129,7 +133,23 @@ class Document:
         new_doc.frame_manager = self.frame_manager.clone()
         new_doc._notify_layer_manager_changed()
         new_doc.ai_output_rect = new_doc._normalize_ai_output_rect(self.ai_output_rect)
+        new_doc.set_playback_total_frames(self.playback_total_frames)
         return new_doc
+
+    @staticmethod
+    def normalize_playback_total_frames(frame_count) -> int:
+        try:
+            normalized = int(frame_count)
+        except (TypeError, ValueError):
+            normalized = DEFAULT_TOTAL_FRAMES
+        if normalized < 1:
+            normalized = 1
+        return normalized
+
+    def set_playback_total_frames(self, frame_count) -> int:
+        normalized = self.normalize_playback_total_frames(frame_count)
+        self.playback_total_frames = normalized
+        return normalized
 
     def render(self) -> QImage:
         """Composites all visible layers into a single image."""

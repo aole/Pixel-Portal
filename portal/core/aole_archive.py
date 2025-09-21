@@ -10,6 +10,7 @@ import zipfile
 from PySide6.QtCore import QBuffer
 from PySide6.QtGui import QImage
 
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
 from portal.core.frame import Frame
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
@@ -106,6 +107,9 @@ class _ArchiveWriter:
             "width": document.width,
             "height": document.height,
             "frames": [],
+            "playback_total_frames": self._normalize_playback_total_frames(
+                getattr(document, "playback_total_frames", None)
+            ),
             "frame_manager": {
                 "active_frame_index": frame_manager.active_frame_index,
                 "frame_markers": sorted(frame_manager.frame_markers),
@@ -164,6 +168,16 @@ class _ArchiveWriter:
             if index >= 0:
                 yield index
 
+    @staticmethod
+    def _normalize_playback_total_frames(value: object) -> int:
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError):
+            normalized = DEFAULT_TOTAL_FRAMES
+        if normalized < 1:
+            normalized = DEFAULT_TOTAL_FRAMES
+        return normalized
+
 
 class _ArchiveReader:
     def __init__(self, document_cls: type["Document"], metadata_file: str) -> None:
@@ -185,6 +199,14 @@ class _ArchiveReader:
 
         document = self._document_cls(width, height)
         document.apply_frame_manager_snapshot(frame_manager)
+        playback_total = self._extract_playback_total_frames(
+            metadata, len(frame_manager.frames)
+        )
+        setter = getattr(document, "set_playback_total_frames", None)
+        if callable(setter):
+            setter(playback_total)
+        else:
+            document.playback_total_frames = playback_total
 
         self._sync_layer_uid_counter(document)
 
@@ -393,6 +415,19 @@ class _ArchiveReader:
         if maximum is not None:
             result = min(maximum, result)
         return result
+
+    def _extract_playback_total_frames(
+        self, metadata: Mapping[str, object], frame_count: int
+    ) -> int:
+        fallback = max(1, int(frame_count) if frame_count else DEFAULT_TOTAL_FRAMES)
+        raw_total = metadata.get("playback_total_frames")
+        try:
+            total = int(raw_total)
+        except (TypeError, ValueError):
+            total = fallback
+        if total < 1:
+            total = fallback
+        return total
 
     def _sync_layer_uid_counter(self, document: "Document") -> None:
         max_uid = 0

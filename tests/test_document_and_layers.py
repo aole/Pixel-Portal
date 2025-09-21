@@ -133,6 +133,8 @@ def test_save_load_aole(tmp_path):
     frame_one_top_layer.image.fill(QColor(0, 255, 0, 255))
     frame_one_top_layer.visible = False
 
+    doc.set_playback_total_frames(42)
+
     save_path = tmp_path / "sample.aole"
     doc.save_aole(str(save_path))
     assert doc.file_path == str(save_path)
@@ -143,6 +145,7 @@ def test_save_load_aole(tmp_path):
     assert loaded.height == doc.height
     assert len(loaded.frame_manager.frames) == len(doc.frame_manager.frames)
     assert loaded.frame_manager.active_frame_index == doc.frame_manager.active_frame_index
+    assert loaded.playback_total_frames == 42
 
     original_keys = doc.frame_manager.layer_keys[top_layer.uid]
     loaded_keys = loaded.frame_manager.layer_keys[top_layer.uid]

@@ -160,13 +160,17 @@ class DocumentController(QObject):
         return self._playback_total_frames
 
     def set_playback_total_frames(self, frame_count: int) -> None:
-        try:
-            normalized = int(frame_count)
-        except (TypeError, ValueError):
+        normalized = Document.normalize_playback_total_frames(frame_count)
+        if normalized == self._playback_total_frames:
+            document = self.document
+            if document is not None:
+                document.set_playback_total_frames(normalized)
             return
-        if normalized < 1:
-            normalized = 1
         self._playback_total_frames = normalized
+        document = self.document
+        if document is not None:
+            document.set_playback_total_frames(normalized)
+            
         max_loop = max(0, self._playback_total_frames - 1)
         if self._playback_loop_end > max_loop:
             self._playback_loop_end = max_loop
@@ -595,6 +599,10 @@ class DocumentController(QObject):
         """Swap to a new document and bind to its layer manager lifecycle."""
 
         self.document = document
+        stored_total = getattr(document, "playback_total_frames", DEFAULT_TOTAL_FRAMES)
+        normalized_total = Document.normalize_playback_total_frames(stored_total)
+        self._playback_total_frames = normalized_total
+        document.set_playback_total_frames(normalized_total)
         if self._layer_manager_unsubscribe:
             self._layer_manager_unsubscribe()
             self._layer_manager_unsubscribe = None
