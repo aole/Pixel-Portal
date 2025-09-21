@@ -64,7 +64,7 @@ class DimensionConstraints:
 MODEL_DIMENSION_CONSTRAINTS: dict[str, DimensionConstraints] = {
     "SD1.5": DimensionConstraints(512, 1024),
     "SD15": DimensionConstraints(512, 1024),
-    "SDXL": DimensionConstraints(768, 1526),
+    "SDXL": DimensionConstraints(768, 2048),
 }
 
 
@@ -124,17 +124,12 @@ class ImageGenerator:
     @staticmethod
     def _flatten_transparency(
         image: Image.Image,
-        mask: Image.Image | None = None,
         *,
         fill_color: tuple[int, int, int] = (255, 255, 255),
     ) -> Image.Image:
         """Return an RGB image with transparent pixels filled using the provided colour."""
 
         rgba_image = image.convert("RGBA")
-        if mask is not None:
-            fill_rgba = Image.new("RGBA", rgba_image.size, fill_color + (255,))
-            rgba_image = Image.composite(fill_rgba, rgba_image, mask)
-
         alpha = rgba_image.getchannel("A")
         if alpha.getextrema() != (255, 255):
             background = Image.new("RGBA", rgba_image.size, fill_color + (255,))
@@ -154,7 +149,7 @@ class ImageGenerator:
         if mask_image is not None:
             prepared_mask = self._normalize_mask_image(mask_image, image.size)
 
-        prepared_image = self._flatten_transparency(image, prepared_mask)
+        prepared_image = self._flatten_transparency(image)
         prepared_image = prepared_image.resize(target_size, Image.Resampling.NEAREST)
 
         if prepared_mask is not None:

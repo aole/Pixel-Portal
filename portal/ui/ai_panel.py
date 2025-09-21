@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
-from PIL import Image, ImageChops
+from PIL import Image
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
 from portal.ai.image_generator import (
@@ -406,6 +406,7 @@ class AIPanel(QWidget):
         mask_image = None
         transparency_mask = None
         transparency_mask_applied = False
+        selection_mask = None
 
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
@@ -424,19 +425,24 @@ class AIPanel(QWidget):
                 if transparency_mask.getbbox() is None:
                     transparency_mask = None
 
-            if has_selection and callable(getattr(canvas, "get_selection_mask_pil", None)):
-                mask_image = canvas.get_selection_mask_pil()
-                if mask_image:
-                    if crop_box:
-                        mask_image = mask_image.crop(crop_box)
-                    mask_image = mask_image.convert("L")
+            should_use_selection = (
+                transparency_mask is None
+                and has_selection
+                and callable(getattr(canvas, "get_selection_mask_pil", None))
+            )
 
-            if mask_image and transparency_mask:
-                mask_image = ImageChops.lighter(mask_image, transparency_mask)
-                transparency_mask_applied = True
-            elif transparency_mask and not mask_image:
+            if should_use_selection:
+                selection_mask = canvas.get_selection_mask_pil()
+                if selection_mask:
+                    if crop_box:
+                        selection_mask = selection_mask.crop(crop_box)
+                    selection_mask = selection_mask.convert("L")
+
+            if transparency_mask is not None:
                 mask_image = transparency_mask
                 transparency_mask_applied = True
+            elif selection_mask is not None:
+                mask_image = selection_mask
 
             if mask_image and mask_image.getbbox() is None:
                 mask_image = None
