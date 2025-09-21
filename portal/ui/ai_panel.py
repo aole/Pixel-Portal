@@ -386,19 +386,46 @@ class AIPanel(QWidget):
             QMessageBox.warning(self, "Warning", "No AI model selected.")
             return
 
+        canvas = getattr(self.app.main_window, "canvas", None)
+        selection_shape = getattr(canvas, "selection_shape", None) if canvas else None
+        has_selection = bool(selection_shape and not selection_shape.isEmpty())
+
+        ai_rect = self.app.get_ai_output_rect() if hasattr(self.app, "get_ai_output_rect") else None
+        crop_box = None
+        if ai_rect is not None and ai_rect.width() > 0 and ai_rect.height() > 0:
+            left = int(ai_rect.left())
+            top = int(ai_rect.top())
+            crop_box = (
+                left,
+                top,
+                left + int(ai_rect.width()),
+                top + int(ai_rect.height()),
+            )
+
         input_image = None
         mask_image = None
 
-        is_inpaint = False
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
             if input_image is None:
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
                 return
 
-            if self.app.main_window.canvas.selection_shape is not None:
-                is_inpaint = True
-                mask_image = self.app.main_window.canvas.get_selection_mask_pil()
+            if crop_box:
+                input_image = input_image.crop(crop_box)
+
+            if has_selection and callable(getattr(canvas, "get_selection_mask_pil", None)):
+                mask_image = canvas.get_selection_mask_pil()
+                if mask_image and crop_box:
+                    mask_image = mask_image.crop(crop_box)
+                if mask_image:
+                    mask_l = mask_image.convert("L")
+                    if mask_l.getbbox() is None:
+                        mask_image = None
+                    else:
+                        mask_image = mask_l
+
+        is_inpaint = mask_image is not None
 
 
         self.progress_bar.setVisible(True)
