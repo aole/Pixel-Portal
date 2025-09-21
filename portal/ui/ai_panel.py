@@ -386,19 +386,68 @@ class AIPanel(QWidget):
             QMessageBox.warning(self, "Warning", "No AI model selected.")
             return
 
+        canvas = getattr(self.app.main_window, "canvas", None)
+        selection_shape = getattr(canvas, "selection_shape", None) if canvas else None
+        has_selection = bool(selection_shape and not selection_shape.isEmpty())
+
+        ai_rect = self.app.get_ai_output_rect() if hasattr(self.app, "get_ai_output_rect") else None
+        crop_box = None
+        if ai_rect is not None and ai_rect.width() > 0 and ai_rect.height() > 0:
+            left = int(ai_rect.left())
+            top = int(ai_rect.top())
+            crop_box = (
+                left,
+                top,
+                left + int(ai_rect.width()),
+                top + int(ai_rect.height()),
+            )
+
         input_image = None
         mask_image = None
+        transparency_mask = None
+        transparency_mask_applied = False
+        selection_mask = None
 
-        is_inpaint = False
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
             if input_image is None:
                 QMessageBox.warning(self, "Warning", "No image available for Image to Image generation.")
                 return
 
-            if self.app.main_window.canvas.selection_shape is not None:
-                is_inpaint = True
-                mask_image = self.app.main_window.canvas.get_selection_mask_pil()
+            if crop_box:
+                input_image = input_image.crop(crop_box)
+
+            if input_image is not None and "A" in input_image.getbands():
+                alpha_channel = input_image.getchannel("A")
+                transparency_mask = alpha_channel.point(
+                    lambda value: 255 if value < 255 else 0
+                )
+                if transparency_mask.getbbox() is None:
+                    transparency_mask = None
+
+            should_use_selection = (
+                transparency_mask is None
+                and has_selection
+                and callable(getattr(canvas, "get_selection_mask_pil", None))
+            )
+
+            if should_use_selection:
+                selection_mask = canvas.get_selection_mask_pil()
+                if selection_mask:
+                    if crop_box:
+                        selection_mask = selection_mask.crop(crop_box)
+                    selection_mask = selection_mask.convert("L")
+
+            if transparency_mask is not None:
+                mask_image = transparency_mask
+                transparency_mask_applied = True
+            elif selection_mask is not None:
+                mask_image = selection_mask
+
+            if mask_image and mask_image.getbbox() is None:
+                mask_image = None
+
+        is_inpaint = mask_image is not None
 
 
         self.progress_bar.setVisible(True)
@@ -416,6 +465,8 @@ class AIPanel(QWidget):
         num_inference_steps = self.steps_slider.value()
         guidance_scale = self.guidance_slider.value() / 10.0
         strength = self.strength_slider.value() / 100.0
+        if transparency_mask_applied:
+            strength = 1.0
 
         remove_background = self.remove_bg_checkbox.isChecked()
 
