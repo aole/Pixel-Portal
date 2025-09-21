@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
-from PIL import Image
+from PIL import Image, ImageChops
 from PIL.ImageQt import ImageQt
 from portal.ai.enums import GenerationMode
 from portal.ai.image_generator import (
@@ -404,6 +404,7 @@ class AIPanel(QWidget):
 
         input_image = None
         mask_image = None
+        transparency_mask = None
 
         if mode == GenerationMode.IMAGE_TO_IMAGE:
             input_image = self.app.get_current_image()
@@ -414,16 +415,28 @@ class AIPanel(QWidget):
             if crop_box:
                 input_image = input_image.crop(crop_box)
 
+            if input_image is not None and "A" in input_image.getbands():
+                alpha_channel = input_image.getchannel("A")
+                transparency_mask = alpha_channel.point(
+                    lambda value: 255 if value < 255 else 0
+                )
+                if transparency_mask.getbbox() is None:
+                    transparency_mask = None
+
             if has_selection and callable(getattr(canvas, "get_selection_mask_pil", None)):
                 mask_image = canvas.get_selection_mask_pil()
-                if mask_image and crop_box:
-                    mask_image = mask_image.crop(crop_box)
                 if mask_image:
-                    mask_l = mask_image.convert("L")
-                    if mask_l.getbbox() is None:
-                        mask_image = None
-                    else:
-                        mask_image = mask_l
+                    if crop_box:
+                        mask_image = mask_image.crop(crop_box)
+                    mask_image = mask_image.convert("L")
+
+            if mask_image and transparency_mask:
+                mask_image = ImageChops.lighter(mask_image, transparency_mask)
+            elif transparency_mask and not mask_image:
+                mask_image = transparency_mask
+
+            if mask_image and mask_image.getbbox() is None:
+                mask_image = None
 
         is_inpaint = mask_image is not None
 
