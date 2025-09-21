@@ -33,6 +33,7 @@ class Canvas(QWidget):
     zoom_changed = Signal(float)
     selection_changed = Signal(bool)
     selection_size_changed = Signal(int, int)
+    ruler_distance_changed = Signal(object)
     canvas_updated = Signal()
     command_generated = Signal(object)
     background_mode_changed = Signal(object)
@@ -592,6 +593,7 @@ class Canvas(QWidget):
         if width <= 0 and height <= 0:
             self._ruler_start = QPointF(0.0, 0.0)
             self._ruler_end = QPointF(0.0, 0.0)
+            self._emit_ruler_distance()
             return
 
         center_x = width / 2.0
@@ -631,6 +633,7 @@ class Canvas(QWidget):
 
         self._ruler_start = start_point
         self._ruler_end = end_point
+        self._emit_ruler_distance()
 
     def _clamp_point_to_document(self, point: QPointF) -> QPointF:
         width = float(max(0, self._document_size.width()))
@@ -644,6 +647,20 @@ class Canvas(QWidget):
             self._ruler_start = self._clamp_point_to_document(self._ruler_start)
         if self._ruler_end is not None:
             self._ruler_end = self._clamp_point_to_document(self._ruler_end)
+        self._emit_ruler_distance()
+
+    def _emit_ruler_distance(self) -> None:
+        if not self.ruler_enabled:
+            self.ruler_distance_changed.emit(None)
+            return
+        if self._ruler_start is None or self._ruler_end is None:
+            self.ruler_distance_changed.emit(None)
+            return
+
+        dx = float(self._ruler_end.x() - self._ruler_start.x())
+        dy = float(self._ruler_end.y() - self._ruler_start.y())
+        distance = math.hypot(dx, dy)
+        self.ruler_distance_changed.emit(distance)
 
     def _doc_point_to_canvas(self, point: QPointF) -> QPointF:
         target_rect = self.get_target_rect()
@@ -738,6 +755,7 @@ class Canvas(QWidget):
             elif handle == "end":
                 self._ruler_end = point
         self.update()
+        self._emit_ruler_distance()
 
     def _update_ruler_hover_state(self, handle: str | None) -> None:
         if handle == self._ruler_handle_hover:
@@ -782,6 +800,7 @@ class Canvas(QWidget):
             self._ruler_handle_prev_cursor = None
 
         self.update()
+        self._emit_ruler_distance()
 
     def mousePressEvent(self, event):
         if self.ai_output_edit_enabled and event.button() == Qt.LeftButton:

@@ -1,3 +1,5 @@
+import math
+
 from PySide6.QtWidgets import QLabel
 
 class StatusBarManager:
@@ -15,16 +17,19 @@ class StatusBarManager:
         self.main_window.selection_size_label = QLabel("")
         self.main_window.rotation_angle_label = QLabel("")
         self.main_window.scale_factor_label = QLabel("")
+        self.main_window.ruler_distance_label = QLabel("")
         status_bar.addWidget(self.main_window.cursor_pos_label)
         status_bar.addWidget(self.main_window.zoom_level_label)
         status_bar.addWidget(self.main_window.selection_size_label)
         status_bar.addWidget(self.main_window.rotation_angle_label)
         status_bar.addWidget(self.main_window.scale_factor_label)
+        status_bar.addWidget(self.main_window.ruler_distance_label)
 
     def _connect_signals(self):
         self.canvas.cursor_pos_changed.connect(self.update_cursor_pos_label)
         self.canvas.zoom_changed.connect(self.update_zoom_level_label)
         self.canvas.selection_size_changed.connect(self.update_selection_size_label)
+        self.canvas.ruler_distance_changed.connect(self.update_ruler_distance_label)
 
     def update_cursor_pos_label(self, pos):
         self.main_window.cursor_pos_label.setText(f"Cursor: ({pos.x()}, {pos.y()})")
@@ -50,3 +55,18 @@ class StatusBarManager:
             self.main_window.scale_factor_label.setText(f"Scale: {percent}%")
         else:
             self.main_window.scale_factor_label.setText("")
+
+    def update_ruler_distance_label(self, distance):
+        label = self.main_window.ruler_distance_label
+        if distance is None:
+            label.setText("")
+            return
+
+        if isinstance(distance, (int, float)) and math.isfinite(distance):
+            if math.isclose(distance, round(distance), abs_tol=0.05):
+                display_text = f"{int(round(distance))}"
+            else:
+                display_text = f"{distance:.1f}"
+            label.setText(f"Ruler: {display_text} px")
+        else:
+            label.setText("Ruler: 0 px")

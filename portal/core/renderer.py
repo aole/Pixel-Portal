@@ -888,43 +888,6 @@ class CanvasRenderer:
             painter.setBrush(fill_color)
             painter.drawEllipse(rect)
 
-        if math.isfinite(distance):
-            if math.isclose(distance, round(distance), abs_tol=0.05):
-                distance_text = f"{int(round(distance))} px"
-            else:
-                distance_text = f"{distance:.1f} px"
-        else:
-            distance_text = "0 px"
-
-        mid_point = QPointF(
-            (start_center.x() + end_center.x()) / 2.0,
-            (start_center.y() + end_center.y()) / 2.0,
-        )
-
-        metrics = painter.fontMetrics()
-        text_bounds = metrics.boundingRect(distance_text)
-        padding_x = 8
-        padding_y = 4
-        label_rect = QRectF(
-            0,
-            0,
-            text_bounds.width() + padding_x * 2,
-            text_bounds.height() + padding_y * 2,
-        )
-        offset = handle_radius + label_rect.height() / 2.0 + 6
-        label_center = QPointF(
-            mid_point.x() + normal_x * offset,
-            mid_point.y() + normal_y * offset,
-        )
-        label_rect.moveCenter(label_center)
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(0, 0, 0, 190))
-        painter.drawRoundedRect(label_rect, 4, 4)
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(label_rect, Qt.AlignCenter, distance_text)
-
         painter.restore()
 
     def draw_grid(self, painter, target_rect):
