@@ -878,13 +878,18 @@ class Canvas(QWidget):
 
     def mouseMoveEvent(self, event):
         if self.ai_output_edit_enabled:
-            self._update_cursor_position_from_event(event)
             if event.buttons() & Qt.LeftButton:
+                self._update_cursor_position_from_event(event)
                 if self._ai_output_active_handle is not None:
                     self._drag_ai_output(event.position())
                     self._set_ai_output_cursor(self._ai_output_active_handle)
                 return
-            self._update_ai_output_hover(event.position())
+            if event.buttons() & Qt.MiddleButton:
+                self.input_handler.mouseMoveEvent(event)
+                return
+            self._update_cursor_position_from_event(event)
+            if not event.buttons():
+                self._update_ai_output_hover(event.position())
             return
         pos = event.position().toPoint()
         if self._mirror_handle_drag is not None or self._ruler_handle_drag is not None:
