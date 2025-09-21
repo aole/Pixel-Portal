@@ -128,7 +128,7 @@ class Canvas(QWidget):
         self._ruler_handle_hover: str | None = None
         self._ruler_handle_drag: str | None = None
         self._ruler_handle_prev_cursor: QCursor | None = None
-        self._ruler_interval = 8
+        self._ruler_segments = 2
 
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
@@ -1152,21 +1152,23 @@ class Canvas(QWidget):
                 self.grid_minor_color = color
         self.update()
 
-    def set_ruler_settings(self, *, interval=None):
-        if interval is None:
+    def set_ruler_settings(self, *, segments=None, interval=None):
+        if segments is None and interval is not None:
+            segments = interval
+        if segments is None:
             return
         try:
-            interval_value = int(interval)
+            segments_value = int(segments)
         except (TypeError, ValueError):
             return
-        interval_value = max(1, interval_value)
-        if interval_value == self._ruler_interval:
+        segments_value = max(1, segments_value)
+        if segments_value == self._ruler_segments:
             return
-        self._ruler_interval = interval_value
+        self._ruler_segments = segments_value
         self.update()
 
     def get_ruler_settings(self):
-        return {"interval": int(self._ruler_interval)}
+        return {"segments": int(self._ruler_segments)}
 
     def get_grid_settings(self):
         return {

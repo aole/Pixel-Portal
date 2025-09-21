@@ -848,15 +848,20 @@ class CanvasRenderer:
         draw_tick_line(start_center, major_tick_length)
         draw_tick_line(end_center, major_tick_length)
 
-        interval_value = float(max(1, getattr(self.canvas, "_ruler_interval", 8)))
+        segments_value = int(
+            max(
+                1,
+                getattr(
+                    self.canvas,
+                    "_ruler_segments",
+                    getattr(self.canvas, "_ruler_interval", 2),
+                ),
+            )
+        )
         minor_tick_length = max(handle_radius * 1.4, 8.0)
-        if distance > 0 and interval_value > 0 and screen_length > 0:
-            steps = int(distance // interval_value)
-            for step_index in range(1, steps + 1):
-                distance_along = step_index * interval_value
-                if distance_along >= distance:
-                    break
-                ratio = distance_along / distance
+        if distance > 0 and segments_value > 1 and screen_length > 0:
+            for segment_index in range(1, segments_value):
+                ratio = segment_index / segments_value
                 doc_point = QPointF(
                     start_doc.x() + dx_doc * ratio,
                     start_doc.y() + dy_doc * ratio,
