@@ -79,15 +79,25 @@ Set `QT_QPA_PLATFORM=offscreen` when running in a headless environment.
 ## Testing
 - **Do not run tests unless explicitly asked to do so.**
 - When tests are required, export `QT_QPA_PLATFORM=offscreen` first. Run each module individually to
-  avoid intermittent Qt crashes:
+  avoid intermittent Qt crashes. The full suite currently includes:
   ```bash
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_ai_generation_size.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_animation_player.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_canvas_input_handler.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_core.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_dialogs.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_and_layers.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_controller_title.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_service.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_document_service_animation.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_drawing_tools.py
-  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_fit_canvas_to_selection.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_frame_drawing.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_frames.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_grid_settings.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_selection_tools.py
   QT_QPA_PLATFORM=offscreen python -m pytest tests/test_tool_bar_builder.py
+  QT_QPA_PLATFORM=offscreen python -m pytest tests/test_transform_tool.py
   ```
 - `tests/test_segfault.py` documents historical Qt crashes; only run it when specifically asked.
 
