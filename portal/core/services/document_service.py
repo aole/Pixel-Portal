@@ -53,8 +53,8 @@ class DocumentService:
     """High level operations for loading, saving, and exporting documents."""
 
     _OPEN_FILE_FILTERS: tuple[str, ...] = (
-        "Pixel Portal Document (*.aole)",
         "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff)",
+        "Pixel Portal Document (*.aole)",
         "Image Files (*.png *.jpg *.bmp)",
         "TIFF Files (*.tif *.tiff)",
     )

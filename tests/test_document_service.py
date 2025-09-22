@@ -65,6 +65,12 @@ def test_save_document_uses_existing_path(monkeypatch, document_service, tmp_pat
     assert document_service.app.updated_title is True
 
 
+def test_open_dialog_defaults_to_all_supported_filters():
+    filters = DocumentService._OPEN_FILE_FILTERS
+
+    assert filters[0] == "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff)"
+
+
 @pytest.mark.parametrize(
     "selected_filter, expected_extension",
     [
