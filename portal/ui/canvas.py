@@ -59,6 +59,7 @@ class Canvas(QWidget):
         self.temp_image_replaces_active_layer = False
         self.original_image = None
         self.tile_preview_image = None
+        self.preview_layer = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.background_pixmap = QPixmap("alphabg.png")
@@ -136,6 +137,39 @@ class Canvas(QWidget):
         self.drawing_context.mirror_x_position_changed.connect(self.update)
         self.drawing_context.mirror_y_position_changed.connect(self.update)
         self._reset_mirror_axes(force_center=True)
+
+    def set_preview_layer(self, layer) -> None:
+        """Record the layer that preview buffers should mirror."""
+
+        self.preview_layer = layer
+
+    def clear_preview_layer(self) -> None:
+        """Forget any cached preview layer reference."""
+
+        self.preview_layer = None
+
+    def redraw_temp_from_preview_layer(self, layer=None) -> bool:
+        """Copy the current preview layer image into ``temp_image``.
+
+        Returns ``True`` when the redraw succeeds and ``False`` if the
+        operation was skipped because either the preview layer or
+        ``temp_image`` is missing.
+        """
+
+        source_layer = layer if layer is not None else self.preview_layer
+        if source_layer is None or getattr(source_layer, "image", None) is None:
+            return False
+
+        if self.temp_image is None:
+            return False
+
+        painter = QPainter(self.temp_image)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.fillRect(self.temp_image.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.drawImage(0, 0, source_layer.image)
+        painter.end()
+        return True
 
     @Slot(QSize)
     def set_document_size(self, size):

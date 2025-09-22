@@ -351,12 +351,28 @@ def line_tool(qtbot):
     mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
-    mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
-    mock_canvas.original_image.fill(Qt.transparent)
+    mock_canvas.original_image = None
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
     mock_canvas.drawing = Drawing()
+    mock_canvas.preview_layer = mock_layer
+
+    def _set_preview_layer(layer):
+        mock_canvas.preview_layer = layer
+
+    def _clear_preview_layer():
+        mock_canvas.preview_layer = None
+
+    def _redraw_preview(layer=None):
+        if mock_canvas.temp_image is None:
+            return False
+        mock_canvas.temp_image.fill(Qt.transparent)
+        return True
+
+    mock_canvas.set_preview_layer = Mock(side_effect=_set_preview_layer)
+    mock_canvas.clear_preview_layer = Mock(side_effect=_clear_preview_layer)
+    mock_canvas.redraw_temp_from_preview_layer = Mock(side_effect=_redraw_preview)
     tool = LineTool(mock_canvas)
     return tool
 
@@ -375,6 +391,7 @@ def test_line_mouse_events(line_tool, qtbot):
     assert blocker.args == [("get_active_layer_image", "line_tool_start")]
     assert tool.start_point == QPoint(10, 10)
     assert canvas.temp_image_replaces_active_layer is True
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_line_with_brush") as mock_draw_line:
@@ -414,6 +431,7 @@ def test_line_tile_preview_overlay(line_tool, qtbot):
     )
     with qtbot.waitSignal(tool.command_generated):
         tool.mousePressEvent(press_event, start_point)
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
 
     move_point = QPoint(20, 20)
     move_event = QMouseEvent(
@@ -492,6 +510,24 @@ def move_tool(qtbot):
     mock_canvas.temp_image = QImage(256, 256, QImage.Format_ARGB32)
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
+    mock_canvas._document_size = QSize(256, 256)
+    mock_canvas.preview_layer = mock_layer
+
+    def _set_preview_layer(layer):
+        mock_canvas.preview_layer = layer
+
+    def _clear_preview_layer():
+        mock_canvas.preview_layer = None
+
+    def _redraw_preview(layer=None):
+        if mock_canvas.temp_image is None:
+            return False
+        mock_canvas.temp_image.fill(Qt.transparent)
+        return True
+
+    mock_canvas.set_preview_layer = Mock(side_effect=_set_preview_layer)
+    mock_canvas.clear_preview_layer = Mock(side_effect=_clear_preview_layer)
+    mock_canvas.redraw_temp_from_preview_layer = Mock(side_effect=_redraw_preview)
     tool = MoveTool(mock_canvas)
     return tool
 
@@ -618,8 +654,9 @@ def test_bucket_ctrl_disables_contiguous(bucket_tool, qtbot):
 @pytest.fixture
 def ellipse_tool(qtbot):
     mock_canvas = Mock()
-    mock_canvas.document.layer_manager.active_layer = Mock()
-    mock_canvas.document.layer_manager.active_layer.visible = True
+    mock_layer = Mock()
+    mock_layer.visible = True
+    mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
     mock_canvas.drawing_context.brush_type = "Square"
@@ -630,12 +667,28 @@ def ellipse_tool(qtbot):
     mock_canvas.drawing_context.mirror_y_position = None
     mock_canvas.selection_shape = None
     mock_canvas._document_size = QSize(256, 256)
-    mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
-    mock_canvas.original_image.fill(Qt.transparent)
+    mock_canvas.original_image = None
     mock_canvas.temp_image = None
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
     mock_canvas.drawing = Drawing()
+    mock_canvas.preview_layer = mock_layer
+
+    def _set_preview_layer(layer):
+        mock_canvas.preview_layer = layer
+
+    def _clear_preview_layer():
+        mock_canvas.preview_layer = None
+
+    def _redraw_preview(layer=None):
+        if mock_canvas.temp_image is None:
+            return False
+        mock_canvas.temp_image.fill(Qt.transparent)
+        return True
+
+    mock_canvas.set_preview_layer = Mock(side_effect=_set_preview_layer)
+    mock_canvas.clear_preview_layer = Mock(side_effect=_clear_preview_layer)
+    mock_canvas.redraw_temp_from_preview_layer = Mock(side_effect=_redraw_preview)
     tool = EllipseTool(mock_canvas)
     return tool
 
@@ -654,6 +707,7 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert blocker.args == [("get_active_layer_image", "ellipse_tool_start")]
     assert tool.start_point == QPoint(10, 10)
     assert canvas.temp_image_replaces_active_layer is True
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_ellipse") as mock_draw_ellipse:
@@ -680,6 +734,7 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
 
 def test_ellipse_reverse_drag_includes_endpoints(ellipse_tool, qtbot):
     tool = ellipse_tool
+    canvas = tool.canvas
 
     start_point = QPoint(12, 12)
     press_event = QMouseEvent(
@@ -692,6 +747,7 @@ def test_ellipse_reverse_drag_includes_endpoints(ellipse_tool, qtbot):
     )
     with qtbot.waitSignal(tool.command_generated):
         tool.mousePressEvent(press_event, start_point)
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
 
     end_point = QPoint(5, 2)
     move_event = QMouseEvent(
@@ -832,8 +888,7 @@ def rectangle_tool(qtbot):
     drawing_context.mirror_y = False
     drawing_context.pattern_brush = None
     canvas.selection_shape = None
-    canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
-    canvas.original_image.fill(Qt.transparent)
+    canvas.original_image = None
     canvas.temp_image = None
     canvas.temp_image_replaces_active_layer = False
     canvas.tile_preview_enabled = False
@@ -855,6 +910,7 @@ def test_rectangle_mouse_events(rectangle_tool, qtbot):
     assert blocker.args == [("get_active_layer_image", "rectangle_tool_start")]
     assert tool.start_point == QPoint(10, 10)
     assert canvas.temp_image_replaces_active_layer is True
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
 
     # Mouse Move
     with patch.object(canvas.drawing, "draw_rect") as mock_draw_rect:
@@ -892,6 +948,8 @@ def test_rectangle_reverse_drag_includes_endpoints(rectangle_tool, qtbot):
     )
     with qtbot.waitSignal(tool.command_generated):
         tool.mousePressEvent(press_event, start_point)
+
+    tool.canvas.set_preview_layer(tool.canvas.document.layer_manager.active_layer)
 
     end_point = QPoint(4, 4)
     move_event = QMouseEvent(

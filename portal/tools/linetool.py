@@ -17,14 +17,13 @@ class LineTool(BaseTool):
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
         self.start_point = doc_pos
-        self._allocate_preview_images(replace_active_layer=True, allocate_temp=False)
+        self._allocate_preview_images(replace_active_layer=True)
         self.command_generated.emit(("get_active_layer_image", "line_tool_start"))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self.canvas.original_image is None:
+        if not self._redraw_temp_from_preview_layer():
             return
 
-        self.canvas.temp_image = self.canvas.original_image.copy()
         self._refresh_preview_images(clear_temp=False)
         self._paint_preview_line(
             self.canvas.temp_image,
@@ -44,7 +43,7 @@ class LineTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self.canvas.original_image is None:
+        if getattr(self.canvas, "preview_layer", None) is None:
             return
 
         layer_manager = self._get_active_layer_manager()

@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QMouseEvent, QImage, QPainter, Qt, QPainterPath, QCursor
+from PySide6.QtGui import QMouseEvent, QPainter, Qt, QPainterPath, QCursor
 
 from portal.commands.selection_commands import (
     SelectionChangeCommand,
@@ -37,6 +37,8 @@ class MoveTool(BaseTool):
         self.canvas.temp_image_replaces_active_layer = False
         self.moving_selection = False
         self.original_selection_shape = None
+        if hasattr(self.canvas, "clear_preview_layer"):
+            self.canvas.clear_preview_layer()
 
     def _sync_active_layer(self) -> bool:
         if not self._layer_tracker.has_changed():
@@ -59,7 +61,6 @@ class MoveTool(BaseTool):
 
         self._sync_active_layer()
         self.start_point = doc_pos
-        self.canvas.temp_image_replaces_active_layer = False
 
         layer_manager = self._get_active_layer_manager()
         if layer_manager is None:
@@ -70,12 +71,9 @@ class MoveTool(BaseTool):
             return
         self.before_image = active_layer.image.copy()
 
-        image_size = active_layer.image.size()
-        image_format = active_layer.image.format()
-        if self.canvas.temp_image is None or self.canvas.temp_image.size() != image_size:
-            self.canvas.temp_image = QImage(image_size, image_format)
-        self.canvas.temp_image.fill(Qt.transparent)
-        self.canvas.original_image = active_layer.image.copy()
+        self._allocate_preview_images(replace_active_layer=True)
+        if hasattr(self.canvas, "set_preview_layer"):
+            self.canvas.set_preview_layer(active_layer)
 
         if self.canvas.selection_shape:
             self.moving_selection = True
@@ -91,8 +89,12 @@ class MoveTool(BaseTool):
         if self.canvas.original_image is None:
             return
 
+        if not self._redraw_temp_from_preview_layer():
+            if self.canvas.temp_image is None:
+                return
+            self.canvas.temp_image.fill(Qt.transparent)
+
         delta = doc_pos - self.start_point
-        self.canvas.temp_image.fill(Qt.transparent)
         painter = QPainter(self.canvas.temp_image)
         painter.drawImage(delta, self.canvas.original_image)
         painter.end()

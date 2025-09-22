@@ -94,6 +94,14 @@ class BaseTool(QObject):
         else:
             canvas.tile_preview_image = None
 
+    def _redraw_temp_from_preview_layer(self, layer=None) -> bool:
+        redraw = getattr(self.canvas, "redraw_temp_from_preview_layer", None)
+        if callable(redraw):
+            if layer is not None:
+                return bool(redraw(layer))
+            return bool(redraw())
+        return False
+
     def _refresh_preview_images(
         self,
         *,
@@ -126,6 +134,8 @@ class BaseTool(QObject):
         canvas.tile_preview_image = None
         canvas.temp_image_replaces_active_layer = False
         canvas.is_erasing_preview = False
+        if hasattr(canvas, "clear_preview_layer"):
+            canvas.clear_preview_layer()
 
     def _get_active_layer_manager(self):
         document = getattr(self.canvas, "document", None)
