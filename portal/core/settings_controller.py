@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
 
+from portal.core.animation_player import DEFAULT_PLAYBACK_FPS
 from portal.ui.background import BackgroundImageMode
 
 
@@ -29,6 +30,12 @@ class SettingsController(QObject):
         "negative_prompt": (
             "blurry, low quality, distorted, deformed, extra limbs, watermark, text"
         ),
+    }
+
+    DEFAULT_ANIMATION_SETTINGS = {
+        "fps": DEFAULT_PLAYBACK_FPS,
+        "onion_prev_frames": 1,
+        "onion_next_frames": 1,
     }
 
     def __init__(self):
@@ -87,6 +94,25 @@ class SettingsController(QObject):
         )
         self._sync_ruler_settings_to_config()
 
+        if not self.config.has_section('Animation'):
+            self.config.add_section('Animation')
+        try:
+            fps_value = self.config.getfloat('Animation', 'fps')
+        except (configparser.NoOptionError, ValueError):
+            fps_value = self.DEFAULT_ANIMATION_SETTINGS["fps"]
+        self.animation_fps = max(1.0, float(fps_value))
+        try:
+            prev_frames = self.config.getint('Animation', 'onion_prev_frames')
+        except (configparser.NoOptionError, ValueError):
+            prev_frames = self.DEFAULT_ANIMATION_SETTINGS["onion_prev_frames"]
+        try:
+            next_frames = self.config.getint('Animation', 'onion_next_frames')
+        except (configparser.NoOptionError, ValueError):
+            next_frames = self.DEFAULT_ANIMATION_SETTINGS["onion_next_frames"]
+        self.onion_prev_frames = max(0, int(prev_frames))
+        self.onion_next_frames = max(0, int(next_frames))
+        self._sync_animation_settings_to_config()
+
         if not self.config.has_section('AI'):
             self.config.add_section('AI')
         self.ai_negative_prompt = self.config.get(
@@ -109,6 +135,7 @@ class SettingsController(QObject):
             self._sync_grid_settings_to_config()
             self._sync_background_settings_to_config()
             self._sync_ruler_settings_to_config()
+            self._sync_animation_settings_to_config()
             self._sync_ai_settings_to_config()
 
             with open('settings.ini', 'w') as configfile:
@@ -174,6 +201,17 @@ class SettingsController(QObject):
         if self.config.has_option('Ruler', 'interval'):
             self.config.remove_option('Ruler', 'interval')
 
+    def _sync_animation_settings_to_config(self):
+        if not self.config.has_section('Animation'):
+            self.config.add_section('Animation')
+        self.config.set('Animation', 'fps', f"{float(self.animation_fps):.3f}")
+        self.config.set(
+            'Animation', 'onion_prev_frames', str(int(self.onion_prev_frames))
+        )
+        self.config.set(
+            'Animation', 'onion_next_frames', str(int(self.onion_next_frames))
+        )
+
     def _sync_ai_settings_to_config(self):
         if not self.config.has_section('AI'):
             self.config.add_section('AI')
@@ -205,6 +243,13 @@ class SettingsController(QObject):
             'negative_prompt': self.ai_negative_prompt,
         }
 
+    def get_animation_settings(self):
+        return {
+            'fps': float(self.animation_fps),
+            'onion_prev_frames': int(self.onion_prev_frames),
+            'onion_next_frames': int(self.onion_next_frames),
+        }
+
     def get_default_grid_settings(self):
         return dict(self.DEFAULT_GRID_SETTINGS)
 
@@ -213,6 +258,9 @@ class SettingsController(QObject):
 
     def get_default_ai_settings(self):
         return dict(self.DEFAULT_AI_SETTINGS)
+
+    def get_default_animation_settings(self):
+        return dict(self.DEFAULT_ANIMATION_SETTINGS)
 
     def update_grid_settings(
         self,
@@ -237,6 +285,35 @@ class SettingsController(QObject):
             if color.isValid():
                 self.grid_minor_color = color.name(QColor.NameFormat.HexArgb)
         self._sync_grid_settings_to_config()
+
+    def update_animation_settings(
+        self,
+        *,
+        fps=None,
+        onion_prev_frames=None,
+        onion_next_frames=None,
+    ):
+        if fps is not None:
+            try:
+                fps_value = float(fps)
+            except (TypeError, ValueError):
+                fps_value = self.animation_fps
+            if fps_value <= 0:
+                fps_value = self.animation_fps
+            self.animation_fps = fps_value
+        if onion_prev_frames is not None:
+            try:
+                prev_value = int(onion_prev_frames)
+            except (TypeError, ValueError):
+                prev_value = self.onion_prev_frames
+            self.onion_prev_frames = max(0, prev_value)
+        if onion_next_frames is not None:
+            try:
+                next_value = int(onion_next_frames)
+            except (TypeError, ValueError):
+                next_value = self.onion_next_frames
+            self.onion_next_frames = max(0, next_value)
+        self._sync_animation_settings_to_config()
 
     def update_background_settings(self, *, image_mode=None, image_alpha=None):
         if image_mode is not None:

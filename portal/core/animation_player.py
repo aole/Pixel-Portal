@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 
 DEFAULT_TOTAL_FRAMES = 24
+DEFAULT_PLAYBACK_FPS = 12.0
 
 
 class AnimationPlayer(QObject):
@@ -17,7 +18,7 @@ class AnimationPlayer(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._fps = 12.0
+        self._fps = DEFAULT_PLAYBACK_FPS
         self._total_frames = DEFAULT_TOTAL_FRAMES
         self._current_frame = 0
         self._is_playing = False

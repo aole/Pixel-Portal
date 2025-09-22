@@ -47,6 +47,7 @@ class SettingsDialog(QDialog):
 
         self._build_grid_tab()
         self._build_canvas_tab()
+        self._build_animation_tab()
         self._build_ai_tab()
 
         self.button_box = QDialogButtonBox(
@@ -220,6 +221,41 @@ class SettingsDialog(QDialog):
 
         self.tab_widget.addTab(canvas_tab, "Canvas")
 
+    def _build_animation_tab(self):
+        animation_tab = QWidget(self)
+        animation_layout = QGridLayout(animation_tab)
+        animation_layout.setColumnStretch(1, 1)
+
+        animation_layout.addWidget(QLabel("Playback FPS", animation_tab), 0, 0)
+        self.animation_fps_spinbox = QSpinBox(animation_tab)
+        self.animation_fps_spinbox.setRange(1, 60)
+        animation_layout.addWidget(self.animation_fps_spinbox, 0, 1)
+
+        animation_layout.addWidget(QLabel("Onion skin previous", animation_tab), 1, 0)
+        self.onion_prev_spinbox = QSpinBox(animation_tab)
+        self.onion_prev_spinbox.setRange(0, 6)
+        animation_layout.addWidget(self.onion_prev_spinbox, 1, 1)
+
+        animation_layout.addWidget(QLabel("Onion skin next", animation_tab), 2, 0)
+        self.onion_next_spinbox = QSpinBox(animation_tab)
+        self.onion_next_spinbox.setRange(0, 6)
+        animation_layout.addWidget(self.onion_next_spinbox, 2, 1)
+
+        self.animation_reset_button = QPushButton("Reset to Defaults", animation_tab)
+        self.animation_reset_button.clicked.connect(self._reset_animation_tab)
+        animation_layout.addWidget(
+            self.animation_reset_button,
+            3,
+            0,
+            1,
+            2,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+
+        animation_layout.setRowStretch(4, 1)
+
+        self.tab_widget.addTab(animation_tab, "Animation")
+
     def _build_ai_tab(self):
         ai_tab = QWidget(self)
         ai_layout = QVBoxLayout(ai_tab)
@@ -276,6 +312,33 @@ class SettingsDialog(QDialog):
         clamped_percent = max(0, min(100, percent))
         self.background_alpha_slider.setValue(clamped_percent)
         self._update_background_alpha_label(clamped_percent)
+
+        animation_settings = self.settings_controller.get_animation_settings()
+        fps_value = animation_settings.get("fps", 12.0)
+        try:
+            fps_numeric = float(fps_value)
+        except (TypeError, ValueError):
+            fps_numeric = 12.0
+        fps_clamped = max(
+            self.animation_fps_spinbox.minimum(),
+            min(self.animation_fps_spinbox.maximum(), int(round(fps_numeric))),
+        )
+        self.animation_fps_spinbox.setValue(fps_clamped)
+
+        prev_value = animation_settings.get("onion_prev_frames", 1)
+        next_value = animation_settings.get("onion_next_frames", 1)
+        try:
+            prev_int = int(prev_value)
+        except (TypeError, ValueError):
+            prev_int = 1
+        try:
+            next_int = int(next_value)
+        except (TypeError, ValueError):
+            next_int = 1
+        prev_int = max(self.onion_prev_spinbox.minimum(), min(self.onion_prev_spinbox.maximum(), prev_int))
+        next_int = max(self.onion_next_spinbox.minimum(), min(self.onion_next_spinbox.maximum(), next_int))
+        self.onion_prev_spinbox.setValue(prev_int)
+        self.onion_next_spinbox.setValue(next_int)
 
         ruler_settings = self.settings_controller.get_ruler_settings()
         segments = ruler_settings.get(
@@ -334,6 +397,13 @@ class SettingsDialog(QDialog):
             "segments": self.ruler_segments_spinbox.value(),
         }
 
+    def get_animation_settings(self):
+        return {
+            "fps": float(self.animation_fps_spinbox.value()),
+            "onion_prev_frames": int(self.onion_prev_spinbox.value()),
+            "onion_next_frames": int(self.onion_next_spinbox.value()),
+        }
+
     def _apply_settings(self):
         self.settings_controller.update_grid_settings(**self.get_grid_settings())
         self.settings_controller.update_background_settings(
@@ -341,6 +411,9 @@ class SettingsDialog(QDialog):
             image_alpha=self.get_background_image_alpha(),
         )
         self.settings_controller.update_ruler_settings(**self.get_ruler_settings())
+        self.settings_controller.update_animation_settings(
+            **self.get_animation_settings()
+        )
         self.settings_controller.update_ai_settings(
             negative_prompt=self.negative_prompt_edit.toPlainText()
         )
@@ -373,6 +446,40 @@ class SettingsDialog(QDialog):
         self.ruler_segments_spinbox.setValue(
             getattr(self.settings_controller, "DEFAULT_RULER_SEGMENTS", 2)
         )
+
+    def _reset_animation_tab(self):
+        defaults = self.settings_controller.get_default_animation_settings()
+        fps_default = defaults.get("fps", 12.0)
+        try:
+            fps_value = float(fps_default)
+        except (TypeError, ValueError):
+            fps_value = 12.0
+        fps_clamped = max(
+            self.animation_fps_spinbox.minimum(),
+            min(self.animation_fps_spinbox.maximum(), int(round(fps_value))),
+        )
+        self.animation_fps_spinbox.setValue(fps_clamped)
+
+        prev_default = defaults.get("onion_prev_frames", 1)
+        next_default = defaults.get("onion_next_frames", 1)
+        try:
+            prev_value = int(prev_default)
+        except (TypeError, ValueError):
+            prev_value = 1
+        try:
+            next_value = int(next_default)
+        except (TypeError, ValueError):
+            next_value = 1
+        prev_value = max(
+            self.onion_prev_spinbox.minimum(),
+            min(self.onion_prev_spinbox.maximum(), prev_value),
+        )
+        next_value = max(
+            self.onion_next_spinbox.minimum(),
+            min(self.onion_next_spinbox.maximum(), next_value),
+        )
+        self.onion_prev_spinbox.setValue(prev_value)
+        self.onion_next_spinbox.setValue(next_value)
 
     def _reset_ai_tab(self):
         defaults = self.settings_controller.get_default_ai_settings()

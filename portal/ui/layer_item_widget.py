@@ -1,6 +1,15 @@
 from PySide6.QtCore import Signal, Qt, QRect
 from PySide6.QtGui import QPixmap, QPainter, QColor
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QStackedWidget, QSlider
+from PySide6.QtWidgets import (
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QLineEdit,
+    QStackedWidget,
+    QSlider,
+    QSizePolicy,
+)
 
 
 class NameLabel(QLabel):
@@ -96,25 +105,25 @@ class LayerItemWidget(QWidget):
         self.setLayout(self.layout)
 
         icon_container = QWidget()
+        icon_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         icon_layout = QVBoxLayout(icon_container)
         icon_layout.setContentsMargins(0, 0, 0, 0)
-        icon_layout.setSpacing(2)
+        icon_layout.setSpacing(4)
+        icon_layout.setAlignment(Qt.AlignCenter)
 
         self.visibility_icon = ClickableLabel()
-        self.visibility_icon.setFixedWidth(24)
-        self.visibility_icon.setFixedHeight(24)
+        self.visibility_icon.setFixedSize(24, 24)
+        self.visibility_icon.setAlignment(Qt.AlignCenter)
         self.visibility_icon.clicked.connect(self.on_visibility_clicked)
-        icon_layout.addWidget(self.visibility_icon)
+        icon_layout.addWidget(self.visibility_icon, alignment=Qt.AlignCenter)
 
         self.onion_icon = ClickableLabel()
-        self.onion_icon.setFixedWidth(24)
-        self.onion_icon.setFixedHeight(24)
+        self.onion_icon.setFixedSize(24, 24)
         self.onion_icon.setToolTip("Toggle onion skin for this layer")
         self.onion_icon.clicked.connect(self.on_onion_clicked)
-        icon_layout.addWidget(self.onion_icon)
-
-        icon_layout.addStretch()
-        self.layout.addWidget(icon_container)
+        self.onion_icon.setAlignment(Qt.AlignCenter)
+        icon_layout.addWidget(self.onion_icon, alignment=Qt.AlignCenter)
+        self.layout.addWidget(icon_container, alignment=Qt.AlignVCenter)
 
         thumbnail_container = QWidget()
         thumbnail_layout = QHBoxLayout(thumbnail_container)

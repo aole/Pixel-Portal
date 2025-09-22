@@ -9,7 +9,7 @@ from PySide6.QtGui import QImage, QPainter
 from PIL import Image, ImageSequence, ImageQt
 
 from portal.core.aole_archive import AOLEArchive
-from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES, DEFAULT_PLAYBACK_FPS
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
@@ -27,6 +27,7 @@ class Document:
         self.playback_total_frames = self.normalize_playback_total_frames(
             DEFAULT_TOTAL_FRAMES
         )
+        self.playback_fps = self.normalize_playback_fps(DEFAULT_PLAYBACK_FPS)
 
     # ------------------------------------------------------------------
     def get_ai_output_rect(self) -> QRect:
@@ -137,6 +138,7 @@ class Document:
         new_doc._notify_layer_manager_changed()
         new_doc.ai_output_rect = new_doc._normalize_ai_output_rect(self.ai_output_rect)
         new_doc.set_playback_total_frames(self.playback_total_frames)
+        new_doc.set_playback_fps(self.playback_fps)
         return new_doc
 
     @staticmethod
@@ -152,6 +154,21 @@ class Document:
     def set_playback_total_frames(self, frame_count) -> int:
         normalized = self.normalize_playback_total_frames(frame_count)
         self.playback_total_frames = normalized
+        return normalized
+
+    @staticmethod
+    def normalize_playback_fps(value) -> float:
+        try:
+            fps_value = float(value)
+        except (TypeError, ValueError):
+            fps_value = DEFAULT_PLAYBACK_FPS
+        if fps_value <= 0:
+            fps_value = DEFAULT_PLAYBACK_FPS
+        return fps_value
+
+    def set_playback_fps(self, fps: float) -> float:
+        normalized = self.normalize_playback_fps(fps)
+        self.playback_fps = normalized
         return normalized
 
     def render(self) -> QImage:
@@ -187,7 +204,7 @@ class Document:
                 index = new_manager.index_for_layer_uid(previous_active_uid)
                 if index is not None:
                     new_manager.select_layer(index)
-        self._notify_layer_manager_changed()
+        self._notify_layer_manager_changed(previous_active_uid)
 
     def render_current_frame(self) -> QImage:
         return self.frame_manager.render_current_frame()
@@ -211,7 +228,7 @@ class Document:
             return False
         changed = self.frame_manager.set_layer_key_frames(layer.uid, frames)
         if changed:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return changed
 
     def move_key_frames(self, moves: Mapping[int, int]) -> bool:
@@ -223,7 +240,7 @@ class Document:
             return False
         changed = self.frame_manager.move_layer_keys(layer.uid, moves)
         if changed:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return changed
 
     def add_key_frame(self, frame: int) -> bool:
@@ -235,7 +252,7 @@ class Document:
             return False
         changed = self.frame_manager.add_layer_key(layer.uid, frame)
         if changed:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return changed
 
     def remove_key_frame(self, frame: int) -> bool:
@@ -247,7 +264,7 @@ class Document:
             return False
         changed = self.frame_manager.remove_layer_key(layer.uid, frame)
         if changed:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return changed
 
     def duplicate_key_frame(
@@ -263,7 +280,7 @@ class Document:
             layer.uid, source_frame, target_frame
         )
         if created is not None:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return created
 
     def copy_active_layer_key(self, frame: int) -> Layer | None:
@@ -284,7 +301,7 @@ class Document:
             return False
         changed = self.frame_manager.paste_layer_key(layer.uid, frame, key_state)
         if changed:
-            self._notify_layer_manager_changed()
+            self._notify_layer_manager_changed(layer.uid)
         return changed
 
     def key_frames_for_layer(self, layer: Layer) -> list[int]:
@@ -427,13 +444,22 @@ class Document:
                 layer.on_image_change.emit()
         self.ensure_ai_output_rect()
 
-    def _notify_layer_manager_changed(self) -> None:
+    def _notify_layer_manager_changed(
+        self, preferred_layer_uid: int | None = None
+    ) -> None:
         manager = self.frame_manager.current_layer_manager
         if manager is None:
             return
         setter = getattr(manager, "set_document", None)
         if callable(setter):
             setter(self)
+        if preferred_layer_uid is not None:
+            index = manager.index_for_layer_uid(preferred_layer_uid)
+            if index is not None:
+                try:
+                    manager.select_layer(index)
+                except IndexError:
+                    pass
         for callback in list(self._layer_manager_listeners):
             callback(manager)
 

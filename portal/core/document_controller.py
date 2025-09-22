@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from PIL.ImageQt import ImageQt
 
-from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES, DEFAULT_PLAYBACK_FPS
 from portal.core.document import Document
 from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
@@ -73,13 +73,17 @@ class DocumentController(QObject):
         self._copied_key_state = None
         self.auto_key_enabled = False
         self._playback_total_frames = DEFAULT_TOTAL_FRAMES
+        default_fps = getattr(settings, "animation_fps", DEFAULT_PLAYBACK_FPS)
+        self._playback_fps = Document.normalize_playback_fps(default_fps)
         self._playback_loop_start = 0
         self._playback_loop_end = max(0, self._playback_total_frames - 1)
 
         self._last_ai_output_rect = QRect()
         self.document_changed.connect(self._on_document_mutated)
 
+        initial_fps = self._playback_fps
         self.attach_document(Document(64, 64))
+        self.set_playback_fps(initial_fps)
 
     # expose settings-backed properties
     @property
@@ -180,6 +184,22 @@ class DocumentController(QObject):
     @property
     def playback_loop_range(self) -> tuple[int, int]:
         return self._playback_loop_start, self._playback_loop_end
+
+    @property
+    def playback_fps(self) -> float:
+        return self._playback_fps
+
+    def set_playback_fps(self, fps: float) -> None:
+        normalized = Document.normalize_playback_fps(fps)
+        if normalized == self._playback_fps:
+            document = self.document
+            if document is not None:
+                document.set_playback_fps(normalized)
+            return
+        self._playback_fps = normalized
+        document = self.document
+        if document is not None:
+            document.set_playback_fps(normalized)
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
         try:
@@ -606,6 +626,10 @@ class DocumentController(QObject):
         normalized_total = Document.normalize_playback_total_frames(stored_total)
         self._playback_total_frames = normalized_total
         document.set_playback_total_frames(normalized_total)
+        stored_fps = getattr(document, "playback_fps", DEFAULT_PLAYBACK_FPS)
+        normalized_fps = Document.normalize_playback_fps(stored_fps)
+        self._playback_fps = normalized_fps
+        document.set_playback_fps(normalized_fps)
         if self._layer_manager_unsubscribe:
             self._layer_manager_unsubscribe()
             self._layer_manager_unsubscribe = None

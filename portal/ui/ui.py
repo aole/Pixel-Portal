@@ -11,8 +11,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
-    QSlider,
-    QSpinBox,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -174,48 +172,6 @@ class MainWindow(QMainWindow):
         self._update_timeline_onion_button_icon()
         timeline_header_layout.addWidget(self.timeline_onion_button)
 
-        self.timeline_onion_settings = QWidget(self.timeline_panel)
-        onion_settings_layout = QHBoxLayout(self.timeline_onion_settings)
-        onion_settings_layout.setContentsMargins(0, 0, 0, 0)
-        onion_settings_layout.setSpacing(4)
-
-        onion_prev_label = QLabel("Prev", self.timeline_onion_settings)
-        onion_prev_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        onion_settings_layout.addWidget(onion_prev_label)
-
-        self.timeline_onion_prev_spinbox = QSpinBox(self.timeline_onion_settings)
-        self.timeline_onion_prev_spinbox.setRange(0, 6)
-        self.timeline_onion_prev_spinbox.setFixedWidth(48)
-        self.timeline_onion_prev_spinbox.setValue(self.canvas.onion_skin_prev_frames)
-        onion_settings_layout.addWidget(self.timeline_onion_prev_spinbox)
-
-        onion_next_label = QLabel("Next", self.timeline_onion_settings)
-        onion_next_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        onion_settings_layout.addWidget(onion_next_label)
-
-        self.timeline_onion_next_spinbox = QSpinBox(self.timeline_onion_settings)
-        self.timeline_onion_next_spinbox.setRange(0, 6)
-        self.timeline_onion_next_spinbox.setFixedWidth(48)
-        self.timeline_onion_next_spinbox.setValue(self.canvas.onion_skin_next_frames)
-        onion_settings_layout.addWidget(self.timeline_onion_next_spinbox)
-
-        self.timeline_onion_settings.setEnabled(self.canvas.onion_skin_enabled)
-        timeline_header_layout.addWidget(self.timeline_onion_settings)
-
-        timeline_header_layout.addStretch()
-
-        fps_label = QLabel("FPS", self.timeline_panel)
-        timeline_header_layout.addWidget(fps_label)
-
-        self.timeline_fps_slider = QSlider(Qt.Horizontal, self.timeline_panel)
-        self.timeline_fps_slider.setRange(1, 60)
-        self.timeline_fps_slider.setValue(int(round(self.animation_player.fps)))
-        self.timeline_fps_slider.setFixedWidth(120)
-        timeline_header_layout.addWidget(self.timeline_fps_slider)
-
-        self.timeline_fps_value_label = QLabel(self.timeline_panel)
-        timeline_header_layout.addWidget(self.timeline_fps_value_label)
-
         timeline_header_layout.addStretch()
 
         self.timeline_layer_label = QLabel("", self.timeline_panel)
@@ -229,14 +185,7 @@ class MainWindow(QMainWindow):
         self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
         self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
         self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
-        self.timeline_fps_slider.valueChanged.connect(self._on_timeline_fps_changed)
         self.timeline_onion_button.toggled.connect(self._on_timeline_onion_toggled)
-        self.timeline_onion_prev_spinbox.valueChanged.connect(
-            self._on_timeline_onion_prev_changed
-        )
-        self.timeline_onion_next_spinbox.valueChanged.connect(
-            self._on_timeline_onion_next_changed
-        )
 
         self.play_pause_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
         self.play_pause_shortcut.setAutoRepeat(False)
@@ -263,7 +212,9 @@ class MainWindow(QMainWindow):
 
         self.animation_player.frame_changed.connect(self.timeline_widget.set_current_frame)
         self.animation_player.playing_changed.connect(self._on_player_state_changed)
-        self.animation_player.fps_changed.connect(self._update_timeline_fps_label)
+        self.animation_player.fps_changed.connect(self._on_animation_fps_changed)
+
+        self._apply_runtime_animation_settings()
 
         self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
 
@@ -271,7 +222,7 @@ class MainWindow(QMainWindow):
         self._update_current_frame_label(self.timeline_widget.current_frame())
         self._update_timeline_layer_label(None)
         self._on_player_state_changed(self.animation_player.is_playing)
-        self._update_timeline_fps_label(self.animation_player.fps)
+        self._on_animation_fps_changed(self.animation_player.fps)
         self.sync_timeline_from_document()
 
         central_container = QWidget(self)
@@ -420,16 +371,71 @@ class MainWindow(QMainWindow):
             text = "Layer: (none)"
         self.timeline_layer_label.setText(text)
 
-    def _update_timeline_fps_label(self, value: float) -> None:
-        if isinstance(value, (int, float)):
-            text = f"{value:.0f}"
-            slider_value = int(round(value))
-            with QSignalBlocker(self.timeline_fps_slider):
-                self.timeline_fps_slider.setValue(slider_value)
-            self.preview_panel.set_playback_fps(value)
+    def _apply_runtime_animation_settings(self) -> None:
+        controller = getattr(self.app, "settings_controller", None)
+        if controller is None:
+            return
+
+        animation_settings = controller.get_animation_settings()
+
+        raw_fps = animation_settings.get("fps", self.animation_player.fps)
+        try:
+            fps_value = float(raw_fps)
+        except (TypeError, ValueError):
+            fps_value = self.animation_player.fps
+        if fps_value <= 0:
+            fps_value = self.animation_player.fps
+
+        current_fps = self.animation_player.fps
+        emit_fps_update = abs(fps_value - current_fps) > 1e-6
+        if emit_fps_update:
+            self.animation_player.set_fps(fps_value)
         else:
-            text = ""
-        self.timeline_fps_value_label.setText(text)
+            self.app.set_playback_fps(fps_value)
+
+        raw_prev = animation_settings.get(
+            "onion_prev_frames", self.canvas.onion_skin_prev_frames
+        )
+        raw_next = animation_settings.get(
+            "onion_next_frames", self.canvas.onion_skin_next_frames
+        )
+        try:
+            prev_frames = max(0, int(raw_prev))
+        except (TypeError, ValueError):
+            prev_frames = self.canvas.onion_skin_prev_frames
+        try:
+            next_frames = max(0, int(raw_next))
+        except (TypeError, ValueError):
+            next_frames = self.canvas.onion_skin_next_frames
+
+        self.canvas.set_onion_skin_range(previous=prev_frames, next=next_frames)
+
+        self.preview_panel.set_playback_fps(self.animation_player.fps)
+
+        update_kwargs: dict[str, float | int] = {
+            "onion_prev_frames": prev_frames,
+            "onion_next_frames": next_frames,
+        }
+        if not emit_fps_update:
+            update_kwargs["fps"] = fps_value
+        controller.update_animation_settings(**update_kwargs)
+
+    def _on_animation_fps_changed(self, value: float) -> None:
+        try:
+            fps_value = float(value)
+        except (TypeError, ValueError):
+            fps_value = self.animation_player.fps
+        if fps_value <= 0:
+            fps_value = self.animation_player.fps
+        self.preview_panel.set_playback_fps(fps_value)
+        self.app.set_playback_fps(fps_value)
+        controller = getattr(self.app, "settings_controller", None)
+        if controller is not None:
+            controller.update_animation_settings(
+                fps=fps_value,
+                onion_prev_frames=self.canvas.onion_skin_prev_frames,
+                onion_next_frames=self.canvas.onion_skin_next_frames,
+            )
 
     def _update_stop_button_state(self) -> None:
         should_enable = (
@@ -462,16 +468,7 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _on_timeline_onion_toggled(self, enabled: bool) -> None:
         self.canvas.set_onion_skin_enabled(enabled)
-        self.timeline_onion_settings.setEnabled(enabled)
         self._update_timeline_onion_button_icon()
-
-    @Slot(int)
-    def _on_timeline_onion_prev_changed(self, value: int) -> None:
-        self.canvas.set_onion_skin_range(previous=value)
-
-    @Slot(int)
-    def _on_timeline_onion_next_changed(self, value: int) -> None:
-        self.canvas.set_onion_skin_range(next=value)
 
     @Slot(bool)
     def _on_timeline_play_toggled(self, checked: bool) -> None:
@@ -489,11 +486,6 @@ class MainWindow(QMainWindow):
             self.animation_player.pause()
         else:
             self.animation_player.play()
-
-    @Slot(int)
-    def _on_timeline_fps_changed(self, value: int) -> None:
-        self.animation_player.set_fps(value)
-        self.preview_panel.set_playback_fps(value)
 
     @Slot(int)
     def _on_timeline_total_frames_changed(self, value: int) -> None:
@@ -642,6 +634,16 @@ class MainWindow(QMainWindow):
         loop_start, loop_end = self.app.playback_loop_range
         loop_end = max(0, min(loop_end, playback_total - 1))
         loop_start = max(0, min(loop_start, loop_end))
+
+        raw_fps = getattr(self.app, "playback_fps", self.animation_player.fps)
+        try:
+            fps_value = float(raw_fps)
+        except (TypeError, ValueError):
+            fps_value = self.animation_player.fps
+        if fps_value <= 0:
+            fps_value = self.animation_player.fps
+        self.animation_player.set_fps(fps_value)
+        self.preview_panel.set_playback_fps(self.animation_player.fps)
 
         self.timeline_widget.set_playback_total_frames(playback_total)
         self.timeline_widget.set_loop_range(loop_start, loop_end)
@@ -939,7 +941,13 @@ class MainWindow(QMainWindow):
                 self.app.resize_document(values["width"], values["height"], values["interpolation"])
 
     def open_settings_dialog(self):
-        dialog = SettingsDialog(self.app.settings_controller, self)
+        controller = self.app.settings_controller
+        controller.update_animation_settings(
+            fps=self.animation_player.fps,
+            onion_prev_frames=self.canvas.onion_skin_prev_frames,
+            onion_next_frames=self.canvas.onion_skin_next_frames,
+        )
+        dialog = SettingsDialog(controller, self)
         dialog.settings_applied.connect(self.apply_settings_from_controller)
         dialog.exec()
 
@@ -971,6 +979,7 @@ class MainWindow(QMainWindow):
             image_alpha=self.canvas.background_image_alpha,
         )
         controller.update_ruler_settings(**self.canvas.get_ruler_settings())
+        self._apply_runtime_animation_settings()
         self.app.save_settings()
 
     def open_background_color_dialog(self):
