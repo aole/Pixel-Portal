@@ -9,6 +9,7 @@ class Layer(QObject):
     """
     on_image_change = Signal()
     visibility_changed = Signal()
+    onion_skin_changed = Signal(bool)
     name_changed = Signal(str)
 
     _uid_counter = 0
@@ -26,6 +27,7 @@ class Layer(QObject):
         self._name = name
         self._visible = True
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
+        self._onion_skin_enabled = False
 
         self.image = QImage(QSize(width, height), QImage.Format_ARGB32)
         self.image.fill(QColor(0, 0, 0, 0))  # Fill with transparent
@@ -53,6 +55,17 @@ class Layer(QObject):
             self._visible = value
             self.visibility_changed.emit()
 
+    @property
+    def onion_skin_enabled(self) -> bool:
+        return self._onion_skin_enabled
+
+    @onion_skin_enabled.setter
+    def onion_skin_enabled(self, value: bool) -> None:
+        normalized = bool(value)
+        if self._onion_skin_enabled != normalized:
+            self._onion_skin_enabled = normalized
+            self.onion_skin_changed.emit(self._onion_skin_enabled)
+
     def clear(self, selection=None):
         """Fills the layer with transparent color."""
         if selection and not selection.isEmpty():
@@ -73,6 +86,7 @@ class Layer(QObject):
             new_layer.uid = self.uid
         new_layer.visible = self.visible
         new_layer.opacity = self.opacity
+        new_layer.onion_skin_enabled = self.onion_skin_enabled
         new_layer.image = self.image.copy()  # Use QImage's copy method
         return new_layer
 
@@ -82,6 +96,7 @@ class Layer(QObject):
         self.image = other.image.copy()
         self.visible = other.visible
         self.opacity = other.opacity
+        self.onion_skin_enabled = other.onion_skin_enabled
         self.on_image_change.emit()
 
     def get_properties(self):
@@ -90,6 +105,7 @@ class Layer(QObject):
             "name": self.name,
             "visible": self.visible,
             "opacity": self.opacity,
+            "onion_skin_enabled": self.onion_skin_enabled,
         }
 
     @classmethod

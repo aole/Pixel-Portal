@@ -2,7 +2,7 @@ from portal.core.layer import Layer
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt
-from portal.commands.layer_commands import SetLayerVisibleCommand
+from portal.commands.layer_commands import SetLayerVisibleCommand, SetLayerOnionSkinCommand
 
 
 class LayerManager(QObject):
@@ -11,6 +11,7 @@ class LayerManager(QObject):
     """
     layer_visibility_changed = Signal(int)
     layer_structure_changed = Signal()
+    layer_onion_skin_changed = Signal(int)
     command_generated = Signal(object)
 
     def __init__(self, width: int, height: int, create_background: bool = True):
@@ -146,6 +147,15 @@ class LayerManager(QObject):
 
         layer = self.layers[index]
         command = SetLayerVisibleCommand(self, index, not layer.visible)
+        self.command_generated.emit(command)
+
+    def toggle_onion_skin(self, index: int) -> None:
+        """Toggle the onion-skin participation flag for the layer at ``index``."""
+        if not (0 <= index < len(self.layers)):
+            raise IndexError("Layer index out of range.")
+
+        layer = self.layers[index]
+        command = SetLayerOnionSkinCommand(self, index, not layer.onion_skin_enabled)
         self.command_generated.emit(command)
 
     def clone(self):

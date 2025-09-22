@@ -316,6 +316,7 @@ class Document:
             pil_image.info["layer_name"] = layer.name
             pil_image.info["layer_visible"] = str(layer.visible)
             pil_image.info["layer_opacity"] = str(layer.opacity)
+            pil_image.info["layer_onion_skin"] = str(layer.onion_skin_enabled)
             images.append(pil_image)
 
         if images:
@@ -358,6 +359,7 @@ class Document:
                     layer = Layer.from_qimage(qimage, props.get("name", f"Layer {i+1}"))
                     layer.visible = props.get("visible", True)
                     layer.opacity = props.get("opacity", 1.0)
+                    layer.onion_skin_enabled = props.get("onion_skin_enabled", False)
                 else:
                     layer = Layer.from_qimage(qimage, f"Layer {i+1}")
                 doc.layer_manager.layers.append(layer)

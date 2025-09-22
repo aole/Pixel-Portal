@@ -30,6 +30,7 @@ class _LayerRecord:
     visible: bool
     opacity: float
     image_path: str
+    onion_skin_enabled: bool
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -38,6 +39,7 @@ class _LayerRecord:
             "visible": self.visible,
             "opacity": self.opacity,
             "image": self.image_path,
+            "onion_skin_enabled": self.onion_skin_enabled,
         }
 
 
@@ -140,6 +142,7 @@ class _ArchiveWriter:
                 visible=layer.visible,
                 opacity=layer.opacity,
                 image_path=str(image_path),
+                onion_skin_enabled=getattr(layer, "onion_skin_enabled", False),
             )
             layer_records.append(record)
 
@@ -296,6 +299,7 @@ class _ArchiveReader:
         layer.uid = self._coerce_int(layer_data.get("uid"), layer.uid)
         layer.visible = self._coerce_bool(layer_data.get("visible"), True)
         layer.opacity = self._coerce_float(layer_data.get("opacity"), 1.0, minimum=0.0, maximum=1.0)
+        layer.onion_skin_enabled = self._coerce_bool(layer_data.get("onion_skin_enabled"), False)
 
         return layer
 

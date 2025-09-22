@@ -93,6 +93,9 @@ class LayerManagerWidget(QWidget):
                 item_widget.visibility_toggled.connect(
                     partial(self.on_visibility_toggled, item_widget)
                 )
+                item_widget.onion_skin_toggled.connect(
+                    partial(self.on_onion_skin_toggled, item_widget)
+                )
                 item_widget.opacity_preview_changed.connect(
                     partial(self.on_opacity_preview_changed, item_widget)
                 )
@@ -160,6 +163,28 @@ class LayerManagerWidget(QWidget):
     def on_opacity_preview_changed(self, widget, value):
         """Preview layer opacity while dragging."""
         widget.layer.opacity = value / 100.0
+        self.layer_changed.emit()
+
+    def on_onion_skin_toggled(self, widget):
+        """Handle toggling the onion skin flag for a layer."""
+        layer_manager = self._get_layer_manager()
+        if layer_manager is None:
+            return
+
+        try:
+            actual_index = layer_manager.layers.index(widget.layer)
+        except ValueError:
+            return
+
+        list_index = self._list_row_from_layer_index(layer_manager, actual_index)
+
+        if self.layer_list.currentRow() != list_index:
+            self._set_list_current_row(list_index)
+
+        if layer_manager.active_layer_index != actual_index:
+            layer_manager.select_layer(actual_index)
+
+        layer_manager.toggle_onion_skin(actual_index)
         self.layer_changed.emit()
 
     def on_opacity_changed(self, widget, old_value, new_value):

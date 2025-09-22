@@ -322,6 +322,9 @@ class DocumentController(QObject):
     def on_layer_visibility_changed(self, index):
         self.document_changed.emit()
 
+    def on_layer_onion_skin_changed(self, index):
+        self.document_changed.emit()
+
     def on_layer_structure_changed(self):
         self.document_changed.emit()
 
@@ -647,6 +650,7 @@ class DocumentController(QObject):
         self._disconnect_layer_manager()
         self._layer_manager = layer_manager
         layer_manager.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+        layer_manager.layer_onion_skin_changed.connect(self.on_layer_onion_skin_changed)
         layer_manager.layer_structure_changed.connect(self.on_layer_structure_changed)
         layer_manager.command_generated.connect(self.handle_command)
 
@@ -655,6 +659,7 @@ class DocumentController(QObject):
             return
         for signal, slot in (
             (self._layer_manager.layer_visibility_changed, self.on_layer_visibility_changed),
+            (self._layer_manager.layer_onion_skin_changed, self.on_layer_onion_skin_changed),
             (self._layer_manager.layer_structure_changed, self.on_layer_structure_changed),
             (self._layer_manager.command_generated, self.handle_command),
         ):

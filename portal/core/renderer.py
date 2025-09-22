@@ -40,6 +40,7 @@ class _OnionSkinContext:
     active_index: int
     resolved_index: Optional[int]
     key_indices: Tuple[int, ...]
+    allowed_layer_uids: Tuple[int, ...]
 
     @property
     def active_is_key(self) -> bool:
@@ -51,6 +52,10 @@ class _OnionSkinContext:
             self.resolved_index is not None
             and self.resolved_index != self.active_index
         )
+
+    @property
+    def has_allowed_layers(self) -> bool:
+        return bool(self.allowed_layer_uids)
 
     def iter_keys(self, direction: int) -> Iterable[int]:
         if direction < 0:
@@ -426,6 +431,8 @@ class CanvasRenderer:
             context = self._build_onion_skin_context(document)
         if context is None:
             return
+        if not context.has_allowed_layers:
+            return
 
         drawn_indices: set[int] = set()
         if context.active_is_key:
@@ -571,11 +578,28 @@ class CanvasRenderer:
 
         normalized_markers = sorted(set(normalized_markers))
 
+        allowed_layer_uids: set[int] = set()
+        active_layer_manager = resolve_active_layer_manager(document)
+        if active_layer_manager is not None:
+            active_layer = getattr(active_layer_manager, "active_layer", None)
+            active_uid = getattr(active_layer, "uid", None) if active_layer is not None else None
+            if isinstance(active_uid, int):
+                allowed_layer_uids.add(active_uid)
+
+            for layer in getattr(active_layer_manager, "layers", []):
+                if getattr(layer, "onion_skin_enabled", False):
+                    layer_uid = getattr(layer, "uid", None)
+                    if isinstance(layer_uid, int):
+                        allowed_layer_uids.add(layer_uid)
+
+        allowed_tuple = tuple(sorted(allowed_layer_uids))
+
         return _OnionSkinContext(
             frames=frames,
             active_index=active_index,
             resolved_index=resolved_index,
             key_indices=tuple(normalized_markers),
+            allowed_layer_uids=allowed_tuple,
         )
 
     @staticmethod
@@ -641,7 +665,7 @@ class CanvasRenderer:
                 continue
 
             try:
-                source = render_fn()
+                source = render_fn(allowed_layer_uids=context.allowed_layer_uids)
             except Exception:
                 continue
 

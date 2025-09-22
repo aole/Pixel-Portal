@@ -272,6 +272,25 @@ class SetLayerVisibleCommand(Command):
         self.layer_manager.layer_visibility_changed.emit(self.layer_index)
 
 
+class SetLayerOnionSkinCommand(Command):
+    def __init__(self, layer_manager: 'LayerManager', layer_index: int, enabled: bool):
+        self.layer_manager = layer_manager
+        self.layer_index = layer_index
+        self.enabled = bool(enabled)
+        layer = self.layer_manager.layers[self.layer_index]
+        self.previous_enabled = getattr(layer, "onion_skin_enabled", False)
+
+    def execute(self):
+        layer = self.layer_manager.layers[self.layer_index]
+        layer.onion_skin_enabled = self.enabled
+        self.layer_manager.layer_onion_skin_changed.emit(self.layer_index)
+
+    def undo(self):
+        layer = self.layer_manager.layers[self.layer_index]
+        layer.onion_skin_enabled = self.previous_enabled
+        self.layer_manager.layer_onion_skin_changed.emit(self.layer_index)
+
+
 class RotateLayerCommand(Command):
     def __init__(
         self,
