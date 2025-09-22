@@ -17,7 +17,7 @@ class _KeyframeCommand(Command):
 
     def _capture_before(self) -> None:
         if self._previous_state is None:
-            self._previous_state = self.document.frame_manager.clone()
+            self._previous_state = self.document.frame_manager.clone(deep_copy=True)
 
     def undo(self) -> None:
         if self._previous_state is None:

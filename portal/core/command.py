@@ -502,7 +502,7 @@ class CropCommand(Command):
         if len(current_layers) != len(original_layers):
             # Fallback: replace the stack entirely if counts diverge (shouldn't
             # happen for crop but keeps undo resilient to future changes).
-            current_manager.layers = [layer.clone() for layer in original_layers]
+            current_manager.layers = [layer.clone(deep_copy=True) for layer in original_layers]
         else:
             for current_layer, original_layer in zip(current_layers, original_layers):
                 current_layer.image = original_layer.image.copy()
@@ -880,7 +880,9 @@ class DuplicateLayerCommand(Command):
         if self.duplicated_layer is None:
             # First execution
             original_layer = self.layer_manager.layers[self.index]
-            self.duplicated_layer = original_layer.clone(preserve_identity=False)
+            self.duplicated_layer = original_layer.clone(
+                preserve_identity=False, deep_copy=True
+            )
             self.duplicated_layer.name = f"{original_layer.name} copy"
             self.added_index = self.index + 1
 
@@ -946,11 +948,11 @@ class ClearLayerAndKeysCommand(Command):
             return
 
         if self._before_state is None:
-            self._before_state = frame_manager.clone()
-            working_state = frame_manager.clone()
+            self._before_state = frame_manager.clone(deep_copy=True)
+            working_state = frame_manager.clone(deep_copy=True)
             self._clear_layer_and_keys(working_state, layer_uid)
             document.apply_frame_manager_snapshot(working_state)
-            self._after_state = document.frame_manager.clone()
+            self._after_state = document.frame_manager.clone(deep_copy=True)
         else:
             if self._after_state is None:
                 return

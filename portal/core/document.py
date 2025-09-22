@@ -134,7 +134,7 @@ class Document:
 
     def clone(self):
         new_doc = Document(self.width, self.height)
-        new_doc.frame_manager = self.frame_manager.clone()
+        new_doc.frame_manager = self.frame_manager.clone(deep_copy=True)
         new_doc._notify_layer_manager_changed()
         new_doc.ai_output_rect = new_doc._normalize_ai_output_rect(self.ai_output_rect)
         new_doc.set_playback_total_frames(self.playback_total_frames)
@@ -335,7 +335,7 @@ class Document:
         self.frame_manager.duplicate_layer_keys(source_layer.uid, new_layer)
 
     def apply_frame_manager_snapshot(self, snapshot: FrameManager) -> None:
-        self.frame_manager = snapshot.clone()
+        self.frame_manager = snapshot.clone(deep_copy=True)
         self.width = self.frame_manager.width
         self.height = self.frame_manager.height
         self._notify_layer_manager_changed()

@@ -193,6 +193,21 @@ def test_clone_copies_frames_and_layers():
         assert len(cloned_frame.layer_manager.layers) == len(original_frame.layer_manager.layers)
 
 
+def test_cloned_key_state_snapshot_isolated_from_edits():
+    document = Document(2, 2)
+    layer = document.layer_manager.active_layer
+    layer.image.fill(QColor("red"))
+
+    snapshot = document.frame_manager.clone_layer_key_state(layer.uid, 0)
+
+    assert snapshot is not None
+    assert snapshot.image.cacheKey() != layer.image.cacheKey()
+
+    layer.image.fill(QColor("blue"))
+
+    assert snapshot.image.pixelColor(0, 0) == QColor("red")
+
+
 def test_document_key_frames_follow_frame_removal():
     document = Document(4, 4)
     document.add_frame()

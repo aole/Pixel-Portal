@@ -51,8 +51,8 @@ class Frame:
 
         return final_image
 
-    def clone(self) -> "Frame":
-        """Create a deep copy of the frame and its layers."""
+    def clone(self, *, deep_copy: bool = False) -> "Frame":
+        """Create a copy of the frame and its layers."""
         cloned_frame = Frame(self.width, self.height, create_background=False)
-        cloned_frame.layer_manager = self.layer_manager.clone()
+        cloned_frame.layer_manager = self.layer_manager.clone(deep_copy=deep_copy)
         return cloned_frame

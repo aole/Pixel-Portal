@@ -78,8 +78,18 @@ class Layer(QObject):
             
         self.on_image_change.emit()
 
-    def clone(self, *, preserve_identity: bool = True) -> "Layer":
-        """Creates a deep copy of this layer."""
+    def clone(
+        self,
+        *,
+        preserve_identity: bool = True,
+        deep_copy: bool = False,
+    ) -> "Layer":
+        """Create a copy of this layer.
+
+        When ``deep_copy`` is ``False`` (the default) the returned layer shares the
+        source image's pixel buffer thanks to Qt's implicit sharing. Callers that
+        require an isolated buffer must request ``deep_copy=True``.
+        """
 
         new_layer = Layer(self.image.width(), self.image.height(), self.name)
         if preserve_identity:
@@ -87,13 +97,21 @@ class Layer(QObject):
         new_layer.visible = self.visible
         new_layer.opacity = self.opacity
         new_layer.onion_skin_enabled = self.onion_skin_enabled
-        new_layer.image = self.image.copy()  # Use QImage's copy method
+        if deep_copy:
+            new_layer.image = self.image.copy()
+        else:
+            new_layer.image = QImage(self.image)
         return new_layer
 
-    def apply_key_state_from(self, other: "Layer") -> None:
+    def apply_key_state_from(
+        self, other: "Layer", *, deep_copy: bool = False
+    ) -> None:
         """Copy image, visibility, and opacity from *other* without changing identity."""
 
-        self.image = other.image.copy()
+        if deep_copy:
+            self.image = other.image.copy()
+        else:
+            self.image = QImage(other.image)
         self.visible = other.visible
         self.opacity = other.opacity
         self.onion_skin_enabled = other.onion_skin_enabled

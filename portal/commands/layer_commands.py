@@ -182,11 +182,11 @@ class MergeLayerDownCommand(Command):
         if self._before_state is None:
             if not (0 < self.layer_index < len(self.document.layer_manager.layers)):
                 return
-            self._before_state = self.document.frame_manager.clone()
+            self._before_state = self.document.frame_manager.clone(deep_copy=True)
             if not _merge_layer_down_with_union(self.document, self.layer_index):
                 self._before_state = None
                 return
-            self._after_state = self.document.frame_manager.clone()
+            self._after_state = self.document.frame_manager.clone(deep_copy=True)
         else:
             if self._after_state is None:
                 return
@@ -213,11 +213,11 @@ class MergeLayerDownCurrentFrameCommand(Command):
                 return
             if not (0 < self.layer_index < layer_count):
                 return
-            self._before_state = self.document.frame_manager.clone()
+            self._before_state = self.document.frame_manager.clone(deep_copy=True)
             if not _merge_layer_down_current_frame(self.document, self.layer_index):
                 self._before_state = None
                 return
-            self._after_state = self.document.frame_manager.clone()
+            self._after_state = self.document.frame_manager.clone(deep_copy=True)
         else:
             if self._after_state is None:
                 return
@@ -241,10 +241,10 @@ class CollapseLayersCommand(Command):
             return
 
         if self._before_state is None:
-            self._before_state = self.document.frame_manager.clone()
+            self._before_state = self.document.frame_manager.clone(deep_copy=True)
             for index in range(layer_count - 1, 0, -1):
                 _merge_layer_down_with_union(self.document, index)
-            self._after_state = self.document.frame_manager.clone()
+            self._after_state = self.document.frame_manager.clone(deep_copy=True)
         else:
             if self._after_state is None:
                 return
