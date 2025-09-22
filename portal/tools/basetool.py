@@ -12,6 +12,7 @@ class BaseTool(QObject):
     shortcut = None
     category = None
     requires_visible_layer = True
+    supports_right_click_erase = False
     command_generated = Signal(object)
 
     def __init__(self, canvas):

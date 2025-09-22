@@ -9,13 +9,18 @@ class PenTool(BaseTool):
     icon = "icons/toolpen.png"
     shortcut = "b"
     category = "draw"
+    supports_right_click_erase = True
 
     def __init__(self, canvas):
         super().__init__(canvas)
         self.points = []
         self.cursor = QCursor(Qt.BlankCursor)
+        self._is_erasing = False
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        if event.button() not in (Qt.LeftButton, Qt.RightButton):
+            return
+
         layer_manager = self._get_active_layer_manager()
         if layer_manager is None:
             return
@@ -24,10 +29,15 @@ class PenTool(BaseTool):
         if not active_layer or not active_layer.visible:
             return
 
+        self._is_erasing = event.button() == Qt.RightButton
         self.points = [doc_pos]
 
         # Prepare transparent overlays for the live preview.
-        self._allocate_preview_images(replace_active_layer=False, allocate_temp=True)
+        self._allocate_preview_images(
+            replace_active_layer=False,
+            allocate_temp=True,
+            erase_preview=self._is_erasing,
+        )
 
         self.draw_path_on_temp_image()
         self.canvas.update()
@@ -54,6 +64,7 @@ class PenTool(BaseTool):
             self.points = []
             self._clear_preview_images()
             self.canvas.update()
+            self._is_erasing = False
             return
 
         layer_manager = self._get_active_layer_manager()
@@ -62,6 +73,7 @@ class PenTool(BaseTool):
             self.points = []
             self._clear_preview_images()
             self.canvas.update()
+            self._is_erasing = False
             return
 
         active_layer = layer_manager.active_layer
@@ -70,6 +82,7 @@ class PenTool(BaseTool):
             self.points = []
             self._clear_preview_images()
             self.canvas.update()
+            self._is_erasing = False
             return
 
         command = DrawCommand(
@@ -80,7 +93,7 @@ class PenTool(BaseTool):
             brush_type=self.canvas.drawing_context.brush_type,
             document=self.canvas.document,
             selection_shape=self.canvas.selection_shape,
-            erase=False,
+            erase=self._is_erasing,
             mirror_x=self.canvas.drawing_context.mirror_x,
             mirror_y=self.canvas.drawing_context.mirror_y,
             mirror_x_position=self.canvas.drawing_context.mirror_x_position,
@@ -94,6 +107,7 @@ class PenTool(BaseTool):
         self.points = []
         self._clear_preview_images()
         self.canvas.update()
+        self._is_erasing = False
 
     def draw_path_on_temp_image(self):
         if not self.points or self.canvas.temp_image is None:
@@ -111,7 +125,8 @@ class PenTool(BaseTool):
         painter = QPainter(image)
         if self.canvas.selection_shape:
             painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
+        pen_color = Qt.black if self._is_erasing else self.canvas.drawing_context.pen_color
+        painter.setPen(QPen(pen_color))
 
         if len(self.points) == 1:
             self.canvas.drawing.draw_brush(

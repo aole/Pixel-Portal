@@ -987,6 +987,36 @@ def test_fill_command(document, layer):
     restored_image_data = layer.image.constBits().tobytes()
     assert original_image_data == restored_image_data
 
+
+def test_fill_command_non_contiguous(document, layer):
+    """Filling with contiguous disabled recolours every pixel matching the sampled colour."""
+
+    layer.image.fill(QColor("white"))
+
+    for base_x in (10, 60):
+        for x in range(base_x, base_x + 5):
+            for y in range(10, 15):
+                layer.image.setPixelColor(x, y, QColor("black"))
+
+    command = FillCommand(
+        document=document,
+        layer=layer,
+        fill_pos=QPoint(12, 12),
+        fill_color=QColor("red"),
+        selection_shape=None,
+        mirror_x=False,
+        mirror_y=False,
+        contiguous=False,
+    )
+    command.execute()
+
+    for base_x in (10, 60):
+        for x in range(base_x, base_x + 5):
+            for y in range(10, 15):
+                assert layer.image.pixelColor(x, y) == QColor("red")
+
+    assert layer.image.pixelColor(30, 30) == QColor("white")
+
 def test_crop_command(document):
     """Test that the CropCommand crops the document and that undo restores the original document."""
     old_width = document.width

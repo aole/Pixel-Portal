@@ -1,5 +1,5 @@
 from PySide6.QtGui import QPainter, QColor, QPen, QImage
-from PySide6.QtCore import Qt, QPoint, QSize
+from PySide6.QtCore import Qt, QPoint, QSize, QRect
 import math
 
 
@@ -463,7 +463,15 @@ class Drawing:
                 mirror_y_position=mirror_y_position,
             )
 
-    def flood_fill(self, layer, start_pos, fill_color, selection_shape=None):
+    def flood_fill(
+        self,
+        layer,
+        start_pos,
+        fill_color,
+        selection_shape=None,
+        *,
+        contiguous: bool = True,
+    ):
         if not layer:
             return
 
@@ -477,27 +485,51 @@ class Drawing:
 
         if selection_shape and not selection_shape.contains(start_pos):
             return
-            
+
         target_color = image.pixelColor(x, y)
 
         if target_color == fill_color:
             return
 
-        stack = [(x, y)]
+        if contiguous:
+            stack = [(x, y)]
 
-        while stack:
-            x, y = stack.pop()
+            while stack:
+                x, y = stack.pop()
 
-            if not (0 <= x < width and 0 <= y < height):
-                continue
+                if not (0 <= x < width and 0 <= y < height):
+                    continue
 
-            if selection_shape and not selection_shape.contains(QPoint(x, y)):
-                continue
-                
-            if image.pixelColor(x, y) == target_color:
-                image.setPixelColor(x, y, fill_color)
-                stack.append((x + 1, y))
-                stack.append((x - 1, y))
-                stack.append((x, y + 1))
-                stack.append((x, y - 1))
+                if selection_shape and not selection_shape.contains(QPoint(x, y)):
+                    continue
+
+                if image.pixelColor(x, y) == target_color:
+                    image.setPixelColor(x, y, fill_color)
+                    stack.append((x + 1, y))
+                    stack.append((x - 1, y))
+                    stack.append((x, y + 1))
+                    stack.append((x, y - 1))
+            return
+
+        if selection_shape:
+            bounds = selection_shape.boundingRect().toAlignedRect()
+            bounds = bounds.intersected(QRect(0, 0, width, height))
+
+            if bounds.isNull() or bounds.isEmpty():
+                return
+
+            for row in range(bounds.top(), bounds.bottom() + 1):
+                for col in range(bounds.left(), bounds.right() + 1):
+                    point = QPoint(col, row)
+                    if not selection_shape.contains(point):
+                        continue
+                    if image.pixelColor(col, row) == target_color:
+                        image.setPixelColor(col, row, fill_color)
+            return
+
+        for row in range(height):
+            for col in range(width):
+                if image.pixelColor(col, row) == target_color:
+                    image.setPixelColor(col, row, fill_color)
+
                 

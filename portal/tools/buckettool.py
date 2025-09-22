@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QMouseEvent
 
 from portal.tools.basetool import BaseTool
@@ -26,6 +26,8 @@ class BucketTool(BaseTool):
             doc_height = self.canvas.document.height
             pos = QPoint(doc_pos.x() % doc_width, doc_pos.y() % doc_height)
 
+        contiguous = not bool(event.modifiers() & Qt.ControlModifier)
+
         command = FillCommand(
             document=self.canvas.document,
             layer=active_layer,
@@ -36,6 +38,7 @@ class BucketTool(BaseTool):
             mirror_y=self.canvas.drawing_context.mirror_y,
             mirror_x_position=self.canvas.drawing_context.mirror_x_position,
             mirror_y_position=self.canvas.drawing_context.mirror_y_position,
+            contiguous=contiguous,
         )
         self.command_generated.emit(command)
         self.canvas.update()
