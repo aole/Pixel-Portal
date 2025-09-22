@@ -174,6 +174,9 @@ class App(QObject):
     def move_keyframes(self, frames: Iterable[int], delta: int) -> None:
         self.document_controller.move_keyframes(frames, delta)
 
+    def duplicate_keyframes(self, frames: Iterable[int], delta: int) -> None:
+        self.document_controller.duplicate_keyframes(frames, delta)
+
     def add_keyframe(self, frame_index: int) -> None:
         self.document_controller.add_keyframe(frame_index)
 

@@ -443,6 +443,51 @@ class FrameManager:
         self._rebind_layer_fallbacks(layer_uid)
         return True
 
+    def duplicate_layer_keys_with_offset(
+        self, layer_uid: int, frames: Iterable[int], offset: int
+    ) -> bool:
+        keys = self.layer_keys.get(layer_uid)
+        if not keys:
+            return False
+        try:
+            offset_value = int(offset)
+        except (TypeError, ValueError):
+            return False
+        if not offset_value:
+            return False
+        normalized_sources: set[int] = set()
+        for value in frames:
+            try:
+                frame = int(value)
+            except (TypeError, ValueError):
+                continue
+            if frame in keys and frame >= 0:
+                normalized_sources.add(frame)
+        if not normalized_sources:
+            return False
+        updated_keys = set(keys)
+        produced_targets: set[int] = set()
+        for source in sorted(normalized_sources):
+            target = source + offset_value
+            if target < 0:
+                continue
+            self.ensure_frame(target)
+            if not (0 <= target < len(self.frames)):
+                continue
+            if target in normalized_sources:
+                continue
+            if target in updated_keys:
+                updated_keys.discard(target)
+            self._clone_layer_state(layer_uid, source, target)
+            updated_keys.add(target)
+            produced_targets.add(target)
+        if not produced_targets:
+            return False
+        self.layer_keys[layer_uid] = updated_keys
+        self._refresh_frame_markers()
+        self._rebind_layer_fallbacks(layer_uid)
+        return True
+
     def add_layer_key(self, layer_uid: int, index: int) -> bool:
         if index < 0:
             return False
