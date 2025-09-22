@@ -63,3 +63,18 @@ def test_save_document_uses_existing_path(monkeypatch, document_service, tmp_pat
     assert existing.exists()
     assert document_service.app.is_dirty is False
     assert document_service.app.updated_title is True
+
+
+@pytest.mark.parametrize(
+    "selected_filter, expected_extension",
+    [
+        ("Pixel Portal Document (*.aole)", ".aole"),
+        ("TIFF Files (*.tif *.tiff)", ".tiff"),
+        ("All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff)", None),
+        ("All Files (*)", None),
+    ],
+)
+def test_extract_extension_hint_handles_multi_extension_filters(
+    document_service, selected_filter, expected_extension
+):
+    assert document_service._extract_extension_hint(selected_filter) == expected_extension
