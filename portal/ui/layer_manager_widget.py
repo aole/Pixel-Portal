@@ -206,27 +206,16 @@ class LayerManagerWidget(QWidget):
         self.layer_changed.emit()
 
     def _collect_layer_instances(self, layer) -> list:
-        document = getattr(self.app, "document", None)
-        if document is None:
-            return [layer]
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return [layer]
-        layer_uid = getattr(layer, "uid", None)
-        if layer_uid is None:
-            return [layer]
-        frames = getattr(frame_manager, "frames", None)
-        if frames is None:
-            return [layer]
-        try:
-            instances = list(
-                frame_manager.iter_layer_instances(layer_uid, range(len(frames)))
-            )
-        except AttributeError:
-            instances = []
-        if not instances:
-            instances = [layer]
-        return instances
+        """Return the live instances backing *layer*.
+
+        Animation support has been removed, so each layer is represented by a
+        single object.  The helper now simply returns ``[layer]`` to keep the
+        existing signal wiring intact without touching the surrounding code.
+        """
+
+        if layer is None:
+            return []
+        return [layer]
 
     def on_layers_moved(self, _parent, start, end, _destination, row):
         """Handles reordering layers via drag-and-drop."""

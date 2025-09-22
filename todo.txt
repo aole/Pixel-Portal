@@ -3,5 +3,5 @@
 6. better status bar
 11. polygon create
 12. polygon select
-15. wire timeline UI to Document.add_layer_manager_listener for frame awareness (rendering/tools now use frame_manager.active_layer_manager)
+15. rebuild timeline bindings once the new animation stack exists (current controls are placeholders)
 16. expand timeline playback controls (e.g. ping-pong, per-layer preview toggles)

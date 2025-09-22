@@ -14,8 +14,11 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from portal.core.frame_manager import resolve_active_layer_manager
 from portal.ui.background import BackgroundImageMode
+
+
+def resolve_active_layer_manager(document):
+    return getattr(document, "layer_manager", None)
 
 
 @dataclass(frozen=True)
@@ -521,86 +524,9 @@ class CanvasRenderer:
     def _build_onion_skin_context(
         self, document
     ) -> Optional[_OnionSkinContext]:
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return None
+        """Return ``None`` now that onion-skinning has been retired."""
 
-        frames = getattr(frame_manager, "frames", None)
-        if not frames:
-            return None
-
-        total_frames = len(frames)
-        if total_frames <= 0:
-            return None
-
-        active_raw = getattr(frame_manager, "active_frame_index", 0)
-        try:
-            active_index = int(active_raw)
-        except (TypeError, ValueError):
-            active_index = 0
-        active_index = max(0, min(active_index, total_frames - 1))
-
-        resolved_index: Optional[int] = None
-        if hasattr(frame_manager, "resolve_key_frame_index"):
-            try:
-                resolved_candidate = frame_manager.resolve_key_frame_index(active_index)
-            except (TypeError, ValueError):
-                resolved_candidate = None
-            if resolved_candidate is not None:
-                try:
-                    resolved_index = int(resolved_candidate)
-                except (TypeError, ValueError):
-                    resolved_index = None
-                else:
-                    if resolved_index < 0 or resolved_index >= total_frames:
-                        resolved_index = None
-
-        markers_raw = getattr(frame_manager, "frame_markers", None)
-        normalized_markers: List[int] = []
-        if markers_raw:
-            for marker in markers_raw:
-                try:
-                    normalized = int(marker)
-                except (TypeError, ValueError):
-                    continue
-                if 0 <= normalized < total_frames:
-                    normalized_markers.append(normalized)
-
-        if not normalized_markers:
-            normalized_markers = list(range(total_frames))
-
-        if (
-            resolved_index is not None
-            and 0 <= resolved_index < total_frames
-            and resolved_index not in normalized_markers
-        ):
-            normalized_markers.append(resolved_index)
-
-        normalized_markers = sorted(set(normalized_markers))
-
-        allowed_layer_uids: set[int] = set()
-        active_layer_manager = resolve_active_layer_manager(document)
-        if active_layer_manager is not None:
-            active_layer = getattr(active_layer_manager, "active_layer", None)
-            active_uid = getattr(active_layer, "uid", None) if active_layer is not None else None
-            if isinstance(active_uid, int):
-                allowed_layer_uids.add(active_uid)
-
-            for layer in getattr(active_layer_manager, "layers", []):
-                if getattr(layer, "onion_skin_enabled", False):
-                    layer_uid = getattr(layer, "uid", None)
-                    if isinstance(layer_uid, int):
-                        allowed_layer_uids.add(layer_uid)
-
-        allowed_tuple = tuple(sorted(allowed_layer_uids))
-
-        return _OnionSkinContext(
-            frames=frames,
-            active_index=active_index,
-            resolved_index=resolved_index,
-            key_indices=tuple(normalized_markers),
-            allowed_layer_uids=allowed_tuple,
-        )
+        return None
 
     @staticmethod
     def _normalize_onion_count(raw_value) -> int:

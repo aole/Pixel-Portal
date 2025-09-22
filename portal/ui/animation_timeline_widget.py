@@ -20,7 +20,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QSizePolicy, QWidget
 
-from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
+from portal.core.document import DEFAULT_TOTAL_FRAMES
 
 
 @dataclass
