@@ -4,6 +4,7 @@ import io
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Callable, Iterable
 import zlib
@@ -52,8 +53,8 @@ class DocumentService:
     """High level operations for loading, saving, and exporting documents."""
 
     _OPEN_FILE_FILTERS: tuple[str, ...] = (
-        "Pixel Portal Document (*.aole)",
         "All Supported Files (*.aole *.png *.jpg *.bmp *.tif *.tiff)",
+        "Pixel Portal Document (*.aole)",
         "Image Files (*.png *.jpg *.bmp)",
         "TIFF Files (*.tif *.tiff)",
     )
@@ -66,16 +67,14 @@ class DocumentService:
         "TIFF (*.tif *.tiff)",
     )
 
-    _FILTER_EXTENSION_HINTS: tuple[tuple[str, str], ...] = (
-        ("pixel portal document", ".aole"),
-        ("aole", ".aole"),
-        ("tiff", ".tiff"),
-        ("tif", ".tiff"),
-        ("jpeg", ".jpg"),
-        ("jpg", ".jpg"),
-        ("png", ".png"),
-        ("bmp", ".bmp"),
-    )
+    _FILTER_EXTENSION_PATTERN = re.compile(r"\*\.(\w+)")
+
+    _FILTER_EXTENSION_NORMALIZATION: dict[str, str] = {
+        ".jpeg": ".jpg",
+        ".jpg": ".jpg",
+        ".tif": ".tiff",
+        ".tiff": ".tiff",
+    }
 
     _RASTER_EXTENSIONS: frozenset[str] = frozenset({
         ".png",
@@ -266,11 +265,28 @@ class DocumentService:
     def _extract_extension_hint(self, selected_filter: str | None) -> str | None:
         if not selected_filter:
             return None
-        lowered = selected_filter.lower()
-        for token, extension in self._FILTER_EXTENSION_HINTS:
-            if token in lowered:
-                return extension
+
+        matches = self._FILTER_EXTENSION_PATTERN.findall(selected_filter.lower())
+        if not matches:
+            return None
+
+        canonical_extensions = {
+            self._normalize_filter_extension(match) for match in matches
+        }
+        canonical_extensions.discard("")
+        if len(canonical_extensions) == 1:
+            return canonical_extensions.pop()
         return None
+
+    @classmethod
+    def _normalize_filter_extension(cls, extension: str) -> str:
+        if not extension:
+            return ""
+
+        if not extension.startswith("."):
+            extension = f".{extension}"
+
+        return cls._FILTER_EXTENSION_NORMALIZATION.get(extension, extension)
 
     def _load_document_from_path(
         self, file_path: str, extension_hint: str | None
