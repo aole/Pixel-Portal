@@ -520,7 +520,8 @@ class FrameManager:
         source_index = self.resolve_layer_key_frame_index(layer_uid, index)
         if source_index is None:
             source_index = 0
-        self._clone_layer_state(layer_uid, source_index, index, deep_copy=True)
+        self._clone_layer_state(layer_uid, source_index, index)
+        self._clear_layer_key(layer_uid, index)
         keys.add(index)
         self._refresh_frame_markers()
         self._rebind_layer_fallbacks(layer_uid)
