@@ -27,6 +27,32 @@ class _DummySignal:
         for callback in list(self._callbacks):
             callback(*args, **kwargs)
 
+
+def _make_picker_tool_with_canvas():
+    canvas = Mock()
+    canvas.tile_preview_enabled = False
+    canvas.canvas_updated = _DummySignal()
+
+    def toggle_tile_preview(enabled):
+        canvas.tile_preview_enabled = enabled
+
+    canvas.toggle_tile_preview = toggle_tile_preview
+
+    drawing_context = Mock()
+    drawing_context.previous_tool = None
+    drawing_context.set_pen_color = Mock()
+    drawing_context.set_tool = Mock()
+    canvas.drawing_context = drawing_context
+
+    image = QImage(8, 8, QImage.Format_ARGB32)
+    image.fill(QColor("red"))
+    document = Mock()
+    document.render = Mock(return_value=image)
+    canvas.document = document
+
+    tool = PickerTool(canvas)
+    return tool, canvas, document
+
 def test_draw_line_wraps_across_edges():
     image = QImage(8, 8, QImage.Format_ARGB32)
     image.fill(QColor("transparent"))
@@ -991,23 +1017,7 @@ def test_rectangle_reverse_drag_includes_endpoints(rectangle_tool, qtbot):
 
 
 def test_picker_renders_once_per_drag():
-    canvas = Mock()
-    canvas.tile_preview_enabled = False
-    canvas.canvas_updated = _DummySignal()
-
-    drawing_context = Mock()
-    drawing_context.previous_tool = None
-    drawing_context.set_pen_color = Mock()
-    drawing_context.set_tool = Mock()
-    canvas.drawing_context = drawing_context
-
-    image = QImage(8, 8, QImage.Format_ARGB32)
-    image.fill(QColor("red"))
-    document = Mock()
-    document.render = Mock(return_value=image)
-    canvas.document = document
-
-    tool = PickerTool(canvas)
+    tool, canvas, document = _make_picker_tool_with_canvas()
 
     press_point = QPoint(1, 1)
     press_event = QMouseEvent(
@@ -1033,6 +1043,9 @@ def test_picker_renders_once_per_drag():
     tool.mouseMoveEvent(move_event, move_point)
     assert document.render.call_count == 1
 
+    canvas.canvas_updated.emit()
+    assert document.render.call_count == 1
+
     release_event = QMouseEvent(
         QMouseEvent.Type.MouseButtonRelease,
         move_point,
@@ -1042,6 +1055,9 @@ def test_picker_renders_once_per_drag():
         Qt.KeyboardModifier.NoModifier,
     )
     tool.mouseReleaseEvent(release_event, move_point)
+    assert document.render.call_count == 1
+
+    canvas.canvas_updated.emit()
     assert document.render.call_count == 1
 
     second_press_event = QMouseEvent(
@@ -1054,3 +1070,44 @@ def test_picker_renders_once_per_drag():
     )
     tool.mousePressEvent(second_press_event, press_point)
     assert document.render.call_count == 2
+
+
+def test_picker_refreshes_render_when_tile_preview_toggles():
+    tool, canvas, document = _make_picker_tool_with_canvas()
+
+    press_point = QPoint(1, 1)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        press_point,
+        press_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mousePressEvent(press_event, press_point)
+    assert document.render.call_count == 1
+
+    canvas.toggle_tile_preview(True)
+    assert canvas.tile_preview_enabled is True
+    assert document.render.call_count == 2
+
+    canvas.toggle_tile_preview(False)
+    assert canvas.tile_preview_enabled is False
+    assert document.render.call_count == 3
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        press_point,
+        press_point,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseReleaseEvent(release_event, press_point)
+    assert document.render.call_count == 3
+
+    canvas.toggle_tile_preview(True)
+    assert document.render.call_count == 3
+
+    tool.mousePressEvent(press_event, press_point)
+    assert document.render.call_count == 4

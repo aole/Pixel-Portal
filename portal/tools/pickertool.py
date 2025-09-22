@@ -15,11 +15,14 @@ class PickerTool(BaseTool):
         self._cached_render = None
         self._cached_tile_preview_enabled = None
         self._is_dragging = False
+        self._tile_preview_listener_registered = False
 
         canvas_updated = getattr(self.canvas, "canvas_updated", None)
         connect = getattr(canvas_updated, "connect", None)
         if callable(connect):
             connect(self._on_canvas_updated)
+
+        self._register_tile_preview_listener()
 
     def mousePressEvent(self, event, doc_pos):
         self._begin_drag()
@@ -83,4 +86,38 @@ class PickerTool(BaseTool):
         self._cached_tile_preview_enabled = None
 
     def _on_canvas_updated(self):
+        if self._is_dragging:
+            return
         self._clear_render_cache()
+
+    def _register_tile_preview_listener(self):
+        if self._tile_preview_listener_registered:
+            return
+
+        toggle_tile_preview = getattr(self.canvas, "toggle_tile_preview", None)
+        if not callable(toggle_tile_preview):
+            return
+
+        callbacks = getattr(self.canvas, "_picker_tile_preview_callbacks", None)
+        if callbacks is None:
+            callbacks = []
+            setattr(self.canvas, "_picker_tile_preview_callbacks", callbacks)
+
+            original_toggle = toggle_tile_preview
+
+            def wrapped_toggle(enabled, *, _orig=original_toggle, _canvas=self.canvas):
+                result = _orig(enabled)
+                for callback in list(getattr(_canvas, "_picker_tile_preview_callbacks", [])):
+                    callback(enabled)
+                return result
+
+            setattr(self.canvas, "toggle_tile_preview", wrapped_toggle)
+
+        callbacks.append(self._on_tile_preview_toggled)
+        self._tile_preview_listener_registered = True
+
+    def _on_tile_preview_toggled(self, enabled):
+        if self._is_dragging:
+            self._ensure_render_cache(force=True)
+        else:
+            self._clear_render_cache()
