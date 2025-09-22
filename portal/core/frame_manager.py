@@ -86,6 +86,12 @@ class FrameManager:
                 target_manager.layers[target_index] = clone
 
 
+    def _clear_layer_key(self, layer_uid: int, frame_index: int) -> None:
+        layer = self.layer_for_frame(frame_index, layer_uid)
+        if layer is None:
+            return
+        layer.clear()
+
     def _copy_layer_between_layers(
         self, source_uid: int, target_uid: int, frame_index: int
     ) -> None:
@@ -418,17 +424,20 @@ class FrameManager:
         if all(source == target for source, target in normalized.items()):
             return False
 
+        blank_sources: Set[int] = set()
         for source, target in normalized.items():
             if source == target:
                 continue
             self._clone_layer_state(layer_uid, source, target)
+            if source == 0 and target != 0:
+                blank_sources.add(source)
 
         existing_keys = set(keys)
         target_positions = set(normalized.values())
 
         updated_keys = set(existing_keys)
         for source, target in normalized.items():
-            if source != target:
+            if source != target and source not in blank_sources:
                 updated_keys.discard(source)
         for target in target_positions:
             updated_keys.discard(target)
@@ -438,6 +447,9 @@ class FrameManager:
         if updated_keys == existing_keys:
             return False
         self.layer_keys[layer_uid] = updated_keys
+
+        for source in blank_sources:
+            self._clear_layer_key(layer_uid, source)
 
         self._refresh_frame_markers()
         self._rebind_layer_fallbacks(layer_uid)
@@ -501,6 +513,7 @@ class FrameManager:
         if source_index is None:
             source_index = 0
         self._clone_layer_state(layer_uid, source_index, index)
+        self._clear_layer_key(layer_uid, index)
         keys.add(index)
         self._refresh_frame_markers()
         self._rebind_layer_fallbacks(layer_uid)

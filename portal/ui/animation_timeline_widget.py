@@ -92,6 +92,7 @@ class AnimationTimelineWidget(QWidget):
     key_add_requested = Signal(int)
     key_remove_requested = Signal(int)
     keys_remove_requested = Signal(list)
+    key_copy_last_requested = Signal(int)
     key_copy_requested = Signal(int)
     key_paste_requested = Signal(int)
     frame_insert_requested = Signal(int)
@@ -621,6 +622,9 @@ class AnimationTimelineWidget(QWidget):
         add_action = menu.addAction(f"Add Key @ Frame {frame}")
         add_action.setEnabled(frame not in self._keys)
 
+        copy_last_action = menu.addAction(f"Copy Last Key @ Frame {frame}")
+        copy_last_action.setEnabled(bool(self._keys) and frame not in self._keys)
+
         selected_keys = self.selected_keys()
         if selected_keys:
             if len(selected_keys) == 1:
@@ -650,6 +654,8 @@ class AnimationTimelineWidget(QWidget):
             self.frame_delete_requested.emit(frame_for_frame_ops)
         elif chosen == add_action:
             self.key_add_requested.emit(frame)
+        elif chosen == copy_last_action:
+            self.key_copy_last_requested.emit(frame)
         elif chosen == remove_action:
             if selected_keys:
                 unique_selection = sorted(set(selected_keys))
