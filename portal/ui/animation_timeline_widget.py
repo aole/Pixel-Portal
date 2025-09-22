@@ -486,7 +486,7 @@ class AnimationTimelineWidget(QWidget):
             key_frame = self._key_at_point(event)
             if key_frame is not None:
                 self._is_dragging = False
-                if not ctrl_down and not shift_down and key_frame in self._selected_keys:
+                if not shift_down and key_frame in self._selected_keys:
                     self._prepare_key_drag(
                         key_frame,
                         modifiers=modifiers,
