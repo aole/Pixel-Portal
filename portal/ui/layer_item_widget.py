@@ -74,6 +74,7 @@ class ClickableLabel(QLabel):
 
 class LayerItemWidget(QWidget):
     visibility_toggled = Signal()
+    onion_skin_toggled = Signal()
     # Emitted continuously as the slider moves
     opacity_preview_changed = Signal(int)
     # Emitted when the slider is released: (old_value, new_value)
@@ -86,17 +87,34 @@ class LayerItemWidget(QWidget):
 
         self.pixmap_visible = QPixmap("icons/layervisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.pixmap_invisible = QPixmap("icons/layerinvisible.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.pixmap_onion_enabled = QPixmap("icons/skinon.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.pixmap_onion_disabled = QPixmap("icons/skinoff.png").scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(5, 5, 5, 5)
         self.layout.setSpacing(5)
         self.setLayout(self.layout)
 
+        icon_container = QWidget()
+        icon_layout = QVBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setSpacing(2)
+
         self.visibility_icon = ClickableLabel()
         self.visibility_icon.setFixedWidth(24)
         self.visibility_icon.setFixedHeight(24)
         self.visibility_icon.clicked.connect(self.on_visibility_clicked)
-        self.layout.addWidget(self.visibility_icon)
+        icon_layout.addWidget(self.visibility_icon)
+
+        self.onion_icon = ClickableLabel()
+        self.onion_icon.setFixedWidth(24)
+        self.onion_icon.setFixedHeight(24)
+        self.onion_icon.setToolTip("Toggle onion skin for this layer")
+        self.onion_icon.clicked.connect(self.on_onion_clicked)
+        icon_layout.addWidget(self.onion_icon)
+
+        icon_layout.addStretch()
+        self.layout.addWidget(icon_container)
 
         thumbnail_container = QWidget()
         thumbnail_layout = QHBoxLayout(thumbnail_container)
@@ -143,8 +161,10 @@ class LayerItemWidget(QWidget):
 
         self.update_thumbnail()
         self.update_visibility_icon()
+        self.update_onion_icon()
         self.layer.on_image_change.connect(self.update_thumbnail)
         self.layer.visibility_changed.connect(self.update_visibility_icon)
+        self.layer.onion_skin_changed.connect(self.update_onion_icon)
         self.layer.name_changed.connect(self.label.setText)
 
     def on_name_changed(self, new_name):
@@ -217,3 +237,12 @@ class LayerItemWidget(QWidget):
 
     def on_visibility_clicked(self):
         self.visibility_toggled.emit()
+
+    def update_onion_icon(self, _enabled=None):
+        if getattr(self.layer, "onion_skin_enabled", False):
+            self.onion_icon.setPixmap(self.pixmap_onion_enabled)
+        else:
+            self.onion_icon.setPixmap(self.pixmap_onion_disabled)
+
+    def on_onion_clicked(self):
+        self.onion_skin_toggled.emit()

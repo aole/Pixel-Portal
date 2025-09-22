@@ -260,16 +260,137 @@ class SetLayerVisibleCommand(Command):
     def __init__(self, layer_manager: 'LayerManager', layer_index: int, visible: bool):
         self.layer_manager = layer_manager
         self.layer_index = layer_index
-        self.visible = visible
-        self.previous_visible = self.layer_manager.layers[self.layer_index].visible
+        self.visible = bool(visible)
+
+        try:
+            layer = self.layer_manager.layers[self.layer_index]
+        except IndexError:
+            layer = None
+
+        self.previous_visible = bool(getattr(layer, "visible", False))
+        self._layer_uid = getattr(layer, "uid", None)
+        self._instances = None
+        self._previous_values = None
+
+    def _collect_instances(self):
+        if self._instances is not None:
+            return self._instances
+
+        instances = []
+        layer = None
+        try:
+            layer = self.layer_manager.layers[self.layer_index]
+        except IndexError:
+            layer = None
+
+        document = getattr(self.layer_manager, "document", None)
+        frame_manager = getattr(document, "frame_manager", None) if document else None
+        if (
+            frame_manager is not None
+            and hasattr(frame_manager, "iter_layer_instances")
+            and self._layer_uid is not None
+        ):
+            frames = getattr(frame_manager, "frames", None)
+            if frames is not None:
+                frame_indices = range(len(frames))
+                instances = list(
+                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
+                )
+
+        if not instances and layer is not None:
+            instances = [layer]
+
+        self._instances = instances
+        return self._instances
+
+    def _apply(self, value: bool) -> None:
+        for instance in self._collect_instances():
+            instance.visible = value
 
     def execute(self):
-        self.layer_manager.layers[self.layer_index].visible = self.visible
+        instances = self._collect_instances()
+        if self._previous_values is None:
+            self._previous_values = [instance.visible for instance in instances]
+        self._apply(self.visible)
         self.layer_manager.layer_visibility_changed.emit(self.layer_index)
 
     def undo(self):
-        self.layer_manager.layers[self.layer_index].visible = self.previous_visible
+        if self._previous_values is None:
+            return
+        instances = self._collect_instances()
+        for instance, previous in zip(instances, self._previous_values):
+            instance.visible = previous
         self.layer_manager.layer_visibility_changed.emit(self.layer_index)
+
+
+class SetLayerOnionSkinCommand(Command):
+    def __init__(self, layer_manager: 'LayerManager', layer_index: int, enabled: bool):
+        self.layer_manager = layer_manager
+        self.layer_index = layer_index
+        self.enabled = bool(enabled)
+
+        try:
+            layer = self.layer_manager.layers[self.layer_index]
+        except IndexError:
+            layer = None
+
+        self.previous_enabled = bool(getattr(layer, "onion_skin_enabled", False))
+        self._layer_uid = getattr(layer, "uid", None)
+        self._instances = None
+        self._previous_values = None
+
+    def _collect_instances(self):
+        if self._instances is not None:
+            return self._instances
+
+        instances = []
+        layer = None
+        try:
+            layer = self.layer_manager.layers[self.layer_index]
+        except IndexError:
+            layer = None
+
+        document = getattr(self.layer_manager, "document", None)
+        frame_manager = getattr(document, "frame_manager", None) if document else None
+        if (
+            frame_manager is not None
+            and hasattr(frame_manager, "iter_layer_instances")
+            and self._layer_uid is not None
+        ):
+            frames = getattr(frame_manager, "frames", None)
+            if frames is not None:
+                frame_indices = range(len(frames))
+                instances = list(
+                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
+                )
+
+        if not instances and layer is not None:
+            instances = [layer]
+
+        self._instances = instances
+        return self._instances
+
+    def _apply(self, value: bool) -> None:
+        for instance in self._collect_instances():
+            instance.onion_skin_enabled = value
+
+    def execute(self):
+        instances = self._collect_instances()
+        if self._previous_values is None:
+            self._previous_values = [
+                bool(getattr(instance, "onion_skin_enabled", False))
+                for instance in instances
+            ]
+        self._apply(self.enabled)
+        self.layer_manager.layer_onion_skin_changed.emit(self.layer_index)
+
+    def undo(self):
+        if self._previous_values is None:
+            return
+        instances = self._collect_instances()
+        for instance, previous in zip(instances, self._previous_values):
+            instance.onion_skin_enabled = previous
+        self.layer_manager.layer_onion_skin_changed.emit(self.layer_index)
 
 
 class RotateLayerCommand(Command):

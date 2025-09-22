@@ -2,7 +2,7 @@ from portal.core.layer import Layer
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt
-from portal.commands.layer_commands import SetLayerVisibleCommand
+from portal.commands.layer_commands import SetLayerVisibleCommand, SetLayerOnionSkinCommand
 
 
 class LayerManager(QObject):
@@ -11,6 +11,7 @@ class LayerManager(QObject):
     """
     layer_visibility_changed = Signal(int)
     layer_structure_changed = Signal()
+    layer_onion_skin_changed = Signal(int)
     command_generated = Signal(object)
 
     def __init__(self, width: int, height: int, create_background: bool = True):
@@ -19,6 +20,7 @@ class LayerManager(QObject):
         self.height = height
         self.layers = []
         self.active_layer_index = -1
+        self._document = None
 
         if create_background:
             self.add_layer("Background")
@@ -29,6 +31,17 @@ class LayerManager(QObject):
         if 0 <= self.active_layer_index < len(self.layers):
             return self.layers[self.active_layer_index]
         return None
+
+    @property
+    def document(self):
+        """Return the document this manager belongs to, if any."""
+
+        return self._document
+
+    def set_document(self, document) -> None:
+        """Assign the owning document so commands can reach frame data."""
+
+        self._document = document
 
     # ------------------------------------------------------------------
     # Layer lookup helpers
@@ -148,9 +161,19 @@ class LayerManager(QObject):
         command = SetLayerVisibleCommand(self, index, not layer.visible)
         self.command_generated.emit(command)
 
+    def toggle_onion_skin(self, index: int) -> None:
+        """Toggle the onion-skin participation flag for the layer at ``index``."""
+        if not (0 <= index < len(self.layers)):
+            raise IndexError("Layer index out of range.")
+
+        layer = self.layers[index]
+        command = SetLayerOnionSkinCommand(self, index, not layer.onion_skin_enabled)
+        self.command_generated.emit(command)
+
     def clone(self):
         """Creates a deep copy of the layer manager."""
         new_manager = LayerManager(self.width, self.height, create_background=False)
         new_manager.layers = [layer.clone() for layer in self.layers]
         new_manager.active_layer_index = self.active_layer_index
+        new_manager._document = self._document
         return new_manager

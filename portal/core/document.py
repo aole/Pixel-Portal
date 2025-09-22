@@ -98,6 +98,9 @@ class Document:
         layer_manager = self.frame_manager.current_layer_manager
         if layer_manager is None:
             raise ValueError("Document has no active frame.")
+        setter = getattr(layer_manager, "set_document", None)
+        if callable(setter):
+            setter(self)
         return layer_manager
 
     def add_layer_manager_listener(
@@ -316,6 +319,7 @@ class Document:
             pil_image.info["layer_name"] = layer.name
             pil_image.info["layer_visible"] = str(layer.visible)
             pil_image.info["layer_opacity"] = str(layer.opacity)
+            pil_image.info["layer_onion_skin"] = str(layer.onion_skin_enabled)
             images.append(pil_image)
 
         if images:
@@ -358,6 +362,7 @@ class Document:
                     layer = Layer.from_qimage(qimage, props.get("name", f"Layer {i+1}"))
                     layer.visible = props.get("visible", True)
                     layer.opacity = props.get("opacity", 1.0)
+                    layer.onion_skin_enabled = props.get("onion_skin_enabled", False)
                 else:
                     layer = Layer.from_qimage(qimage, f"Layer {i+1}")
                 doc.layer_manager.layers.append(layer)
@@ -426,6 +431,9 @@ class Document:
         manager = self.frame_manager.current_layer_manager
         if manager is None:
             return
+        setter = getattr(manager, "set_document", None)
+        if callable(setter):
+            setter(self)
         for callback in list(self._layer_manager_listeners):
             callback(manager)
 
