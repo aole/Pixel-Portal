@@ -34,7 +34,7 @@ class FrameManager:
         base_manager = self.frames[0].layer_manager
         for frame in self.frames[1:]:
             manager = frame.layer_manager
-            manager.layers = [layer.clone() for layer in base_manager.layers]
+            manager.layers = [layer.clone(deep_copy=False) for layer in base_manager.layers]
             if manager.active_layer_index >= len(manager.layers):
                 manager.active_layer_index = len(manager.layers) - 1
         for layer in base_manager.layers:
@@ -54,7 +54,12 @@ class FrameManager:
             self.frame_markers = set()
 
     def _clone_layer_state(
-        self, layer_uid: int, source_frame_index: int, target_frame_index: int
+        self,
+        layer_uid: int,
+        source_frame_index: int,
+        target_frame_index: int,
+        *,
+        deep_copy: bool = False,
     ) -> None:
         if not (0 <= source_frame_index < len(self.frames)):
             return
@@ -72,7 +77,7 @@ class FrameManager:
         if source_index is None:
             return
 
-        clone = source_layer.clone()
+        clone = source_layer.clone(deep_copy=deep_copy)
         target_layer = target_manager.find_layer_by_uid(layer_uid)
         if target_layer is None:
             insertion_index = min(source_index, len(target_manager.layers))
@@ -142,7 +147,7 @@ class FrameManager:
             if frame_index == fallback_index:
                 # Ensure the keyed frame hosts the layer entry.
                 if target_manager.find_layer_by_uid(layer_uid) is None:
-                    clone = source_layer.clone()
+                    clone = source_layer.clone(deep_copy=False)
                     target_manager.layers.insert(source_index, clone)
                 continue
             target_layer = target_manager.find_layer_by_uid(layer_uid)
@@ -243,7 +248,7 @@ class FrameManager:
             if source_index is None or not (0 <= source_index < len(self.frames)):
                 source_index = len(self.frames) - 1
             source_frame = self.frames[source_index]
-            self.frames.append(source_frame.clone())
+            self.frames.append(source_frame.clone(deep_copy=False))
         self._rebind_all_layers()
 
     def add_frame(self, frame: Optional[Frame] = None) -> Frame:
@@ -278,7 +283,7 @@ class FrameManager:
         if source_index >= len(self.frames):
             source_index = len(self.frames) - 1
         source_frame = self.frames[source_index]
-        new_frame = source_frame.clone()
+        new_frame = source_frame.clone(deep_copy=False)
         self.frames.insert(index, new_frame)
 
         if self.active_frame_index >= index:
@@ -348,9 +353,9 @@ class FrameManager:
             raise ValueError("No active frame to render.")
         return frame.render()
 
-    def clone(self) -> "FrameManager":
+    def clone(self, *, deep_copy: bool = True) -> "FrameManager":
         cloned_manager = FrameManager(self.width, self.height, frame_count=0)
-        cloned_manager.frames = [frame.clone() for frame in self.frames]
+        cloned_manager.frames = [frame.clone(deep_copy=deep_copy) for frame in self.frames]
         cloned_manager.active_frame_index = self.active_frame_index
         cloned_manager.frame_markers = set(self.frame_markers)
         cloned_manager.layer_keys = {
@@ -428,8 +433,11 @@ class FrameManager:
         for source, target in normalized.items():
             if source == target:
                 continue
-            self._clone_layer_state(layer_uid, source, target)
-            if source == 0 and target != 0:
+            should_blank = source == 0 and target != 0
+            self._clone_layer_state(
+                layer_uid, source, target, deep_copy=should_blank
+            )
+            if should_blank:
                 blank_sources.add(source)
 
         existing_keys = set(keys)
@@ -512,8 +520,7 @@ class FrameManager:
         source_index = self.resolve_layer_key_frame_index(layer_uid, index)
         if source_index is None:
             source_index = 0
-        self._clone_layer_state(layer_uid, source_index, index)
-        self._clear_layer_key(layer_uid, index)
+        self._clone_layer_state(layer_uid, source_index, index, deep_copy=True)
         keys.add(index)
         self._refresh_frame_markers()
         self._rebind_layer_fallbacks(layer_uid)
@@ -577,7 +584,7 @@ class FrameManager:
         layer = manager.find_layer_by_uid(layer_uid)
         if layer is None:
             return None
-        return layer.clone(preserve_identity=False)
+        return layer.clone(preserve_identity=False, deep_copy=True)
 
     def paste_layer_key(self, layer_uid: int, frame_index: int, key_state: Layer) -> bool:
         if frame_index < 0:
@@ -592,7 +599,7 @@ class FrameManager:
         layer = manager.find_layer_by_uid(layer_uid)
         if layer is None:
             return False
-        layer.apply_key_state_from(key_state)
+        layer.apply_key_state_from(key_state, deep_copy=True)
         self._rebind_layer_fallbacks(layer_uid)
         self._refresh_frame_markers()
         return True
@@ -626,7 +633,7 @@ class FrameManager:
             if insertion_index > len(manager.layers):
                 insertion_index = len(manager.layers)
             if manager.find_layer_by_uid(layer.uid) is None:
-                clone = layer.clone()
+                clone = layer.clone(deep_copy=False)
                 manager.layers.insert(insertion_index, clone)
             if manager.layers:
                 manager.active_layer_index = min(

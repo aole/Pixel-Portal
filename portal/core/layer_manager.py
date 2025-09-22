@@ -170,10 +170,10 @@ class LayerManager(QObject):
         command = SetLayerOnionSkinCommand(self, index, not layer.onion_skin_enabled)
         self.command_generated.emit(command)
 
-    def clone(self):
-        """Creates a deep copy of the layer manager."""
+    def clone(self, *, deep_copy: bool = False):
+        """Create a copy of the layer manager."""
         new_manager = LayerManager(self.width, self.height, create_background=False)
-        new_manager.layers = [layer.clone() for layer in self.layers]
+        new_manager.layers = [layer.clone(deep_copy=deep_copy) for layer in self.layers]
         new_manager.active_layer_index = self.active_layer_index
         new_manager._document = self._document
         return new_manager
