@@ -200,6 +200,9 @@ class MainWindow(QMainWindow):
         self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
         self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
         self.timeline_widget.keys_remove_requested.connect(self.on_timeline_remove_keys)
+        self.timeline_widget.key_copy_last_requested.connect(
+            self.on_timeline_copy_last_key
+        )
         self.timeline_widget.key_copy_requested.connect(self.on_timeline_copy_key)
         self.timeline_widget.key_paste_requested.connect(self.on_timeline_paste_key)
         self.timeline_widget.key_move_requested.connect(self.on_timeline_move_keys)
@@ -738,6 +741,14 @@ class MainWindow(QMainWindow):
     def on_timeline_remove_keys(self, frames: list[int]) -> None:
         for frame in sorted(set(frames)):
             self.app.remove_keyframe(frame)
+
+    @Slot(int)
+    def on_timeline_copy_last_key(self, frame: int) -> None:
+        created = self.app.duplicate_keyframe(target_frame=frame)
+        if created is None:
+            return
+        self.app.select_frame(created)
+        self.timeline_widget.set_current_frame(created)
 
     @Slot(int)
     def on_timeline_copy_key(self, frame: int) -> None:
