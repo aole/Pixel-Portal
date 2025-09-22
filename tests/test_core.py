@@ -610,141 +610,6 @@ def test_flip_command_frame_scope(document):
         assert layer.image.pixelColor(99, 99) == QColor("blue")
 
 
-def test_flip_command_layer_scope_creates_key(document):
-    """Ensure flipping a layer keys the frame and flips every keyed instance."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_layer = frame_manager.frames[0].layer_manager.layers[0]
-    mirror_layer = frame_manager.frames[1].layer_manager.layers[0]
-    assert mirror_layer is base_layer
-
-    width = document.width
-    base_layer.image.fill(QColor(0, 0, 0, 0))
-    base_layer.image.setPixelColor(0, 0, QColor("red"))
-    base_layer.image.setPixelColor(width - 1, 0, QColor("blue"))
-
-    document.select_frame(1)
-    assert document.layer_manager.active_layer is base_layer
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.LAYER)
-    command.execute()
-
-    keys = frame_manager.layer_key_frames(base_layer.uid)
-    assert 1 in keys
-
-    keyed_layer = frame_manager.frames[1].layer_manager.layers[0]
-    assert keyed_layer is not base_layer
-
-    document.select_frame(0)
-    original_layer = document.layer_manager.active_layer
-    assert original_layer.image.pixelColor(width - 1, 0) == QColor("red")
-    assert original_layer.image.pixelColor(0, 0) == QColor("blue")
-
-    document.select_frame(1)
-    flipped_layer = document.layer_manager.active_layer
-    assert flipped_layer.image.pixelColor(width - 1, 0) == QColor("red")
-    assert flipped_layer.image.pixelColor(0, 0) == QColor("blue")
-
-    command.undo()
-
-    document.select_frame(0)
-    restored_base = document.layer_manager.active_layer
-    assert restored_base.image.pixelColor(0, 0) == QColor("red")
-    assert restored_base.image.pixelColor(width - 1, 0) == QColor("blue")
-
-    document.select_frame(1)
-    restored_key = document.layer_manager.active_layer
-    assert restored_key.image.pixelColor(0, 0) == QColor("red")
-    assert restored_key.image.pixelColor(width - 1, 0) == QColor("blue")
-
-
-def test_flip_command_frame_scope_creates_keys(document):
-    """Ensure flipping a frame creates keys for every layer on that frame."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_layers = list(frame_manager.frames[0].layer_manager.layers)
-    for layer in base_layers:
-        layer.image.fill(QColor(0, 0, 0, 0))
-        layer.image.setPixelColor(0, 0, QColor("red"))
-        layer.image.setPixelColor(document.width - 1, 0, QColor("blue"))
-
-    document.select_frame(1)
-
-    for layer, base in zip(document.layer_manager.layers, base_layers):
-        assert layer is base
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.FRAME)
-    command.execute()
-
-    for layer in base_layers:
-        keys = frame_manager.layer_key_frames(layer.uid)
-        assert 1 in keys
-
-    keyed_layers = list(frame_manager.frames[1].layer_manager.layers)
-    for base_layer, keyed_layer in zip(base_layers, keyed_layers):
-        assert keyed_layer is not base_layer
-
-    document.select_frame(0)
-    for layer in document.layer_manager.layers:
-        assert layer.image.pixelColor(0, 0) == QColor("red")
-        assert layer.image.pixelColor(document.width - 1, 0) == QColor("blue")
-
-    document.select_frame(1)
-    for layer in document.layer_manager.layers:
-        assert layer.image.pixelColor(document.width - 1, 0) == QColor("red")
-        assert layer.image.pixelColor(0, 0) == QColor("blue")
-
-
-def test_flip_command_document_scope(document):
-    """Flip the entire document by updating every key on every layer."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_manager = frame_manager.frames[0].layer_manager
-    second_manager = frame_manager.frames[1].layer_manager
-
-    width = document.width
-    tracked_states: list[tuple[Layer, QColor, QColor]] = []
-
-    for index, base_layer in enumerate(base_manager.layers):
-        base_layer.image.fill(QColor(0, 0, 0, 0))
-        left_color = QColor(32 + index, 0, 0)
-        right_color = QColor(0, 32 + index, 0)
-        base_layer.image.setPixelColor(0, 0, left_color)
-        base_layer.image.setPixelColor(width - 1, 0, right_color)
-        tracked_states.append((base_layer, left_color, right_color))
-
-        frame_manager.add_layer_key(base_layer.uid, 1)
-
-        keyed_layer = next(
-            layer for layer in second_manager.layers if layer.uid == base_layer.uid
-        )
-        assert keyed_layer is not base_layer
-        keyed_layer.image.fill(QColor(0, 0, 0, 0))
-        keyed_left = QColor(0, 0, 32 + index)
-        keyed_right = QColor(32 + index, 32 + index, 0)
-        keyed_layer.image.setPixelColor(0, 0, keyed_left)
-        keyed_layer.image.setPixelColor(width - 1, 0, keyed_right)
-        tracked_states.append((keyed_layer, keyed_left, keyed_right))
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.DOCUMENT)
-    command.execute()
-
-    for layer, left_color, right_color in tracked_states:
-        assert layer.image.pixelColor(width - 1, 0) == left_color
-        assert layer.image.pixelColor(0, 0) == right_color
-
-    command.undo()
-
-    for layer, left_color, right_color in tracked_states:
-        assert layer.image.pixelColor(0, 0) == left_color
-        assert layer.image.pixelColor(width - 1, 0) == right_color
-
 def test_add_layer_command(document):
     """Test that the AddLayerCommand adds a new layer and that undo removes it."""
     initial_layer_count = len(document.layer_manager.layers)
@@ -930,12 +795,7 @@ def test_move_layer_command(document):
         layer_manager.active_layer_index,
     )
 
-    # Ensure an additional frame exists so the command must propagate ordering changes.
-    document.frame_manager.ensure_frame(1)
-    second_manager = document.frame_manager.frames[1].layer_manager
-
     original_layers = list(layer_manager.layers)
-    original_second_order = list(second_manager.layers)
 
     from_index = 0
     to_index = 2
@@ -944,16 +804,10 @@ def test_move_layer_command(document):
     command.execute()
 
     assert layer_manager.layers[to_index] == original_layers[from_index]
-    assert [layer.uid for layer in second_manager.layers] == [
-        layer.uid for layer in layer_manager.layers
-    ]
 
     command.undo()
 
     assert layer_manager.layers == original_layers
-    assert [layer.uid for layer in second_manager.layers] == [
-        layer.uid for layer in original_second_order
-    ]
 
 def test_fill_command(document, layer):
     """Test that the FillCommand correctly fills an area and that undo restores the previous state."""

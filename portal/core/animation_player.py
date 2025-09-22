@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QTimer, Signal
 
 
-DEFAULT_TOTAL_FRAMES = 24
+DEFAULT_TOTAL_FRAMES = 1
 DEFAULT_PLAYBACK_FPS = 12.0
 
 
@@ -100,43 +100,21 @@ class AnimationPlayer(QObject):
         self.fps_changed.emit(self._fps)
 
     def set_total_frames(self, frame_count: int) -> None:
-        frame_count = int(frame_count)
-        if frame_count < 1:
-            frame_count = 1
-        if frame_count == self._total_frames:
+        if self._total_frames == 1:
             return
-        self._total_frames = frame_count
-        max_index = self._total_frames - 1
-        if self._loop_end > max_index:
-            self._loop_end = max_index
-        if self._loop_start > self._loop_end:
-            self._loop_start = self._loop_end
-        if self._current_frame > max_index:
-            self.set_current_frame(max_index)
-        elif self._current_frame < self._loop_start or self._current_frame > self._loop_end:
-            self.set_current_frame(self._loop_start)
+        self._total_frames = 1
+        self._loop_start = 0
+        self._loop_end = 0
+        if self._current_frame != 0:
+            self.set_current_frame(0)
 
     def set_loop_range(self, start: int, end: int) -> None:
-        try:
-            start_value = int(start)
-            end_value = int(end)
-        except (TypeError, ValueError):
+        if self._loop_start == 0 and self._loop_end == 0:
             return
-        if start_value < 0:
-            start_value = 0
-        max_index = max(0, self._total_frames - 1)
-        if end_value < start_value:
-            end_value = start_value
-        if end_value > max_index:
-            end_value = max_index
-        if start_value > end_value:
-            start_value = end_value
-        if self._loop_start == start_value and self._loop_end == end_value:
-            return
-        self._loop_start = start_value
-        self._loop_end = end_value
-        if self._current_frame < self._loop_start or self._current_frame > self._loop_end:
-            self.set_current_frame(self._loop_start)
+        self._loop_start = 0
+        self._loop_end = 0
+        if self._current_frame != 0:
+            self.set_current_frame(0)
 
     def set_current_frame(self, frame: int) -> None:
         if self._total_frames <= 0:

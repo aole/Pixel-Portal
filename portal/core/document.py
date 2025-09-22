@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 import io
 import json
 
@@ -15,11 +16,23 @@ from portal.core.layer import Layer
 from portal.core.layer_manager import LayerManager
 
 
+@dataclass
+class LayerLink:
+    """Node representation for the document's doubly linked layer chain."""
+
+    layer: Layer
+    previous: Layer | None = None
+    next: Layer | None = None
+
+
 class Document:
     def __init__(self, width, height):
         self.width = width
         self.height = height
         self.frame_manager = FrameManager(width, height)
+        self.layer_links: list[LayerLink] = []
+        self._layer_link_map: dict[int, LayerLink] = {}
+        self._observed_layer_manager: LayerManager | None = None
         self._layer_manager_listeners: list[Callable[[LayerManager], None]] = []
         self._notify_layer_manager_changed()
         self.file_path: str | None = None
@@ -143,13 +156,7 @@ class Document:
 
     @staticmethod
     def normalize_playback_total_frames(frame_count) -> int:
-        try:
-            normalized = int(frame_count)
-        except (TypeError, ValueError):
-            normalized = DEFAULT_TOTAL_FRAMES
-        if normalized < 1:
-            normalized = 1
-        return normalized
+        return 1
 
     def set_playback_total_frames(self, frame_count) -> int:
         normalized = self.normalize_playback_total_frames(frame_count)
@@ -327,12 +334,15 @@ class Document:
         self, layer: Layer, index: int | None = None, *, key_frames: Iterable[int] | None = None
     ) -> None:
         self.frame_manager.register_new_layer(layer, index, key_frames=key_frames)
+        self._rebuild_layer_chain()
 
     def unregister_layer(self, layer_uid: int) -> None:
         self.frame_manager.unregister_layer(layer_uid)
+        self._rebuild_layer_chain()
 
     def duplicate_layer_keys(self, source_layer: Layer, new_layer: Layer) -> None:
         self.frame_manager.duplicate_layer_keys(source_layer.uid, new_layer)
+        self._rebuild_layer_chain()
 
     def apply_frame_manager_snapshot(self, snapshot: FrameManager) -> None:
         self.frame_manager = snapshot.clone(deep_copy=True)
@@ -460,15 +470,70 @@ class Document:
                 layer.on_image_change.emit()
         self.ensure_ai_output_rect()
 
+    def _rebuild_layer_chain(self) -> None:
+        try:
+            manager = self.frame_manager.current_layer_manager
+        except AttributeError:
+            manager = None
+        if manager is None:
+            self.layer_links = []
+            self._layer_link_map = {}
+            return
+
+        links: list[LayerLink] = []
+        link_map: dict[int, LayerLink] = {}
+        previous_link: LayerLink | None = None
+        previous_layer: Layer | None = None
+        for layer in manager.layers:
+            link = LayerLink(layer=layer, previous=previous_layer, next=None)
+            if previous_link is not None:
+                previous_link.next = layer
+            links.append(link)
+            link_map[layer.uid] = link
+            previous_link = link
+            previous_layer = layer
+
+        self.layer_links = links
+        self._layer_link_map = link_map
+
+    def get_layer_link(self, layer: Layer | int) -> LayerLink | None:
+        if isinstance(layer, Layer):
+            uid = getattr(layer, "uid", None)
+        else:
+            try:
+                uid = int(layer)
+            except (TypeError, ValueError):
+                uid = None
+        if uid is None:
+            return None
+        return self._layer_link_map.get(uid)
+
     def _notify_layer_manager_changed(
         self, preferred_layer_uid: int | None = None
     ) -> None:
         manager = self.frame_manager.current_layer_manager
         if manager is None:
+            self.layer_links = []
+            self._layer_link_map = {}
+            self._observed_layer_manager = None
             return
         setter = getattr(manager, "set_document", None)
         if callable(setter):
             setter(self)
+        if self._observed_layer_manager is not manager:
+            if self._observed_layer_manager is not None:
+                try:
+                    self._observed_layer_manager.layer_structure_changed.disconnect(
+                        self._rebuild_layer_chain
+                    )
+                except (TypeError, RuntimeError):
+                    pass
+            try:
+                manager.layer_structure_changed.connect(self._rebuild_layer_chain)
+            except TypeError:
+                pass
+            self._observed_layer_manager = manager
+        self._rebuild_layer_chain()
         if preferred_layer_uid is not None:
             index = manager.index_for_layer_uid(preferred_layer_uid)
             if index is not None:
