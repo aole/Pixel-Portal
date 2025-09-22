@@ -26,12 +26,12 @@ class EllipseTool(BaseTool):
             return
 
         self.start_point = doc_pos
-        self._allocate_preview_images(replace_active_layer=True, allocate_temp=False)
+        self._allocate_preview_images(replace_active_layer=True)
         # The command will need the original image state
         self.command_generated.emit(("get_active_layer_image", "ellipse_tool_start"))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self.canvas.original_image is None:
+        if not self._redraw_temp_from_preview_layer():
             return
 
         layer_manager = self._get_active_layer_manager()
@@ -42,7 +42,6 @@ class EllipseTool(BaseTool):
         if not active_layer or not active_layer.visible:
             return
 
-        self.canvas.temp_image = self.canvas.original_image.copy()
         self._refresh_preview_images(clear_temp=False)
 
         end_point = doc_pos
@@ -68,7 +67,7 @@ class EllipseTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self.canvas.original_image is None:
+        if getattr(self.canvas, "preview_layer", None) is None:
             return
 
         end_point = doc_pos

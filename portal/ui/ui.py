@@ -601,18 +601,24 @@ class MainWindow(QMainWindow):
 
         from PySide6.QtGui import QImage, QPainter, Qt
         command_type, command_data = data
-        active_layer = self.app.document.layer_manager.active_layer
-        if not active_layer:
-            if command_type == "get_active_layer_image":
+        document = getattr(self.app, "document", None)
+        layer_manager = getattr(document, "layer_manager", None) if document else None
+        active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
+
+        if command_type == "get_active_layer_image":
+            if active_layer is None:
+                self.canvas.set_preview_layer(None)
+                self.canvas.original_image = None
+            else:
+                self.canvas.set_preview_layer(active_layer)
                 self.canvas.original_image = None
             return
 
-        if command_type == "get_active_layer_image":
-            self.canvas.original_image = active_layer.image.copy()
-            if command_data in ["line_tool_start", "ellipse_tool_start", "rectangle_tool_start", "move_tool_start_no_selection"]:
-                self.canvas.temp_image = self.canvas.original_image.copy()
+        if active_layer is None:
+            return
 
-        elif command_type == "cut_selection":
+        if command_type == "cut_selection":
+            self.canvas.set_preview_layer(active_layer)
             if self.canvas.selection_shape:
                 self.canvas.original_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
                 self.canvas.original_image.fill(Qt.transparent)
