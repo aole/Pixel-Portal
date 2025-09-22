@@ -25,6 +25,7 @@ from portal.commands.timeline_commands import (
     AddKeyframeCommand,
     DeleteFrameCommand,
     DuplicateKeyframeCommand,
+    DuplicateKeyframesCommand,
     InsertFrameCommand,
     MoveKeyframesCommand,
     PasteKeyframeCommand,
@@ -305,6 +306,34 @@ class DocumentController(QObject):
         if not normalized:
             return
         command = MoveKeyframesCommand(document, normalized)
+        self.execute_command(command)
+
+    def duplicate_keyframes(self, frames: Iterable[int], delta: int) -> None:
+        document = self.document
+        if document is None:
+            return
+        frame_manager = document.frame_manager
+        layer_manager = getattr(frame_manager, "current_layer_manager", None)
+        if layer_manager is None or layer_manager.active_layer is None:
+            return
+        try:
+            offset = int(delta)
+        except (TypeError, ValueError):
+            return
+        if not offset:
+            return
+        normalized: list[int] = []
+        for value in frames:
+            try:
+                source = int(value)
+            except (TypeError, ValueError):
+                continue
+            if source < 0:
+                continue
+            normalized.append(source)
+        if not normalized:
+            return
+        command = DuplicateKeyframesCommand(document, normalized, offset)
         self.execute_command(command)
 
     # ------------------------------------------------------------------

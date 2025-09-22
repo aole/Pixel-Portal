@@ -52,6 +52,8 @@ class _KeyDragState:
     defer_selection: bool = False
     follow_current_frame: bool = False
     start_current_frame: int = 0
+    clone_on_drag: bool = False
+    produced_targets: Set[int] = field(default_factory=set)
 
     def clear(self) -> None:
         self.is_dragging = False
@@ -66,6 +68,8 @@ class _KeyDragState:
         self.defer_selection = False
         self.follow_current_frame = False
         self.start_current_frame = 0
+        self.clone_on_drag = False
+        self.produced_targets.clear()
 
     @property
     def pending(self) -> bool:
@@ -93,6 +97,7 @@ class AnimationTimelineWidget(QWidget):
     frame_insert_requested = Signal(int)
     frame_delete_requested = Signal(int)
     key_move_requested = Signal(list, int)
+    keys_duplicate_requested = Signal(list, int)
     playback_total_frames_changed = Signal(int)
     loop_range_changed = Signal(int, int)
 
@@ -486,7 +491,7 @@ class AnimationTimelineWidget(QWidget):
             key_frame = self._key_at_point(event)
             if key_frame is not None:
                 self._is_dragging = False
-                if not ctrl_down and not shift_down and key_frame in self._selected_keys:
+                if not shift_down and key_frame in self._selected_keys:
                     self._prepare_key_drag(
                         key_frame,
                         modifiers=modifiers,
@@ -1062,6 +1067,7 @@ class AnimationTimelineWidget(QWidget):
         state.defer_selection = defer_selection
         state.follow_current_frame = self._current_frame in initial_selection
         state.start_current_frame = self._current_frame
+        state.clone_on_drag = self._is_control_modifier(modifiers)
 
     def _clear_key_drag_state(self) -> None:
         self._drag_state.clear()
@@ -1095,9 +1101,23 @@ class AnimationTimelineWidget(QWidget):
         state = self._drag_state
         if not state.initial_keys:
             return
-        shifted_keys = {max(0, frame + delta) for frame in state.initial_keys}
-        remaining_keys = {frame for frame in state.other_keys if frame not in shifted_keys}
-        updated_keys = remaining_keys | shifted_keys
+        if state.clone_on_drag:
+            shifted_keys = set()
+            for frame in state.initial_keys:
+                target = max(0, frame + delta)
+                if target in state.initial_keys:
+                    continue
+                shifted_keys.add(target)
+            base_keys = set(state.all_keys)
+            for target in shifted_keys:
+                if target not in state.initial_keys:
+                    base_keys.discard(target)
+            updated_keys = base_keys | shifted_keys
+        else:
+            shifted_keys = {max(0, frame + delta) for frame in state.initial_keys}
+            remaining_keys = {frame for frame in state.other_keys if frame not in shifted_keys}
+            updated_keys = remaining_keys | shifted_keys
+        state.produced_targets = set(shifted_keys)
         if not updated_keys:
             updated_keys = {0}
         if updated_keys != self._keys:
@@ -1123,8 +1143,14 @@ class AnimationTimelineWidget(QWidget):
             follow_current = state.follow_current_frame
             final_frame = self._current_frame
             initial_selection = sorted(state.initial_keys)
-            if initial_selection and set(moved_keys) != state.all_keys:
-                self.key_move_requested.emit(initial_selection, state.last_offset)
+            if initial_selection and (
+                set(moved_keys) != state.all_keys
+                or (state.clone_on_drag and state.produced_targets)
+            ):
+                if state.clone_on_drag and state.last_offset and state.produced_targets:
+                    self.keys_duplicate_requested.emit(initial_selection, state.last_offset)
+                else:
+                    self.key_move_requested.emit(initial_selection, state.last_offset)
             if follow_current:
                 self._set_current_frame_internal(final_frame, emit_signal=False)
                 self.current_frame_changed.emit(final_frame)

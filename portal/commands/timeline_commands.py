@@ -142,6 +142,31 @@ class DuplicateKeyframeCommand(_KeyframeCommand):
             self.created_frame = result
 
 
+class DuplicateKeyframesCommand(_KeyframeCommand):
+    """Duplicate multiple keyframes by ``offset``."""
+
+    def __init__(self, document: Document, frames: Iterable[int], offset: int) -> None:
+        super().__init__(document)
+        normalized: list[int] = []
+        for value in frames:
+            try:
+                frame = int(value)
+            except (TypeError, ValueError):
+                continue
+            normalized.append(frame)
+        self.frames = sorted(set(normalized))
+        try:
+            self.offset = int(offset)
+        except (TypeError, ValueError):
+            self.offset = 0
+
+    def execute(self) -> None:
+        if not self.frames or not self.offset:
+            return
+        self._capture_before()
+        self.document.duplicate_key_frames_with_offset(self.frames, self.offset)
+
+
 class PasteKeyframeCommand(_KeyframeCommand):
     """Paste copied keyframe data onto ``frame_index``."""
 

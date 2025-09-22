@@ -243,6 +243,22 @@ class Document:
             self._notify_layer_manager_changed(layer.uid)
         return changed
 
+    def duplicate_key_frames_with_offset(
+        self, frames: Iterable[int], offset: int
+    ) -> bool:
+        layer_manager = self.frame_manager.current_layer_manager
+        if layer_manager is None:
+            return False
+        layer = layer_manager.active_layer
+        if layer is None:
+            return False
+        changed = self.frame_manager.duplicate_layer_keys_with_offset(
+            layer.uid, frames, offset
+        )
+        if changed:
+            self._notify_layer_manager_changed(layer.uid)
+        return changed
+
     def add_key_frame(self, frame: int) -> bool:
         layer_manager = self.frame_manager.current_layer_manager
         if layer_manager is None:
