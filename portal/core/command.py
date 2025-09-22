@@ -1130,7 +1130,7 @@ class MoveLayerCommand(Command):
 
 
 class SetLayerOpacityCommand(Command):
-    def __init__(self, layer: Layer, opacity: float, *, document: 'Document' | None = None):
+    def __init__(self, layer: Layer, opacity: float, *, document: Optional['Document'] = None):
         self.layer = layer
         self.new_opacity = opacity
         self.old_opacity = layer.opacity
