@@ -26,7 +26,6 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtCore import Qt, Slot, QSignalBlocker, QSize
-from portal.core.animation_player import AnimationPlayer
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
 from portal.ui.animation_timeline_widget import AnimationTimelineWidget
@@ -37,7 +36,7 @@ except Exception:  # Optional dependency may be missing or heavy to load
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
-from portal.ui.preview_panel import PreviewPanel
+from portal.ui.preview_panel import PreviewPanel, NullAnimationPlayer
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
@@ -73,7 +72,7 @@ class MainWindow(QMainWindow):
             self.app.settings_controller.background_image_mode
         )
 
-        self.animation_player = AnimationPlayer(self)
+        self.animation_player = NullAnimationPlayer(self)
 
         # Instantiate the preview panel early so timeline setup helpers can
         # safely forward playback state during initialization.
@@ -496,16 +495,9 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_timeline_total_frames_changed(self, value: int) -> None:
         value = max(1, int(value))
-        document = self.app.document
-        doc_max_index = 0
-        if document:
-            frame_manager = getattr(document, "frame_manager", None)
-            if frame_manager is not None:
-                frame_count = len(frame_manager.frames)
-                doc_max_index = max(0, frame_count - 1) if frame_count else 0
         keys = self.timeline_widget.keys()
         highest_key = max(keys) if keys else 0
-        target_base = max(doc_max_index, highest_key, value - 1)
+        target_base = max(highest_key, value - 1)
         self.timeline_widget.set_total_frames(target_base)
         self.timeline_widget.set_playback_total_frames(value)
         self.preview_panel.set_playback_total_frames(value)
@@ -671,52 +663,29 @@ class MainWindow(QMainWindow):
         self.app.set_playback_loop_range(loop_start, loop_end)
 
         document = self.app.document
-        frame_manager = getattr(document, "frame_manager", None) if document else None
-        if not document or frame_manager is None:
-            self._update_timeline_layer_label(None)
-            self.timeline_widget.set_document_frame_count(0)
-            loop_end_default = max(0, playback_total - 1)
-            timeline_blocker = QSignalBlocker(self.timeline_widget)
-            try:
-                self.timeline_widget.set_total_frames(loop_end_default)
-                self.timeline_widget.set_keys([0])
-                self.timeline_widget.set_current_frame(loop_start)
-                self.timeline_widget.set_loop_range(loop_start, loop_end_default)
-            finally:
-                del timeline_blocker
-            if self.animation_player.current_frame != loop_start:
-                self.animation_player.set_current_frame(loop_start)
-            self.animation_player.set_loop_range(loop_start, loop_end_default)
-            self.preview_panel.set_loop_range(loop_start, loop_end_default)
-            self.app.set_playback_loop_range(loop_start, loop_end_default)
-            self._update_current_frame_label(self.timeline_widget.current_frame())
-            self._update_stop_button_state()
-            return
-
-        layer_manager = getattr(frame_manager, "current_layer_manager", None)
-        active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
-        layer_name = getattr(active_layer, "name", None)
+        layer_name = None
+        if document is not None:
+            layer_manager = getattr(document, "layer_manager", None)
+            active_layer = (
+                getattr(layer_manager, "active_layer", None)
+                if layer_manager is not None
+                else None
+            )
+            layer_name = getattr(active_layer, "name", None)
         self._update_timeline_layer_label(layer_name)
 
-        frame_count = len(frame_manager.frames)
-        self.timeline_widget.set_document_frame_count(frame_count)
-        doc_max_index = max(0, frame_count - 1) if frame_count else 0
-        current_frame = frame_manager.active_frame_index
-        if current_frame < 0 and frame_count:
-            current_frame = 0
-        current_frame = max(0, min(current_frame, doc_max_index))
-        keys = list(document.key_frames)
-        highest_key = max(keys) if keys else 0
-        base_target = max(doc_max_index, highest_key, playback_total - 1)
-
+        loop_end_default = max(0, playback_total - 1)
         timeline_blocker = QSignalBlocker(self.timeline_widget)
         try:
-            self.timeline_widget.set_total_frames(base_target)
-            self.timeline_widget.set_keys(keys)
-            self.timeline_widget.set_current_frame(current_frame)
+            self.timeline_widget.set_document_frame_count(playback_total)
+            self.timeline_widget.set_total_frames(loop_end_default)
+            self.timeline_widget.set_keys([0])
+            self.timeline_widget.set_current_frame(loop_start)
+            self.timeline_widget.set_loop_range(loop_start, loop_end)
         finally:
             del timeline_blocker
 
+        current_frame = self.timeline_widget.current_frame()
         if (
             current_frame < self.animation_player.total_frames
             and self.animation_player.current_frame != current_frame
@@ -789,22 +758,14 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def on_timeline_frame_changed(self, frame: int) -> None:
-        document = self.app.document
-        if not document:
-            return
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return
-        if frame < 0:
-            return
-        if frame_manager.active_frame_index == frame:
-            return
+        frame = max(0, int(frame))
         if (
             frame < self.animation_player.total_frames
             and self.animation_player.current_frame != frame
         ):
             self.animation_player.set_current_frame(frame)
         self.app.select_frame(frame)
+        self._update_current_frame_label(frame)
 
     @Slot()
     def on_crop_to_selection(self):

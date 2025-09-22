@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Tuple
 
-from portal.core.frame_manager import resolve_active_layer_manager
+def resolve_active_layer_manager(document):
+    return getattr(document, "layer_manager", None)
 
 
 class ActiveLayerTracker:

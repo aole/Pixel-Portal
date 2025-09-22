@@ -10,7 +10,6 @@ from portal.core.drawing import Drawing
 
 if TYPE_CHECKING:
     from portal.core.document import Document
-    from portal.core.frame_manager import FrameManager
 
 
 class Command(ABC):
@@ -329,14 +328,9 @@ class FlipCommand(Command):
         self._target_layers: list['Layer'] | None = None
 
     def execute(self):
-        keys_added = self._ensure_scope_keys()
-        if keys_added:
-            # Keying a layer may replace the objects referenced by the current
-            # frame. Clear cached state so we capture the updated layer
-            # instances and their pristine images before applying the flip.
-            self._target_layers = None
-            self._before_images = {}
         target_layers = self._resolve_target_layers()
+        if not target_layers:
+            return
         if not self._before_images:
             for layer in target_layers:
                 self._before_images[id(layer)] = layer.image.copy()
@@ -352,102 +346,30 @@ class FlipCommand(Command):
             before_image = self._before_images.get(id(layer))
             if before_image is None:
                 continue
-            painter = QPainter(layer.image)
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            painter.drawImage(0, 0, before_image)
-            painter.end()
+            layer.image = before_image.copy()
             layer.on_image_change.emit()
-
-    def _ensure_scope_keys(self) -> bool:
-        if self.scope is FlipScope.DOCUMENT:
-            return False
-
-        document = self.document
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return False
-
-        frame_index = getattr(frame_manager, "active_frame_index", None)
-        if frame_index is None or frame_index < 0:
-            return False
-
-        add_layer_key = getattr(frame_manager, "add_layer_key", None)
-        if not callable(add_layer_key):
-            return False
-
-        try:
-            layer_manager = document.layer_manager
-        except ValueError:
-            return False
-
-        if self.scope is FlipScope.LAYER:
-            layer = getattr(layer_manager, "active_layer", None)
-            if layer is None:
-                return False
-            return bool(add_layer_key(layer.uid, frame_index))
-
-        added = False
-        for layer in list(getattr(layer_manager, "layers", [])):
-            if add_layer_key(layer.uid, frame_index):
-                added = True
-        return added
 
     def _resolve_target_layers(self) -> list['Layer']:
         if self._target_layers is not None:
             return self._target_layers
 
-        document = self.document
-        target_layers: list['Layer'] = []
-        seen: set[int] = set()
-
-        try:
-            frame_manager = document.frame_manager
-        except AttributeError:
-            frame_manager = None
-
-        def append_layer(layer: 'Layer') -> None:
-            identity = id(layer)
-            if identity in seen:
-                return
-            seen.add(identity)
-            target_layers.append(layer)
+        manager = getattr(self.document, "layer_manager", None)
+        if manager is None:
+            self._target_layers = []
+            return self._target_layers
 
         if self.scope is FlipScope.LAYER:
-            layer_manager = document.layer_manager
-            layer = layer_manager.active_layer
-            if layer is not None:
-                for keyed_layer in self._resolve_layer_keys(layer):
-                    append_layer(keyed_layer)
-        elif self.scope is FlipScope.FRAME or frame_manager is None:
-            layer_manager = document.layer_manager
-            for layer in getattr(layer_manager, "layers", []):
-                append_layer(layer)
+            layer = manager.active_layer
+            layers = [layer] if layer is not None else []
+        elif self.scope is FlipScope.DOCUMENT:
+            layers = list(getattr(manager, "layers", []))
         else:
-            layer_manager = document.layer_manager
-            for layer in getattr(layer_manager, "layers", []):
-                for keyed_layer in self._resolve_layer_keys(layer):
-                    append_layer(keyed_layer)
+            # ``FRAME`` falls back to operating on the visible stack now that
+            # animation support has been removed.
+            layers = list(getattr(manager, "layers", []))
 
-        self._target_layers = target_layers
-        return target_layers
-
-    def _resolve_layer_keys(self, layer: 'Layer') -> list['Layer']:
-        frame_manager = getattr(self.document, "frame_manager", None)
-        if frame_manager is None:
-            return [layer]
-
-        try:
-            key_frames = frame_manager.layer_key_frames(layer.uid)
-        except Exception:
-            key_frames = [0]
-
-        keyed_layers: list['Layer'] = []
-        for frame_index in key_frames:
-            layer_instance = frame_manager.layer_for_frame(frame_index, layer.uid)
-            if layer_instance is not None:
-                keyed_layers.append(layer_instance)
-
-        return keyed_layers or [layer]
+        self._target_layers = layers
+        return layers
 
 
 class ResizeCommand(Command):
@@ -534,14 +456,14 @@ class AddLayerCommand(Command):
                 self.document.layer_manager.add_layer(self.name)
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
-            if self.added_layer is not None:
-                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo: re-insert the existing layer object
-            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
-            self.document.layer_manager.select_layer(self.insertion_index)
-            self.document.layer_manager.layer_structure_changed.emit()
-            self.document.register_layer(self.added_layer, self.insertion_index)
+            manager = self.document.layer_manager
+            if self.added_layer is None or self.insertion_index is None:
+                return
+            manager.layers.insert(self.insertion_index, self.added_layer)
+            manager.select_layer(self.insertion_index)
+            manager.layer_structure_changed.emit()
 
     def undo(self):
         if self.added_layer:
@@ -549,7 +471,6 @@ class AddLayerCommand(Command):
                 # `remove_layer` needs an index, and it's safer to find it dynamically
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
-                self.document.unregister_layer(self.added_layer.uid)
 
                 # Restore the previously active layer
                 if self.old_active_layer in self.document.layer_manager.layers:
@@ -579,21 +500,20 @@ class PasteCommand(Command):
             self.document.layer_manager.add_layer_with_image(scaled_image, name="Pasted Layer")
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
-            if self.added_layer is not None:
-                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo
-            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
-            self.document.layer_manager.select_layer(self.insertion_index)
-            self.document.layer_manager.layer_structure_changed.emit()
-            self.document.register_layer(self.added_layer, self.insertion_index)
+            manager = self.document.layer_manager
+            if self.added_layer is None or self.insertion_index is None:
+                return
+            manager.layers.insert(self.insertion_index, self.added_layer)
+            manager.select_layer(self.insertion_index)
+            manager.layer_structure_changed.emit()
 
     def undo(self):
         if self.added_layer:
             try:
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
-                self.document.unregister_layer(self.added_layer.uid)
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
                     self.document.layer_manager.select_layer(old_active_index)
@@ -628,21 +548,20 @@ class PasteInSelectionCommand(Command):
             self.document.layer_manager.add_layer_with_image(pasted_content_image, name="Pasted Layer")
             self.added_layer = self.document.layer_manager.active_layer
             self.insertion_index = self.document.layer_manager.active_layer_index
-            if self.added_layer is not None:
-                self.document.register_layer(self.added_layer, self.insertion_index)
         else:
             # Redo
-            self.document.layer_manager.layers.insert(self.insertion_index, self.added_layer)
-            self.document.layer_manager.select_layer(self.insertion_index)
-            self.document.layer_manager.layer_structure_changed.emit()
-            self.document.register_layer(self.added_layer, self.insertion_index)
+            manager = self.document.layer_manager
+            if self.added_layer is None or self.insertion_index is None:
+                return
+            manager.layers.insert(self.insertion_index, self.added_layer)
+            manager.select_layer(self.insertion_index)
+            manager.layer_structure_changed.emit()
 
     def undo(self):
         if self.added_layer:
             try:
                 index = self.document.layer_manager.layers.index(self.added_layer)
                 self.document.layer_manager.remove_layer(index)
-                self.document.unregister_layer(self.added_layer.uid)
                 if self.old_active_layer in self.document.layer_manager.layers:
                     old_active_index = self.document.layer_manager.layers.index(self.old_active_layer)
                     self.document.layer_manager.select_layer(old_active_index)
@@ -889,8 +808,6 @@ class DuplicateLayerCommand(Command):
         self.layer_manager.layers.insert(self.added_index, self.duplicated_layer)
         self.layer_manager.select_layer(self.added_index)
         self.layer_manager.layer_structure_changed.emit()
-        original_layer = self.layer_manager.layers[self.index]
-        self.document.duplicate_layer_keys(original_layer, self.duplicated_layer)
 
     def undo(self):
         if self.duplicated_layer:
@@ -899,7 +816,6 @@ class DuplicateLayerCommand(Command):
                 current_index = self.layer_manager.layers.index(self.duplicated_layer)
                 self.layer_manager.remove_layer(current_index) # remove_layer handles signals and active layer adjustment
                 self.layer_manager.select_layer(self.old_active_layer_index) # Explicitly set active layer back
-                self.document.unregister_layer(self.duplicated_layer.uid)
             except ValueError:
                 # Layer not found, maybe already removed.
                 pass
@@ -925,56 +841,35 @@ class ClearLayerCommand(Command):
 
 
 class ClearLayerAndKeysCommand(Command):
-    """Clear a layer across all frames and reset its keyframes."""
+    """Clear a layer completely.
+
+    Animation-era keyframe handling has been removed, so this command now acts
+    as a convenience wrapper that wipes the layer's pixels and supports undo.
+    """
 
     def __init__(self, document: 'Document', layer: Layer):
         self.document = document
         self.layer = layer
-        self._before_state: 'Optional[FrameManager]' = None
-        self._after_state: 'Optional[FrameManager]' = None
+        self._before_image: QImage | None = None
 
     def execute(self):
-        document = self.document
         layer = self.layer
-        if document is None or layer is None:
+        if layer is None:
             return
 
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return
+        if self._before_image is None:
+            self._before_image = layer.image.copy()
 
-        layer_uid = getattr(layer, "uid", None)
-        if layer_uid is None:
-            return
-
-        if self._before_state is None:
-            self._before_state = frame_manager.clone(deep_copy=True)
-            working_state = frame_manager.clone(deep_copy=True)
-            self._clear_layer_and_keys(working_state, layer_uid)
-            document.apply_frame_manager_snapshot(working_state)
-            self._after_state = document.frame_manager.clone(deep_copy=True)
-        else:
-            if self._after_state is None:
-                return
-            document.apply_frame_manager_snapshot(self._after_state)
+        layer.clear(None)
+        layer.on_image_change.emit()
 
     def undo(self):
-        if self._before_state is None:
-            return
-        self.document.apply_frame_manager_snapshot(self._before_state)
-
-    @staticmethod
-    def _clear_layer_and_keys(frame_manager: 'FrameManager', layer_uid: int) -> None:
-        if frame_manager is None:
+        layer = self.layer
+        if layer is None or self._before_image is None:
             return
 
-        frame_indices = range(len(frame_manager.frames))
-        for instance in frame_manager.iter_layer_instances(layer_uid, frame_indices):
-            instance.clear()
-
-        if layer_uid not in frame_manager.layer_keys:
-            frame_manager.add_layer_key(layer_uid, 0)
-        frame_manager.set_layer_key_frames(layer_uid, [0])
+        layer.image = self._before_image.copy()
+        layer.on_image_change.emit()
             
 class RemoveLayerCommand(Command):
     def __init__(self, document: 'Document', index: int):
@@ -987,156 +882,103 @@ class RemoveLayerCommand(Command):
     def execute(self):
         self.removed_layer = self.layer_manager.layers[self.index]
         self.layer_manager.remove_layer(self.index)
-        self.document.unregister_layer(self.removed_layer.uid)
 
     def undo(self):
         if self.removed_layer:
             self.layer_manager.layers.insert(self.index, self.removed_layer)
-            self.layer_manager.select_layer(self.old_active_layer_index)
             self.layer_manager.layer_structure_changed.emit()
-            self.document.register_layer(self.removed_layer, self.index)
+            restore_index = self.old_active_layer_index
+            if restore_index >= len(self.layer_manager.layers):
+                restore_index = len(self.layer_manager.layers) - 1
+            if restore_index >= 0:
+                try:
+                    self.layer_manager.select_layer(restore_index)
+                except IndexError:
+                    pass
 
 class MoveLayerCommand(Command):
     def __init__(self, document: 'Document', from_index: int, to_index: int):
         self.document = document
         self.from_index = from_index
         self.to_index = to_index
-        self._before_orders: Dict[int, List[int]] | None = None
-        self._before_active: Dict[int, Optional[int]] | None = None
-        self._after_orders: Dict[int, List[int]] | None = None
-        self._after_active: Dict[int, Optional[int]] | None = None
+        self._before_order: List[Layer] | None = None
+        self._after_order: List[Layer] | None = None
+        self._before_active: Optional[int] = None
+        self._after_active: Optional[int] = None
 
     def execute(self):
-        document = self.document
-        if document is None:
+        manager = getattr(self.document, "layer_manager", None)
+        if manager is None:
             return
 
-        frame_manager = document.frame_manager
-        if not frame_manager.frames:
+        layers = manager.layers
+        count = len(layers)
+        if count == 0:
             return
 
-        layer_manager = document.layer_manager
-        layers = layer_manager.layers
-        if not layers:
+        from_index = max(0, min(self.from_index, count - 1))
+        to_index = max(0, min(self.to_index, count - 1))
+        if from_index == to_index:
             return
 
-        if self._before_orders is None:
-            if not self._has_index(layers, self.from_index):
-                return
+        if self._before_order is None:
+            self._before_order = list(layers)
+            self._before_active = manager.active_layer_index
 
-            self._before_orders = self._capture_orders(frame_manager)
-            self._before_active = self._capture_active_uids(frame_manager)
+            layer = layers.pop(from_index)
+            layers.insert(to_index, layer)
 
-            layer = layers.pop(self.from_index)
-            layers.insert(self.to_index, layer)
+            self._after_order = list(layers)
+            self._after_active = self._resolve_active_index(
+                self._before_active, from_index, to_index, len(layers)
+            )
 
-            new_order = [getattr(item, "uid", None) for item in layers]
-            orders_after = {
-                frame_index: list(new_order)
-                for frame_index in range(len(frame_manager.frames))
-            }
-            self._apply_orders(frame_manager, orders_after, self._before_active)
-
-            self._after_orders = self._capture_orders(frame_manager)
-            self._after_active = self._capture_active_uids(frame_manager)
+            if self._after_active is not None:
+                manager.active_layer_index = self._after_active
         else:
-            if self._after_orders is None or self._after_active is None:
+            if self._after_order is None:
                 return
-            self._apply_orders(frame_manager, self._after_orders, self._after_active)
+            manager.layers = list(self._after_order)
+            if self._after_active is not None and manager.layers:
+                manager.active_layer_index = max(
+                    0, min(self._after_active, len(manager.layers) - 1)
+                )
+            manager.layer_structure_changed.emit()
+            return
 
-        document.layer_manager.layer_structure_changed.emit()
+        manager.layer_structure_changed.emit()
 
     def undo(self):
-        if self._before_orders is None or self._before_active is None:
+        manager = getattr(self.document, "layer_manager", None)
+        if manager is None or self._before_order is None:
             return
 
-        frame_manager = self.document.frame_manager
-        self._apply_orders(frame_manager, self._before_orders, self._before_active)
-        self.document.layer_manager.layer_structure_changed.emit()
-
-    @staticmethod
-    def _has_index(layers: List[Layer], index: int) -> bool:
-        try:
-            layers[index]
-        except IndexError:
-            return False
-        return True
-
-    def _capture_orders(self, frame_manager) -> Dict[int, List[int]]:
-        orders: Dict[int, List[int]] = {}
-        for frame_index, frame in enumerate(frame_manager.frames):
-            manager = frame.layer_manager
-            orders[frame_index] = [
-                getattr(layer, "uid", None) for layer in manager.layers
-            ]
-        return orders
-
-    def _capture_active_uids(self, frame_manager) -> Dict[int, Optional[int]]:
-        active_map: Dict[int, Optional[int]] = {}
-        for frame_index, frame in enumerate(frame_manager.frames):
-            manager = frame.layer_manager
-            active_layer = manager.active_layer
-            active_map[frame_index] = getattr(active_layer, "uid", None)
-        return active_map
-
-    def _apply_orders(
-        self,
-        frame_manager,
-        orders_by_frame: Dict[int, List[int]],
-        active_uids: Dict[int, Optional[int]] | None,
-    ) -> None:
-        for frame_index, frame in enumerate(frame_manager.frames):
-            target_order = orders_by_frame.get(frame_index)
-            if target_order is None:
-                continue
-            manager = frame.layer_manager
-            self._reorder_manager(manager, target_order)
-            if active_uids is None:
-                continue
-            self._restore_active_layer(manager, active_uids.get(frame_index))
-
-    @staticmethod
-    def _reorder_manager(manager, target_order: List[int]) -> None:
-        existing_layers = list(manager.layers)
-        by_uid = {getattr(layer, "uid", None): layer for layer in existing_layers}
-        reordered: List[Layer] = []
-        seen = set()
-        for uid in target_order:
-            layer = by_uid.get(uid)
-            if layer is None:
-                continue
-            reordered.append(layer)
-            seen.add(uid)
-        if len(reordered) != len(existing_layers):
-            for layer in existing_layers:
-                uid = getattr(layer, "uid", None)
-                if uid not in seen:
-                    reordered.append(layer)
-        manager.layers = reordered
-
-    @staticmethod
-    def _restore_active_layer(manager, active_uid: Optional[int]) -> None:
-        if active_uid is None:
-            if manager.layers:
-                manager.active_layer_index = min(
-                    manager.active_layer_index, len(manager.layers) - 1
-                )
-            else:
-                manager.active_layer_index = -1
-            return
-
-        finder = getattr(manager, "index_for_layer_uid", None)
-        index = finder(active_uid) if callable(finder) else None
-        if index is not None:
-            manager.active_layer_index = index
-            return
-
-        if manager.layers:
-            manager.active_layer_index = min(
-                manager.active_layer_index, len(manager.layers) - 1
+        manager.layers = list(self._before_order)
+        if self._before_active is not None and manager.layers:
+            manager.active_layer_index = max(
+                0, min(self._before_active, len(manager.layers) - 1)
             )
-        else:
-            manager.active_layer_index = -1
+        manager.layer_structure_changed.emit()
+
+    @staticmethod
+    def _resolve_active_index(
+        active_index: Optional[int],
+        from_index: int,
+        to_index: int,
+        count: int,
+    ) -> Optional[int]:
+        if active_index is None:
+            return None
+
+        result = active_index
+        if active_index == from_index:
+            result = to_index
+        elif from_index < to_index and from_index < active_index <= to_index:
+            result = active_index - 1
+        elif to_index < from_index and to_index <= active_index < from_index:
+            result = active_index + 1
+
+        return max(0, min(result, max(0, count - 1)))
 
 
 class SetLayerOpacityCommand(Command):
@@ -1154,23 +996,7 @@ class SetLayerOpacityCommand(Command):
             return self._instances
 
         instances: List[Layer] = []
-        document = self.document
-        if document is None:
-            document = getattr(self.layer, "document", None)
-        frame_manager = getattr(document, "frame_manager", None) if document else None
-        if (
-            frame_manager is not None
-            and hasattr(frame_manager, "iter_layer_instances")
-            and self._layer_uid is not None
-        ):
-            frames = getattr(frame_manager, "frames", None)
-            if frames is not None:
-                frame_indices = range(len(frames))
-                instances = list(
-                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
-                )
-
-        if not instances:
+        if self.layer is not None:
             instances = [self.layer]
 
         self._instances = instances

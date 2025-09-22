@@ -1,8 +1,73 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
 from PySide6.QtGui import QIcon, QImage, QPixmap
-from PySide6.QtCore import Qt, QSignalBlocker
+from PySide6.QtCore import Qt, QSignalBlocker, QObject, Signal
 
-from portal.core.animation_player import AnimationPlayer
+
+class NullAnimationPlayer(QObject):
+    """Lightweight stand-in that keeps the preview UI responsive."""
+
+    frame_changed = Signal(int)
+    playing_changed = Signal(bool)
+    fps_changed = Signal(float)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._current_frame = 0
+        self._is_playing = False
+        self.total_frames = 1
+        self._loop_start = 0
+        self._loop_end = 0
+        self.fps = 12.0
+
+    @property
+    def current_frame(self) -> int:
+        return self._current_frame
+
+    @property
+    def is_playing(self) -> bool:
+        return self._is_playing
+
+    def play(self) -> None:  # pragma: no cover - no runtime effect
+        if not self._is_playing:
+            self._is_playing = True
+            self.playing_changed.emit(True)
+
+    def pause(self) -> None:  # pragma: no cover - no runtime effect
+        if self._is_playing:
+            self._is_playing = False
+            self.playing_changed.emit(False)
+
+    def stop(self) -> None:  # pragma: no cover - no runtime effect
+        changed = self._is_playing
+        self._is_playing = False
+        if changed:
+            self.playing_changed.emit(False)
+        if self._current_frame != self._loop_start:
+            self._current_frame = self._loop_start
+            self.frame_changed.emit(self._current_frame)
+
+    def set_total_frames(self, value: int) -> None:
+        self.total_frames = max(1, int(value))
+        self._loop_end = max(0, self.total_frames - 1)
+        self._current_frame = min(self._current_frame, self._loop_end)
+
+    def set_loop_range(self, start: int, end: int) -> None:
+        self._loop_start = max(0, int(start))
+        self._loop_end = max(self._loop_start, int(end))
+        self._current_frame = min(max(self._current_frame, self._loop_start), self._loop_end)
+
+    def set_current_frame(self, frame: int) -> None:
+        frame = max(self._loop_start, min(int(frame), self._loop_end))
+        if frame != self._current_frame:
+            self._current_frame = frame
+            self.frame_changed.emit(self._current_frame)
+
+    def set_fps(self, fps: float) -> None:
+        try:
+            self.fps = float(fps)
+        except (TypeError, ValueError):
+            self.fps = 12.0
+        self.fps_changed.emit(self.fps)
 
 class PreviewPanel(QWidget):
     def __init__(self, app):
@@ -15,7 +80,7 @@ class PreviewPanel(QWidget):
         self._loop_start = 0
         self._loop_end = 0
 
-        self.preview_player = AnimationPlayer(self)
+        self.preview_player = NullAnimationPlayer(self)
         self.preview_player.frame_changed.connect(self._on_preview_frame_changed)
         self.preview_player.playing_changed.connect(self._on_preview_player_state_changed)
 
@@ -53,11 +118,8 @@ class PreviewPanel(QWidget):
         total_frames = max(1, int(total_frames))
         self._playback_total_frames = total_frames
         self.preview_player.set_total_frames(total_frames)
-        max_loop = max(0, self._playback_total_frames - 1)
-        if self._loop_end > max_loop:
-            self._loop_end = max_loop
-        if self._loop_start > self._loop_end:
-            self._loop_start = self._loop_end
+        self._loop_start = 0
+        self._loop_end = max(0, total_frames - 1)
         self.preview_player.set_loop_range(self._loop_start, self._loop_end)
         self._current_playback_frame = self.preview_player.current_frame
 
@@ -95,17 +157,10 @@ class PreviewPanel(QWidget):
             self.preview_label.setFixedSize(0, 0)
             return
 
-        if playback_index is None and self.preview_player.is_playing:
+        if playback_index is None:
             playback_index = self.preview_player.current_frame
-        elif playback_index is not None:
-            try:
-                playback_index = int(playback_index)
-            except (TypeError, ValueError):
-                playback_index = None
-            else:
-                playback_index = max(0, min(playback_index, self._playback_total_frames - 1))
 
-        pixmap = self._pixmap_for_document(document, playback_index)
+        pixmap = self._pixmap_for_document(document)
         if pixmap is None:
             self.preview_label.clear()
             self.preview_label.setFixedSize(0, 0)
@@ -145,33 +200,16 @@ class PreviewPanel(QWidget):
         self._current_playback_frame = frame
         self.update_preview(playback_index=frame)
 
-    def _pixmap_for_document(self, document, playback_index: int | None) -> QPixmap | None:
+    def _pixmap_for_document(self, document) -> QPixmap | None:
         image: QImage | None = None
-        frame_manager = getattr(document, "frame_manager", None)
-        if playback_index is not None and frame_manager is not None:
-            resolved_index = frame_manager.resolve_key_frame_index(playback_index)
-            if resolved_index is not None and 0 <= resolved_index < len(frame_manager.frames):
-                candidate = frame_manager.frames[resolved_index].render()
+        render_fallback = getattr(document, "render", None)
+        if callable(render_fallback):
+            try:
+                candidate = render_fallback()
+            except ValueError:
+                image = None
+            else:
                 image = self._coerce_qimage(candidate)
-
-        if image is None:
-            render_current = getattr(document, "render_current_frame", None)
-            if callable(render_current):
-                try:
-                    candidate = render_current()
-                except ValueError:
-                    image = None
-                else:
-                    image = self._coerce_qimage(candidate)
-            if image is None:
-                render_fallback = getattr(document, "render", None)
-                if callable(render_fallback):
-                    try:
-                        candidate = render_fallback()
-                    except ValueError:
-                        image = None
-                    else:
-                        image = self._coerce_qimage(candidate)
 
         if image is None:
             return None

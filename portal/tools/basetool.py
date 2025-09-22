@@ -1,7 +1,8 @@
 from PySide6.QtCore import QPoint, Qt, QObject, Signal, QRect
 from PySide6.QtGui import QMouseEvent, QCursor, QImage
 
-from portal.core.frame_manager import resolve_active_layer_manager
+def resolve_active_layer_manager(document):
+    return getattr(document, "layer_manager", None)
 
 
 class BaseTool(QObject):
