@@ -162,7 +162,9 @@ class LayerManagerWidget(QWidget):
 
     def on_opacity_preview_changed(self, widget, value):
         """Preview layer opacity while dragging."""
-        widget.layer.opacity = value / 100.0
+        opacity = value / 100.0
+        for instance in self._collect_layer_instances(widget.layer):
+            instance.opacity = opacity
         self.layer_changed.emit()
 
     def on_onion_skin_toggled(self, widget):
@@ -189,12 +191,42 @@ class LayerManagerWidget(QWidget):
 
     def on_opacity_changed(self, widget, old_value, new_value):
         """Commit an undoable change to layer opacity."""
-        # Restore old value so the command captures it correctly
-        widget.layer.opacity = old_value / 100.0
+        # Restore old value across all instances so the command captures it correctly
+        restored_opacity = old_value / 100.0
+        for instance in self._collect_layer_instances(widget.layer):
+            instance.opacity = restored_opacity
         from portal.core.command import SetLayerOpacityCommand
-        command = SetLayerOpacityCommand(widget.layer, new_value / 100.0)
+        document = getattr(self.app, "document", None)
+        command = SetLayerOpacityCommand(
+            widget.layer,
+            new_value / 100.0,
+            document=document,
+        )
         self.app.execute_command(command)
         self.layer_changed.emit()
+
+    def _collect_layer_instances(self, layer) -> list:
+        document = getattr(self.app, "document", None)
+        if document is None:
+            return [layer]
+        frame_manager = getattr(document, "frame_manager", None)
+        if frame_manager is None:
+            return [layer]
+        layer_uid = getattr(layer, "uid", None)
+        if layer_uid is None:
+            return [layer]
+        frames = getattr(frame_manager, "frames", None)
+        if frames is None:
+            return [layer]
+        try:
+            instances = list(
+                frame_manager.iter_layer_instances(layer_uid, range(len(frames)))
+            )
+        except AttributeError:
+            instances = []
+        if not instances:
+            instances = [layer]
+        return instances
 
     def on_layers_moved(self, _parent, start, end, _destination, row):
         """Handles reordering layers via drag-and-drop."""

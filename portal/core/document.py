@@ -98,6 +98,9 @@ class Document:
         layer_manager = self.frame_manager.current_layer_manager
         if layer_manager is None:
             raise ValueError("Document has no active frame.")
+        setter = getattr(layer_manager, "set_document", None)
+        if callable(setter):
+            setter(self)
         return layer_manager
 
     def add_layer_manager_listener(
@@ -428,6 +431,9 @@ class Document:
         manager = self.frame_manager.current_layer_manager
         if manager is None:
             return
+        setter = getattr(manager, "set_document", None)
+        if callable(setter):
+            setter(self)
         for callback in list(self._layer_manager_listeners):
             callback(manager)
 

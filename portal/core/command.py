@@ -1130,13 +1130,52 @@ class MoveLayerCommand(Command):
 
 
 class SetLayerOpacityCommand(Command):
-    def __init__(self, layer: Layer, opacity: float):
+    def __init__(self, layer: Layer, opacity: float, *, document: 'Document' | None = None):
         self.layer = layer
         self.new_opacity = opacity
         self.old_opacity = layer.opacity
+        self.document = document
+        self._layer_uid = getattr(layer, "uid", None)
+        self._instances: List[Layer] | None = None
+        self._previous_values: List[float] | None = None
+
+    def _collect_instances(self) -> List[Layer]:
+        if self._instances is not None:
+            return self._instances
+
+        instances: List[Layer] = []
+        document = self.document
+        if document is None:
+            document = getattr(self.layer, "document", None)
+        frame_manager = getattr(document, "frame_manager", None) if document else None
+        if (
+            frame_manager is not None
+            and hasattr(frame_manager, "iter_layer_instances")
+            and self._layer_uid is not None
+        ):
+            frames = getattr(frame_manager, "frames", None)
+            if frames is not None:
+                frame_indices = range(len(frames))
+                instances = list(
+                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
+                )
+
+        if not instances:
+            instances = [self.layer]
+
+        self._instances = instances
+        return self._instances
 
     def execute(self):
-        self.layer.opacity = self.new_opacity
+        instances = self._collect_instances()
+        if self._previous_values is None:
+            self._previous_values = [instance.opacity for instance in instances]
+        for instance in instances:
+            instance.opacity = self.new_opacity
 
     def undo(self):
-        self.layer.opacity = self.old_opacity
+        if self._previous_values is None:
+            return
+        instances = self._collect_instances()
+        for instance, previous in zip(instances, self._previous_values):
+            instance.opacity = previous

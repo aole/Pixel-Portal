@@ -20,6 +20,7 @@ class LayerManager(QObject):
         self.height = height
         self.layers = []
         self.active_layer_index = -1
+        self._document = None
 
         if create_background:
             self.add_layer("Background")
@@ -30,6 +31,17 @@ class LayerManager(QObject):
         if 0 <= self.active_layer_index < len(self.layers):
             return self.layers[self.active_layer_index]
         return None
+
+    @property
+    def document(self):
+        """Return the document this manager belongs to, if any."""
+
+        return self._document
+
+    def set_document(self, document) -> None:
+        """Assign the owning document so commands can reach frame data."""
+
+        self._document = document
 
     # ------------------------------------------------------------------
     # Layer lookup helpers
@@ -163,4 +175,5 @@ class LayerManager(QObject):
         new_manager = LayerManager(self.width, self.height, create_background=False)
         new_manager.layers = [layer.clone() for layer in self.layers]
         new_manager.active_layer_index = self.active_layer_index
+        new_manager._document = self._document
         return new_manager

@@ -165,13 +165,13 @@ class MainWindow(QMainWindow):
 
         self.timeline_onion_button = QToolButton(self.timeline_panel)
         self.timeline_onion_button.setCheckable(True)
-        self.timeline_onion_button.setText("Onion")
-        self.timeline_onion_button.setToolTip("Toggle onion skinning preview")
         self.timeline_onion_button.setAutoRaise(True)
         self.timeline_onion_button.setFocusPolicy(Qt.NoFocus)
+        self.timeline_onion_icon_on = QIcon("icons/skinon.png")
+        self.timeline_onion_icon_off = QIcon("icons/skinoff.png")
+        self.timeline_onion_button.setIconSize(QSize(24, 24))
         self.timeline_onion_button.setChecked(self.canvas.onion_skin_enabled)
-        if self.canvas.onion_skin_enabled:
-            self.timeline_onion_button.setText("Onion On")
+        self._update_timeline_onion_button_icon()
         timeline_header_layout.addWidget(self.timeline_onion_button)
 
         self.timeline_onion_settings = QWidget(self.timeline_panel)
@@ -448,11 +448,22 @@ class MainWindow(QMainWindow):
         self.timeline_autokey_button.setIcon(icon)
         self.app.set_auto_key_enabled(enabled)
 
+    def _update_timeline_onion_button_icon(self) -> None:
+        if not hasattr(self, "timeline_onion_button"):
+            return
+        checked = self.timeline_onion_button.isChecked()
+        icon_on = getattr(self, "timeline_onion_icon_on", QIcon())
+        icon_off = getattr(self, "timeline_onion_icon_off", QIcon())
+        icon = icon_on if checked else icon_off
+        self.timeline_onion_button.setIcon(icon)
+        tooltip_state = "on" if checked else "off"
+        self.timeline_onion_button.setToolTip(f"Onion skinning preview ({tooltip_state})")
+
     @Slot(bool)
     def _on_timeline_onion_toggled(self, enabled: bool) -> None:
         self.canvas.set_onion_skin_enabled(enabled)
         self.timeline_onion_settings.setEnabled(enabled)
-        self.timeline_onion_button.setText("Onion On" if enabled else "Onion")
+        self._update_timeline_onion_button_icon()
 
     @Slot(int)
     def _on_timeline_onion_prev_changed(self, value: int) -> None:
