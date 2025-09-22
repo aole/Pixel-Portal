@@ -228,7 +228,6 @@ Selections support move handles for repositioning. Use **Select → Invert** (`C
 
 ### 9.6 Modifier keys and gesture reference
 - **Alt (any paint tool):** Eyedropper
-- **Ctrl (paint tools):** Temporarily activates the Transform tool while pressed
 - **Shift (shape/select tools):** Constrain proportions or angles
 - **Right-click (paint tools):** Use the eraser color (transparent)
 - **Middle-click:** Pan canvas
