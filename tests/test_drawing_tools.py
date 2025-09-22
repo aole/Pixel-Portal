@@ -593,6 +593,28 @@ def test_bucket_mouse_press_event(bucket_tool, qtbot):
     assert isinstance(blocker.args[0], FillCommand)
 
 
+def test_bucket_ctrl_disables_contiguous(bucket_tool, qtbot):
+    """Ctrl modifier triggers a non-contiguous fill command."""
+
+    tool = bucket_tool
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPoint(10, 10),
+        QPoint(10, 10),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+
+    with qtbot.waitSignal(tool.command_generated) as blocker:
+        tool.mousePressEvent(event, QPoint(10, 10))
+
+    assert blocker.signal_triggered
+    command = blocker.args[0]
+    assert isinstance(command, FillCommand)
+    assert command.contiguous is False
+
+
 @pytest.fixture
 def ellipse_tool(qtbot):
     mock_canvas = Mock()

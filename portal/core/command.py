@@ -662,6 +662,7 @@ class FillCommand(Command):
         mirror_y: bool,
         mirror_x_position: float | None = None,
         mirror_y_position: float | None = None,
+        contiguous: bool = True,
     ):
         from portal.core.document import Document
         self.document = document
@@ -674,6 +675,7 @@ class FillCommand(Command):
         self.mirror_y = mirror_y
         self.mirror_x_position = mirror_x_position
         self.mirror_y_position = mirror_y_position
+        self.contiguous = bool(contiguous)
         self.before_image = None
 
     def execute(self):
@@ -703,7 +705,13 @@ class FillCommand(Command):
 
         for point in points_to_fill:
             if tuple(point.toTuple()) not in processed_points:
-                self.drawing.flood_fill(self.layer, point, self.fill_color, self.selection_shape)
+                self.drawing.flood_fill(
+                    self.layer,
+                    point,
+                    self.fill_color,
+                    self.selection_shape,
+                    contiguous=self.contiguous,
+                )
                 processed_points.add(tuple(point.toTuple()))
 
         self.layer.on_image_change.emit()

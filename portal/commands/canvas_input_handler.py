@@ -146,7 +146,10 @@ class CanvasInputHandler:
         if event.button() == Qt.LeftButton:
             self.canvas.current_tool.mousePressEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:
-            self.canvas.tools["Eraser"].mousePressEvent(event, doc_pos)
+            if current_tool is not None and getattr(
+                current_tool, "supports_right_click_erase", False
+            ):
+                current_tool.mousePressEvent(event, doc_pos)
         elif event.button() == Qt.MiddleButton:
             self.canvas.dragging = True
             self.canvas.last_point = event.position().toPoint()
@@ -190,7 +193,10 @@ class CanvasInputHandler:
                 current_tool.mouseMoveEvent(event, doc_pos)
             self.canvas.canvas_updated.emit()
         elif event.buttons() & Qt.RightButton:
-            self.canvas.tools["Eraser"].mouseMoveEvent(event, doc_pos)
+            if current_tool is not None and getattr(
+                current_tool, "supports_right_click_erase", False
+            ):
+                current_tool.mouseMoveEvent(event, doc_pos)
         elif (event.buttons() & Qt.MiddleButton) and self.canvas.dragging:
             delta = event.position().toPoint() - self.canvas.last_point
             self.canvas.x_offset += delta.x()
@@ -222,7 +228,10 @@ class CanvasInputHandler:
             if current_tool is not None:
                 current_tool.mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.RightButton:
-            self.canvas.tools["Eraser"].mouseReleaseEvent(event, doc_pos)
+            if current_tool is not None and getattr(
+                current_tool, "supports_right_click_erase", False
+            ):
+                current_tool.mouseReleaseEvent(event, doc_pos)
         elif event.button() == Qt.MiddleButton:
             self.canvas.dragging = False
 
