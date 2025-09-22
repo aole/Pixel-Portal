@@ -10,7 +10,7 @@ import zipfile
 from PySide6.QtCore import QBuffer
 from PySide6.QtGui import QImage
 
-from portal.core.animation_player import DEFAULT_TOTAL_FRAMES
+from portal.core.animation_player import DEFAULT_TOTAL_FRAMES, DEFAULT_PLAYBACK_FPS
 from portal.core.frame import Frame
 from portal.core.frame_manager import FrameManager
 from portal.core.layer import Layer
@@ -112,6 +112,9 @@ class _ArchiveWriter:
             "playback_total_frames": self._normalize_playback_total_frames(
                 getattr(document, "playback_total_frames", None)
             ),
+            "playback_fps": self._normalize_playback_fps(
+                getattr(document, "playback_fps", None)
+            ),
             "frame_manager": {
                 "active_frame_index": frame_manager.active_frame_index,
                 "frame_markers": sorted(frame_manager.frame_markers),
@@ -181,6 +184,16 @@ class _ArchiveWriter:
             normalized = DEFAULT_TOTAL_FRAMES
         return normalized
 
+    @staticmethod
+    def _normalize_playback_fps(value: object) -> float:
+        try:
+            fps_value = float(value)
+        except (TypeError, ValueError):
+            fps_value = DEFAULT_PLAYBACK_FPS
+        if fps_value <= 0:
+            fps_value = DEFAULT_PLAYBACK_FPS
+        return fps_value
+
 
 class _ArchiveReader:
     def __init__(self, document_cls: type["Document"], metadata_file: str) -> None:
@@ -210,6 +223,13 @@ class _ArchiveReader:
             setter(playback_total)
         else:
             document.playback_total_frames = playback_total
+
+        playback_fps = self._extract_playback_fps(metadata)
+        fps_setter = getattr(document, "set_playback_fps", None)
+        if callable(fps_setter):
+            fps_setter(playback_fps)
+        else:
+            document.playback_fps = playback_fps
 
         self._sync_layer_uid_counter(document)
 
@@ -432,6 +452,16 @@ class _ArchiveReader:
         if total < 1:
             total = fallback
         return total
+
+    def _extract_playback_fps(self, metadata: Mapping[str, object]) -> float:
+        raw_fps = metadata.get("playback_fps")
+        try:
+            fps_value = float(raw_fps)
+        except (TypeError, ValueError):
+            fps_value = DEFAULT_PLAYBACK_FPS
+        if fps_value <= 0:
+            fps_value = DEFAULT_PLAYBACK_FPS
+        return fps_value
 
     def _sync_layer_uid_counter(self, document: "Document") -> None:
         max_uid = 0

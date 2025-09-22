@@ -14,10 +14,8 @@ from PIL import Image
 from PySide6.QtGui import QImage, QImageReader, QPainter
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+from portal.core.animation_player import DEFAULT_PLAYBACK_FPS
 from portal.core.document import Document
-
-
-DEFAULT_PLAYBACK_FPS = 12.0
 
 
 @dataclass
@@ -312,11 +310,15 @@ class DocumentService:
         setter = getattr(app, "set_playback_total_frames", None)
         if callable(setter):
             setter(playback_total)
+        fps_value = Document.normalize_playback_fps(
+            getattr(document, "playback_fps", DEFAULT_PLAYBACK_FPS)
+        )
+        fps_setter = getattr(app, "set_playback_fps", None)
+        if callable(fps_setter):
+            fps_setter(fps_value)
         main_window = getattr(app, "main_window", None)
         if main_window is not None:
             apply_metadata = getattr(main_window, "apply_imported_animation_metadata", None)
-            animation_player = getattr(main_window, "animation_player", None)
-            fps_value = getattr(animation_player, "fps", DEFAULT_PLAYBACK_FPS)
             if callable(apply_metadata):
                 apply_metadata(playback_total, fps_value)
 
@@ -491,6 +493,10 @@ class DocumentService:
                 fps_value = self._sanitize_fps(
                     getattr(animation_player, "fps", DEFAULT_PLAYBACK_FPS)
                 )
+        else:
+            fps_value = self._sanitize_fps(
+                getattr(app, "playback_fps", fps_value)
+            )
 
         if total_frames is None:
             total_frames = self._safe_positive_int(getattr(app, "playback_total_frames", None))

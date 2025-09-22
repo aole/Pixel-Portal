@@ -260,9 +260,9 @@ Selections support move handles for repositioning. Use **Select → Invert** (`C
 - The frame counter displays playback length and the currently selected frame index. Adjust total playback frames to introduce holds without adding duplicate keys.
 
 ### 12.2 Onion skinning and playback controls
-- Onion skin sliders define how many previous/next frames appear and their opacity tint.
-- Playback controls (Play/Pause, FPS slider, loop toggle) live beneath the timeline. Press `Space` to toggle playback from anywhere in the window.
-- FPS adjustments update both the animation player and exported animation defaults.
+- Configure how many previous/next frames appear—and their tint—from the **Settings → Animation** tab.
+- Playback controls (Play/Pause, loop toggle) live beneath the timeline. Press `Space` to toggle playback from anywhere in the window.
+- Adjust the animation FPS in **Settings → Animation**. Changes apply to timeline playback and export defaults.
 
 ### 12.3 Previewing animations
 - The Preview dock mirrors the main playhead. Dock it beside the canvas for side-by-side reference or float it on a secondary display.
@@ -304,7 +304,7 @@ Ensure the optional AI libraries are installed (Section 3.3). GPU acceleration r
 
 ### 15.3 Exporting sprites and animations
 - **File → Export Animation** outputs GIF, APNG, or WebP. Choose the format from the save dialog filter; Pixel-Portal ensures the file extension matches the selected option.
-- The export inherits the current playback range and FPS. Adjust them on the timeline before exporting to control loop length and pacing.
+- The export inherits the current playback range and FPS. Adjust the playback range on the timeline and update FPS from **Settings → Animation** to control loop length and pacing.
 - For sprite sheets, export individual frames as PNGs by stepping through the timeline and using **File → Save As** with unique filenames.
 
 ## 16. Scripting and automation
@@ -317,6 +317,7 @@ Ensure the optional AI libraries are installed (Section 3.3). GPU acceleration r
 Open **Edit → Settings** (`Ctrl+,`) to configure:
 - **Grid tab:** Toggle major/minor grids, set spacing (1–1024 px), and choose colors.
 - **Canvas tab:** Pick background image mode (Fit, Stretch, Fill, Center), adjust background image opacity, and set ruler segment count.
+- **Animation tab:** Dial in playback FPS and onion-skin counts for the canvas and preview docks.
 - **AI tab:** Manage the default negative prompt text used by the AI panel.
 Use the **Reset to Defaults** button in each tab to revert to factory values. Apply commits changes without closing the dialog; OK saves and closes; Cancel discards pending edits.
 
