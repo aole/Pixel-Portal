@@ -56,6 +56,7 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis: str | None = None
         self._current_pivot_doc: QPointF | None = None
         self._layer_tracker = ActiveLayerTracker(canvas)
+        self._did_apply_scale = False
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -67,6 +68,7 @@ class ScaleTool(BaseTool):
         self._drag_base_edge_rect_doc = None
         self._current_pivot_doc = None
         self._hover_handle = None
+        self._did_apply_scale = False
         self._refresh_base_rect()
         self.canvas.setCursor(self.cursor)
         self.canvas.update()
@@ -84,6 +86,7 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._did_apply_scale = False
         self._layer_tracker.reset()
         self._refresh_base_rect()
 
@@ -121,6 +124,7 @@ class ScaleTool(BaseTool):
         self._drag_handle_axis = None
         self._current_pivot_doc = None
         self._bounds_dirty = True
+        self._did_apply_scale = False
         self._layer_tracker.reset()
 
     # ------------------------------------------------------------------
@@ -129,6 +133,7 @@ class ScaleTool(BaseTool):
             return
 
         self._ensure_base_rect()
+        self._did_apply_scale = False
 
         canvas_pos = QPointF(event.position())
         handle = self._hit_test_handles(canvas_pos)
@@ -198,11 +203,13 @@ class ScaleTool(BaseTool):
 
         layer_manager = self._get_active_layer_manager()
         active_layer = None if layer_manager is None else layer_manager.active_layer
+        applied_scale = not (
+            math.isclose(self.scale_x, 1.0, abs_tol=1e-3)
+            and math.isclose(self.scale_y, 1.0, abs_tol=1e-3)
+        )
 
         if active_layer is not None and self.original_image is not None:
-            if math.isclose(self.scale_x, 1.0, abs_tol=1e-3) and math.isclose(
-                self.scale_y, 1.0, abs_tol=1e-3
-            ):
+            if not applied_scale:
                 if self.original_selection_shape is not None:
                     self.canvas._update_selection_and_emit_size(
                         QPainterPath(self.original_selection_shape)
@@ -236,6 +243,8 @@ class ScaleTool(BaseTool):
                 QPainterPath(self.original_selection_shape)
             )
 
+        self._did_apply_scale = applied_scale
+
         self.original_image = None
         self.selection_source_image = None
         self.original_selection_shape = None
@@ -262,6 +271,14 @@ class ScaleTool(BaseTool):
         self._current_pivot_doc = None
         self._refresh_base_rect()
         self.canvas.update()
+
+    # ------------------------------------------------------------------
+    def consume_did_apply_scale(self) -> bool:
+        """Return whether the last interaction applied a scale and reset the flag."""
+
+        did_apply = self._did_apply_scale
+        self._did_apply_scale = False
+        return did_apply
 
     # ------------------------------------------------------------------
     def _update_preview_image(self):

@@ -202,8 +202,13 @@ class TransformTool(BaseTool):
 
     # ------------------------------------------------------------------
     def _handle_scale_finished(self) -> None:
+        did_scale = bool(self._invoke(self._scale_tool, "consume_did_apply_scale"))
         self._refresh_scale_handles()
-        self._refresh_pivot()
+        if did_scale:
+            self._invoke(self._rotate_tool, "reset_pivot_to_default")
+            self._update_rotation_overlay_geometry()
+        else:
+            self._refresh_pivot()
 
     # ------------------------------------------------------------------
     def _handle_move_finished(self, delta: QPoint) -> None:
