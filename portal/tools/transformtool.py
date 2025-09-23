@@ -49,6 +49,7 @@ class TransformTool(BaseTool):
         self._active_operation: Operation | None = None
         self._dragging_transform = False
         self._last_move_delta = QPoint()
+        self._update_rotation_overlay_geometry()
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -77,6 +78,7 @@ class TransformTool(BaseTool):
         self._invoke(self._scale_tool, "activate")
         self.angle_changed.emit(0.0)
         self._last_move_delta = QPoint()
+        self._update_rotation_overlay_geometry()
 
     # ------------------------------------------------------------------
     def deactivate(self):
@@ -86,9 +88,11 @@ class TransformTool(BaseTool):
         self._invoke(self._rotate_tool, "deactivate")
         self._invoke(self._scale_tool, "deactivate")
         self._last_move_delta = QPoint()
+        self._update_rotation_overlay_geometry()
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event, doc_pos):
+        self._update_rotation_overlay_geometry()
         if event.button() != Qt.LeftButton:
             return
 
@@ -112,6 +116,7 @@ class TransformTool(BaseTool):
 
     # ------------------------------------------------------------------
     def mouseMoveEvent(self, event, doc_pos):
+        self._update_rotation_overlay_geometry()
         if self._active_operation == "rotate":
             if getattr(self._rotate_tool, "drag_mode", None) == "rotate":
                 self._set_dragging_transform(True)
@@ -139,6 +144,7 @@ class TransformTool(BaseTool):
 
     # ------------------------------------------------------------------
     def mouseReleaseEvent(self, event, doc_pos):
+        self._update_rotation_overlay_geometry()
         if event.button() != Qt.LeftButton:
             return
 
@@ -167,6 +173,7 @@ class TransformTool(BaseTool):
 
     # ------------------------------------------------------------------
     def mouseHoverEvent(self, event, doc_pos):
+        self._update_rotation_overlay_geometry()
         self._invoke(self._rotate_tool, "mouseHoverEvent", event, doc_pos)
         self._invoke(self._scale_tool, "mouseHoverEvent", event, doc_pos)
 
@@ -175,6 +182,7 @@ class TransformTool(BaseTool):
         if self._dragging_transform:
             return
         self._invoke(self._scale_tool, "draw_overlay", painter)
+        self._update_rotation_overlay_geometry()
         self._invoke(self._rotate_tool, "draw_overlay", painter)
 
     # ------------------------------------------------------------------
@@ -216,10 +224,27 @@ class TransformTool(BaseTool):
     # ------------------------------------------------------------------
     def _refresh_scale_handles(self) -> None:
         self._invoke(self._scale_tool, "refresh_handles_from_document")
+        self._update_rotation_overlay_geometry()
 
     # ------------------------------------------------------------------
     def _refresh_pivot(self) -> None:
         self._invoke(self._rotate_tool, "refresh_pivot_from_document")
+        self._update_rotation_overlay_geometry()
+
+    # ------------------------------------------------------------------
+    def _update_rotation_overlay_geometry(self) -> None:
+        overlay = self._invoke(self._scale_tool, "get_overlay_geometry")
+        if overlay is None:
+            rect_canvas = None
+            handle_rects: dict[str, object] = {}
+        else:
+            rect_canvas, handle_rects = overlay
+        self._invoke(
+            self._rotate_tool,
+            "set_overlay_geometry",
+            rect_canvas,
+            handle_rects or {},
+        )
 
     # ------------------------------------------------------------------
     def _update_move_gizmos(self, doc_pos: QPoint) -> None:
