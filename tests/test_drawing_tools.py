@@ -13,8 +13,7 @@ from portal.tools.ellipsetool import EllipseTool
 from portal.tools.buckettool import BucketTool
 from portal.tools.erasertool import EraserTool
 from portal.tools.pickertool import PickerTool
-from portal.tools.basetool import BaseTool
-from portal.tools.transformtool import TransformTool
+from portal.tools.movetool import MoveTool
 from PySide6.QtGui import QPainterPath, QPainter
 
 
@@ -542,146 +541,40 @@ def test_pick_color(picker_tool):
 
 @pytest.fixture
 def move_tool(qtbot):
-    class NullRotateTool(BaseTool):
-        angle_changed = _DummySignal()
-
-        def __init__(self, canvas):
-            super().__init__(canvas)
-            self.command_generated = _DummySignal()
-            self.angle_changed = _DummySignal()
-            self.drag_mode: str | None = None
-            self.manual_pivot = False
-
-        def activate(self):
-            pass
-
-        def deactivate(self):
-            pass
-
-        def mousePressEvent(self, event, doc_pos):
-            self.drag_mode = None
-
-        def mouseMoveEvent(self, event, doc_pos):
-            pass
-
-        def mouseReleaseEvent(self, event, doc_pos):
-            self.drag_mode = None
-
-        def mouseHoverEvent(self, event, doc_pos):
-            pass
-
-        def draw_overlay(self, painter):
-            pass
-
-        def refresh_pivot_from_document(self):
-            pass
-
-        def pivot_is_manual(self) -> bool:
-            return self.manual_pivot
-
-        def offset_pivot(self, delta):
-            pass
-
-        def reset_pivot_to_default(self):
-            pass
-
-        def set_overlay_geometry(self, rect_canvas, handle_rects):
-            pass
-
-    class NullScaleTool(BaseTool):
-        scale_changed = _DummySignal()
-
-        def __init__(self, canvas):
-            super().__init__(canvas)
-            self.command_generated = _DummySignal()
-            self.scale_changed = _DummySignal()
-            self.drag_mode: str | None = None
-
-        def activate(self):
-            pass
-
-        def deactivate(self):
-            pass
-
-        def mousePressEvent(self, event, doc_pos):
-            self.drag_mode = None
-
-        def mouseMoveEvent(self, event, doc_pos):
-            pass
-
-        def mouseReleaseEvent(self, event, doc_pos):
-            self.drag_mode = None
-
-        def mouseHoverEvent(self, event, doc_pos):
-            pass
-
-        def draw_overlay(self, painter):
-            pass
-
-        def refresh_handles_from_document(self):
-            pass
-
-        def consume_did_apply_scale(self) -> bool:
-            return False
-
-        def get_overlay_geometry(self):
-            return None
-
-    canvas = SimpleNamespace()
-    canvas.selection_changed = _DummySignal()
-    canvas.selection_shape = None
-    canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
-    canvas.temp_image = QImage(256, 256, QImage.Format_ARGB32)
-    canvas.temp_image_replaces_active_layer = False
-    canvas.tile_preview_enabled = False
-    canvas.tile_preview_image = None
-    canvas._document_size = QSize(256, 256)
-    canvas.preview_layer = None
-    canvas.is_erasing_preview = False
-    canvas.selection_overlay_hidden = False
-    canvas.x_offset = 0
-    canvas.y_offset = 0
-    canvas.zoom = 1.0
-
-    def set_selection_overlay_hidden(hidden: bool) -> None:
-        canvas.selection_overlay_hidden = hidden
-
-    canvas.set_selection_overlay_hidden = set_selection_overlay_hidden
-
-    def set_preview_layer(layer):
-        canvas.preview_layer = layer
-
-    canvas.set_preview_layer = set_preview_layer
-
-    def clear_preview_layer():
-        canvas.preview_layer = None
-
-    canvas.clear_preview_layer = clear_preview_layer
-
-    def redraw_preview(layer=None):
-        if canvas.temp_image is None:
-            return False
-        canvas.temp_image.fill(Qt.transparent)
-        return True
-
-    canvas.redraw_temp_from_preview_layer = redraw_preview
-    canvas.update = lambda *args, **kwargs: None
-    canvas.setCursor = lambda *args, **kwargs: None
-    canvas.width = lambda: 512
-    canvas.height = lambda: 512
-    canvas.get_canvas_coords = lambda pt: pt
-
-    mock_layer = SimpleNamespace()
+    mock_canvas = Mock()
+    mock_layer = Mock()
     mock_layer.image = QImage(256, 256, QImage.Format_ARGB32)
     mock_layer.visible = True
     mock_layer.uid = 1
-    layer_manager = SimpleNamespace(active_layer=mock_layer)
-    document = SimpleNamespace(layer_manager=layer_manager)
-    canvas.document = document
+    layer_manager = Mock()
+    layer_manager.active_layer = mock_layer
+    document = Mock()
+    document.layer_manager = layer_manager
+    mock_canvas.document = document
+    mock_canvas.selection_shape = None
+    mock_canvas.original_image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_canvas.temp_image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_canvas.temp_image_replaces_active_layer = False
+    mock_canvas.tile_preview_enabled = False
+    mock_canvas._document_size = QSize(256, 256)
+    mock_canvas.preview_layer = mock_layer
 
-    rotate_stub = NullRotateTool(canvas)
-    scale_stub = NullScaleTool(canvas)
-    tool = TransformTool(canvas, rotate_tool=rotate_stub, scale_tool=scale_stub)
+    def _set_preview_layer(layer):
+        mock_canvas.preview_layer = layer
+
+    def _clear_preview_layer():
+        mock_canvas.preview_layer = None
+
+    def _redraw_preview(layer=None):
+        if mock_canvas.temp_image is None:
+            return False
+        mock_canvas.temp_image.fill(Qt.transparent)
+        return True
+
+    mock_canvas.set_preview_layer = Mock(side_effect=_set_preview_layer)
+    mock_canvas.clear_preview_layer = Mock(side_effect=_clear_preview_layer)
+    mock_canvas.redraw_temp_from_preview_layer = Mock(side_effect=_redraw_preview)
+    tool = MoveTool(mock_canvas)
     return tool
 
 def test_move_mouse_events_no_selection(move_tool, qtbot):
@@ -726,6 +619,7 @@ def test_move_mouse_events_with_selection(move_tool, qtbot):
     selection_path = QPainterPath()
     selection_path.addRect(QRect(5, 5, 50, 50))
     canvas.selection_shape = selection_path
+    tool.original_selection_shape = selection_path
 
     # Mouse Press
     press_event = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPoint(10, 10), QPoint(10, 10), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
