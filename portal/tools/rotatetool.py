@@ -83,9 +83,10 @@ class RotateTool(BaseTool):
 
         layer_manager = self._get_active_layer_manager()
         if layer_manager and layer_manager.active_layer is not None:
-            image = layer_manager.active_layer.image
+            layer = layer_manager.active_layer
+            image = layer.image
             if image is not None and not image.isNull():
-                bounds = self._find_non_transparent_bounds(image)
+                bounds = layer.non_transparent_bounds
                 if bounds is None:
                     bounds = image.rect()
                 if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
@@ -101,50 +102,6 @@ class RotateTool(BaseTool):
                 return QRect(0, 0, width_int, height_int)
 
         return None
-
-    def _find_non_transparent_bounds(self, image: QImage) -> QRect | None:
-        width = image.width()
-        height = image.height()
-        if width <= 0 or height <= 0:
-            return None
-
-        left = width
-        right = -1
-        top = height
-        bottom = -1
-
-        for y in range(height):
-            row_left = None
-            row_right = None
-
-            for x in range(width):
-                if image.pixelColor(x, y).alpha() > 0:
-                    row_left = x
-                    break
-
-            if row_left is None:
-                continue
-
-            for x in range(width - 1, -1, -1):
-                if image.pixelColor(x, y).alpha() > 0:
-                    row_right = x
-                    break
-
-            if row_right is None:
-                continue
-
-            if row_left < left:
-                left = row_left
-            if row_right > right:
-                right = row_right
-            if top == height:
-                top = y
-            bottom = y
-
-        if right < left or bottom < top:
-            return None
-
-        return QRect(left, top, right - left + 1, bottom - top + 1)
 
     def get_rotation_center_doc(self) -> QPoint:
         return self.pivot_doc
