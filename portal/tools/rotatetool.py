@@ -1,11 +1,21 @@
 import math
-from PySide6.QtGui import QPen, QColor, QTransform, QImage, QPainter, QPainterPath
+from PySide6.QtGui import (
+    QPen,
+    QColor,
+    QTransform,
+    QImage,
+    QPainter,
+    QPainterPath,
+    QRectF,
+)
 from PySide6.QtCore import Qt, QPoint, QPointF, Signal
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
 from ._transform_style import (
+    TRANSFORM_GIZMO_ACTIVE_COLOR,
     TRANSFORM_GIZMO_BASE_COLOR,
+    TRANSFORM_GIZMO_HANDLE_OUTLINE_COLOR,
     TRANSFORM_GIZMO_HOVER_COLOR,
     make_transform_cursor,
 )
@@ -34,6 +44,10 @@ class RotateTool(BaseTool):
         self.selection_source_image: QImage | None = None
         self._manual_pivot = False
         self._layer_tracker = ActiveLayerTracker(canvas)
+        self._handle_size = 14.0
+        self._handle_gap = 4.0
+        self._pivot_radius = 10.0
+        self._rotation_handle_rect: QRectF | None = None
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -48,6 +62,7 @@ class RotateTool(BaseTool):
         self._layer_tracker.reset()
         self._sync_active_layer(force=True)
         self._manual_pivot = False
+        self._rotation_handle_rect = None
 
     def calculate_default_pivot_doc(self) -> QPoint:
         if self.canvas.selection_shape:
@@ -66,11 +81,11 @@ class RotateTool(BaseTool):
         return QPointF(self.canvas.get_canvas_coords(self.pivot_doc))
 
     def get_handle_pos(self) -> QPointF:
+        if self._rotation_handle_rect is not None:
+            return self._rotation_handle_rect.center()
+
         center = self.get_center()
-        return QPointF(
-            center.x() + 100 * math.cos(self.angle),
-            center.y() + 100 * math.sin(self.angle),
-        )
+        return QPointF(center.x() + 100.0, center.y())
 
     def _sync_active_layer(self, *, force: bool = False, suppress_update: bool = False) -> bool:
         """Ensure cached geometry reflects the currently selected layer."""
@@ -102,6 +117,7 @@ class RotateTool(BaseTool):
 
         self.is_hovering_handle = False
         self.is_hovering_center = False
+        self._rotation_handle_rect = None
 
         if not suppress_update:
             self.canvas.update()
@@ -121,22 +137,24 @@ class RotateTool(BaseTool):
             self.pivot_doc = new_pivot
             self.canvas.update()
         self._manual_pivot = False
+        self._rotation_handle_rect = None
 
     def _update_hover_state_from_point(
         self, canvas_pos: QPointF, *, request_update: bool = True
     ) -> None:
-        handle_pos = self.get_handle_pos()
         center_pos = self.get_center()
+        handle_rect = self._rotation_handle_rect
 
-        distance_handle = math.hypot(
-            canvas_pos.x() - handle_pos.x(), canvas_pos.y() - handle_pos.y()
-        )
         distance_center = math.hypot(
             canvas_pos.x() - center_pos.x(), canvas_pos.y() - center_pos.y()
         )
 
-        new_hover_handle = distance_handle <= 6
-        new_hover_center = distance_center <= 10
+        if handle_rect is not None:
+            new_hover_handle = handle_rect.contains(canvas_pos)
+        else:
+            new_hover_handle = False
+
+        new_hover_center = distance_center <= self._pivot_radius
 
         if (
             self.is_hovering_handle != new_hover_handle
@@ -146,6 +164,26 @@ class RotateTool(BaseTool):
             self.is_hovering_center = new_hover_center
             if request_update:
                 self.canvas.repaint()
+
+    def set_overlay_geometry(
+        self, rect_canvas: QRectF | None, handle_rects: dict[str, QRectF]
+    ) -> None:
+        if rect_canvas is None and not handle_rects:
+            self._rotation_handle_rect = None
+            return
+
+        right_handle = handle_rects.get("right")
+        if right_handle is None:
+            self._rotation_handle_rect = None
+            return
+
+        gap = self._handle_gap
+        handle_size = self._handle_size
+        right_rect = QRectF(right_handle)
+        center_y = right_rect.center().y()
+        x = right_rect.right() + gap
+        y = center_y - handle_size / 2.0
+        self._rotation_handle_rect = QRectF(x, y, handle_size, handle_size)
 
     def mousePressEvent(self, event, doc_pos):
         if event.button() != Qt.LeftButton:
@@ -354,35 +392,49 @@ class RotateTool(BaseTool):
         self.is_hovering_center = False
         self._layer_tracker.reset()
         self._manual_pivot = False
+        self._rotation_handle_rect = None
 
     def draw_overlay(self, painter):
         self._sync_active_layer(suppress_update=True)
 
         painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, False)
 
         center = self.get_center()
-        handle_pos = self.get_handle_pos()
 
         base_color = QColor(TRANSFORM_GIZMO_BASE_COLOR)
         hover_color = QColor(TRANSFORM_GIZMO_HOVER_COLOR)
+        active_color = QColor(TRANSFORM_GIZMO_ACTIVE_COLOR)
+        outline_color = QColor(TRANSFORM_GIZMO_HANDLE_OUTLINE_COLOR)
 
-        color_handle = hover_color if self.is_hovering_handle else base_color
-        color_center = hover_color if self.is_hovering_center else base_color
+        if self.drag_mode == "rotate":
+            color_handle = active_color
+        elif self.is_hovering_handle:
+            color_handle = hover_color
+        else:
+            color_handle = base_color
+
+        if self.drag_mode == "pivot":
+            color_center = active_color
+        elif self.is_hovering_center:
+            color_center = hover_color
+        else:
+            color_center = base_color
+
+        outline_pen = QPen(outline_color)
+        outline_pen.setWidth(1)
+        outline_pen.setCosmetic(True)
 
         # Circle (pivot)
-        pen = QPen(color_center, 4)
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(center, 10, 10)
-
-        # Line
-        painter.setPen(QPen(color_handle, 4))
-        painter.drawLine(center, handle_pos)
+        painter.setPen(outline_pen)
+        painter.setBrush(color_center)
+        painter.drawEllipse(center, self._pivot_radius, self._pivot_radius)
 
         # Handle
-        painter.setBrush(color_handle)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(handle_pos, 6, 6)
+        if self._rotation_handle_rect is not None:
+            painter.setPen(outline_pen)
+            painter.setBrush(color_handle)
+            painter.drawRect(self._rotation_handle_rect)
 
         painter.restore()
 

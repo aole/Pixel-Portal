@@ -19,6 +19,8 @@ from portal.tools.basetool import BaseTool
 from ._transform_style import (
     TRANSFORM_GIZMO_ACTIVE_COLOR,
     TRANSFORM_GIZMO_BASE_COLOR,
+    TRANSFORM_GIZMO_BORDER_COLOR,
+    TRANSFORM_GIZMO_HANDLE_OUTLINE_COLOR,
     TRANSFORM_GIZMO_HOVER_COLOR,
     make_transform_cursor,
 )
@@ -321,16 +323,18 @@ class ScaleTool(BaseTool):
         base_color = QColor(TRANSFORM_GIZMO_BASE_COLOR)
         hover_color = QColor(TRANSFORM_GIZMO_HOVER_COLOR)
         active_color = QColor(TRANSFORM_GIZMO_ACTIVE_COLOR)
+        border_color = QColor(TRANSFORM_GIZMO_BORDER_COLOR)
+        outline_color = QColor(TRANSFORM_GIZMO_HANDLE_OUTLINE_COLOR)
 
         if overlay_rect is not None:
-            border_pen = QPen(base_color)
+            border_pen = QPen(border_color)
             border_pen.setWidth(1)
             border_pen.setCosmetic(True)
             painter.setPen(border_pen)
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(overlay_rect)
 
-            handle_pen = QPen(base_color.darker(150))
+            handle_pen = QPen(outline_color)
             handle_pen.setWidth(1)
             handle_pen.setCosmetic(True)
             painter.setPen(handle_pen)
@@ -709,6 +713,20 @@ class ScaleTool(BaseTool):
         rect_canvas = self._edge_rect_doc_to_canvas(rect_doc)
         handle_rects = self._handle_rects_for_canvas_rect(rect_canvas)
         return rect_doc, rect_canvas, handle_rects
+
+    # ------------------------------------------------------------------
+    def get_overlay_geometry(self):
+        """Return the canvas overlay rect and handle rectangles."""
+
+        rect_doc, rect_canvas, handle_rects = self._overlay_geometry()
+        if rect_canvas is None and not handle_rects:
+            return None
+
+        rect_canvas_copy = QRectF(rect_canvas) if rect_canvas is not None else None
+        handle_rects_copy = {
+            name: QRectF(rect) for name, rect in handle_rects.items()
+        }
+        return rect_canvas_copy, handle_rects_copy
 
     # ------------------------------------------------------------------
     def _handle_rects_for_canvas_rect(self, rect: QRectF) -> dict[str, QRectF]:
