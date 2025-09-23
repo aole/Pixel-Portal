@@ -46,7 +46,8 @@ class RotateTool(BaseTool):
         self._handle_size = 14.0
         self._handle_gap = 4.0
         self._pivot_radius = 10.0
-        self._rotation_handle_rect: QRectF | None = None
+        self._rotation_handle_center: QPointF | None = None
+        self._rotation_handle_radius = self._handle_size / 2.0
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -61,7 +62,8 @@ class RotateTool(BaseTool):
         self._layer_tracker.reset()
         self._sync_active_layer(force=True)
         self._manual_pivot = False
-        self._rotation_handle_rect = None
+        self._rotation_handle_center = None
+        self._rotation_handle_radius = self._handle_size / 2.0
 
     def calculate_default_pivot_doc(self) -> QPoint:
         if self.canvas.selection_shape:
@@ -80,8 +82,8 @@ class RotateTool(BaseTool):
         return QPointF(self.canvas.get_canvas_coords(self.pivot_doc))
 
     def get_handle_pos(self) -> QPointF:
-        if self._rotation_handle_rect is not None:
-            return self._rotation_handle_rect.center()
+        if self._rotation_handle_center is not None:
+            return QPointF(self._rotation_handle_center)
 
         center = self.get_center()
         return QPointF(center.x() + 100.0, center.y())
@@ -116,7 +118,8 @@ class RotateTool(BaseTool):
 
         self.is_hovering_handle = False
         self.is_hovering_center = False
-        self._rotation_handle_rect = None
+        self._rotation_handle_center = None
+        self._rotation_handle_radius = self._handle_size / 2.0
 
         if not suppress_update:
             self.canvas.update()
@@ -136,20 +139,24 @@ class RotateTool(BaseTool):
             self.pivot_doc = new_pivot
             self.canvas.update()
         self._manual_pivot = False
-        self._rotation_handle_rect = None
+        self._rotation_handle_center = None
+        self._rotation_handle_radius = self._handle_size / 2.0
 
     def _update_hover_state_from_point(
         self, canvas_pos: QPointF, *, request_update: bool = True
     ) -> None:
         center_pos = self.get_center()
-        handle_rect = self._rotation_handle_rect
+        handle_center = self._rotation_handle_center
+        handle_radius = self._rotation_handle_radius
 
         distance_center = math.hypot(
             canvas_pos.x() - center_pos.x(), canvas_pos.y() - center_pos.y()
         )
 
-        if handle_rect is not None:
-            new_hover_handle = handle_rect.contains(canvas_pos)
+        if handle_center is not None and handle_radius > 0.0:
+            dx = canvas_pos.x() - handle_center.x()
+            dy = canvas_pos.y() - handle_center.y()
+            new_hover_handle = (dx * dx + dy * dy) <= handle_radius * handle_radius
         else:
             new_hover_handle = False
 
@@ -168,21 +175,25 @@ class RotateTool(BaseTool):
         self, rect_canvas: QRectF | None, handle_rects: dict[str, QRectF]
     ) -> None:
         if rect_canvas is None and not handle_rects:
-            self._rotation_handle_rect = None
+            self._rotation_handle_center = None
+            self._rotation_handle_radius = self._handle_size / 2.0
             return
 
         right_handle = handle_rects.get("right")
         if right_handle is None:
-            self._rotation_handle_rect = None
+            self._rotation_handle_center = None
+            self._rotation_handle_radius = self._handle_size / 2.0
             return
 
         gap = self._handle_gap
         handle_size = self._handle_size
+        radius = handle_size / 2.0
         right_rect = QRectF(right_handle)
         center_y = right_rect.center().y()
-        x = right_rect.right() + gap
-        y = center_y - handle_size / 2.0
-        self._rotation_handle_rect = QRectF(x, y, handle_size, handle_size)
+        center_x = right_rect.right() + gap + radius
+
+        self._rotation_handle_center = QPointF(center_x, center_y)
+        self._rotation_handle_radius = radius
 
     def mousePressEvent(self, event, doc_pos):
         if event.button() != Qt.LeftButton:
@@ -391,7 +402,8 @@ class RotateTool(BaseTool):
         self.is_hovering_center = False
         self._layer_tracker.reset()
         self._manual_pivot = False
-        self._rotation_handle_rect = None
+        self._rotation_handle_center = None
+        self._rotation_handle_radius = self._handle_size / 2.0
 
     def draw_overlay(self, painter):
         self._sync_active_layer(suppress_update=True)
@@ -430,10 +442,14 @@ class RotateTool(BaseTool):
         painter.drawEllipse(center, self._pivot_radius, self._pivot_radius)
 
         # Handle
-        if self._rotation_handle_rect is not None:
+        if self._rotation_handle_center is not None:
             painter.setPen(outline_pen)
             painter.setBrush(color_handle)
-            painter.drawRect(self._rotation_handle_rect)
+            painter.drawEllipse(
+                self._rotation_handle_center,
+                self._rotation_handle_radius,
+                self._rotation_handle_radius,
+            )
 
         painter.restore()
 

@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QCursor
 # fixture) spin up the application, so we expose a factory to avoid constructing
 # cursor instances at import time. The tools call :func:`make_transform_cursor`
 # from their initialisers when the application is already available.
-TRANSFORM_CURSOR_SHAPE = Qt.OpenHandCursor
+TRANSFORM_CURSOR_SHAPE = Qt.ArrowCursor
 
 
 def make_transform_cursor() -> QCursor:
