@@ -6,9 +6,8 @@ from PySide6.QtGui import (
     QImage,
     QPainter,
     QPainterPath,
-    QRectF,
 )
-from PySide6.QtCore import Qt, QPoint, QPointF, Signal
+from PySide6.QtCore import Qt, QPoint, QPointF, QRectF, Signal
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
