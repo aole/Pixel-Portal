@@ -271,6 +271,7 @@ def eraser_tool(qtbot):
     mock_canvas.document.height = 256
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
+    mock_canvas.drawing_context.eraser_width = 1
     mock_canvas.drawing_context.brush_type = "Square"
     mock_canvas.drawing_context.mirror_x = False
     mock_canvas.drawing_context.mirror_y = False
