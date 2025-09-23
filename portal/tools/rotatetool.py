@@ -7,7 +7,7 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
 )
-from PySide6.QtCore import Qt, QPoint, QPointF, QRectF, Signal
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, Signal
 from portal.tools._layer_tracker import ActiveLayerTracker
 from portal.tools.basetool import BaseTool
 from portal.commands.layer_commands import RotateLayerCommand
@@ -48,6 +48,7 @@ class RotateTool(BaseTool):
         self._pivot_radius = 10.0
         self._rotation_handle_center: QPointF | None = None
         self._rotation_handle_radius = self._handle_size / 2.0
+        self._rotation_press_radians = 0.0
 
         self.canvas.selection_changed.connect(self._on_canvas_selection_changed)
 
@@ -64,16 +65,86 @@ class RotateTool(BaseTool):
         self._manual_pivot = False
         self._rotation_handle_center = None
         self._rotation_handle_radius = self._handle_size / 2.0
+        self._rotation_press_radians = 0.0
 
     def calculate_default_pivot_doc(self) -> QPoint:
-        if self.canvas.selection_shape:
-            return self.canvas.selection_shape.boundingRect().center().toPoint()
-
-        layer_manager = self._get_active_layer_manager()
-        if layer_manager and layer_manager.active_layer:
-            return layer_manager.active_layer.image.rect().center()
+        target_rect = self._calculate_transform_bounds()
+        if target_rect is not None and not target_rect.isEmpty():
+            return target_rect.center()
 
         return QPoint(0, 0)  # Fallback
+
+    def _calculate_transform_bounds(self) -> QRect | None:
+        selection_shape = getattr(self.canvas, "selection_shape", None)
+        if selection_shape:
+            rect = selection_shape.boundingRect().toAlignedRect()
+            if rect.isValid() and rect.width() > 0 and rect.height() > 0:
+                return rect
+
+        layer_manager = self._get_active_layer_manager()
+        if layer_manager and layer_manager.active_layer is not None:
+            image = layer_manager.active_layer.image
+            if image is not None and not image.isNull():
+                bounds = self._find_non_transparent_bounds(image)
+                if bounds is None:
+                    bounds = image.rect()
+                if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
+                    return bounds
+
+        document = getattr(self.canvas, "document", None)
+        if document is not None:
+            width = getattr(document, "width", None)
+            height = getattr(document, "height", None)
+            if width is not None and height is not None:
+                width_int = max(1, int(width))
+                height_int = max(1, int(height))
+                return QRect(0, 0, width_int, height_int)
+
+        return None
+
+    def _find_non_transparent_bounds(self, image: QImage) -> QRect | None:
+        width = image.width()
+        height = image.height()
+        if width <= 0 or height <= 0:
+            return None
+
+        left = width
+        right = -1
+        top = height
+        bottom = -1
+
+        for y in range(height):
+            row_left = None
+            row_right = None
+
+            for x in range(width):
+                if image.pixelColor(x, y).alpha() > 0:
+                    row_left = x
+                    break
+
+            if row_left is None:
+                continue
+
+            for x in range(width - 1, -1, -1):
+                if image.pixelColor(x, y).alpha() > 0:
+                    row_right = x
+                    break
+
+            if row_right is None:
+                continue
+
+            if row_left < left:
+                left = row_left
+            if row_right > right:
+                right = row_right
+            if top == height:
+                top = y
+            bottom = y
+
+        if right < left or bottom < top:
+            return None
+
+        return QRect(left, top, right - left + 1, bottom - top + 1)
 
     def get_rotation_center_doc(self) -> QPoint:
         return self.pivot_doc
@@ -120,6 +191,7 @@ class RotateTool(BaseTool):
         self.is_hovering_center = False
         self._rotation_handle_center = None
         self._rotation_handle_radius = self._handle_size / 2.0
+        self._rotation_press_radians = 0.0
 
         if not suppress_update:
             self.canvas.update()
@@ -141,6 +213,7 @@ class RotateTool(BaseTool):
         self._manual_pivot = False
         self._rotation_handle_center = None
         self._rotation_handle_radius = self._handle_size / 2.0
+        self._rotation_press_radians = 0.0
 
     def _update_hover_state_from_point(
         self, canvas_pos: QPointF, *, request_update: bool = True
@@ -210,6 +283,14 @@ class RotateTool(BaseTool):
             if layer_manager is None:
                 return
 
+            center = self.get_center()
+            press_pos = QPointF(event.pos())
+            dx = press_pos.x() - center.x()
+            dy = press_pos.y() - center.y()
+            self._rotation_press_radians = math.atan2(dy, dx)
+            self.angle = 0.0
+            self.angle_changed.emit(0.0)
+
             active_layer = layer_manager.active_layer
             if active_layer:
                 self.original_image = active_layer.image.copy()
@@ -252,15 +333,18 @@ class RotateTool(BaseTool):
             dy = canvas_pos.y() - center.y()
 
             angle_radians = math.atan2(dy, dx)
-            angle_degrees = math.degrees(angle_radians)
+            relative_radians = angle_radians - self._rotation_press_radians
+            relative_degrees = math.degrees(relative_radians)
 
             if event.modifiers() & Qt.ShiftModifier:
                 snap_increment = 22.5
-                angle_degrees = round(angle_degrees / snap_increment) * snap_increment
-                angle_radians = math.radians(angle_degrees)
+                relative_degrees = (
+                    round(relative_degrees / snap_increment) * snap_increment
+                )
+                relative_radians = math.radians(relative_degrees)
 
-            self.angle = angle_radians
-            self.angle_changed.emit(angle_degrees)
+            self.angle = relative_radians
+            self.angle_changed.emit(relative_degrees)
 
             if self.original_image:
                 image_to_modify = self.original_image.copy()
@@ -377,6 +461,7 @@ class RotateTool(BaseTool):
             self.original_selection_shape = None
             self.angle = 0.0
             self.angle_changed.emit(math.degrees(self.angle))
+            self._rotation_press_radians = 0.0
 
         self.drag_mode = None
 
@@ -404,6 +489,7 @@ class RotateTool(BaseTool):
         self._manual_pivot = False
         self._rotation_handle_center = None
         self._rotation_handle_radius = self._handle_size / 2.0
+        self._rotation_press_radians = 0.0
 
     def draw_overlay(self, painter):
         self._sync_active_layer(suppress_update=True)
@@ -463,6 +549,7 @@ class RotateTool(BaseTool):
         new_pivot = self.calculate_default_pivot_doc()
         if new_pivot != self.pivot_doc:
             self.pivot_doc = new_pivot
+            self._rotation_press_radians = 0.0
             self.canvas.update()
 
     # ------------------------------------------------------------------
@@ -478,4 +565,16 @@ class RotateTool(BaseTool):
             self.pivot_doc.x() + delta.x(),
             self.pivot_doc.y() + delta.y(),
         )
+        self._rotation_press_radians = 0.0
         self.canvas.update()
+
+    # ------------------------------------------------------------------
+    def reset_pivot_to_default(self) -> None:
+        """Recenter the pivot and mark it as automatic."""
+
+        self._manual_pivot = False
+        self._rotation_press_radians = 0.0
+        new_pivot = self.calculate_default_pivot_doc()
+        if new_pivot != self.pivot_doc:
+            self.pivot_doc = new_pivot
+            self.canvas.update()
