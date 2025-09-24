@@ -204,7 +204,6 @@ class _RotateOperation(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = make_transform_cursor()
         self.angle = 0.0
         self.is_hovering_handle = False
         self.is_hovering_center = False
@@ -733,7 +732,6 @@ class _ScaleOperation(BaseTool):
 
     def __init__(self, canvas):
         super().__init__(canvas)
-        self.cursor = make_transform_cursor()
         self.scale_factor = 1.0
         self.scale_x = 1.0
         self.scale_y = 1.0
