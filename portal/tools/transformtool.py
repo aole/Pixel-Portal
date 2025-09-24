@@ -99,12 +99,7 @@ class _MoveOperation(BaseTool):
         self.start_point = doc_pos
 
         layer_manager = self._get_active_layer_manager()
-        if layer_manager is None:
-            return
-
         active_layer = layer_manager.active_layer
-        if not active_layer:
-            return
         self.before_image = active_layer.image.copy()
 
         self._allocate_preview_images(replace_active_layer=True)
@@ -157,12 +152,7 @@ class _MoveOperation(BaseTool):
         delta = doc_pos - self.start_point
 
         layer_manager = self._get_active_layer_manager()
-        if layer_manager is None:
-            return
-
         active_layer = layer_manager.active_layer
-        if not active_layer:
-            return
 
         move_command = MoveCommand(
             layer=active_layer,
@@ -267,15 +257,14 @@ class _RotateOperation(BaseTool):
                 return rect
 
         layer_manager = self._get_active_layer_manager()
-        if layer_manager and layer_manager.active_layer is not None:
-            layer = layer_manager.active_layer
-            image = layer.image
-            if image is not None and not image.isNull():
-                bounds = layer.non_transparent_bounds
-                if bounds is None:
-                    bounds = image.rect()
-                if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
-                    return bounds
+        layer = layer_manager.active_layer
+        image = layer.image
+        if image is not None and not image.isNull():
+            bounds = layer.non_transparent_bounds
+            if bounds is None:
+                bounds = image.rect()
+            if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
+                return bounds
 
         document = getattr(self.canvas, "document", None)
         if document is not None:
@@ -431,8 +420,6 @@ class _RotateOperation(BaseTool):
         if self.is_hovering_handle:
             self.drag_mode = "rotate"
             layer_manager = self._get_active_layer_manager()
-            if layer_manager is None:
-                return
 
             center = self.get_center()
             press_pos = QPointF(event.pos())
@@ -443,29 +430,28 @@ class _RotateOperation(BaseTool):
             self.angle_changed.emit(0.0)
 
             active_layer = layer_manager.active_layer
-            if active_layer:
-                self.original_image = active_layer.image.copy()
-                self.canvas.temp_image_replaces_active_layer = True
-                self.original_selection_shape = None
-                self.selection_source_image = None
-                if self.canvas.selection_shape:
-                    self.original_selection_shape = QPainterPath(
-                        self.canvas.selection_shape
-                    )
-                    self.selection_source_image = QImage(
-                        self.original_image.size(),
-                        self.original_image.format(),
-                    )
-                    self.selection_source_image.fill(Qt.transparent)
+            self.original_image = active_layer.image.copy()
+            self.canvas.temp_image_replaces_active_layer = True
+            self.original_selection_shape = None
+            self.selection_source_image = None
+            if self.canvas.selection_shape:
+                self.original_selection_shape = QPainterPath(
+                    self.canvas.selection_shape
+                )
+                self.selection_source_image = QImage(
+                    self.original_image.size(),
+                    self.original_image.format(),
+                )
+                self.selection_source_image.fill(Qt.transparent)
 
-                    selection_painter = QPainter(self.selection_source_image)
-                    selection_painter.setRenderHint(QPainter.Antialiasing, False)
-                    selection_painter.setRenderHint(
-                        QPainter.SmoothPixmapTransform, False
-                    )
-                    selection_painter.setClipPath(self.original_selection_shape)
-                    selection_painter.drawImage(0, 0, self.original_image)
-                    selection_painter.end()
+                selection_painter = QPainter(self.selection_source_image)
+                selection_painter.setRenderHint(QPainter.Antialiasing, False)
+                selection_painter.setRenderHint(
+                    QPainter.SmoothPixmapTransform, False
+                )
+                selection_painter.setClipPath(self.original_selection_shape)
+                selection_painter.drawImage(0, 0, self.original_image)
+                selection_painter.end()
         elif self.is_hovering_center:
             self.drag_mode = "pivot"
 
@@ -580,39 +566,35 @@ class _RotateOperation(BaseTool):
             self.canvas.temp_image_replaces_active_layer = False
 
             layer_manager = self._get_active_layer_manager()
-            if layer_manager is None:
-                return
-
             active_layer = layer_manager.active_layer
-            if active_layer:
-                center_doc = self.get_rotation_center_doc()
-                angle_degrees = math.degrees(self.angle)
-                selection_shape = (
-                    QPainterPath(self.original_selection_shape)
-                    if self.original_selection_shape is not None
-                    else None
-                )
+            center_doc = self.get_rotation_center_doc()
+            angle_degrees = math.degrees(self.angle)
+            selection_shape = (
+                QPainterPath(self.original_selection_shape)
+                if self.original_selection_shape is not None
+                else None
+            )
 
-                rotated_shape = None
-                if self.original_selection_shape:
-                    transform = (
-                        QTransform()
-                        .translate(center_doc.x(), center_doc.y())
-                        .rotate(angle_degrees)
-                        .translate(-center_doc.x(), -center_doc.y())
-                    )
-                    rotated_shape = transform.map(self.original_selection_shape)
-                    self.canvas._update_selection_and_emit_size(rotated_shape)
-
-                command = RotateLayerCommand(
-                    active_layer,
-                    angle_degrees,
-                    center_doc,
-                    selection_shape,
-                    canvas=self.canvas,
-                    rotated_selection_shape=rotated_shape,
+            rotated_shape = None
+            if self.original_selection_shape:
+                transform = (
+                    QTransform()
+                    .translate(center_doc.x(), center_doc.y())
+                    .rotate(angle_degrees)
+                    .translate(-center_doc.x(), -center_doc.y())
                 )
-                self.command_generated.emit(command)
+                rotated_shape = transform.map(self.original_selection_shape)
+                self.canvas._update_selection_and_emit_size(rotated_shape)
+
+            command = RotateLayerCommand(
+                active_layer,
+                angle_degrees,
+                center_doc,
+                selection_shape,
+                canvas=self.canvas,
+                rotated_selection_shape=rotated_shape,
+            )
+            self.command_generated.emit(command)
 
             self.original_image = None
             self.selection_source_image = None
@@ -629,7 +611,7 @@ class _RotateOperation(BaseTool):
             self.canvas.temp_image = None
             self.canvas.temp_image_replaces_active_layer = False
             layer_manager = self._get_active_layer_manager()
-            if self.original_image and layer_manager and layer_manager.active_layer:
+            if self.original_image:
                 layer_manager.active_layer.image = self.original_image
                 layer_manager.active_layer.on_image_change.emit()
             if self.original_selection_shape is not None:
@@ -812,8 +794,6 @@ class _ScaleOperation(BaseTool):
             layer_manager = self._get_active_layer_manager()
             if (
                 self.original_image is not None
-                and layer_manager is not None
-                and layer_manager.active_layer is not None
             ):
                 layer_manager.active_layer.image = self.original_image
                 layer_manager.active_layer.on_image_change.emit()
@@ -915,13 +895,13 @@ class _ScaleOperation(BaseTool):
         self.canvas.temp_image_replaces_active_layer = False
 
         layer_manager = self._get_active_layer_manager()
-        active_layer = None if layer_manager is None else layer_manager.active_layer
+        active_layer = layer_manager.active_layer
         applied_scale = not (
             math.isclose(self.scale_x, 1.0, abs_tol=1e-3)
             and math.isclose(self.scale_y, 1.0, abs_tol=1e-3)
         )
 
-        if active_layer is not None and self.original_image is not None:
+        if self.original_image is not None:
             if not applied_scale:
                 if self.original_selection_shape is not None:
                     self.canvas._update_selection_and_emit_size(
@@ -1111,8 +1091,6 @@ class _ScaleOperation(BaseTool):
     # ------------------------------------------------------------------
     def _start_scale_drag(self, handle: str) -> bool:
         layer_manager = self._get_active_layer_manager()
-        if layer_manager is None or layer_manager.active_layer is None:
-            return False
 
         base_rect = self._base_edge_rect_doc
         if base_rect is None or base_rect.isEmpty():
@@ -1276,15 +1254,14 @@ class _ScaleOperation(BaseTool):
                 return QRectF(rect.left(), rect.top(), rect.width(), rect.height())
 
         layer_manager = self._get_active_layer_manager()
-        if layer_manager and layer_manager.active_layer is not None:
-            layer = layer_manager.active_layer
-            image = layer.image
-            if image is not None and not image.isNull():
-                bounds = layer.non_transparent_bounds
-                if bounds is None:
-                    bounds = image.rect()
-                if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
-                    return QRectF(bounds.left(), bounds.top(), bounds.width(), bounds.height())
+        layer = layer_manager.active_layer
+        image = layer.image
+        if image is not None and not image.isNull():
+            bounds = layer.non_transparent_bounds
+            if bounds is None:
+                bounds = image.rect()
+            if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
+                return QRectF(bounds.left(), bounds.top(), bounds.width(), bounds.height())
 
         document = getattr(self.canvas, "document", None)
         if document is not None:
