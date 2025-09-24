@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtGui import QImage
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QRect, Signal
 
 from .key import Key
 
@@ -44,6 +44,7 @@ class Layer(QObject):
         key.setParent(self)
         self.key = key
         self.key.image_changed.connect(self.on_image_change.emit)
+        self.on_image_change.connect(self.key.mark_non_transparent_bounds_dirty)
 
         self.uid = self._next_uid()
 
