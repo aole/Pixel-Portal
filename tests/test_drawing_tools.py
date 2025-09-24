@@ -13,7 +13,7 @@ from portal.tools.ellipsetool import EllipseTool
 from portal.tools.buckettool import BucketTool
 from portal.tools.erasertool import EraserTool
 from portal.tools.pickertool import PickerTool
-from portal.tools.movetool import MoveTool
+from portal.tools.transformtool import _MoveOperation
 from PySide6.QtGui import QPainterPath, QPainter
 
 
@@ -574,7 +574,7 @@ def move_tool(qtbot):
     mock_canvas.set_preview_layer = Mock(side_effect=_set_preview_layer)
     mock_canvas.clear_preview_layer = Mock(side_effect=_clear_preview_layer)
     mock_canvas.redraw_temp_from_preview_layer = Mock(side_effect=_redraw_preview)
-    tool = MoveTool(mock_canvas)
+    tool = _MoveOperation(mock_canvas)
     return tool
 
 def test_move_mouse_events_no_selection(move_tool, qtbot):
