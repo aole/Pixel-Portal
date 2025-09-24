@@ -1367,24 +1367,19 @@ class TransformTool(BaseTool):
         self._scale_tool = scale_tool or _ScaleOperation(canvas)
 
         signal = getattr(self._move_tool, "command_generated", None)
-        if hasattr(signal, "connect"):
-            signal.connect(self.command_generated.emit)
+        signal.connect(self.command_generated.emit)
 
         signal = getattr(self._rotate_tool, "command_generated", None)
-        if hasattr(signal, "connect"):
-            signal.connect(self.command_generated.emit)
+        signal.connect(self.command_generated.emit)
 
         signal = getattr(self._scale_tool, "command_generated", None)
-        if hasattr(signal, "connect"):
-            signal.connect(self.command_generated.emit)
+        signal.connect(self.command_generated.emit)
 
         signal = getattr(self._rotate_tool, "angle_changed", None)
-        if hasattr(signal, "connect"):
-            signal.connect(self.angle_changed.emit)
+        signal.connect(self.angle_changed.emit)
 
         signal = getattr(self._scale_tool, "scale_changed", None)
-        if hasattr(signal, "connect"):
-            signal.connect(self.scale_changed.emit)
+        signal.connect(self.scale_changed.emit)
 
         self._active_operation: Operation | None = None
         self._dragging_transform = False
