@@ -36,6 +36,7 @@ from portal.commands.status_bar_manager import StatusBarManager
 from portal.ui.flip_dialog import FlipDialog
 from portal.ui.settings_dialog import SettingsDialog
 from portal.ui.remove_background_dialog import RemoveBackgroundDialog
+from portal.ui.animation_timeline_panel import AnimationTimelinePanel
 
 
 from PySide6.QtWidgets import QColorDialog
@@ -75,6 +76,8 @@ class MainWindow(QMainWindow):
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
         central_layout.addWidget(self.canvas, 1)
+        self.animation_timeline_panel = AnimationTimelinePanel(self)
+        central_layout.addWidget(self.animation_timeline_panel)
 
         self.setCentralWidget(central_container)
         self._apply_runtime_animation_settings()
