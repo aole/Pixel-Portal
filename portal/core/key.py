@@ -15,6 +15,7 @@ class Key(QObject):
         height: int,
         *,
         image: QImage | None = None,
+        frame_number: int | None = None,
     ) -> None:
         super().__init__()
         if image is None:
@@ -23,6 +24,29 @@ class Key(QObject):
         self._image = image
         self._non_transparent_bounds: QRect | None = None
         self._non_transparent_bounds_dirty = False
+        if frame_number is None:
+            frame_number = 0
+        try:
+            normalized_frame = int(frame_number)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("frame_number must be an integer") from exc
+        if normalized_frame < 0:
+            raise ValueError("frame_number must be a non-negative integer")
+        self._frame_number = normalized_frame
+
+    @property
+    def frame_number(self) -> int:
+        return self._frame_number
+
+    @frame_number.setter
+    def frame_number(self, value: int) -> None:
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("frame_number must be an integer") from exc
+        if normalized < 0:
+            raise ValueError("frame_number must be a non-negative integer")
+        self._frame_number = normalized
 
     @property
     def image(self) -> QImage:
@@ -51,7 +75,12 @@ class Key(QObject):
         """Return a copy of this key."""
 
         image = self._image.copy() if deep_copy else QImage(self._image)
-        cloned_key = Key(image.width(), image.height(), image=image)
+        cloned_key = Key(
+            image.width(),
+            image.height(),
+            image=image,
+            frame_number=self.frame_number,
+        )
         cloned_key._copy_non_transparent_bounds_from(self)
         return cloned_key
 
@@ -71,8 +100,13 @@ class Key(QObject):
             self.image_changed.emit()
 
     @classmethod
-    def from_qimage(cls, qimage: QImage) -> "Key":
-        key = cls(qimage.width(), qimage.height(), image=qimage)
+    def from_qimage(cls, qimage: QImage, *, frame_number: int | None = None) -> "Key":
+        key = cls(
+            qimage.width(),
+            qimage.height(),
+            image=qimage,
+            frame_number=frame_number,
+        )
         key._non_transparent_bounds = None
         key._non_transparent_bounds_dirty = True
         return key

@@ -29,6 +29,7 @@ class Layer(QObject):
         name: str,
         *,
         key: Key | None = None,
+        keys: list[Key] | None = None,
     ):
         super().__init__()
         if not isinstance(name, str) or not name:
@@ -38,15 +39,46 @@ class Layer(QObject):
         self._visible = True
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
         self._onion_skin_enabled = False
+        self._active_key_index = 0
+        if keys is not None:
+            provided_keys = list(keys)
+        elif key is not None:
+            provided_keys = [key]
+        else:
+            provided_keys = [Key(width, height, frame_number=0)]
+        if not provided_keys:
+            raise ValueError("Layer must be initialized with at least one key.")
 
-        if key is None:
-            key = Key(width, height)
-        key.setParent(self)
-        self.key = key
-        self.key.image_changed.connect(self.on_image_change.emit)
-        self.on_image_change.connect(self.key.mark_non_transparent_bounds_dirty)
+        self.keys: list[Key] = []
+        for key_instance in provided_keys:
+            self._register_key(key_instance)
+            self.keys.append(key_instance)
 
         self.uid = self._next_uid()
+
+    def _register_key(self, key: Key) -> None:
+        key.setParent(self)
+        key.image_changed.connect(self.on_image_change.emit)
+        key.image_changed.connect(key.mark_non_transparent_bounds_dirty)
+
+    @property
+    def active_key(self) -> Key:
+        if not self.keys:
+            raise ValueError("Layer does not contain any keys.")
+        if not (0 <= self._active_key_index < len(self.keys)):
+            self._active_key_index = 0
+        return self.keys[self._active_key_index]
+
+    @property
+    def active_key_index(self) -> int:
+        return self._active_key_index
+
+    def set_active_key_index(self, index: int) -> None:
+        if not self.keys:
+            raise ValueError("Layer does not contain any keys.")
+        if not (0 <= index < len(self.keys)):
+            raise IndexError("Active key index out of range.")
+        self._active_key_index = index
 
     @property
     def name(self):
@@ -83,15 +115,15 @@ class Layer(QObject):
 
     @property
     def image(self) -> QImage:
-        return self.key.image
+        return self.active_key.image
 
     @image.setter
     def image(self, value: QImage) -> None:
-        self.key.image = value
+        self.active_key.image = value
 
     def clear(self, selection=None):
         """Fills the layer with transparent color."""
-        self.key.clear(selection)
+        self.active_key.clear(selection)
 
     def clone(
         self,
@@ -106,14 +138,22 @@ class Layer(QObject):
         require an isolated buffer must request ``deep_copy=True``.
         """
 
+        cloned_keys = [key.clone(deep_copy=deep_copy) for key in self.keys]
         new_layer = Layer(
-            self.image.width(), self.image.height(), self.name, key=self.key.clone(deep_copy=deep_copy)
+            self.image.width(),
+            self.image.height(),
+            self.name,
+            keys=cloned_keys,
         )
         if preserve_identity:
             new_layer.uid = self.uid
         new_layer.visible = self.visible
         new_layer.opacity = self.opacity
         new_layer.onion_skin_enabled = self.onion_skin_enabled
+        try:
+            new_layer.set_active_key_index(self._active_key_index)
+        except (IndexError, ValueError):
+            new_layer.set_active_key_index(0)
         return new_layer
 
     def apply_key_state_from(
@@ -122,8 +162,10 @@ class Layer(QObject):
         """Copy image, visibility, and opacity from *other* without changing identity."""
 
         is_layer = isinstance(other, Layer)
-        other_key = other.key if is_layer else other
-        self.key.apply_state_from(other_key, deep_copy=deep_copy)
+        other_key = other.active_key if is_layer else other
+        if not isinstance(other_key, Key):
+            raise TypeError("other must be a Layer or Key instance")
+        self.active_key.apply_state_from(other_key, deep_copy=deep_copy)
         if is_layer:
             self.visible = other.visible
             self.opacity = other.opacity
@@ -143,19 +185,19 @@ class Layer(QObject):
         """Creates a new layer from a QImage."""
         width = qimage.width()
         height = qimage.height()
-        key = Key.from_qimage(qimage)
-        layer = cls(width, height, name, key=key)
+        key = Key.from_qimage(qimage, frame_number=0)
+        layer = cls(width, height, name, keys=[key])
         return layer
 
     def flip_horizontal(self):
-        self.key.flip_horizontal()
+        self.active_key.flip_horizontal()
 
     def flip_vertical(self):
-        self.key.flip_vertical()
+        self.active_key.flip_vertical()
 
     def mark_non_transparent_bounds_dirty(self) -> None:
-        self.key.mark_non_transparent_bounds_dirty()
+        self.active_key.mark_non_transparent_bounds_dirty()
 
     @property
     def non_transparent_bounds(self) -> QRect | None:
-        return self.key.non_transparent_bounds
+        return self.active_key.non_transparent_bounds
