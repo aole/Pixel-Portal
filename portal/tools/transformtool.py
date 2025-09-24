@@ -1361,16 +1361,6 @@ class _ScaleOperation(BaseTool):
         return QRectF(top_left, bottom_right).normalized()
 
     # ------------------------------------------------------------------
-    def _handle_positions_for_edge_rect(self, rect: QRectF) -> dict[str, QPointF]:
-        center = rect.center()
-        return {
-            "left": QPointF(rect.left(), center.y()),
-            "right": QPointF(rect.right(), center.y()),
-            "top": QPointF(center.x(), rect.top()),
-            "bottom": QPointF(center.x(), rect.bottom()),
-        }
-
-    # ------------------------------------------------------------------
     def _overlay_geometry(self):
         rect_doc = self._current_edge_rect_doc()
         if rect_doc is None or rect_doc.isEmpty():
