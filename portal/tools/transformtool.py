@@ -1494,7 +1494,6 @@ class TransformTool(BaseTool):
         self._active_operation: Operation | None = None
         self._dragging_transform = False
         self._last_move_delta = QPoint()
-        self._update_rotation_overlay_geometry()
 
     # ------------------------------------------------------------------
     def activate(self):
