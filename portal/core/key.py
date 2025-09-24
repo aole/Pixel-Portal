@@ -15,7 +15,7 @@ class Key(QObject):
         height: int,
         *,
         image: QImage | None = None,
-        frame_number: int | None = None,
+        frame_number: int = 0,
     ) -> None:
         super().__init__()
         if image is None:
@@ -24,15 +24,8 @@ class Key(QObject):
         self._image = image
         self._non_transparent_bounds: QRect | None = None
         self._non_transparent_bounds_dirty = False
-        if frame_number is None:
-            frame_number = 0
-        try:
-            normalized_frame = int(frame_number)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("frame_number must be an integer") from exc
-        if normalized_frame < 0:
-            raise ValueError("frame_number must be a non-negative integer")
-        self._frame_number = normalized_frame
+        
+        self._frame_number = frame_number
 
     @property
     def frame_number(self) -> int:
@@ -40,13 +33,7 @@ class Key(QObject):
 
     @frame_number.setter
     def frame_number(self, value: int) -> None:
-        try:
-            normalized = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("frame_number must be an integer") from exc
-        if normalized < 0:
-            raise ValueError("frame_number must be a non-negative integer")
-        self._frame_number = normalized
+        self._frame_number = value
 
     @property
     def image(self) -> QImage:

@@ -507,20 +507,13 @@ class DocumentController(QObject):
             return
 
         layer_manager = getattr(document, "layer_manager", None)
-        if layer_manager is None:
-            return
-
         layer = getattr(layer_manager, "active_layer", None)
-        if layer is None:
-            return
-
         command = RemoveBackgroundCommand(layer)
         self.execute_command(command)
 
     def select_frame(self, index: int) -> None:
-        """Frame selection is no longer supported."""
-
-        return
+        layer_manager = getattr(self.document, "layer_manager", None)
+        layer_manager.set_current_frame(index)
 
     def check_for_unsaved_changes(self):
         if not self.is_dirty:

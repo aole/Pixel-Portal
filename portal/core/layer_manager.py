@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from portal.core.layer import Layer
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
@@ -18,9 +20,10 @@ class LayerManager(QObject):
         super().__init__()
         self.width = width
         self.height = height
-        self.layers = []
+        self.layers: list[Layer] = []
         self.active_layer_index = -1
         self._document = None
+        self._current_frame = 0
 
         if create_background:
             self.add_layer("Background")
@@ -42,6 +45,8 @@ class LayerManager(QObject):
         """Assign the owning document so commands can reach frame data."""
 
         self._document = document
+        for layer in self.layers:
+            layer.attach_to_manager(self)
 
     # ------------------------------------------------------------------
     # Layer lookup helpers
@@ -69,6 +74,7 @@ class LayerManager(QObject):
     def add_layer(self, name: str):
         """Adds a new layer to the top of the stack."""
         new_layer = Layer(self.width, self.height, name)
+        new_layer.attach_to_manager(self)
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
         self.layer_structure_changed.emit()
@@ -81,6 +87,7 @@ class LayerManager(QObject):
             q_image = image
 
         new_layer = Layer(self.width, self.height, name)
+        new_layer.attach_to_manager(self)
 
         painter = QPainter(new_layer.image)
         painter.drawImage(0, 0, q_image)
@@ -92,12 +99,10 @@ class LayerManager(QObject):
 
     def remove_layer(self, index: int):
         """Removes the layer at the given index."""
-        if not (0 <= index < len(self.layers)):
-            raise IndexError("Layer index out of range.")
         if len(self.layers) == 1:
             raise ValueError("Cannot remove the last layer.")
 
-        del self.layers[index]
+        layer = self.layers.pop(index)
 
         if self.active_layer_index >= index:
             self.active_layer_index = max(0, self.active_layer_index - 1)
@@ -174,6 +179,20 @@ class LayerManager(QObject):
         """Create a copy of the layer manager."""
         new_manager = LayerManager(self.width, self.height, create_background=False)
         new_manager.layers = [layer.clone(deep_copy=deep_copy) for layer in self.layers]
+        for layer in new_manager.layers:
+            layer.attach_to_manager(new_manager)
         new_manager.active_layer_index = self.active_layer_index
         new_manager._document = self._document
+        new_manager._current_frame = self._current_frame
         return new_manager
+
+    @property
+    def current_frame(self) -> int:
+        return self._current_frame
+
+    def set_current_frame(self, frame: int) -> None:
+        if frame == self._current_frame:
+            return
+        self._current_frame = frame
+        for layer in self.layers:
+            layer.on_current_frame_changed(self._current_frame)

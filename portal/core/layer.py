@@ -32,22 +32,16 @@ class Layer(QObject):
         keys: list[Key] | None = None,
     ):
         super().__init__()
-        if not isinstance(name, str) or not name:
-            raise ValueError("Layer name must be a non-empty string.")
-
         self._name = name
         self._visible = True
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
         self._onion_skin_enabled = False
         self._active_key_index = 0
+        self._layer_manager = None
         if keys is not None:
             provided_keys = list(keys)
-        elif key is not None:
-            provided_keys = [key]
         else:
             provided_keys = [Key(width, height, frame_number=0)]
-        if not provided_keys:
-            raise ValueError("Layer must be initialized with at least one key.")
 
         self.keys: list[Key] = []
         for key_instance in provided_keys:
@@ -61,12 +55,15 @@ class Layer(QObject):
         key.image_changed.connect(self.on_image_change.emit)
         key.image_changed.connect(key.mark_non_transparent_bounds_dirty)
 
+    def attach_to_manager(self, manager: "LayerManager | None") -> None:
+        if manager is self._layer_manager:
+            return
+        self._layer_manager = manager
+        self.on_current_frame_changed(manager.current_frame)
+
     @property
     def active_key(self) -> Key:
-        if not self.keys:
-            raise ValueError("Layer does not contain any keys.")
-        if not (0 <= self._active_key_index < len(self.keys)):
-            self._active_key_index = 0
+        self._active_key_index = self._index_for_frame(self._layer_manager.current_frame)
         return self.keys[self._active_key_index]
 
     @property
@@ -74,11 +71,13 @@ class Layer(QObject):
         return self._active_key_index
 
     def set_active_key_index(self, index: int) -> None:
-        if not self.keys:
-            raise ValueError("Layer does not contain any keys.")
-        if not (0 <= index < len(self.keys)):
-            raise IndexError("Active key index out of range.")
         self._active_key_index = index
+
+    def on_current_frame_changed(self, frame: int) -> None:
+        resolved_index = self._index_for_frame(frame)
+        if resolved_index != self._active_key_index:
+            self._active_key_index = resolved_index
+            self.on_image_change.emit()
 
     @property
     def name(self):
@@ -87,8 +86,6 @@ class Layer(QObject):
     @name.setter
     def name(self, value):
         if self._name != value:
-            if not isinstance(value, str) or not value:
-                raise ValueError("Layer name must be a non-empty string.")
             self._name = value
             self.name_changed.emit(self._name)
 
@@ -201,3 +198,19 @@ class Layer(QObject):
     @property
     def non_transparent_bounds(self) -> QRect | None:
         return self.active_key.non_transparent_bounds
+
+    def _index_for_frame(self, frame: int) -> int:
+        """Return the index of the key best matching ``frame``."""
+
+        best_index: int | None = None
+        best_frame: int | None = None
+        for index, key in enumerate(self.keys):
+            key_frame = key.frame_number
+            if key_frame <= frame and (best_frame is None or key_frame > best_frame):
+                best_index = index
+                best_frame = key_frame
+        if best_index is not None:
+            return best_index
+        # No key was found with ``frame_number`` <= frame_value, so fall back to the
+        # earliest available key to keep the layer usable.
+        return min(range(len(self.keys)), key=lambda idx: self.keys[idx].frame_number)
