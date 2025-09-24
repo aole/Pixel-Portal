@@ -71,11 +71,6 @@ def _target_bounds(canvas) -> QRectF | None:
 class _MoveOperation(BaseTool):
     """Internal move helper composed by :class:`TransformTool`."""
 
-    name = None
-    icon = "icons/toolmove.png"
-    shortcut = "m"
-    category = "draw"
-
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
@@ -140,15 +135,7 @@ class _MoveOperation(BaseTool):
 
     # ------------------------------------------------------------------
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if self._sync_active_layer():
-            return
-
-        if self.canvas.original_image is None:
-            return
-
         if not self._redraw_temp_from_preview_layer():
-            if self.canvas.temp_image is None:
-                return
             self.canvas.temp_image.fill(Qt.transparent)
 
         delta = doc_pos - self.start_point
@@ -166,12 +153,6 @@ class _MoveOperation(BaseTool):
     # ------------------------------------------------------------------
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
         if event.button() != Qt.LeftButton:
-            return
-
-        if self._sync_active_layer():
-            return
-
-        if self.canvas.original_image is None or self.before_image is None:
             return
 
         delta = doc_pos - self.start_point
@@ -222,9 +203,6 @@ class _MoveOperation(BaseTool):
 class _RotateOperation(BaseTool):
     """Internal rotate helper used by :class:`TransformTool`."""
 
-    name = None
-    icon = "icons/toolrotate.png"
-    category = "draw"
     angle_changed = Signal(float)
 
     def __init__(self, canvas):
@@ -234,13 +212,13 @@ class _RotateOperation(BaseTool):
         self.is_hovering_center = False
         self.drag_mode: str | None = None  # None, 'rotate', or 'pivot'
         self.original_image: QImage | None = None
-        self.pivot_doc = QPoint(0, 0)
+        self.pivot_doc: QPoint = None
         self.original_selection_shape: QPainterPath | None = None
         self.selection_source_image: QImage | None = None
         self._manual_pivot = False
         self._layer_tracker = ActiveLayerTracker(canvas)
         self._handle_size = 14.0
-        self._handle_gap = 4.0
+        self._handle_gap = 8.0
         self._pivot_radius = 10.0
         self._rotation_handle_center: QPointF | None = None
         self._rotation_handle_radius = self._handle_size / 2.0
@@ -266,21 +244,9 @@ class _RotateOperation(BaseTool):
 
     # ------------------------------------------------------------------
     def calculate_default_pivot_doc(self) -> QPoint:
-        target_rect = self._calculate_transform_bounds()
-        if target_rect is not None and not target_rect.isEmpty():
-            return target_rect.center()
-
-        return QPoint(0, 0)  # Fallback
-
-    # ------------------------------------------------------------------
-    def _calculate_transform_bounds(self) -> QRect | None:
         bounds = _target_bounds(self.canvas)
-        rect = bounds.toAlignedRect()
-        return rect
-
-    # ------------------------------------------------------------------
-    def get_rotation_center_doc(self) -> QPoint:
-        return self.pivot_doc
+        target_rect = bounds.toAlignedRect()
+        return target_rect.center() + QPoint(1, 1)
 
     # ------------------------------------------------------------------
     def get_center(self) -> QPointF:
@@ -496,13 +462,12 @@ class _RotateOperation(BaseTool):
                 painter.setRenderHint(QPainter.Antialiasing, False)
                 painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
 
-                center_doc = self.get_rotation_center_doc()
                 angle_degrees = math.degrees(self.angle)
                 transform = (
                     QTransform()
-                    .translate(center_doc.x(), center_doc.y())
+                    .translate(self.pivot_doc.x(), self.pivot_doc.y())
                     .rotate(angle_degrees)
-                    .translate(-center_doc.x(), -center_doc.y())
+                    .translate(-self.pivot_doc.x(), -self.pivot_doc.y())
                 )
 
                 if self.original_selection_shape:
@@ -568,7 +533,6 @@ class _RotateOperation(BaseTool):
 
             layer_manager = self._get_active_layer_manager()
             active_layer = layer_manager.active_layer
-            center_doc = self.get_rotation_center_doc()
             angle_degrees = math.degrees(self.angle)
             selection_shape = (
                 QPainterPath(self.original_selection_shape)
@@ -580,9 +544,9 @@ class _RotateOperation(BaseTool):
             if self.original_selection_shape:
                 transform = (
                     QTransform()
-                    .translate(center_doc.x(), center_doc.y())
+                    .translate(self.pivot_doc.x(), self.pivot_doc.y())
                     .rotate(angle_degrees)
-                    .translate(-center_doc.x(), -center_doc.y())
+                    .translate(-self.pivot_doc.x(), -self.pivot_doc.y())
                 )
                 rotated_shape = transform.map(self.original_selection_shape)
                 self.canvas._update_selection_and_emit_size(rotated_shape)
@@ -590,7 +554,7 @@ class _RotateOperation(BaseTool):
             command = RotateLayerCommand(
                 active_layer,
                 angle_degrees,
-                center_doc,
+                self.pivot_doc,
                 selection_shape,
                 canvas=self.canvas,
                 rotated_selection_shape=rotated_shape,
@@ -727,9 +691,6 @@ class _RotateOperation(BaseTool):
 class _ScaleOperation(BaseTool):
     """Internal scaling helper composed by :class:`TransformTool`."""
 
-    name = None
-    icon = "icons/toolscale.png"
-    category = "draw"
     scale_changed = Signal(float)
 
     def __init__(self, canvas):
@@ -1057,34 +1018,6 @@ class _ScaleOperation(BaseTool):
                     brush = base_color
                 painter.setBrush(brush)
                 painter.drawRect(rect)
-
-        text = self._scale_display_text()
-        metrics = painter.fontMetrics()
-        text_width = metrics.horizontalAdvance(text) + 16
-        text_height = metrics.height() + 8
-
-        if overlay_rect is not None:
-            text_rect = QRectF(
-                overlay_rect.center().x() - text_width / 2,
-                overlay_rect.top() - text_height - 6,
-                text_width,
-                text_height,
-            )
-        else:
-            pivot_point = self._doc_to_canvas_point(self._current_pivot_point())
-            text_rect = QRectF(
-                pivot_point.x() - text_width / 2,
-                pivot_point.y() - text_height - 6,
-                text_width,
-                text_height,
-            )
-
-        painter.setBrush(QColor(0, 0, 0, 160))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(text_rect, 4, 4)
-
-        painter.setPen(QPen(QColor("#ffffff")))
-        painter.drawText(text_rect, Qt.AlignCenter, text)
 
         painter.restore()
 
