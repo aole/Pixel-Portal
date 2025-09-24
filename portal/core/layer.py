@@ -161,7 +161,7 @@ class Layer(QObject):
 
     def _set_non_transparent_bounds(self, bounds: QRect | None) -> None:
         if bounds is None:
-            self._non_transparent_bounds = None
+            self._non_transparent_bounds = QRect()
         else:
             self._non_transparent_bounds = QRect(bounds)
         self._non_transparent_bounds_dirty = False

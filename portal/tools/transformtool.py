@@ -42,30 +42,28 @@ from ._transform_style import (
 Operation = Literal["move", "rotate", "scale"]
 
 
-def _target_bounds(canvas) -> QRectF | None:
+def _target_bounds(canvas) -> QRect | None:
     """Return the active selection/layer/document bounds for *canvas*."""
 
     selection_shape = getattr(canvas, "selection_shape", None)
     if selection_shape:
-        rect = selection_shape.boundingRect().toAlignedRect()
+        rect = selection_shape.boundingRect()
         if rect.isValid() and rect.width() > 0 and rect.height() > 0:
-            return QRectF(rect)
+            return rect.toRect()
 
     document = getattr(canvas, "document", None)
 
     layer_manager = resolve_active_layer_manager(document)
     layer = getattr(layer_manager, "active_layer", None)
-    image = getattr(layer, "image", None)
-    if image is not None and not image.isNull():
-        bounds = getattr(layer, "non_transparent_bounds", None)
-        if bounds is None:
-            bounds = image.rect()
-        if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
-            return QRectF(bounds)
 
-    width = getattr(document, "width", None)
-    height = getattr(document, "height", None)
-    return QRectF(0, 0, width, height)
+    bounds = getattr(layer, "non_transparent_bounds", )
+    
+    if bounds is None:
+        width = getattr(document, "width", None)
+        height = getattr(document, "height", None)
+        bounds = QRect(0, 0, width, height)
+    
+    return bounds
 
 
 class _MoveOperation(BaseTool):
@@ -244,8 +242,7 @@ class _RotateOperation(BaseTool):
 
     # ------------------------------------------------------------------
     def calculate_default_pivot_doc(self) -> QPoint:
-        bounds = _target_bounds(self.canvas)
-        target_rect = bounds.toAlignedRect()
+        target_rect = _target_bounds(self.canvas)
         return target_rect.center() + QPoint(1, 1)
 
     # ------------------------------------------------------------------
@@ -1509,23 +1506,19 @@ class TransformTool(BaseTool):
     def mouseHoverEvent(self, event, doc_pos):
         self._update_rotation_overlay_geometry()
         hover = getattr(self._rotate_tool, "mouseHoverEvent", None)
-        if callable(hover):
-            hover(event, doc_pos)
+        hover(event, doc_pos)
         hover = getattr(self._scale_tool, "mouseHoverEvent", None)
-        if callable(hover):
-            hover(event, doc_pos)
+        hover(event, doc_pos)
 
     # ------------------------------------------------------------------
     def draw_overlay(self, painter):
         if self._dragging_transform:
             return
         draw = getattr(self._scale_tool, "draw_overlay", None)
-        if callable(draw):
-            draw(painter)
+        draw(painter)
         self._update_rotation_overlay_geometry()
         draw = getattr(self._rotate_tool, "draw_overlay", None)
-        if callable(draw):
-            draw(painter)
+        draw(painter)
 
     # ------------------------------------------------------------------
     def _set_dragging_transform(self, active: bool) -> None:
