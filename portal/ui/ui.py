@@ -3,32 +3,24 @@ import os
 from PySide6.QtWidgets import (
     QFileDialog,
     QDockWidget,
-    QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
-    QSizePolicy,
     QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 from PySide6.QtGui import (
     QAction,
-    QIcon,
     QColor,
     QPixmap,
-    QKeySequence,
     QImage,
-    QShortcut,
 )
-from PySide6.QtCore import Qt, Slot, QSignalBlocker, QSize
+from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
-from portal.ui.animation_timeline_widget import AnimationTimelineWidget
 try:
     from portal.ui.ai_panel import AIPanel
 except Exception:  # Optional dependency may be missing or heavy to load
@@ -36,7 +28,7 @@ except Exception:  # Optional dependency may be missing or heavy to load
 from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
-from portal.ui.preview_panel import PreviewPanel, NullAnimationPlayer
+from portal.ui.preview_panel import PreviewPanel
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
@@ -72,172 +64,21 @@ class MainWindow(QMainWindow):
             self.app.settings_controller.background_image_mode
         )
 
-        self.animation_player = NullAnimationPlayer(self)
-
-        # Instantiate the preview panel early so timeline setup helpers can
-        # safely forward playback state during initialization.
         self.preview_panel = PreviewPanel(self.app)
-
-        self.timeline_widget = AnimationTimelineWidget(self)
-        self.timeline_widget.set_playback_total_frames(self.animation_player.total_frames)
-        self.timeline_widget.set_total_frames(max(0, self.animation_player.total_frames - 1))
-        self.timeline_widget.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
-        self.animation_player.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
-        self.app.set_playback_total_frames(self.animation_player.total_frames)
-        self.app.set_playback_loop_range(0, max(0, self.animation_player.total_frames - 1))
-
-        self.timeline_panel = QFrame(self)
-        self.timeline_panel.setObjectName("animationTimelinePanel")
-        self.timeline_panel.setFrameShape(QFrame.StyledPanel)
-        self.timeline_panel.setFrameShadow(QFrame.Plain)
-        self.timeline_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        timeline_layout = QVBoxLayout(self.timeline_panel)
-        timeline_layout.setContentsMargins(12, 8, 12, 12)
-        timeline_layout.setSpacing(6)
-
-        timeline_header_layout = QHBoxLayout()
-        timeline_header_layout.setContentsMargins(0, 0, 0, 0)
-        timeline_header_layout.setSpacing(8)
-
-        self._timeline_play_icon = QIcon("icons/play.png")
-        self._timeline_pause_icon = QIcon("icons/pause.png")
-        self._timeline_stop_icon = QIcon("icons/stop.png")
-        self._timeline_autokey_icon = QIcon("icons/autokey.png")
-        self._timeline_autokey_disabled_icon = QIcon("icons/autokeydisabled.png")
-
-        self.timeline_play_button = QToolButton(self.timeline_panel)
-        self.timeline_play_button.setIcon(self._timeline_play_icon)
-        self.timeline_play_button.setText("Play")
-        self.timeline_play_button.setCheckable(True)
-        self.timeline_play_button.setToolTip("Play / Pause (Space)")
-        timeline_header_layout.addWidget(self.timeline_play_button)
-
-        self.timeline_stop_button = QToolButton(self.timeline_panel)
-        self.timeline_stop_button.setIcon(self._timeline_stop_icon)
-        self.timeline_stop_button.setText("Stop")
-        timeline_header_layout.addWidget(self.timeline_stop_button)
-
-        self.timeline_autokey_button = QToolButton(self.timeline_panel)
-        self.timeline_autokey_button.setCheckable(True)
-        self.timeline_autokey_button.setIcon(self._timeline_autokey_disabled_icon)
-        self.timeline_autokey_button.setToolTip("Toggle auto-keyframing")
-        self.timeline_autokey_button.setAutoRaise(True)
-        self.timeline_autokey_button.setFocusPolicy(Qt.NoFocus)
-        self.timeline_autokey_button.setStyleSheet(
-            "QToolButton { padding: 0; margin: 0; border: none; background: transparent; }"
-            "QToolButton:hover { background: transparent; }"
-            "QToolButton:checked { padding: 0; margin: 0; border: none; background: transparent; }"
-            "QToolButton:pressed { padding: 0; margin: 0; border: none; background: transparent; }"
-        )
-        autokey_sizes = self._timeline_autokey_icon.availableSizes()
-        if autokey_sizes:
-            autokey_icon_size = autokey_sizes[0]
-        else:
-            autokey_icon_size = QSize(195, 64)
-
-        reference_height = self.timeline_stop_button.sizeHint().height()
-        if reference_height <= 0:
-            reference_height = autokey_icon_size.height()
-
-        if autokey_icon_size.height() > 0:
-            scaled_width = max(
-                1,
-                int(
-                    round(
-                        reference_height
-                        * autokey_icon_size.width()
-                        / autokey_icon_size.height()
-                    )
-                ),
-            )
-        else:
-            scaled_width = reference_height
-
-        scaled_size = QSize(scaled_width, reference_height)
-        self.timeline_autokey_button.setIconSize(scaled_size)
-        self.timeline_autokey_button.setFixedSize(scaled_size)
-        self.timeline_autokey_button.setChecked(self.app.is_auto_key_enabled())
-        timeline_header_layout.addWidget(self.timeline_autokey_button)
-
-        self.timeline_onion_button = QToolButton(self.timeline_panel)
-        self.timeline_onion_button.setCheckable(True)
-        self.timeline_onion_button.setAutoRaise(True)
-        self.timeline_onion_button.setFocusPolicy(Qt.NoFocus)
-        self.timeline_onion_icon_on = QIcon("icons/skinon.png")
-        self.timeline_onion_icon_off = QIcon("icons/skinoff.png")
-        self.timeline_onion_button.setIconSize(QSize(24, 24))
-        self.timeline_onion_button.setChecked(self.canvas.onion_skin_enabled)
-        self._update_timeline_onion_button_icon()
-        timeline_header_layout.addWidget(self.timeline_onion_button)
-
-        timeline_header_layout.addStretch()
-
-        self.timeline_layer_label = QLabel("", self.timeline_panel)
-        self.timeline_layer_label.setObjectName("animationTimelineLayerLabel")
-        self.timeline_layer_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        timeline_header_layout.addWidget(self.timeline_layer_label, 0)
-
-        timeline_layout.addLayout(timeline_header_layout)
-        timeline_layout.addWidget(self.timeline_widget)
-
-        self.timeline_play_button.toggled.connect(self._on_timeline_play_toggled)
-        self.timeline_stop_button.clicked.connect(self._on_timeline_stop_clicked)
-        self.timeline_autokey_button.toggled.connect(self._on_timeline_autokey_toggled)
-        self.timeline_onion_button.toggled.connect(self._on_timeline_onion_toggled)
-
-        self.play_pause_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
-        self.play_pause_shortcut.setAutoRepeat(False)
-        self.play_pause_shortcut.activated.connect(self._toggle_timeline_playback)
-
-        self.timeline_widget.playback_total_frames_changed.connect(
-            self._on_timeline_total_frames_changed
-        )
-        self.timeline_widget.loop_range_changed.connect(self._on_timeline_loop_range_changed)
-        self.timeline_widget.current_frame_changed.connect(self._update_current_frame_label)
-        self.timeline_widget.current_frame_changed.connect(self.on_timeline_frame_changed)
-        self.timeline_widget.key_add_requested.connect(self.on_timeline_add_key)
-        self.timeline_widget.key_remove_requested.connect(self.on_timeline_remove_key)
-        self.timeline_widget.keys_remove_requested.connect(self.on_timeline_remove_keys)
-        self.timeline_widget.key_copy_last_requested.connect(
-            self.on_timeline_copy_last_key
-        )
-        self.timeline_widget.key_copy_requested.connect(self.on_timeline_copy_key)
-        self.timeline_widget.key_paste_requested.connect(self.on_timeline_paste_key)
-        self.timeline_widget.key_move_requested.connect(self.on_timeline_move_keys)
-        self.timeline_widget.keys_duplicate_requested.connect(
-            self.on_timeline_duplicate_keys
-        )
-        self.timeline_widget.frame_insert_requested.connect(
-            self.on_timeline_insert_frame
-        )
-        self.timeline_widget.frame_delete_requested.connect(
-            self.on_timeline_delete_frame
-        )
-
-        self.animation_player.frame_changed.connect(self.timeline_widget.set_current_frame)
-        self.animation_player.playing_changed.connect(self._on_player_state_changed)
-        self.animation_player.fps_changed.connect(self._on_animation_fps_changed)
-
-        self._apply_runtime_animation_settings()
-
-        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
-
-        self._on_timeline_autokey_toggled(self.timeline_autokey_button.isChecked())
-        self._update_current_frame_label(self.timeline_widget.current_frame())
-        self._update_timeline_layer_label(None)
-        self._on_player_state_changed(self.animation_player.is_playing)
-        self._on_animation_fps_changed(self.animation_player.fps)
-        self.sync_timeline_from_document()
+        loop_start, loop_end = self.app.playback_loop_range
+        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
+        self.preview_panel.set_loop_range(loop_start, loop_end)
+        self.preview_panel.set_playback_fps(self.app.playback_fps)
 
         central_container = QWidget(self)
         central_layout = QVBoxLayout(central_container)
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
         central_layout.addWidget(self.canvas, 1)
-        central_layout.addWidget(self.timeline_panel, 0)
 
         self.setCentralWidget(central_container)
+        self._apply_runtime_animation_settings()
+        self.sync_timeline_from_document()
         self.canvas.set_document(self.app.document)
         self.apply_grid_settings_from_settings()
         self.apply_ruler_settings_from_settings()
@@ -315,9 +156,10 @@ class MainWindow(QMainWindow):
         self.color_toolbar.addWidget(self.color_container)
 
         # Preview Panel
-        self.preview_panel.set_playback_total_frames(self.animation_player.total_frames)
-        self.preview_panel.set_loop_range(0, max(0, self.animation_player.total_frames - 1))
-        self.preview_panel.set_playback_fps(self.animation_player.fps)
+        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
+        loop_start, loop_end = self.app.playback_loop_range
+        self.preview_panel.set_loop_range(loop_start, loop_end)
+        self.preview_panel.set_playback_fps(self.app.playback_fps)
         self.preview_dock = QDockWidget("Preview", self)
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
@@ -366,16 +208,6 @@ class MainWindow(QMainWindow):
             self.color_toolbar
         ])
 
-    def _update_current_frame_label(self, frame: int) -> None:
-        self._update_stop_button_state()
-
-    def _update_timeline_layer_label(self, layer_name: str | None) -> None:
-        if layer_name:
-            text = f"Layer: {layer_name}"
-        else:
-            text = "Layer: (none)"
-        self.timeline_layer_label.setText(text)
-
     def _apply_runtime_animation_settings(self) -> None:
         controller = getattr(self.app, "settings_controller", None)
         if controller is None:
@@ -383,27 +215,19 @@ class MainWindow(QMainWindow):
 
         animation_settings = controller.get_animation_settings()
 
-        raw_fps = animation_settings.get("fps", self.animation_player.fps)
+        raw_fps = animation_settings.get("fps", self.app.playback_fps)
         try:
             fps_value = float(raw_fps)
         except (TypeError, ValueError):
-            fps_value = self.animation_player.fps
+            fps_value = self.app.playback_fps
         if fps_value <= 0:
-            fps_value = self.animation_player.fps
+            fps_value = self.app.playback_fps
 
-        current_fps = self.animation_player.fps
-        emit_fps_update = abs(fps_value - current_fps) > 1e-6
-        if emit_fps_update:
-            self.animation_player.set_fps(fps_value)
-        else:
-            self.app.set_playback_fps(fps_value)
+        self.app.set_playback_fps(fps_value)
+        self.preview_panel.set_playback_fps(self.app.playback_fps)
 
-        raw_prev = animation_settings.get(
-            "onion_prev_frames", self.canvas.onion_skin_prev_frames
-        )
-        raw_next = animation_settings.get(
-            "onion_next_frames", self.canvas.onion_skin_next_frames
-        )
+        raw_prev = animation_settings.get("onion_prev_frames", self.canvas.onion_skin_prev_frames)
+        raw_next = animation_settings.get("onion_next_frames", self.canvas.onion_skin_next_frames)
         try:
             prev_frames = max(0, int(raw_prev))
         except (TypeError, ValueError):
@@ -415,176 +239,46 @@ class MainWindow(QMainWindow):
 
         self.canvas.set_onion_skin_range(previous=prev_frames, next=next_frames)
 
-        self.preview_panel.set_playback_fps(self.animation_player.fps)
-
-        update_kwargs: dict[str, float | int] = {
-            "onion_prev_frames": prev_frames,
-            "onion_next_frames": next_frames,
-        }
-        if not emit_fps_update:
-            update_kwargs["fps"] = fps_value
-        controller.update_animation_settings(**update_kwargs)
-
-    def _on_animation_fps_changed(self, value: float) -> None:
-        try:
-            fps_value = float(value)
-        except (TypeError, ValueError):
-            fps_value = self.animation_player.fps
-        if fps_value <= 0:
-            fps_value = self.animation_player.fps
-        self.preview_panel.set_playback_fps(fps_value)
-        self.app.set_playback_fps(fps_value)
-        controller = getattr(self.app, "settings_controller", None)
-        if controller is not None:
-            controller.update_animation_settings(
-                fps=fps_value,
-                onion_prev_frames=self.canvas.onion_skin_prev_frames,
-                onion_next_frames=self.canvas.onion_skin_next_frames,
-            )
-
-    def _update_stop_button_state(self) -> None:
-        should_enable = (
-            self.animation_player.is_playing
-            or self.timeline_widget.current_frame() != 0
+        controller.update_animation_settings(
+            fps=self.app.playback_fps,
+            onion_prev_frames=prev_frames,
+            onion_next_frames=next_frames,
         )
-        self.timeline_stop_button.setEnabled(should_enable)
-
-    @Slot(bool)
-    def _on_timeline_autokey_toggled(self, enabled: bool) -> None:
-        icon = (
-            self._timeline_autokey_icon
-            if enabled
-            else self._timeline_autokey_disabled_icon
-        )
-        self.timeline_autokey_button.setIcon(icon)
-        self.app.set_auto_key_enabled(enabled)
-
-    def _update_timeline_onion_button_icon(self) -> None:
-        if not hasattr(self, "timeline_onion_button"):
-            return
-        checked = self.timeline_onion_button.isChecked()
-        icon_on = getattr(self, "timeline_onion_icon_on", QIcon())
-        icon_off = getattr(self, "timeline_onion_icon_off", QIcon())
-        icon = icon_on if checked else icon_off
-        self.timeline_onion_button.setIcon(icon)
-        tooltip_state = "on" if checked else "off"
-        self.timeline_onion_button.setToolTip(f"Onion skinning preview ({tooltip_state})")
-
-    @Slot(bool)
-    def _on_timeline_onion_toggled(self, enabled: bool) -> None:
-        self.canvas.set_onion_skin_enabled(enabled)
-        self._update_timeline_onion_button_icon()
-
-    @Slot(bool)
-    def _on_timeline_play_toggled(self, checked: bool) -> None:
-        if checked:
-            self.animation_player.play()
-        else:
-            self.animation_player.pause()
 
     @Slot()
-    def _on_timeline_stop_clicked(self) -> None:
-        self.animation_player.stop()
+    def sync_timeline_from_document(self):
+        playback_total = max(1, self.app.playback_total_frames)
+        loop_start, loop_end = self.app.playback_loop_range
+        loop_end = max(0, min(loop_end, playback_total - 1))
+        loop_start = max(0, min(loop_start, loop_end))
 
-    def _toggle_timeline_playback(self) -> None:
-        if self.animation_player.is_playing:
-            self.animation_player.pause()
-        else:
-            self.animation_player.play()
-
-    @Slot(int)
-    def _on_timeline_total_frames_changed(self, value: int) -> None:
-        value = max(1, int(value))
-        keys = self.timeline_widget.keys()
-        highest_key = max(keys) if keys else 0
-        target_base = max(highest_key, value - 1)
-        self.timeline_widget.set_total_frames(target_base)
-        self.timeline_widget.set_playback_total_frames(value)
-        self.preview_panel.set_playback_total_frames(value)
-        loop_start, loop_end = self.timeline_widget.loop_range()
-        max_loop_end = max(0, value - 1)
-        if loop_end > max_loop_end:
-            loop_end = max_loop_end
-        if loop_start > loop_end:
-            loop_start = loop_end
-        self.timeline_widget.set_loop_range(loop_start, loop_end)
-        self.preview_panel.set_loop_range(loop_start, loop_end)
-        player_blocker = QSignalBlocker(self.animation_player)
+        raw_fps = getattr(self.app, "playback_fps", 12.0)
         try:
-            self.animation_player.set_total_frames(value)
-            self.animation_player.set_loop_range(loop_start, loop_end)
-        finally:
-            del player_blocker
-        self.app.set_playback_total_frames(value)
+            fps_value = float(raw_fps)
+        except (TypeError, ValueError):
+            fps_value = 12.0
+        if fps_value <= 0:
+            fps_value = 12.0
+
+        self.app.set_playback_total_frames(playback_total)
         self.app.set_playback_loop_range(loop_start, loop_end)
-        current_frame = self.timeline_widget.current_frame()
-        if current_frame < loop_start:
-            self.timeline_widget.set_current_frame(loop_start)
-            current_frame = loop_start
-        elif current_frame > loop_end:
-            self.timeline_widget.set_current_frame(loop_end)
-            current_frame = loop_end
-        if (
-            current_frame < self.animation_player.total_frames
-            and self.animation_player.current_frame != current_frame
-        ):
-            self.animation_player.set_current_frame(current_frame)
-        self._update_stop_button_state()
+        self.app.set_playback_fps(fps_value)
 
-    @Slot(int, int)
-    def _on_timeline_loop_range_changed(self, start: int, end: int) -> None:
-        start_value = max(0, int(start))
-        end_value = max(start_value, int(end))
-        max_loop_end = max(0, self.timeline_widget.playback_total_frames() - 1)
-        if end_value > max_loop_end:
-            end_value = max_loop_end
-        if start_value > end_value:
-            start_value = end_value
-        if (start_value, end_value) != self.timeline_widget.loop_range():
-            self.timeline_widget.set_loop_range(start_value, end_value)
-        self.preview_panel.set_loop_range(start_value, end_value)
-        self.animation_player.set_loop_range(start_value, end_value)
-        self.app.set_playback_loop_range(start_value, end_value)
-        current_frame = self.timeline_widget.current_frame()
-        adjusted_frame = current_frame
-        if adjusted_frame < start_value:
-            adjusted_frame = start_value
-        elif adjusted_frame > end_value:
-            adjusted_frame = end_value
-        if adjusted_frame != current_frame:
-            self.timeline_widget.set_current_frame(adjusted_frame)
-            current_frame = adjusted_frame
-        if (
-            current_frame < self.animation_player.total_frames
-            and self.animation_player.current_frame != current_frame
-        ):
-            self.animation_player.set_current_frame(current_frame)
-        self._update_stop_button_state()
+        self.preview_panel.set_playback_total_frames(playback_total)
+        self.preview_panel.set_loop_range(loop_start, loop_end)
+        self.preview_panel.set_playback_fps(self.app.playback_fps)
 
-    def apply_imported_animation_metadata(self, frame_count: int, fps: float) -> None:
-        frame_total = max(1, int(frame_count))
-        self._on_timeline_total_frames_changed(frame_total)
-        loop_end = max(0, frame_total - 1)
-        self.timeline_widget.set_loop_range(0, loop_end)
-        self._on_timeline_loop_range_changed(0, loop_end)
-
-        if isinstance(fps, (int, float)):
-            fps_value = float(fps)
-        else:
-            fps_value = self.animation_player.fps
-        fps_value = max(1.0, min(60.0, fps_value))
-        self.animation_player.set_fps(fps_value)
-
-    @Slot(bool)
-    def _on_player_state_changed(self, playing: bool) -> None:
-        with QSignalBlocker(self.timeline_play_button):
-            self.timeline_play_button.setChecked(playing)
-        self.timeline_play_button.setText("Pause" if playing else "Play")
-        self.timeline_play_button.setIcon(
-            self._timeline_pause_icon if playing else self._timeline_play_icon
-        )
-        self.canvas.set_animation_playback_active(playing)
-        self._update_stop_button_state()
+    @Slot()
+    def on_document_changed(self):
+        document = self.app.document
+        document_id = id(document) if document is not None else None
+        if getattr(self, "_current_document_id", None) != document_id:
+            self._current_document_id = document_id
+            self.preview_panel.stop_preview_playback()
+        self.preview_panel.handle_document_changed()
+        self.layer_manager_widget.refresh_layers()
+        self.canvas.set_document(document)
+        self.canvas.update()
 
     @Slot(object)
     def handle_canvas_message(self, data):
@@ -627,145 +321,6 @@ class MainWindow(QMainWindow):
             else:
                 self.canvas.original_image = active_layer.image.copy()
                 active_layer.image.fill(Qt.transparent)
-
-            self.canvas.temp_image = QImage(active_layer.image.size(), QImage.Format_ARGB32)
-            self.canvas.temp_image.fill(Qt.transparent)
-
-
-    @Slot()
-    def sync_timeline_from_document(self):
-        playback_total = max(1, self.app.playback_total_frames)
-        loop_start, loop_end = self.app.playback_loop_range
-        loop_end = max(0, min(loop_end, playback_total - 1))
-        loop_start = max(0, min(loop_start, loop_end))
-
-        raw_fps = getattr(self.app, "playback_fps", self.animation_player.fps)
-        try:
-            fps_value = float(raw_fps)
-        except (TypeError, ValueError):
-            fps_value = self.animation_player.fps
-        if fps_value <= 0:
-            fps_value = self.animation_player.fps
-        self.animation_player.set_fps(fps_value)
-        self.preview_panel.set_playback_fps(self.animation_player.fps)
-
-        self.timeline_widget.set_playback_total_frames(playback_total)
-        self.timeline_widget.set_loop_range(loop_start, loop_end)
-        self.preview_panel.set_playback_total_frames(playback_total)
-        self.preview_panel.set_loop_range(loop_start, loop_end)
-        player_blocker = QSignalBlocker(self.animation_player)
-        try:
-            self.animation_player.set_total_frames(playback_total)
-            self.animation_player.set_loop_range(loop_start, loop_end)
-        finally:
-            del player_blocker
-        self.app.set_playback_total_frames(playback_total)
-        self.app.set_playback_loop_range(loop_start, loop_end)
-
-        document = self.app.document
-        layer_name = None
-        if document is not None:
-            layer_manager = getattr(document, "layer_manager", None)
-            active_layer = (
-                getattr(layer_manager, "active_layer", None)
-                if layer_manager is not None
-                else None
-            )
-            layer_name = getattr(active_layer, "name", None)
-        self._update_timeline_layer_label(layer_name)
-
-        loop_end_default = max(0, playback_total - 1)
-        timeline_blocker = QSignalBlocker(self.timeline_widget)
-        try:
-            self.timeline_widget.set_document_frame_count(playback_total)
-            self.timeline_widget.set_total_frames(loop_end_default)
-            self.timeline_widget.set_keys([0])
-            self.timeline_widget.set_current_frame(loop_start)
-            self.timeline_widget.set_loop_range(loop_start, loop_end)
-        finally:
-            del timeline_blocker
-
-        current_frame = self.timeline_widget.current_frame()
-        if (
-            current_frame < self.animation_player.total_frames
-            and self.animation_player.current_frame != current_frame
-        ):
-            self.animation_player.set_current_frame(current_frame)
-
-        self._update_current_frame_label(self.timeline_widget.current_frame())
-        self._update_stop_button_state()
-
-    @Slot()
-    def on_document_changed(self):
-        document = self.app.document
-        document_id = id(document)
-        if getattr(self, "_current_document_id", None) != document_id:
-            self._current_document_id = document_id
-            self.animation_player.stop()
-        self.preview_panel.handle_document_changed()
-        self.layer_manager_widget.refresh_layers()
-        self.canvas.set_document(document)
-        self.canvas.update()
-
-    @Slot(int)
-    def on_timeline_add_key(self, frame: int) -> None:
-        self.app.add_keyframe(frame)
-
-    @Slot(int)
-    def on_timeline_remove_key(self, frame: int) -> None:
-        self.app.remove_keyframe(frame)
-
-    @Slot(list)
-    def on_timeline_remove_keys(self, frames: list[int]) -> None:
-        for frame in sorted(set(frames)):
-            self.app.remove_keyframe(frame)
-
-    @Slot(int)
-    def on_timeline_copy_last_key(self, frame: int) -> None:
-        created = self.app.duplicate_keyframe(target_frame=frame)
-        if created is None:
-            return
-        self.app.select_frame(created)
-        self.timeline_widget.set_current_frame(created)
-
-    @Slot(int)
-    def on_timeline_copy_key(self, frame: int) -> None:
-        self.app.copy_keyframe(frame)
-        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
-
-    @Slot(int)
-    def on_timeline_paste_key(self, frame: int) -> None:
-        pasted = self.app.paste_keyframe(frame)
-        self.timeline_widget.set_has_copied_key(self.app.has_copied_keyframe())
-        if pasted:
-            self.timeline_widget.set_current_frame(frame)
-
-    @Slot(list, int)
-    def on_timeline_move_keys(self, frames: list[int], delta: int) -> None:
-        self.app.move_keyframes(frames, delta)
-
-    @Slot(list, int)
-    def on_timeline_duplicate_keys(self, frames: list[int], delta: int) -> None:
-        self.app.duplicate_keyframes(frames, delta)
-
-    @Slot(int)
-    def on_timeline_insert_frame(self, frame: int) -> None:
-        self.app.insert_frame(frame + 1)
-
-    @Slot(int)
-    def on_timeline_delete_frame(self, frame: int) -> None:
-        self.app.delete_frame(frame)
-
-    @Slot(int)
-    def on_timeline_frame_changed(self, frame: int) -> None:
-        frame = max(0, int(frame))
-        if (
-            frame < self.animation_player.total_frames
-            and self.animation_player.current_frame != frame
-        ):
-            self.animation_player.set_current_frame(frame)
-        self.app.select_frame(frame)
-        self._update_current_frame_label(frame)
 
     @Slot()
     def on_crop_to_selection(self):
@@ -928,7 +483,7 @@ class MainWindow(QMainWindow):
     def open_settings_dialog(self):
         controller = self.app.settings_controller
         controller.update_animation_settings(
-            fps=self.animation_player.fps,
+            fps=self.app.playback_fps,
             onion_prev_frames=self.canvas.onion_skin_prev_frames,
             onion_next_frames=self.canvas.onion_skin_next_frames,
         )
