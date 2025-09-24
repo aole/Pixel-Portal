@@ -8,7 +8,6 @@ Pixel-Portal is a lightweight, cross-platform image editor built with Python and
 - **Layer Management**: Full support for layers, allowing for complex image compositions. You can add, remove, reorder, and merge layers.
 - **Crisp Layer Rendering**: Canvas compositing and drawing tools operate on the active layer stack with pixel-perfect precision.
 - **Layer Chain Navigation**: Layers are stored in a doubly linked list so tools can traverse neighbours without expensive lookups.
-- **Timeline UI**: The animation timeline is still visible for future work, but playback and frame editing are currently disabled.
 - **Selection Tools**: Tools for selecting parts of the image, including Rectangle, Circle, and Lasso selections.
 - **Image Manipulation**: Resize, crop, and flip the canvas.
 - **AI-Powered Image Generation**: Integrated with state-of-the-art AI models to generate images from text prompts.
