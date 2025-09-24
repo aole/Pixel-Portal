@@ -70,7 +70,7 @@ This bootstraps `App`, `DocumentService`, and `ClipboardService`, then instantia
 Set `QT_QPA_PLATFORM=offscreen` when running in a headless environment.
 
 ## Testing
-- **Do not run tests unless explicitly asked to do so.**
+- **Run only relevant tests.**
 - When tests are required, export `QT_QPA_PLATFORM=offscreen` first. Run each module individually to
   avoid intermittent Qt crashes. Commonly exercised modules include:
   ```bash
