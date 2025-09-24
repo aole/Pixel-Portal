@@ -29,6 +29,7 @@ from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
 from portal.ui.preview_panel import PreviewPanel
+from portal.ui.animation_panel import AnimationPanel
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
@@ -75,6 +76,9 @@ class MainWindow(QMainWindow):
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
         central_layout.addWidget(self.canvas, 1)
+
+        self.animation_panel = AnimationPanel(self)
+        central_layout.addWidget(self.animation_panel)
 
         self.setCentralWidget(central_container)
         self._apply_runtime_animation_settings()
