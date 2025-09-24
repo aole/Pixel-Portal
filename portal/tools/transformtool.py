@@ -28,7 +28,7 @@ from portal.commands.selection_commands import (
 from portal.core.command import CompositeCommand, MoveCommand
 
 from ._layer_tracker import ActiveLayerTracker
-from .basetool import BaseTool
+from .basetool import BaseTool, resolve_active_layer_manager
 from ._transform_style import (
     TRANSFORM_GIZMO_ACTIVE_COLOR,
     TRANSFORM_GIZMO_BASE_COLOR,
@@ -41,6 +41,31 @@ from ._transform_style import (
 
 Operation = Literal["move", "rotate", "scale"]
 
+
+def _target_bounds(canvas) -> QRectF | None:
+    """Return the active selection/layer/document bounds for *canvas*."""
+
+    selection_shape = getattr(canvas, "selection_shape", None)
+    if selection_shape:
+        rect = selection_shape.boundingRect().toAlignedRect()
+        if rect.isValid() and rect.width() > 0 and rect.height() > 0:
+            return QRectF(rect)
+
+    document = getattr(canvas, "document", None)
+
+    layer_manager = resolve_active_layer_manager(document)
+    layer = getattr(layer_manager, "active_layer", None)
+    image = getattr(layer, "image", None)
+    if image is not None and not image.isNull():
+        bounds = getattr(layer, "non_transparent_bounds", None)
+        if bounds is None:
+            bounds = image.rect()
+        if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
+            return QRectF(bounds)
+
+    width = getattr(document, "width", None)
+    height = getattr(document, "height", None)
+    return QRectF(0, 0, width, height)
 
 
 class _MoveOperation(BaseTool):
@@ -249,32 +274,9 @@ class _RotateOperation(BaseTool):
 
     # ------------------------------------------------------------------
     def _calculate_transform_bounds(self) -> QRect | None:
-        selection_shape = getattr(self.canvas, "selection_shape", None)
-        if selection_shape:
-            rect = selection_shape.boundingRect().toAlignedRect()
-            if rect.isValid() and rect.width() > 0 and rect.height() > 0:
-                return rect
-
-        layer_manager = self._get_active_layer_manager()
-        layer = layer_manager.active_layer
-        image = layer.image
-        if image is not None and not image.isNull():
-            bounds = layer.non_transparent_bounds
-            if bounds is None:
-                bounds = image.rect()
-            if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
-                return bounds
-
-        document = getattr(self.canvas, "document", None)
-        if document is not None:
-            width = getattr(document, "width", None)
-            height = getattr(document, "height", None)
-            if width is not None and height is not None:
-                width_int = max(1, int(width))
-                height_int = max(1, int(height))
-                return QRect(0, 0, width_int, height_int)
-
-        return None
+        bounds = _target_bounds(self.canvas)
+        rect = bounds.toAlignedRect()
+        return rect
 
     # ------------------------------------------------------------------
     def get_rotation_center_doc(self) -> QPoint:
@@ -1245,32 +1247,7 @@ class _ScaleOperation(BaseTool):
 
     # ------------------------------------------------------------------
     def _calculate_target_edge_rect_doc(self) -> QRectF | None:
-        selection_shape = getattr(self.canvas, "selection_shape", None)
-        if selection_shape:
-            rect = selection_shape.boundingRect().toAlignedRect()
-            if rect.isValid() and rect.width() > 0 and rect.height() > 0:
-                return QRectF(rect.left(), rect.top(), rect.width(), rect.height())
-
-        layer_manager = self._get_active_layer_manager()
-        layer = layer_manager.active_layer
-        image = layer.image
-        if image is not None and not image.isNull():
-            bounds = layer.non_transparent_bounds
-            if bounds is None:
-                bounds = image.rect()
-            if bounds.isValid() and bounds.width() > 0 and bounds.height() > 0:
-                return QRectF(bounds.left(), bounds.top(), bounds.width(), bounds.height())
-
-        document = getattr(self.canvas, "document", None)
-        if document is not None:
-            width = getattr(document, "width", None)
-            height = getattr(document, "height", None)
-            if width is not None and height is not None:
-                width_int = max(1, int(width))
-                height_int = max(1, int(height))
-                return QRectF(0, 0, width_int, height_int)
-
-        return None
+        return _target_bounds(self.canvas)
 
     # ------------------------------------------------------------------
     def _current_pivot_point(self) -> QPointF:
