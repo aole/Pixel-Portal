@@ -246,7 +246,7 @@ Selections support move handles for repositioning. Use **Select → Invert** (`C
 - Drag layers to reorder them. Dragging respects undo/redo and updates the canvas immediately.
 - Toggle visibility by clicking the eye icon next to each layer. Opacity sliders provide live previews while dragging; releasing commits an undoable command.
 - Double-click a layer name to rename it. Layer thumbnails refresh automatically after drawing.
-- Right-click a layer for advanced commands: **Merge Down**, **Merge Down (Current Frame)**, **Duplicate**, **Select Opaque**, **Remove Background**, and **Collapse Layers** (flattens the entire stack into a single layer).
+- Right-click a layer for advanced commands: **Merge Down**, **Duplicate**, **Select Opaque**, **Remove Background**, and **Collapse Layers** (flattens the entire stack into a single layer).
 - Collapse Layers preserves the active frame while converting all layers into one, useful for exporting flattened sprites.
 - Use **Layer → Remove Background** to launch the background removal dialog and choose whether to apply to the current key or all keys in the active layer.
 
