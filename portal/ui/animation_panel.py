@@ -4,7 +4,7 @@ import math
 from typing import Iterable, Optional
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QPainter, QPen, QPalette
+from PySide6.QtGui import QColor, QPainter, QPen, QPalette
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 
@@ -71,13 +71,13 @@ class AnimationPanel(QWidget):
             if clicked_key is not None:
                 self._handle_keyframe_click(clicked_key, event.modifiers())
                 self._is_dragging_frame = True
-                self._select_frame_at(event.position().x())
+                self._set_current_frame_from_x(event.position().x())
                 event.accept()
                 return
             self._is_dragging_frame = True
             if self._selected_keyframes:
                 self._set_selected_keyframes(())
-            self._select_frame_at(event.position().x())
+            self._set_current_frame_from_x(event.position().x())
             event.accept()
             return
         if event.button() == Qt.MiddleButton:
@@ -97,7 +97,7 @@ class AnimationPanel(QWidget):
             event.accept()
             return
         if self._is_dragging_frame and event.buttons() & Qt.LeftButton:
-            self._select_frame_at(event.position().x())
+            self._set_current_frame_from_x(event.position().x())
             event.accept()
             return
         if self._is_panning and event.buttons() & Qt.MiddleButton and self._last_pan_pos:
@@ -130,7 +130,7 @@ class AnimationPanel(QWidget):
         if event.button() == Qt.LeftButton:
             frame = self._frame_from_x(event.position().x())
             if frame is not None:
-                self._select_frame_at(event.position().x())
+                self._set_current_frame_from_x(event.position().x())
                 self.frame_double_clicked.emit(frame)
                 event.accept()
                 return
@@ -317,8 +317,8 @@ class AnimationPanel(QWidget):
         # draw keys
         if self._keyframes:
             outline_color = self.palette().color(QPalette.WindowText)
-            selected_fill = highlight_color
-            unselected_fill = self.palette().color(QPalette.Button)
+            selected_fill = QColor(255, 153, 0)
+            unselected_fill = highlight_color
 
             outline_pen = QPen(outline_color)
             outline_pen.setCosmetic(True)
@@ -393,7 +393,7 @@ class AnimationPanel(QWidget):
         rect = self.rect()
         return rect.left() + self._left_margin + self._offset + frame * self._pixels_per_frame
 
-    def _select_frame_at(self, x: float) -> None:
+    def _set_current_frame_from_x(self, x: float) -> None:
         frame = self._frame_from_x(x)
         if frame is None:
             return
