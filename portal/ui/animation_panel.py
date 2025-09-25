@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 class AnimationPanel(QWidget):
     """Timeline widget that exposes the current animation frame."""
 
-    frame_selected = Signal(int)
+    current_frame_changed = Signal(int)
     frame_double_clicked = Signal(int)
     loop_range_changed = Signal(int, int)
     keyframes_selection_changed = Signal(tuple)
@@ -401,7 +401,7 @@ class AnimationPanel(QWidget):
         self._current_frame = frame
         self._ensure_frame_visible(frame)
         if self._current_frame != previous:
-            self.frame_selected.emit(self._current_frame)
+            self.current_frame_changed.emit(self._current_frame)
         self.update()
 
     def _frame_from_x(self, x: float) -> Optional[int]:

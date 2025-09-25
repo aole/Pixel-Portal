@@ -165,7 +165,9 @@ class MainWindow(QMainWindow):
 
         # Animation Panel
         self.animation_panel = AnimationPanel(self)
-        self.animation_panel.frame_selected.connect(self.on_animation_frame_selected)
+        self.animation_panel.current_frame_changed.connect(
+            self.on_animation_current_frame_changed
+        )
         self.animation_panel.frame_double_clicked.connect(
             self.on_animation_frame_double_clicked
         )
@@ -292,7 +294,7 @@ class MainWindow(QMainWindow):
             self.preview_panel.sync_to_document_frame(current_frame)
 
     @Slot(int)
-    def on_animation_frame_selected(self, frame: int) -> None:
+    def on_animation_current_frame_changed(self, frame: int) -> None:
         document = getattr(self.app, "document", None)
         layer_manager = getattr(document, "layer_manager", None) if document else None
         if layer_manager is None:
