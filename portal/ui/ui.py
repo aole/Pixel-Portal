@@ -67,7 +67,6 @@ class MainWindow(QMainWindow):
 
         self.preview_panel = PreviewPanel(self.app)
         loop_start, loop_end = self.app.playback_loop_range
-        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
 
@@ -157,7 +156,6 @@ class MainWindow(QMainWindow):
         self.color_toolbar.addWidget(self.color_container)
 
         # Preview Panel
-        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
         loop_start, loop_end = self.app.playback_loop_range
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
@@ -268,24 +266,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def sync_timeline_from_document(self):
-        playback_total = max(1, self.app.playback_total_frames)
         loop_start, loop_end = self.app.playback_loop_range
-        loop_end = max(0, min(loop_end, playback_total - 1))
-        loop_start = max(0, min(loop_start, loop_end))
 
-        raw_fps = getattr(self.app, "playback_fps", 12.0)
-        try:
-            fps_value = float(raw_fps)
-        except (TypeError, ValueError):
-            fps_value = 12.0
-        if fps_value <= 0:
-            fps_value = 12.0
+        fps_value = getattr(self.app, "playback_fps", 12.0)
 
-        self.app.set_playback_total_frames(playback_total)
         self.app.set_playback_loop_range(loop_start, loop_end)
         self.app.set_playback_fps(fps_value)
 
-        self.preview_panel.set_playback_total_frames(playback_total)
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
 

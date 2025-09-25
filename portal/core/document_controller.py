@@ -28,7 +28,6 @@ from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
 
 
-DEFAULT_TOTAL_FRAMES = 1
 DEFAULT_PLAYBACK_FPS = 12.0
 
 
@@ -66,11 +65,10 @@ class DocumentController(QObject):
         self._base_window_title = "Pixel Portal"
         self._copied_key_state = None
         self.auto_key_enabled = False
-        self._playback_total_frames = DEFAULT_TOTAL_FRAMES
         default_fps = getattr(settings, "animation_fps", DEFAULT_PLAYBACK_FPS)
         self._playback_fps = Document.normalize_playback_fps(default_fps)
         self._playback_loop_start = 0
-        self._playback_loop_end = max(0, self._playback_total_frames - 1)
+        self._playback_loop_end = 12
 
         self._last_ai_output_rect = QRect()
         self.document_changed.connect(self._on_document_mutated)
@@ -154,28 +152,6 @@ class DocumentController(QObject):
             self.ai_output_rect_changed.emit(normalized)
 
     @property
-    def playback_total_frames(self) -> int:
-        return self._playback_total_frames
-
-    def set_playback_total_frames(self, frame_count: int) -> None:
-        normalized = Document.normalize_playback_total_frames(frame_count)
-        if normalized == self._playback_total_frames:
-            document = self.document
-            if document is not None:
-                document.set_playback_total_frames(normalized)
-            return
-        self._playback_total_frames = normalized
-        document = self.document
-        if document is not None:
-            document.set_playback_total_frames(normalized)
-            
-        max_loop = max(0, self._playback_total_frames - 1)
-        if self._playback_loop_end > max_loop:
-            self._playback_loop_end = max_loop
-        if self._playback_loop_start > self._playback_loop_end:
-            self._playback_loop_start = self._playback_loop_end
-
-    @property
     def playback_loop_range(self) -> tuple[int, int]:
         return self._playback_loop_start, self._playback_loop_end
 
@@ -196,22 +172,8 @@ class DocumentController(QObject):
             document.set_playback_fps(normalized)
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
-        try:
-            start_value = int(start)
-            end_value = int(end)
-        except (TypeError, ValueError):
-            return
-        if start_value < 0:
-            start_value = 0
-        max_loop = max(0, self._playback_total_frames - 1)
-        if end_value < start_value:
-            end_value = start_value
-        if end_value > max_loop:
-            end_value = max_loop
-        if start_value > end_value:
-            start_value = end_value
-        self._playback_loop_start = start_value
-        self._playback_loop_end = end_value
+        self._playback_loop_start = start
+        self._playback_loop_end = end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         """Auto-key functionality has been removed."""
@@ -438,10 +400,6 @@ class DocumentController(QObject):
         """Swap to a new document and bind to its layer manager lifecycle."""
 
         self.document = document
-        stored_total = getattr(document, "playback_total_frames", DEFAULT_TOTAL_FRAMES)
-        normalized_total = Document.normalize_playback_total_frames(stored_total)
-        self._playback_total_frames = normalized_total
-        document.set_playback_total_frames(normalized_total)
         stored_fps = getattr(document, "playback_fps", DEFAULT_PLAYBACK_FPS)
         normalized_fps = Document.normalize_playback_fps(stored_fps)
         self._playback_fps = normalized_fps
