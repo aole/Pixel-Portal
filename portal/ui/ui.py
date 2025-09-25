@@ -167,10 +167,12 @@ class MainWindow(QMainWindow):
 
         # Animation Panel
         self.animation_panel = AnimationPanel(self)
+        self.animation_panel.frame_selected.connect(self.on_animation_frame_selected)
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.animation_dock)
+        self.sync_timeline_from_document()
 
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
@@ -283,6 +285,23 @@ class MainWindow(QMainWindow):
         self.preview_panel.set_playback_total_frames(playback_total)
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
+
+        if hasattr(self, "animation_panel"):
+            document = getattr(self.app, "document", None)
+            layer_manager = getattr(document, "layer_manager", None) if document else None
+            current_frame = getattr(layer_manager, "current_frame", 0) if layer_manager else 0
+            self.animation_panel.set_current_frame(current_frame)
+
+    @Slot(int)
+    def on_animation_frame_selected(self, frame: int) -> None:
+        document = getattr(self.app, "document", None)
+        layer_manager = getattr(document, "layer_manager", None) if document else None
+        if layer_manager is None:
+            return
+
+        self.app.select_frame(frame)
+        self.preview_panel.preview_player.set_current_frame(frame)
+        self.canvas.update()
 
     @Slot()
     def on_document_changed(self):
