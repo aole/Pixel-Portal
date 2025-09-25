@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
 from PySide6.QtGui import QIcon, QImage, QPixmap
-from PySide6.QtCore import Qt, QSignalBlocker, QObject, Signal
+from PySide6.QtCore import Qt, QSignalBlocker, QObject, Signal, QTimer
 
 
 class NullAnimationPlayer(QObject):
@@ -16,7 +16,11 @@ class NullAnimationPlayer(QObject):
         self._is_playing = False
         self._loop_start = 0
         self._loop_end = 0
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.timeout.connect(self._advance_frame)
         self.fps = 12.0
+        self._update_timer_interval()
 
     @property
     def current_frame(self) -> int:
@@ -29,16 +33,21 @@ class NullAnimationPlayer(QObject):
     def play(self) -> None:  # pragma: no cover - no runtime effect
         if not self._is_playing:
             self._is_playing = True
+            self._ensure_current_frame_in_range()
+            self._update_timer_interval()
+            self._timer.start()
             self.playing_changed.emit(True)
 
     def pause(self) -> None:  # pragma: no cover - no runtime effect
         if self._is_playing:
             self._is_playing = False
+            self._timer.stop()
             self.playing_changed.emit(False)
 
     def stop(self) -> None:  # pragma: no cover - no runtime effect
         changed = self._is_playing
         self._is_playing = False
+        self._timer.stop()
         if changed:
             self.playing_changed.emit(False)
         if self._current_frame != self._loop_start:
@@ -47,8 +56,14 @@ class NullAnimationPlayer(QObject):
 
     def set_loop_range(self, start: int, end: int) -> None:
         self._loop_start = max(0, int(start))
-        self._loop_end = max(self._loop_start, int(end))
-        self._current_frame = min(max(self._current_frame, self._loop_start), self._loop_end)
+        try:
+            normalized_end = int(end)
+        except (TypeError, ValueError):
+            normalized_end = self._loop_start + 1
+        self._loop_end = max(self._loop_start + 1, normalized_end)
+        self._current_frame = min(
+            max(self._current_frame, self._loop_start), self._loop_end
+        )
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(self._loop_start, min(int(frame), self._loop_end))
@@ -61,7 +76,39 @@ class NullAnimationPlayer(QObject):
             self.fps = float(fps)
         except (TypeError, ValueError):
             self.fps = 12.0
+        self._update_timer_interval()
         self.fps_changed.emit(self.fps)
+
+    def _update_timer_interval(self) -> None:
+        fps = getattr(self, "fps", 12.0)
+        if fps <= 0:
+            fps = 12.0
+        interval = int(round(1000.0 / fps))
+        if interval < 10:
+            interval = 10
+        was_active = self._timer.isActive()
+        self._timer.setInterval(interval)
+        if was_active:
+            self._timer.start()
+
+    def _ensure_current_frame_in_range(self) -> None:
+        clamped = max(self._loop_start, min(self._current_frame, self._loop_end))
+        if clamped != self._current_frame:
+            self._current_frame = clamped
+            self.frame_changed.emit(self._current_frame)
+
+    def _advance_frame(self) -> None:
+        if not self._is_playing:
+            return
+        if self._loop_end <= self._loop_start:
+            next_frame = self._loop_start
+        else:
+            next_frame = self._current_frame + 1
+            if next_frame > self._loop_end:
+                next_frame = self._loop_start
+        if next_frame != self._current_frame:
+            self._current_frame = next_frame
+            self.frame_changed.emit(self._current_frame)
 
 class PreviewPanel(QWidget):
     def __init__(self, app):
@@ -111,8 +158,12 @@ class PreviewPanel(QWidget):
         self.preview_player.set_fps(fps)
 
     def set_loop_range(self, start: int, end: int) -> None:
-        self._loop_start = start
-        self._loop_end = end
+        self._loop_start = max(0, int(start))
+        try:
+            normalized_end = int(end)
+        except (TypeError, ValueError):
+            normalized_end = self._loop_start + 1
+        self._loop_end = max(self._loop_start + 1, normalized_end)
         self.preview_player.set_loop_range(self._loop_start, self._loop_end)
         if (
             self.preview_player.current_frame < self._loop_start

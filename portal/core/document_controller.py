@@ -172,8 +172,28 @@ class DocumentController(QObject):
             document.set_playback_fps(normalized)
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
-        self._playback_loop_start = start
-        self._playback_loop_end = end
+        try:
+            normalized_start = int(start)
+        except (TypeError, ValueError):
+            normalized_start = 0
+        if normalized_start < 0:
+            normalized_start = 0
+
+        try:
+            normalized_end = int(end)
+        except (TypeError, ValueError):
+            normalized_end = normalized_start + 1
+        if normalized_end <= normalized_start:
+            normalized_end = normalized_start + 1
+
+        if (
+            normalized_start == self._playback_loop_start
+            and normalized_end == self._playback_loop_end
+        ):
+            return
+
+        self._playback_loop_start = normalized_start
+        self._playback_loop_end = normalized_end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
         """Auto-key functionality has been removed."""
