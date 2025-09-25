@@ -12,6 +12,7 @@ class AnimationPanel(QWidget):
     """Timeline widget that exposes the current animation frame."""
 
     frame_selected = Signal(int)
+    frame_double_clicked = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -77,6 +78,16 @@ class AnimationPanel(QWidget):
         self._is_panning = False
         self._last_pan_pos = None
         super().leaveEvent(event)
+
+    def mouseDoubleClickEvent(self, event):  # noqa: N802 - Qt override
+        if event.button() == Qt.LeftButton:
+            frame = self._frame_from_x(event.position().x())
+            if frame is not None:
+                self._select_frame_at(event.position().x())
+                self.frame_double_clicked.emit(frame)
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
 
     def resizeEvent(self, event):  # noqa: N802 - Qt override
         self._clamp_offset()

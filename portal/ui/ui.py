@@ -168,6 +168,9 @@ class MainWindow(QMainWindow):
         # Animation Panel
         self.animation_panel = AnimationPanel(self)
         self.animation_panel.frame_selected.connect(self.on_animation_frame_selected)
+        self.animation_panel.frame_double_clicked.connect(
+            self.on_animation_frame_double_clicked
+        )
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
@@ -308,6 +311,10 @@ class MainWindow(QMainWindow):
         self.app.select_frame(frame)
         self.preview_panel.preview_player.set_current_frame(frame)
         self.canvas.update()
+
+    @Slot(int)
+    def on_animation_frame_double_clicked(self, frame: int) -> None:
+        self.app.add_keyframe(frame)
 
     @Slot()
     def on_document_changed(self):
