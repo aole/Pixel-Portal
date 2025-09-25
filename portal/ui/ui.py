@@ -168,9 +168,6 @@ class MainWindow(QMainWindow):
         # Animation Panel
         self.animation_panel = AnimationPanel(self)
         self.animation_panel.frame_selected.connect(self.on_animation_frame_selected)
-        self.preview_panel.preview_player.frame_changed.connect(
-            self.animation_panel.set_current_frame
-        )
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
