@@ -28,7 +28,7 @@ class Layer(QObject):
         height: int,
         name: str,
         *,
-        key: Key | None = None,
+        layer_manager: "LayerManager | None" = None,
         keys: list[Key] | None = None,
     ):
         super().__init__()
@@ -37,7 +37,7 @@ class Layer(QObject):
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
         self._onion_skin_enabled = False
         self._active_key_index = 0
-        self._layer_manager = None
+        self._layer_manager: "LayerManager | None" = None
         if keys is not None:
             provided_keys = list(keys)
         else:
@@ -49,6 +49,9 @@ class Layer(QObject):
             self.keys.append(key_instance)
 
         self.uid = self._next_uid()
+
+        if layer_manager is not None:
+            self.attach_to_manager(layer_manager)
 
     def _register_key(self, key: Key) -> None:
         key.setParent(self)

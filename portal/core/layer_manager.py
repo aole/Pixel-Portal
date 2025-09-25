@@ -74,8 +74,7 @@ class LayerManager(QObject):
 
     def add_layer(self, name: str):
         """Adds a new layer to the top of the stack."""
-        new_layer = Layer(self.width, self.height, name)
-        new_layer.attach_to_manager(self)
+        new_layer = Layer(self.width, self.height, name, layer_manager=self)
         self.layers.append(new_layer)
         self.active_layer_index = len(self.layers) - 1
         self.layer_structure_changed.emit()
@@ -87,8 +86,7 @@ class LayerManager(QObject):
         else:
             q_image = image
 
-        new_layer = Layer(self.width, self.height, name)
-        new_layer.attach_to_manager(self)
+        new_layer = Layer(self.width, self.height, name, layer_manager=self)
 
         painter = QPainter(new_layer.image)
         painter.drawImage(0, 0, q_image)
