@@ -29,6 +29,7 @@ from portal.ui.new_file_dialog import NewFileDialog
 from portal.ui.resize_dialog import ResizeDialog
 from portal.ui.background import Background
 from portal.ui.preview_panel import PreviewPanel
+from portal.ui.animation_panel import AnimationPanel
 from portal.commands.action_manager import ActionManager
 from portal.commands.menu_bar_builder import MenuBarBuilder
 from portal.commands.tool_bar_builder import ToolBarBuilder
@@ -164,6 +165,13 @@ class MainWindow(QMainWindow):
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
 
+        # Animation Panel
+        self.animation_panel = AnimationPanel(self)
+        self.animation_dock = QDockWidget("Animation Timeline", self)
+        self.animation_dock.setWidget(self.animation_panel)
+        self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.animation_dock)
+
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
@@ -185,6 +193,9 @@ class MainWindow(QMainWindow):
             self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
             self.layer_manager_dock.raise_()
 
+        self.setCorner(Qt.BottomLeftCorner, Qt.BottomDockWidgetArea)
+        self.setCorner(Qt.BottomRightCorner, Qt.RightDockWidgetArea)
+
         self.app.document_changed.connect(self.preview_panel.handle_document_changed)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
         self.app.ai_output_rect_changed.connect(self.canvas.set_ai_output_rect)
@@ -201,7 +212,12 @@ class MainWindow(QMainWindow):
         self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
         self.app.exit_triggered.connect(self.close)
 
-        menu_bar_builder.set_panels(self.layer_manager_dock, self.preview_dock, self.ai_panel_dock)
+        menu_bar_builder.set_panels(
+            self.layer_manager_dock,
+            self.preview_dock,
+            self.animation_dock,
+            self.ai_panel_dock,
+        )
         menu_bar_builder.set_toolbars([
             toolbar_builder.top_toolbar,
             toolbar_builder.left_toolbar,
