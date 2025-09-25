@@ -18,11 +18,11 @@ from portal.core.command import (
     CropCommand,
     AddLayerCommand,
     CompositeCommand,
+    AddKeyframeCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.core.color_utils import find_closest_color
 from portal.core.layer import Layer
-from portal.core.key import Key
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
@@ -341,31 +341,8 @@ class DocumentController(QObject):
                     layer_manager.set_current_frame(normalized_frame)
                 return
 
-        base_image = getattr(active_layer, "image", None)
-        if base_image is not None and hasattr(base_image, "width") and hasattr(base_image, "height"):
-            width = max(1, int(base_image.width()))
-            height = max(1, int(base_image.height()))
-        else:
-            width = max(1, int(getattr(document, "width", 1)))
-            height = max(1, int(getattr(document, "height", 1)))
-        new_key = Key(width, height, frame_number=normalized_frame)
-        active_layer._register_key(new_key)
-
-        insert_index = len(active_layer.keys)
-        for idx, key in enumerate(active_layer.keys):
-            if getattr(key, "frame_number", 0) > normalized_frame:
-                insert_index = idx
-                break
-        active_layer.keys.insert(insert_index, new_key)
-
-        if layer_manager is not None:
-            layer_manager.set_current_frame(normalized_frame)
-
-        if normalized_frame >= self._playback_total_frames:
-            self.set_playback_total_frames(normalized_frame + 1)
-
-        self.is_dirty = True
-        self.document_changed.emit()
+        command = AddKeyframeCommand(self, active_layer, normalized_frame)
+        self.execute_command(command)
 
     def remove_keyframe(self, frame_index: int) -> None:
         """Keyframe management is no longer supported."""
