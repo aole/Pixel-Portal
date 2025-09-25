@@ -111,7 +111,6 @@ class AnimationPanel(QWidget):
         )
 
         metrics = painter.fontMetrics()
-        base_color = self.palette().color(QPalette.WindowText)
 
         for frame in range(start_frame, end_frame):
             tick_x = round(self._frame_to_x(frame))
@@ -136,18 +135,40 @@ class AnimationPanel(QWidget):
                 painter.drawText(text_rect, Qt.AlignCenter, text)
 
         current_x = round(self._frame_to_x(self._current_frame))
-        highlight_pen = QPen(self.palette().color(QPalette.Highlight), 2)
+        highlight_color = self.palette().color(QPalette.Highlight)
+        highlight_pen = QPen(highlight_color, 2)
         highlight_pen.setCosmetic(True)
         painter.setPen(highlight_pen)
         painter.drawLine(current_x, rect.top() + 4, current_x, rect.bottom() - 4)
 
-        label_text = f"Frame {self._current_frame}"
+        label_text = str(self._current_frame)
         text_width = metrics.horizontalAdvance(label_text)
         text_height = metrics.height()
-        label_x = max(rect.left() + 4, min(current_x - text_width // 2, rect.right() - text_width - 4))
-        label_rect = QRect(label_x, rect.top() + 4, text_width, text_height)
-        painter.setPen(QPen(base_color))
-        painter.drawText(label_rect, Qt.AlignLeft | Qt.AlignVCenter, label_text)
+        padding_x = 6
+        padding_y = 2
+        total_width = text_width + padding_x * 2
+        total_height = text_height + padding_y * 2
+
+        major_marker_height = 13
+        marker_top = timeline_y - major_marker_height
+        label_text_top = marker_top - text_height - 2
+        label_top = label_text_top - padding_y
+
+        label_left = current_x - total_width // 2
+        min_left = rect.left() + 4
+        max_left = rect.right() - total_width - 4
+        if max_left < min_left:
+            max_left = min_left
+        label_left = max(min_left, min(label_left, max_left))
+        label_rect = QRect(label_left, label_top, total_width, total_height)
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(highlight_color)
+        painter.drawRect(label_rect)
+
+        text_rect = label_rect.adjusted(padding_x, padding_y, -padding_x, -padding_y)
+        painter.setPen(QPen(Qt.white))
+        painter.drawText(text_rect, Qt.AlignCenter, label_text)
 
         painter.end()
 
