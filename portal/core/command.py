@@ -164,6 +164,12 @@ class DrawCommand(Command):
         self.pattern_image = pattern_image
         self.drawing = Drawing()
 
+        self._target_key: Key | None = getattr(layer, "active_key", None)
+        self._target_key_index = getattr(layer, "active_key_index", 0)
+        self._target_frame_number = (
+            self._target_key.frame_number if self._target_key is not None else 0
+        )
+
         self.bounding_rect = self._calculate_bounding_rect()
         self.before_image = None
 
@@ -243,8 +249,29 @@ class DrawCommand(Command):
             rect = rect.adjusted(-pad_x, -pad_y, pad_x, pad_y)
 
         # Intersect with layer bounds to stay within the image
-        layer_rect = self.layer.image.rect()
+        target_key = getattr(self, "_target_key", None)
+        if target_key is not None:
+            layer_rect = target_key.image.rect()
+        else:
+            layer_rect = self.layer.image.rect()
         return rect.intersected(layer_rect)
+
+    def _resolve_target_key(self) -> Key | None:
+        keys: list[Key] | None = getattr(self.layer, "keys", None)
+        if not keys:
+            return None
+
+        if self._target_key in keys:
+            return self._target_key
+
+        for key in keys:
+            if getattr(key, "frame_number", None) == self._target_frame_number:
+                self._target_key = key
+                return key
+
+        index = min(self._target_key_index, len(keys) - 1)
+        self._target_key = keys[index]
+        return self._target_key
 
     @staticmethod
     def _resolve_axis(position: float | None, size: int) -> float | None:
@@ -258,12 +285,16 @@ class DrawCommand(Command):
         if not self.bounding_rect.isValid():
             return
 
+        target_key = self._resolve_target_key()
+        if target_key is None:
+            return
+
         # Store the 'before' state only on the first execution
         if self.before_image is None:
-            self.before_image = self.layer.image.copy()
+            self.before_image = target_key.image.copy()
 
         # Perform the drawing
-        painter = QPainter(self.layer.image)
+        painter = QPainter(target_key.image)
         try:
             if self.selection_shape:
                 painter.setClipPath(self.selection_shape)
@@ -274,7 +305,7 @@ class DrawCommand(Command):
 
             if self.erase:
                 # Create a mask image, same size as the layer, and fill it with transparency
-                mask_image = QImage(self.layer.image.size(), QImage.Format_ARGB32)
+                mask_image = QImage(target_key.image.size(), QImage.Format_ARGB32)
                 mask_image.fill(Qt.transparent)
 
                 # Create a painter for the mask
@@ -356,15 +387,21 @@ class DrawCommand(Command):
                         )
         finally:
             painter.end()
-            self.layer.on_image_change.emit()
+            target_key.image_changed.emit()
 
     def undo(self):
-        if self.before_image is not None:
-            # Restore the image by swapping in the cached copy rather than
-            # painting it back. Drawing through a QPainter can subtly mutate
-            # pixel values, which broke exact undo comparisons in tests.
-            self.layer.image = self.before_image.copy()
-        self.layer.on_image_change.emit()
+        if self.before_image is None:
+            return
+
+        target_key = self._resolve_target_key()
+        if target_key is None:
+            return
+
+        # Restore the image by swapping in the cached copy rather than
+        # painting it back. Drawing through a QPainter can subtly mutate
+        # pixel values, which broke exact undo comparisons in tests.
+        target_key.image = self.before_image.copy()
+        target_key.image_changed.emit()
 
 
 class FlipScope(Enum):

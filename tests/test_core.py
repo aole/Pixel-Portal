@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
 from types import SimpleNamespace
+from portal.core.key import Key
 
 
 @pytest.fixture
@@ -528,6 +529,64 @@ def test_draw_command(layer, document):
     # Check that the image has been restored
     restored_image_data = layer.image.constBits().tobytes()
     assert original_image_data == restored_image_data
+
+
+def test_draw_command_redo_targets_original_frame(document):
+    """Redo should repaint the key that was active when the stroke was created."""
+
+    layer_manager = document.layer_manager
+    layer = layer_manager.layers[0]
+
+    frame_zero_key = layer.keys[0]
+    frame_five_key = Key(document.width, document.height, frame_number=5)
+    layer._register_key(frame_five_key)
+    layer.keys.append(frame_five_key)
+
+    assert frame_zero_key.frame_number == 0
+    assert frame_five_key.frame_number == 5
+
+    frame_zero_before = frame_zero_key.image.constBits().tobytes()
+    frame_five_before = frame_five_key.image.constBits().tobytes()
+
+    layer_manager.set_current_frame(0)
+    assert layer.active_key is frame_zero_key
+
+    undo_manager = UndoManager()
+
+    command = DrawCommand(
+        layer=layer,
+        points=[QPoint(10, 10), QPoint(20, 20)],
+        color=QColor("red"),
+        width=5,
+        brush_type="Circular",
+        document=document,
+        selection_shape=None,
+        erase=False,
+        mirror_x=False,
+        mirror_y=False,
+    )
+
+    command.execute()
+    undo_manager.add_command(command)
+
+    frame_zero_after = frame_zero_key.image.constBits().tobytes()
+
+    assert frame_zero_after != frame_zero_before
+    assert frame_five_key.image.constBits().tobytes() == frame_five_before
+
+    undo_manager.undo()
+    assert frame_zero_key.image.constBits().tobytes() == frame_zero_before
+
+    layer_manager.set_current_frame(5)
+    assert layer.active_key is frame_five_key
+    assert layer_manager.current_frame == 5
+
+    undo_manager.redo()
+
+    assert frame_zero_key.image.constBits().tobytes() == frame_zero_after
+    assert frame_five_key.image.constBits().tobytes() == frame_five_before
+    assert layer_manager.current_frame == 5
+    assert layer.active_key is frame_five_key
 
 def test_shape_command(document, layer):
     """Test that the ShapeCommand correctly draws a shape and that undo restores the previous state."""
