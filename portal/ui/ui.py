@@ -289,6 +289,7 @@ class MainWindow(QMainWindow):
             self.animation_panel.set_loop_range(loop_start, loop_end)
             self.animation_panel.set_current_frame(current_frame)
             self.animation_panel.set_keyframes(keyframes)
+            self.preview_panel.sync_to_document_frame(current_frame)
 
     @Slot(int)
     def on_animation_frame_selected(self, frame: int) -> None:
@@ -298,7 +299,7 @@ class MainWindow(QMainWindow):
             return
 
         self.app.select_frame(frame)
-        self.preview_panel.preview_player.set_current_frame(frame)
+        self.preview_panel.sync_to_document_frame(frame)
         self.canvas.update()
 
     @Slot(int)

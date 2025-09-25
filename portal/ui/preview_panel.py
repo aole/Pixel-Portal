@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QToolButton
-from PySide6.QtGui import QIcon, QImage, QPixmap
+from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
 from PySide6.QtCore import Qt, QSignalBlocker, QObject, Signal, QTimer
 
 
@@ -15,7 +15,7 @@ class NullAnimationPlayer(QObject):
         self._current_frame = 0
         self._is_playing = False
         self._loop_start = 0
-        self._loop_end = 0
+        self._loop_end = 1
         self._timer = QTimer(self)
         self._timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._timer.timeout.connect(self._advance_frame)
@@ -61,14 +61,21 @@ class NullAnimationPlayer(QObject):
         except (TypeError, ValueError):
             normalized_end = self._loop_start + 1
         self._loop_end = max(self._loop_start + 1, normalized_end)
-        self._current_frame = min(
-            max(self._current_frame, self._loop_start), self._loop_end
-        )
+        if self._is_playing:
+            self._current_frame = min(
+                max(self._current_frame, self._loop_start), self._loop_end
+            )
 
     def set_current_frame(self, frame: int) -> None:
-        frame = max(self._loop_start, min(int(frame), self._loop_end))
-        if frame != self._current_frame:
-            self._current_frame = frame
+        try:
+            normalized = int(frame)
+        except (TypeError, ValueError):
+            normalized = self._loop_start
+
+        if self._is_playing:
+            normalized = max(self._loop_start, min(normalized, self._loop_end))
+        if normalized != self._current_frame:
+            self._current_frame = normalized
             self.frame_changed.emit(self._current_frame)
 
     def set_fps(self, fps: float) -> None:
@@ -179,9 +186,9 @@ class PreviewPanel(QWidget):
             return
 
         if playback_index is None:
-            playback_index = self.preview_player.current_frame
+            playback_index = self._frame_for_display(document)
 
-        pixmap = self._pixmap_for_document(document)
+        pixmap = self._pixmap_for_document(document, playback_index)
         if pixmap is None:
             self.preview_label.clear()
             self.preview_label.setFixedSize(0, 0)
@@ -196,10 +203,12 @@ class PreviewPanel(QWidget):
         if self._current_document_id != document_id:
             self._current_document_id = document_id
             self.preview_player.stop()
+        self.sync_to_document_frame()
         self.update_preview()
 
     def stop_preview_playback(self) -> None:
         self.preview_player.stop()
+        self.sync_to_document_frame()
 
     def _on_preview_play_toggled(self, checked: bool) -> None:
         if checked:
@@ -215,24 +224,15 @@ class PreviewPanel(QWidget):
             self._pause_icon if playing else self._play_icon
         )
         if not playing:
+            self.sync_to_document_frame()
             self.update_preview()
 
     def _on_preview_frame_changed(self, frame: int) -> None:
         self._current_playback_frame = frame
-        self._sync_document_frame(frame)
         self.update_preview(playback_index=frame)
 
-    def _pixmap_for_document(self, document) -> QPixmap | None:
-        image: QImage | None = None
-        render_fallback = getattr(document, "render", None)
-        if callable(render_fallback):
-            try:
-                candidate = render_fallback()
-            except ValueError:
-                image = None
-            else:
-                image = self._coerce_qimage(candidate)
-
+    def _pixmap_for_document(self, document, frame: int) -> QPixmap | None:
+        image = self._render_document_frame(document, frame)
         if image is None:
             return None
 
@@ -244,26 +244,90 @@ class PreviewPanel(QWidget):
             pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.FastTransformation)
         return pixmap
 
-    @staticmethod
-    def _coerce_qimage(image) -> QImage | None:
-        if isinstance(image, QImage):
-            return image
-        if isinstance(image, QPixmap):
-            return image.toImage()
-        return None
-
-    def _sync_document_frame(self, frame: int) -> None:
-        document = getattr(self.app, "document", None)
-        layer_manager = getattr(document, "layer_manager", None) if document else None
-        if layer_manager is None:
+    def sync_to_document_frame(self, frame: int | None = None) -> None:
+        if self.preview_player.is_playing:
             return
+
+        if frame is None:
+            document = getattr(self.app, "document", None)
+            layer_manager = getattr(document, "layer_manager", None) if document else None
+            if layer_manager is None:
+                return
+            frame = layer_manager.current_frame
 
         try:
             normalized_frame = int(frame)
         except (TypeError, ValueError):
-            normalized_frame = layer_manager.current_frame
-
-        if normalized_frame == layer_manager.current_frame:
             return
 
-        self.app.select_frame(normalized_frame)
+        self.preview_player.set_current_frame(normalized_frame)
+
+    def _frame_for_display(self, document) -> int:
+        if self.preview_player.is_playing:
+            return self.preview_player.current_frame
+
+        layer_manager = getattr(document, "layer_manager", None) if document else None
+        if layer_manager is None:
+            return self.preview_player.current_frame
+
+        return layer_manager.current_frame
+
+    def _render_document_frame(self, document, frame: int) -> QImage | None:
+        if document is None:
+            return None
+
+        try:
+            frame_index = int(frame)
+        except (TypeError, ValueError):
+            frame_index = 0
+
+        width = max(1, int(getattr(document, "width", 0)))
+        height = max(1, int(getattr(document, "height", 0)))
+        image = QImage(width, height, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+
+        layer_manager = getattr(document, "layer_manager", None)
+        if layer_manager is None:
+            return image
+
+        painter = QPainter(image)
+        try:
+            layers = list(getattr(layer_manager, "layers", []))
+        except TypeError:
+            layers = []
+
+        for layer in layers:
+            key_image = self._image_for_layer_frame(layer, frame_index)
+            if key_image is None or key_image.isNull():
+                continue
+
+            opacity = getattr(layer, "opacity", 1.0)
+            try:
+                painter.setOpacity(float(opacity))
+            except (TypeError, ValueError):
+                painter.setOpacity(1.0)
+            painter.drawImage(0, 0, key_image)
+
+        painter.end()
+        return image
+
+    @staticmethod
+    def _image_for_layer_frame(layer, frame: int) -> QImage | None:
+        if layer is None:
+            return None
+
+        keys = getattr(layer, "keys", None)
+        if keys:
+            try:
+                index = layer._index_for_frame(frame)
+                key = keys[index]
+                image = getattr(key, "image", None)
+                if isinstance(image, QImage):
+                    return image
+            except Exception:
+                pass
+
+        image = getattr(layer, "image", None)
+        if isinstance(image, QImage):
+            return image
+        return None

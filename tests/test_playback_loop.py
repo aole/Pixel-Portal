@@ -3,8 +3,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from PySide6.QtGui import QColor, QImage
+
 from portal.core.document_controller import DocumentController
 from portal.core.document import Document
+from portal.core.key import Key
 from portal.ui.preview_panel import NullAnimationPlayer, PreviewPanel
 
 
@@ -50,7 +53,7 @@ def test_null_animation_player_loops_within_window(qtbot):
     qtbot.wait(0)
 
 
-def test_preview_panel_updates_document_frame(qtbot):
+def test_preview_panel_does_not_drive_document_frame(qtbot):
     document = Document(2, 2)
 
     class StubApp:
@@ -58,7 +61,7 @@ def test_preview_panel_updates_document_frame(qtbot):
             self.document = doc
             self.selected_frames: list[int] = []
 
-        def select_frame(self, frame: int) -> None:
+        def select_frame(self, frame: int) -> None:  # pragma: no cover - defensive
             self.selected_frames.append(frame)
             self.document.layer_manager.set_current_frame(frame)
 
@@ -66,9 +69,57 @@ def test_preview_panel_updates_document_frame(qtbot):
     panel = PreviewPanel(stub_app)
     qtbot.addWidget(panel)
 
+    panel.preview_player.play()
     panel._on_preview_frame_changed(1)
-    assert stub_app.selected_frames == [1]
-    assert document.layer_manager.current_frame == 1
 
-    panel._on_preview_frame_changed(1)
-    assert stub_app.selected_frames == [1]
+    assert stub_app.selected_frames == []
+    assert document.layer_manager.current_frame == 0
+    panel.preview_player.pause()
+
+
+def test_preview_panel_renders_requested_frame(qtbot):
+    document = Document(1, 1)
+    layer = document.layer_manager.active_layer
+    base_image = QImage(1, 1, QImage.Format_ARGB32)
+    base_image.fill(QColor("red"))
+    layer.keys[0].image = base_image
+
+    blue_image = QImage(1, 1, QImage.Format_ARGB32)
+    blue_image.fill(QColor("blue"))
+    layer.keys.append(Key.from_qimage(blue_image, frame_number=3))
+
+    class StubApp:
+        def __init__(self, doc: Document) -> None:
+            self.document = doc
+
+    stub_app = StubApp(document)
+    panel = PreviewPanel(stub_app)
+    qtbot.addWidget(panel)
+    panel.set_loop_range(0, 4)
+
+    panel.preview_player.play()
+    panel._on_preview_frame_changed(3)
+
+    pixmap = panel.preview_label.pixmap()
+    assert pixmap is not None
+    sampled = pixmap.toImage().pixelColor(0, 0)
+    assert sampled == QColor("blue")
+    assert document.layer_manager.current_frame == 0
+    panel.preview_player.pause()
+
+
+def test_preview_panel_tracks_document_frame_when_idle(qtbot):
+    document = Document(2, 2)
+
+    class StubApp:
+        def __init__(self, doc: Document) -> None:
+            self.document = doc
+
+    stub_app = StubApp(document)
+    panel = PreviewPanel(stub_app)
+    qtbot.addWidget(panel)
+
+    document.layer_manager.set_current_frame(2)
+    panel.sync_to_document_frame()
+
+    assert panel.preview_player.current_frame == 2
