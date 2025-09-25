@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+from typing import Iterable, Optional
 
 from PySide6.QtCore import QPointF, QRect, Qt, Signal
 from PySide6.QtGui import QPainter, QPen, QPalette
@@ -12,6 +12,7 @@ class AnimationPanel(QWidget):
     """Timeline widget that exposes the current animation frame."""
 
     frame_selected = Signal(int)
+    frame_double_clicked = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -28,6 +29,7 @@ class AnimationPanel(QWidget):
         self._is_dragging_frame = False
         self._is_panning = False
         self._last_pan_pos: Optional[QPointF] = None
+        self._keyframes: tuple[int, ...] = tuple()
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -76,6 +78,16 @@ class AnimationPanel(QWidget):
         self._is_panning = False
         self._last_pan_pos = None
         super().leaveEvent(event)
+
+    def mouseDoubleClickEvent(self, event):  # noqa: N802 - Qt override
+        if event.button() == Qt.LeftButton:
+            frame = self._frame_from_x(event.position().x())
+            if frame is not None:
+                self._select_frame_at(event.position().x())
+                self.frame_double_clicked.emit(frame)
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
 
     def resizeEvent(self, event):  # noqa: N802 - Qt override
         self._clamp_offset()
@@ -133,6 +145,38 @@ class AnimationPanel(QWidget):
                     text_height,
                 )
                 painter.drawText(text_rect, Qt.AlignCenter, text)
+
+        if self._keyframes:
+            outline_color = self.palette().color(QPalette.WindowText)
+            base_fill = self.palette().color(QPalette.Highlight)
+            inactive_fill = base_fill.lighter(165)
+
+            outline_pen = QPen(outline_color)
+            outline_pen.setCosmetic(True)
+
+            half_width = 4
+            half_height = 5
+            center_offset = 5
+            min_x = baseline_left - half_width - 1
+            max_x = baseline_right + half_width + 1
+
+            for frame in self._keyframes:
+                key_x = round(self._frame_to_x(frame))
+                if key_x < min_x or key_x > max_x:
+                    continue
+
+                fill_color = base_fill if frame == self._current_frame else inactive_fill
+                painter.setPen(outline_pen)
+                painter.setBrush(fill_color)
+
+                center_y = timeline_y - center_offset
+                points = [
+                    QPointF(key_x, center_y - half_height),
+                    QPointF(key_x + half_width, center_y),
+                    QPointF(key_x, center_y + half_height),
+                    QPointF(key_x - half_width, center_y),
+                ]
+                painter.drawPolygon(points)
 
         # draw current frame indicator line
         current_x = round(self._frame_to_x(self._current_frame))
@@ -204,6 +248,27 @@ class AnimationPanel(QWidget):
     def _set_offset(self, value: float) -> None:
         self._offset = value
         self._clamp_offset()
+        self.update()
+
+    def set_keyframes(self, frames: Iterable[int]) -> None:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            try:
+                value = int(frame)
+            except (TypeError, ValueError):
+                continue
+            if value < 0:
+                value = 0
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        normalized.sort()
+        keyframe_tuple = tuple(normalized)
+        if keyframe_tuple == self._keyframes:
+            return
+        self._keyframes = keyframe_tuple
         self.update()
 
     def _clamp_offset(self) -> None:

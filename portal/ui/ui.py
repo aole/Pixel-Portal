@@ -67,7 +67,6 @@ class MainWindow(QMainWindow):
 
         self.preview_panel = PreviewPanel(self.app)
         loop_start, loop_end = self.app.playback_loop_range
-        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
 
@@ -157,7 +156,6 @@ class MainWindow(QMainWindow):
         self.color_toolbar.addWidget(self.color_container)
 
         # Preview Panel
-        self.preview_panel.set_playback_total_frames(self.app.playback_total_frames)
         loop_start, loop_end = self.app.playback_loop_range
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
@@ -168,6 +166,9 @@ class MainWindow(QMainWindow):
         # Animation Panel
         self.animation_panel = AnimationPanel(self)
         self.animation_panel.frame_selected.connect(self.on_animation_frame_selected)
+        self.animation_panel.frame_double_clicked.connect(
+            self.on_animation_frame_double_clicked
+        )
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
@@ -265,24 +266,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def sync_timeline_from_document(self):
-        playback_total = max(1, self.app.playback_total_frames)
         loop_start, loop_end = self.app.playback_loop_range
-        loop_end = max(0, min(loop_end, playback_total - 1))
-        loop_start = max(0, min(loop_start, loop_end))
 
-        raw_fps = getattr(self.app, "playback_fps", 12.0)
-        try:
-            fps_value = float(raw_fps)
-        except (TypeError, ValueError):
-            fps_value = 12.0
-        if fps_value <= 0:
-            fps_value = 12.0
+        fps_value = getattr(self.app, "playback_fps", 12.0)
 
-        self.app.set_playback_total_frames(playback_total)
         self.app.set_playback_loop_range(loop_start, loop_end)
         self.app.set_playback_fps(fps_value)
 
-        self.preview_panel.set_playback_total_frames(playback_total)
         self.preview_panel.set_loop_range(loop_start, loop_end)
         self.preview_panel.set_playback_fps(self.app.playback_fps)
 
@@ -290,7 +280,13 @@ class MainWindow(QMainWindow):
             document = getattr(self.app, "document", None)
             layer_manager = getattr(document, "layer_manager", None) if document else None
             current_frame = getattr(layer_manager, "current_frame", 0) if layer_manager else 0
+            active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
+            keyframes = ()
+            if active_layer is not None:
+                keys = getattr(active_layer, "keys", [])
+                keyframes = [getattr(key, "frame_number", 0) for key in keys]
             self.animation_panel.set_current_frame(current_frame)
+            self.animation_panel.set_keyframes(keyframes)
 
     @Slot(int)
     def on_animation_frame_selected(self, frame: int) -> None:
@@ -302,6 +298,10 @@ class MainWindow(QMainWindow):
         self.app.select_frame(frame)
         self.preview_panel.preview_player.set_current_frame(frame)
         self.canvas.update()
+
+    @Slot(int)
+    def on_animation_frame_double_clicked(self, frame: int) -> None:
+        self.app.add_keyframe(frame)
 
     @Slot()
     def on_document_changed(self):

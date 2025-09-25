@@ -145,13 +145,6 @@ class App(QObject):
         self.document_controller.set_ai_output_rect(rect)
 
     @property
-    def playback_total_frames(self) -> int:
-        return self.document_controller.playback_total_frames
-
-    def set_playback_total_frames(self, frame_count: int) -> None:
-        self.document_controller.set_playback_total_frames(frame_count)
-
-    @property
     def playback_loop_range(self) -> tuple[int, int]:
         return self.document_controller.playback_loop_range
 

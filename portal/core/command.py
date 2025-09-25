@@ -6,10 +6,13 @@ from enum import Enum, auto
 from PySide6.QtGui import QImage, QPainter, QPen, QColor, QPainterPath, QPainterPathStroker
 from PySide6.QtCore import QRect, QPoint, Qt, QSize
 from portal.core.layer import Layer
+from portal.core.key import Key
 from portal.core.drawing import Drawing
 
 if TYPE_CHECKING:
     from portal.core.document import Document
+    from portal.core.document_controller import DocumentController
+    from portal.core.layer_manager import LayerManager
 
 
 class Command(ABC):
@@ -46,6 +49,65 @@ class CompositeCommand(Command):
         for command in reversed(self.commands):
             command.undo()
 
+
+class AddKeyframeCommand(Command):
+    """Insert a blank keyframe into the active layer."""
+
+    def __init__(
+        self,
+        controller: "DocumentController",
+        layer: Layer,
+        frame_index: int,
+    ) -> None:
+        self.controller = controller
+        self.document = getattr(controller, "document", None)
+        self.layer_manager = getattr(self.document, "layer_manager", None)
+        self.layer = layer
+
+        self.frame_index = frame_index
+
+        self.created_key: Key | None = None
+        self.previous_active_key_index = getattr(layer, "active_key_index", 0)
+        self.previous_current_frame = (
+            getattr(self.layer_manager, "current_frame", 0) if self.layer_manager else 0
+        )
+
+    def execute(self) -> None:
+        if self.created_key is None:
+            base_image = getattr(self.layer, "image", None)
+            if base_image is not None and hasattr(base_image, "width") and hasattr(base_image, "height"):
+                width = max(1, int(base_image.width()))
+                height = max(1, int(base_image.height()))
+            else:
+                width = max(1, int(getattr(self.document, "width", 1)))
+                height = max(1, int(getattr(self.document, "height", 1)))
+            self.created_key = Key(width, height, frame_number=self.frame_index)
+            self.layer._register_key(self.created_key)
+
+        insert_index = len(self.layer.keys)
+        for idx, key in enumerate(self.layer.keys):
+            if getattr(key, "frame_number", 0) > self.frame_index:
+                insert_index = idx
+                break
+        self.layer.keys.insert(insert_index, self.created_key)
+
+        active_index = insert_index
+        self.layer.set_active_key_index(active_index)
+
+        self.layer_manager.set_current_frame(self.frame_index)
+
+    def undo(self) -> None:
+        if self.layer is None or self.layer_manager is None:
+            return
+
+        if self.created_key is not None:
+            try:
+                self.layer.keys.remove(self.created_key)
+            except ValueError:
+                pass
+
+        self.layer.set_active_key_index(self.previous_active_key_index)
+        self.layer_manager.set_current_frame(self.previous_current_frame)
 
 class ModifyImageCommand(Command):
     """A command that modifies a layer's image with a drawing function."""
