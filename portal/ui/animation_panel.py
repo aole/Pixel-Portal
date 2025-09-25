@@ -14,6 +14,7 @@ class AnimationPanel(QWidget):
     frame_selected = Signal(int)
     frame_double_clicked = Signal(int)
     loop_range_changed = Signal(int, int)
+    keyframe_selection_changed = Signal(tuple)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,6 +38,12 @@ class AnimationPanel(QWidget):
         self._dragging_loop_end = False
         self._loop_start_handle_rect = QRectF()
         self._loop_end_handle_rect = QRectF()
+        self._selected_keyframes: tuple[int, ...] = tuple()
+        self._selection_anchor: int | None = None
+
+    @property
+    def selected_keyframes(self) -> tuple[int, ...]:
+        return self._selected_keyframes
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -65,6 +72,22 @@ class AnimationPanel(QWidget):
                 event.accept()
                 return
             self._is_dragging_frame = True
+            modifiers = event.modifiers()
+            keyframe = self._keyframe_hit_test(event.position())
+            if keyframe is not None:
+                if modifiers & Qt.ShiftModifier:
+                    self._extend_selection_to(keyframe)
+                elif modifiers & Qt.ControlModifier:
+                    self._toggle_keyframe_selection(keyframe)
+                else:
+                    self._select_single_keyframe(keyframe)
+                self._select_frame_at(event.position().x())
+                event.accept()
+                return
+            if not (modifiers & (Qt.ControlModifier | Qt.ShiftModifier)):
+                if self._selected_keyframes:
+                    self._set_selected_keyframes(())
+                self._selection_anchor = None
             self._select_frame_at(event.position().x())
             event.accept()
             return
@@ -263,7 +286,10 @@ class AnimationPanel(QWidget):
                 if key_x < min_x or key_x > max_x:
                     continue
 
-                fill_color = base_fill if frame == self._current_frame else inactive_fill
+                is_selected = frame in self._selected_keyframes or (
+                    not self._selected_keyframes and frame == self._current_frame
+                )
+                fill_color = base_fill if is_selected else inactive_fill
                 painter.setPen(outline_pen)
                 painter.setBrush(fill_color)
 
@@ -328,6 +354,48 @@ class AnimationPanel(QWidget):
         if expanded_end.contains(pos):
             return "end"
         return None
+
+    def _keyframe_hit_test(self, pos: QPointF) -> Optional[int]:
+        if not self._keyframes:
+            return None
+        rect = self.rect()
+        baseline_left = rect.left() + self._left_margin
+        baseline_right = rect.right() - self._right_margin
+        if pos.x() < baseline_left - 8 or pos.x() > baseline_right + 8:
+            return None
+
+        timeline_y = rect.bottom() - 24
+        min_timeline_y = rect.top() + 40
+        if timeline_y < min_timeline_y:
+            timeline_y = min_timeline_y
+        center_y = timeline_y - 5
+        half_width = 4
+        half_height = 5
+
+        hit_rect = QRectF(
+            pos.x() - half_width,
+            pos.y() - half_height,
+            half_width * 2,
+            half_height * 2,
+        )
+
+        closest: Optional[int] = None
+        min_distance: float = float("inf")
+        for frame in self._keyframes:
+            key_x = self._frame_to_x(frame)
+            key_rect = QRectF(
+                key_x - half_width,
+                center_y - half_height,
+                half_width * 2,
+                half_height * 2,
+            )
+            if not key_rect.adjusted(-2, -2, 2, 2).intersects(hit_rect):
+                continue
+            distance = abs(key_x - pos.x())
+            if distance < min_distance:
+                min_distance = distance
+                closest = frame
+        return closest
 
     def _update_loop_start_from_x(self, x: float) -> None:
         frame = self._frame_from_x(x)
@@ -405,7 +473,59 @@ class AnimationPanel(QWidget):
         if keyframe_tuple == self._keyframes:
             return
         self._keyframes = keyframe_tuple
+        self._sync_selection_with_available_keyframes()
         self.update()
+
+    def _set_selected_keyframes(self, frames: Iterable[int]) -> None:
+        unique = {int(frame) for frame in frames}
+        normalized = tuple(sorted(unique))
+        if normalized == self._selected_keyframes:
+            return
+        self._selected_keyframes = normalized
+        self.keyframe_selection_changed.emit(self._selected_keyframes)
+        self.update()
+
+    def _select_single_keyframe(self, frame: int) -> None:
+        self._selection_anchor = frame
+        self._set_selected_keyframes((frame,))
+
+    def _toggle_keyframe_selection(self, frame: int) -> None:
+        current = list(self._selected_keyframes)
+        if frame in current:
+            current.remove(frame)
+            if self._selection_anchor == frame:
+                self._selection_anchor = current[-1] if current else None
+        else:
+            current.append(frame)
+            self._selection_anchor = frame
+        self._set_selected_keyframes(current)
+
+    def _extend_selection_to(self, frame: int) -> None:
+        if self._selection_anchor is None:
+            self._select_single_keyframe(frame)
+            return
+        lower = min(self._selection_anchor, frame)
+        upper = max(self._selection_anchor, frame)
+        frames = [key for key in self._keyframes if lower <= key <= upper]
+        if not frames:
+            self._select_single_keyframe(frame)
+            return
+        self._set_selected_keyframes(frames)
+
+    def _sync_selection_with_available_keyframes(self) -> None:
+        if not self._selected_keyframes:
+            if self._selection_anchor not in self._keyframes:
+                self._selection_anchor = None
+            return
+        available = [frame for frame in self._selected_keyframes if frame in self._keyframes]
+        if not available:
+            self._selection_anchor = None
+            self._set_selected_keyframes(())
+            return
+        if self._selection_anchor not in self._keyframes:
+            self._selection_anchor = available[-1]
+        if tuple(available) != self._selected_keyframes:
+            self._set_selected_keyframes(available)
 
     def _clamp_offset(self) -> None:
         rect = self.rect()
