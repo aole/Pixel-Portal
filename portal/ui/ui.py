@@ -293,7 +293,6 @@ class MainWindow(QMainWindow):
             document = getattr(self.app, "document", None)
             layer_manager = getattr(document, "layer_manager", None) if document else None
             current_frame = getattr(layer_manager, "current_frame", 0) if layer_manager else 0
-            self.animation_panel.set_total_frames(playback_total)
             self.animation_panel.set_current_frame(current_frame)
 
     @Slot(int)

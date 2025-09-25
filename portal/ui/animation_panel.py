@@ -18,7 +18,6 @@ class AnimationPanel(QWidget):
         self.setMinimumHeight(60)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        self._total_frames = 1
         self._current_frame = 0
         self._pixels_per_frame = 10.0
         self._offset = 0.0
@@ -30,18 +29,8 @@ class AnimationPanel(QWidget):
         self._is_panning = False
         self._last_pan_pos: Optional[QPointF] = None
 
-    def set_total_frames(self, total: int) -> None:
-        total = max(1, int(total))
-        if total == self._total_frames:
-            return
-        self._total_frames = total
-        if self._current_frame >= self._total_frames:
-            self._current_frame = self._total_frames - 1
-        self._ensure_frame_visible(self._current_frame)
-        self.update()
-
     def set_current_frame(self, frame: int) -> None:
-        frame = max(0, min(int(frame), self._total_frames - 1))
+        frame = max(0, int(frame))
         if frame == self._current_frame:
             return
         self._current_frame = frame
@@ -112,12 +101,12 @@ class AnimationPanel(QWidget):
         painter.drawLine(baseline_left, timeline_y, baseline_right, timeline_y)
 
         available_width = max(0, baseline_right - baseline_left)
-        visible_left = -self._offset
+        visible_left = max(0.0, -self._offset)
         visible_right = visible_left + available_width
 
         start_frame = max(0, int(math.floor(visible_left / self._pixels_per_frame)) - 1)
-        end_frame = min(
-            self._total_frames,
+        end_frame = max(
+            start_frame + 1,
             int(math.ceil(visible_right / self._pixels_per_frame)) + 2,
         )
 
@@ -187,7 +176,7 @@ class AnimationPanel(QWidget):
         relative = x - rect.left() - self._left_margin - self._offset
         frame_value = relative / self._pixels_per_frame
         frame = int(round(frame_value))
-        return max(0, min(frame, self._total_frames - 1))
+        return max(0, frame)
 
     def _set_offset(self, value: float) -> None:
         self._offset = value
@@ -201,17 +190,8 @@ class AnimationPanel(QWidget):
             self._offset = 0.0
             return
 
-        total_length = self._total_frames * self._pixels_per_frame
-        if total_length <= available_width:
+        if self._offset > 0:
             self._offset = 0.0
-            return
-
-        max_offset = 0.0
-        min_offset = available_width - total_length
-        if self._offset > max_offset:
-            self._offset = max_offset
-        elif self._offset < min_offset:
-            self._offset = min_offset
 
     def _ensure_frame_visible(self, frame: int) -> None:
         rect = self.rect()
@@ -219,13 +199,8 @@ class AnimationPanel(QWidget):
         if available_width <= 0:
             return
 
-        total_length = self._total_frames * self._pixels_per_frame
-        if total_length <= available_width:
-            self._offset = 0.0
-            return
-
         target = frame * self._pixels_per_frame
-        left_edge = -self._offset
+        left_edge = max(0.0, -self._offset)
         right_edge = left_edge + available_width
 
         if target < left_edge:
