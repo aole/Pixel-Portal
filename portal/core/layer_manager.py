@@ -165,18 +165,20 @@ class LayerManager(QObject):
             layer.keys.insert(insert_at, key)
 
         for frame in union_frames:
+            top_key = top_frames.get(frame)
             bottom_key = bottom_frames.get(frame)
+
             if bottom_key is None:
-                base_index = bottom_layer._index_for_frame(frame)
-                base_key = bottom_layer.keys[base_index]
-                new_key = base_key.clone(deep_copy=True)
+                if top_key is None:
+                    continue
+                new_key = top_key.clone(deep_copy=True)
                 new_key.frame_number = frame
                 bottom_layer._register_key(new_key)
                 _insert_key_sorted(bottom_layer, new_key)
                 bottom_frames[frame] = new_key
                 bottom_key = new_key
+                continue
 
-            top_key = top_frames.get(frame)
             if top_key is None:
                 continue
 
