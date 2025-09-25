@@ -219,6 +219,7 @@ class PreviewPanel(QWidget):
 
     def _on_preview_frame_changed(self, frame: int) -> None:
         self._current_playback_frame = frame
+        self._sync_document_frame(frame)
         self.update_preview(playback_index=frame)
 
     def _pixmap_for_document(self, document) -> QPixmap | None:
@@ -250,3 +251,19 @@ class PreviewPanel(QWidget):
         if isinstance(image, QPixmap):
             return image.toImage()
         return None
+
+    def _sync_document_frame(self, frame: int) -> None:
+        document = getattr(self.app, "document", None)
+        layer_manager = getattr(document, "layer_manager", None) if document else None
+        if layer_manager is None:
+            return
+
+        try:
+            normalized_frame = int(frame)
+        except (TypeError, ValueError):
+            normalized_frame = layer_manager.current_frame
+
+        if normalized_frame == layer_manager.current_frame:
+            return
+
+        self.app.select_frame(normalized_frame)
