@@ -290,7 +290,13 @@ class MainWindow(QMainWindow):
             document = getattr(self.app, "document", None)
             layer_manager = getattr(document, "layer_manager", None) if document else None
             current_frame = getattr(layer_manager, "current_frame", 0) if layer_manager else 0
+            active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
+            keyframes = ()
+            if active_layer is not None:
+                keys = getattr(active_layer, "keys", [])
+                keyframes = [getattr(key, "frame_number", 0) for key in keys]
             self.animation_panel.set_current_frame(current_frame)
+            self.animation_panel.set_keyframes(keyframes)
 
     @Slot(int)
     def on_animation_frame_selected(self, frame: int) -> None:
