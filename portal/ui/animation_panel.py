@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Iterable, Optional
 
-from PySide6.QtCore import QPointF, QRect, Qt, Signal
+from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import QPainter, QPen, QPalette
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -13,10 +13,11 @@ class AnimationPanel(QWidget):
 
     frame_selected = Signal(int)
     frame_double_clicked = Signal(int)
+    loop_range_changed = Signal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(60)
+        self.setMinimumHeight(90)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._current_frame = 0
@@ -30,6 +31,12 @@ class AnimationPanel(QWidget):
         self._is_panning = False
         self._last_pan_pos: Optional[QPointF] = None
         self._keyframes: tuple[int, ...] = tuple()
+        self._loop_start = 0
+        self._loop_end = 12
+        self._dragging_loop_start = False
+        self._dragging_loop_end = False
+        self._loop_start_handle_rect = QRectF()
+        self._loop_end_handle_rect = QRectF()
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -39,8 +46,24 @@ class AnimationPanel(QWidget):
         self._ensure_frame_visible(frame)
         self.update()
 
+    def set_loop_range(self, start: int, end: int) -> None:
+        self._loop_start = start
+        self._loop_end = end
+        self.update()
+
     def mousePressEvent(self, event):  # noqa: N802 - Qt override
         if event.button() == Qt.LeftButton:
+            handle = self._loop_handle_hit_test(event.position())
+            if handle == "start":
+                self._dragging_loop_start = True
+                self._is_dragging_frame = False
+                event.accept()
+                return
+            if handle == "end":
+                self._dragging_loop_end = True
+                self._is_dragging_frame = False
+                event.accept()
+                return
             self._is_dragging_frame = True
             self._select_frame_at(event.position().x())
             event.accept()
@@ -53,6 +76,14 @@ class AnimationPanel(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):  # noqa: N802 - Qt override
+        if self._dragging_loop_start and event.buttons() & Qt.LeftButton:
+            self._update_loop_start_from_x(event.position().x())
+            event.accept()
+            return
+        if self._dragging_loop_end and event.buttons() & Qt.LeftButton:
+            self._update_loop_end_from_x(event.position().x())
+            event.accept()
+            return
         if self._is_dragging_frame and event.buttons() & Qt.LeftButton:
             self._select_frame_at(event.position().x())
             event.accept()
@@ -68,6 +99,8 @@ class AnimationPanel(QWidget):
     def mouseReleaseEvent(self, event):  # noqa: N802 - Qt override
         if event.button() == Qt.LeftButton:
             self._is_dragging_frame = False
+            self._dragging_loop_start = False
+            self._dragging_loop_end = False
         elif event.button() == Qt.MiddleButton:
             self._is_panning = False
             self._last_pan_pos = None
@@ -77,6 +110,8 @@ class AnimationPanel(QWidget):
         self._is_dragging_frame = False
         self._is_panning = False
         self._last_pan_pos = None
+        self._dragging_loop_start = False
+        self._dragging_loop_end = False
         super().leaveEvent(event)
 
     def mouseDoubleClickEvent(self, event):  # noqa: N802 - Qt override
@@ -106,9 +141,13 @@ class AnimationPanel(QWidget):
 
         baseline_left = rect.left() + self._left_margin
         baseline_right = rect.right() - self._right_margin
-        timeline_y = rect.center().y() + 10
+        timeline_y = rect.bottom() - 24
+        min_timeline_y = rect.top() + 40
+        if timeline_y < min_timeline_y:
+            timeline_y = min_timeline_y
 
         line_pen = QPen(self.palette().color(QPalette.WindowText))
+        line_pen.setCosmetic(True)
         painter.setPen(line_pen)
         painter.drawLine(baseline_left, timeline_y, baseline_right, timeline_y)
 
@@ -123,6 +162,7 @@ class AnimationPanel(QWidget):
         )
 
         metrics = painter.fontMetrics()
+        highlight_color = self.palette().color(QPalette.Highlight)
 
         for frame in range(start_frame, end_frame):
             tick_x = round(self._frame_to_x(frame))
@@ -138,17 +178,75 @@ class AnimationPanel(QWidget):
                 text = str(frame)
                 text_width = metrics.horizontalAdvance(text)
                 text_height = metrics.height()
+                text_top = timeline_y + 6
+                max_text_top = rect.bottom() - text_height - 2
+                if text_top > max_text_top:
+                    text_top = max_text_top
                 text_rect = QRect(
                     tick_x - text_width // 2,
-                    top - text_height - 2,
+                    text_top,
                     text_width,
                     text_height,
                 )
                 painter.drawText(text_rect, Qt.AlignCenter, text)
 
+        loop_pen = QPen(highlight_color, 2)
+        loop_pen.setCosmetic(True)
+        loop_line_y = timeline_y - 26
+        min_loop_y = rect.top() + 16
+        if loop_line_y < min_loop_y:
+            loop_line_y = min_loop_y
+
+        start_pos = self._frame_to_x(self._loop_start)
+        end_pos = self._frame_to_x(self._loop_end)
+        self._loop_start_handle_rect = QRectF()
+        self._loop_end_handle_rect = QRectF()
+
+        if end_pos >= baseline_left and start_pos <= baseline_right:
+            visible_start = max(baseline_left, int(round(start_pos)))
+            visible_end = min(baseline_right, int(round(end_pos)))
+            if visible_end <= visible_start:
+                visible_end = visible_start + 1
+            painter.setPen(loop_pen)
+            painter.drawLine(visible_start, loop_line_y, visible_end, loop_line_y)
+
+        handle_pen = QPen(self.palette().color(QPalette.WindowText))
+        handle_pen.setCosmetic(True)
+        handle_width = 10.0
+        handle_height = 18.0
+
+        if baseline_left <= start_pos <= baseline_right:
+            start_center = round(start_pos)
+            start_rect = QRectF(
+                start_center - handle_width / 2,
+                loop_line_y - handle_height / 2,
+                handle_width,
+                handle_height,
+            )
+            painter.setPen(handle_pen)
+            painter.setBrush(highlight_color)
+            painter.drawRoundedRect(start_rect, 3, 3)
+            self._loop_start_handle_rect = start_rect
+
+        if baseline_left <= end_pos <= baseline_right:
+            end_center = round(end_pos)
+            end_rect = QRectF(
+                end_center - handle_width / 2,
+                loop_line_y - handle_height / 2,
+                handle_width,
+                handle_height,
+            )
+            painter.setPen(handle_pen)
+            painter.setBrush(highlight_color)
+            painter.drawRoundedRect(end_rect, 3, 3)
+            self._loop_end_handle_rect = end_rect
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(line_pen)
+
         if self._keyframes:
             outline_color = self.palette().color(QPalette.WindowText)
-            base_fill = self.palette().color(QPalette.Highlight)
+            base_fill = highlight_color
             inactive_fill = base_fill.lighter(165)
 
             outline_pen = QPen(outline_color)
@@ -184,7 +282,7 @@ class AnimationPanel(QWidget):
         highlight_pen = QPen(highlight_color, 2)
         highlight_pen.setCosmetic(True)
         painter.setPen(highlight_pen)
-        painter.drawLine(current_x, timeline_y - 13, current_x, timeline_y + 4)
+        painter.drawLine(current_x, timeline_y - 13, current_x, timeline_y + 5)
 
         # draw current frame indicator text
         label_text = str(self._current_frame)
@@ -195,10 +293,11 @@ class AnimationPanel(QWidget):
         total_width = text_width + padding_x * 2
         total_height = text_height + padding_y * 2
 
-        major_marker_height = 13
-        marker_top = timeline_y - major_marker_height
-        label_text_top = marker_top - text_height - 2
-        label_top = label_text_top - padding_y
+        label_gap = 6
+        max_label_top = int(loop_line_y) + label_gap
+        min_label_top = rect.top() + 4
+        # display the current frame label as the same height as scale time labels.
+        label_top = timeline_y + 4
 
         label_left = current_x - total_width // 2
         min_left = rect.left() + 4
@@ -221,6 +320,43 @@ class AnimationPanel(QWidget):
     # ------------------------------------------------------------------
     # Helper methods
     # ------------------------------------------------------------------
+    def _loop_handle_hit_test(self, pos: QPointF) -> Optional[str]:
+        expanded_start = self._loop_start_handle_rect.adjusted(-4, -4, 4, 4)
+        expanded_end = self._loop_end_handle_rect.adjusted(-4, -4, 4, 4)
+        if expanded_start.contains(pos):
+            return "start"
+        if expanded_end.contains(pos):
+            return "end"
+        return None
+
+    def _update_loop_start_from_x(self, x: float) -> None:
+        frame = self._frame_from_x(x)
+        if frame is None:
+            return
+        if frame < 0:
+            frame = 0
+        if frame >= self._loop_end:
+            frame = self._loop_end - 1
+        if frame == self._loop_start:
+            return
+        self._loop_start = frame
+        if self._loop_end <= self._loop_start:
+            self._loop_end = self._loop_start + 1
+        self.loop_range_changed.emit(self._loop_start, self._loop_end)
+        self.update()
+
+    def _update_loop_end_from_x(self, x: float) -> None:
+        frame = self._frame_from_x(x)
+        if frame is None:
+            return
+        if frame <= self._loop_start:
+            frame = self._loop_start + 1
+        if frame == self._loop_end:
+            return
+        self._loop_end = frame
+        self.loop_range_changed.emit(self._loop_start, self._loop_end)
+        self.update()
+
     def _frame_to_x(self, frame: int) -> float:
         rect = self.rect()
         return rect.left() + self._left_margin + self._offset + frame * self._pixels_per_frame

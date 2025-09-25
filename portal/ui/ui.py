@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         self.animation_panel.frame_double_clicked.connect(
             self.on_animation_frame_double_clicked
         )
+        self.animation_panel.loop_range_changed.connect(self.on_loop_range_changed)
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
@@ -285,8 +286,10 @@ class MainWindow(QMainWindow):
             if active_layer is not None:
                 keys = getattr(active_layer, "keys", [])
                 keyframes = [getattr(key, "frame_number", 0) for key in keys]
+            self.animation_panel.set_loop_range(loop_start, loop_end)
             self.animation_panel.set_current_frame(current_frame)
             self.animation_panel.set_keyframes(keyframes)
+            self.preview_panel.sync_to_document_frame(current_frame)
 
     @Slot(int)
     def on_animation_frame_selected(self, frame: int) -> None:
@@ -296,12 +299,17 @@ class MainWindow(QMainWindow):
             return
 
         self.app.select_frame(frame)
-        self.preview_panel.preview_player.set_current_frame(frame)
+        self.preview_panel.sync_to_document_frame(frame)
         self.canvas.update()
 
     @Slot(int)
     def on_animation_frame_double_clicked(self, frame: int) -> None:
         self.app.add_keyframe(frame)
+
+    @Slot(int, int)
+    def on_loop_range_changed(self, start: int, end: int) -> None:
+        self.app.set_playback_loop_range(start, end)
+        self.preview_panel.set_loop_range(start, end)
 
     @Slot()
     def on_document_changed(self):
