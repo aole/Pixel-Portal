@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from portal.core.layer import Layer
+from portal.core.key import Key
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QImage
 from PIL.ImageQt import ImageQt
@@ -142,18 +143,54 @@ class LayerManager(QObject):
             self.active_layer_index += 1
         self.layer_structure_changed.emit()
 
-    def merge_layer_down(self, index: int):
-        """Merges the layer at the given index with the layer below it."""
+    def merge_layer_down(self, index: int) -> None:
+        """Merge the layer at ``index`` into the one directly below it."""
+
         if not (0 < index < len(self.layers)):
             raise IndexError("Cannot merge: invalid index or no layer below.")
 
         top_layer = self.layers[index]
         bottom_layer = self.layers[index - 1]
 
-        painter = QPainter(bottom_layer.image)
-        painter.setOpacity(top_layer.opacity)
-        painter.drawImage(0, 0, top_layer.image)
-        painter.end()
+        top_frames = {key.frame_number: key for key in top_layer.keys}
+        bottom_frames = {key.frame_number: key for key in bottom_layer.keys}
+        union_frames = sorted(set(top_frames) | set(bottom_frames))
+
+        def _insert_key_sorted(layer: Layer, key: Key) -> None:
+            insert_at = len(layer.keys)
+            for idx, existing in enumerate(layer.keys):
+                if existing.frame_number > key.frame_number:
+                    insert_at = idx
+                    break
+            layer.keys.insert(insert_at, key)
+
+        for frame in union_frames:
+            bottom_key = bottom_frames.get(frame)
+            if bottom_key is None:
+                base_index = bottom_layer._index_for_frame(frame)
+                base_key = bottom_layer.keys[base_index]
+                new_key = base_key.clone(deep_copy=True)
+                new_key.frame_number = frame
+                bottom_layer._register_key(new_key)
+                _insert_key_sorted(bottom_layer, new_key)
+                bottom_frames[frame] = new_key
+                bottom_key = new_key
+
+            top_key = top_frames.get(frame)
+            if top_key is None:
+                continue
+
+            painter = QPainter(bottom_key.image)
+            painter.setOpacity(top_layer.opacity)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            painter.drawImage(0, 0, top_key.image)
+            painter.end()
+            bottom_key.image_changed.emit()
+
+        if bottom_layer._layer_manager is self:
+            current_frame = self.current_frame
+            resolved_index = bottom_layer._index_for_frame(current_frame)
+            bottom_layer.set_active_key_index(resolved_index)
 
         self.remove_layer(index)
 
