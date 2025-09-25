@@ -94,7 +94,7 @@ class AnimationPanel(QWidget):
 
         baseline_left = rect.left() + self._left_margin
         baseline_right = rect.right() - self._right_margin
-        timeline_y = rect.center().y()
+        timeline_y = rect.center().y() + 10
 
         line_pen = QPen(self.palette().color(QPalette.WindowText))
         painter.setPen(line_pen)
@@ -134,13 +134,15 @@ class AnimationPanel(QWidget):
                 )
                 painter.drawText(text_rect, Qt.AlignCenter, text)
 
+        # draw current frame indicator line
         current_x = round(self._frame_to_x(self._current_frame))
         highlight_color = self.palette().color(QPalette.Highlight)
         highlight_pen = QPen(highlight_color, 2)
         highlight_pen.setCosmetic(True)
         painter.setPen(highlight_pen)
-        painter.drawLine(current_x, rect.top() + 4, current_x, rect.bottom() - 4)
+        painter.drawLine(current_x, timeline_y - 13, current_x, timeline_y + 4)
 
+        # draw current frame indicator text
         label_text = str(self._current_frame)
         text_width = metrics.horizontalAdvance(label_text)
         text_height = metrics.height()
@@ -164,7 +166,7 @@ class AnimationPanel(QWidget):
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(highlight_color)
-        painter.drawRect(label_rect)
+        painter.drawRoundedRect(label_rect, 4, 4)
 
         text_rect = label_rect.adjusted(padding_x, padding_y, -padding_x, -padding_y)
         painter.setPen(QPen(Qt.white))
