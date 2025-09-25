@@ -141,7 +141,7 @@ class AnimationPanel(QWidget):
 
         baseline_left = rect.left() + self._left_margin
         baseline_right = rect.right() - self._right_margin
-        timeline_y = rect.bottom() - 24
+        timeline_y = rect.bottom() - 30
         min_timeline_y = rect.top() + 40
         if timeline_y < min_timeline_y:
             timeline_y = min_timeline_y
@@ -164,6 +164,7 @@ class AnimationPanel(QWidget):
         metrics = painter.fontMetrics()
         highlight_color = self.palette().color(QPalette.Highlight)
 
+        # draw all frames
         for frame in range(start_frame, end_frame):
             tick_x = round(self._frame_to_x(frame))
             if tick_x < baseline_left - 2 or tick_x > baseline_right + 2:
@@ -174,6 +175,7 @@ class AnimationPanel(QWidget):
             top = timeline_y - marker_height
             painter.drawLine(tick_x, timeline_y, tick_x, top)
 
+            # draw frame label at major markers
             if is_major:
                 text = str(frame)
                 text_width = metrics.horizontalAdvance(text)
@@ -192,7 +194,7 @@ class AnimationPanel(QWidget):
 
         loop_pen = QPen(highlight_color, 2)
         loop_pen.setCosmetic(True)
-        loop_line_y = timeline_y - 26
+        loop_line_y = timeline_y - 20
         min_loop_y = rect.top() + 16
         if loop_line_y < min_loop_y:
             loop_line_y = min_loop_y
@@ -202,6 +204,7 @@ class AnimationPanel(QWidget):
         self._loop_start_handle_rect = QRectF()
         self._loop_end_handle_rect = QRectF()
 
+        # draw loop line
         if end_pos >= baseline_left and start_pos <= baseline_right:
             visible_start = max(baseline_left, int(round(start_pos)))
             visible_end = min(baseline_right, int(round(end_pos)))
@@ -213,13 +216,28 @@ class AnimationPanel(QWidget):
         handle_pen = QPen(self.palette().color(QPalette.WindowText))
         handle_pen.setCosmetic(True)
         handle_width = 10.0
-        handle_height = 18.0
+        handle_height = 12.0
 
+        # draw loop text
+        start_center = round(start_pos)
+        text = "Loop"
+        text_width = metrics.horizontalAdvance(text)
+        text_height = metrics.height()
+        text_top = loop_line_y - (text_height + 2)
+        text_rect = QRect(
+            start_center + handle_width / 2 + 4,
+            text_top,
+            text_width,
+            text_height,
+        )
+        painter.setPen(handle_pen)
+        painter.drawText(text_rect, Qt.AlignLeft, text)
+        
+        # draw left loop handle
         if baseline_left <= start_pos <= baseline_right:
-            start_center = round(start_pos)
             start_rect = QRectF(
                 start_center - handle_width / 2,
-                loop_line_y - handle_height / 2,
+                loop_line_y - handle_height,
                 handle_width,
                 handle_height,
             )
@@ -228,11 +246,12 @@ class AnimationPanel(QWidget):
             painter.drawRoundedRect(start_rect, 3, 3)
             self._loop_start_handle_rect = start_rect
 
+        # draw right loop handle
         if baseline_left <= end_pos <= baseline_right:
             end_center = round(end_pos)
             end_rect = QRectF(
                 end_center - handle_width / 2,
-                loop_line_y - handle_height / 2,
+                loop_line_y - handle_height,
                 handle_width,
                 handle_height,
             )
@@ -243,38 +262,6 @@ class AnimationPanel(QWidget):
 
         painter.setBrush(Qt.NoBrush)
         painter.setPen(line_pen)
-
-        if self._keyframes:
-            outline_color = self.palette().color(QPalette.WindowText)
-            base_fill = highlight_color
-            inactive_fill = base_fill.lighter(165)
-
-            outline_pen = QPen(outline_color)
-            outline_pen.setCosmetic(True)
-
-            half_width = 4
-            half_height = 5
-            center_offset = 5
-            min_x = baseline_left - half_width - 1
-            max_x = baseline_right + half_width + 1
-
-            for frame in self._keyframes:
-                key_x = round(self._frame_to_x(frame))
-                if key_x < min_x or key_x > max_x:
-                    continue
-
-                fill_color = base_fill if frame == self._current_frame else inactive_fill
-                painter.setPen(outline_pen)
-                painter.setBrush(fill_color)
-
-                center_y = timeline_y - center_offset
-                points = [
-                    QPointF(key_x, center_y - half_height),
-                    QPointF(key_x + half_width, center_y),
-                    QPointF(key_x, center_y + half_height),
-                    QPointF(key_x - half_width, center_y),
-                ]
-                painter.drawPolygon(points)
 
         # draw current frame indicator line
         current_x = round(self._frame_to_x(self._current_frame))
@@ -314,6 +301,38 @@ class AnimationPanel(QWidget):
         text_rect = label_rect.adjusted(padding_x, padding_y, -padding_x, -padding_y)
         painter.setPen(QPen(Qt.white))
         painter.drawText(text_rect, Qt.AlignCenter, label_text)
+
+        # draw keys
+        if self._keyframes:
+            outline_color = self.palette().color(QPalette.WindowText)
+            base_fill = highlight_color
+
+            outline_pen = QPen(outline_color)
+            outline_pen.setCosmetic(True)
+
+            half_width = 4
+            half_height = 5
+            center_offset = 5
+            min_x = baseline_left - half_width - 1
+            max_x = baseline_right + half_width + 1
+
+            for frame in self._keyframes:
+                key_x = round(self._frame_to_x(frame))
+                if key_x < min_x or key_x > max_x:
+                    continue
+
+                fill_color = base_fill
+                painter.setPen(outline_pen)
+                painter.setBrush(fill_color)
+
+                center_y = timeline_y - center_offset
+                points = [
+                    QPointF(key_x, center_y - half_height),
+                    QPointF(key_x + half_width, center_y),
+                    QPointF(key_x, center_y + half_height),
+                    QPointF(key_x - half_width, center_y),
+                ]
+                painter.drawPolygon(points)
 
         painter.end()
 
