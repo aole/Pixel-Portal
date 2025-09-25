@@ -77,9 +77,6 @@ class MainWindow(QMainWindow):
         central_layout.setSpacing(0)
         central_layout.addWidget(self.canvas, 1)
 
-        self.animation_panel = AnimationPanel(self)
-        central_layout.addWidget(self.animation_panel)
-
         self.setCentralWidget(central_container)
         self._apply_runtime_animation_settings()
         self.sync_timeline_from_document()
@@ -168,6 +165,13 @@ class MainWindow(QMainWindow):
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
 
+        # Animation Panel
+        self.animation_panel = AnimationPanel(self)
+        self.animation_dock = QDockWidget("Animation Timeline", self)
+        self.animation_dock.setWidget(self.animation_panel)
+        self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.animation_dock)
+
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
         self.layer_manager_widget.layer_changed.connect(self.canvas.update)
@@ -205,7 +209,12 @@ class MainWindow(QMainWindow):
         self.app.clear_layer_triggered.connect(self.layer_manager_widget.clear_layer)
         self.app.exit_triggered.connect(self.close)
 
-        menu_bar_builder.set_panels(self.layer_manager_dock, self.preview_dock, self.ai_panel_dock)
+        menu_bar_builder.set_panels(
+            self.layer_manager_dock,
+            self.preview_dock,
+            self.animation_dock,
+            self.ai_panel_dock,
+        )
         menu_bar_builder.set_toolbars([
             toolbar_builder.top_toolbar,
             toolbar_builder.left_toolbar,
