@@ -4,16 +4,17 @@ import math
 from typing import Iterable, Optional
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QPainter, QPen, QPalette
+from PySide6.QtGui import QColor, QPainter, QPen, QPalette
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 
 class AnimationPanel(QWidget):
     """Timeline widget that exposes the current animation frame."""
 
-    frame_selected = Signal(int)
+    current_frame_changed = Signal(int)
     frame_double_clicked = Signal(int)
     loop_range_changed = Signal(int, int)
+    keyframes_selection_changed = Signal(tuple)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,6 +38,8 @@ class AnimationPanel(QWidget):
         self._dragging_loop_end = False
         self._loop_start_handle_rect = QRectF()
         self._loop_end_handle_rect = QRectF()
+        self._selected_keyframes: tuple[int, ...] = tuple()
+        self._selection_anchor: Optional[int] = None
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -64,8 +67,17 @@ class AnimationPanel(QWidget):
                 self._is_dragging_frame = False
                 event.accept()
                 return
+            clicked_key = self._keyframe_at(event.position())
+            if clicked_key is not None:
+                self._handle_keyframe_click(clicked_key, event.modifiers())
+                self._is_dragging_frame = True
+                self._set_current_frame_from_x(event.position().x())
+                event.accept()
+                return
             self._is_dragging_frame = True
-            self._select_frame_at(event.position().x())
+            if self._selected_keyframes:
+                self._set_selected_keyframes(())
+            self._set_current_frame_from_x(event.position().x())
             event.accept()
             return
         if event.button() == Qt.MiddleButton:
@@ -85,7 +97,7 @@ class AnimationPanel(QWidget):
             event.accept()
             return
         if self._is_dragging_frame and event.buttons() & Qt.LeftButton:
-            self._select_frame_at(event.position().x())
+            self._set_current_frame_from_x(event.position().x())
             event.accept()
             return
         if self._is_panning and event.buttons() & Qt.MiddleButton and self._last_pan_pos:
@@ -118,7 +130,7 @@ class AnimationPanel(QWidget):
         if event.button() == Qt.LeftButton:
             frame = self._frame_from_x(event.position().x())
             if frame is not None:
-                self._select_frame_at(event.position().x())
+                self._set_current_frame_from_x(event.position().x())
                 self.frame_double_clicked.emit(frame)
                 event.accept()
                 return
@@ -305,7 +317,8 @@ class AnimationPanel(QWidget):
         # draw keys
         if self._keyframes:
             outline_color = self.palette().color(QPalette.WindowText)
-            base_fill = highlight_color
+            selected_fill = QColor(255, 153, 0)
+            unselected_fill = highlight_color
 
             outline_pen = QPen(outline_color)
             outline_pen.setCosmetic(True)
@@ -321,7 +334,7 @@ class AnimationPanel(QWidget):
                 if key_x < min_x or key_x > max_x:
                     continue
 
-                fill_color = base_fill
+                fill_color = selected_fill if frame in self._selected_keyframes else unselected_fill
                 painter.setPen(outline_pen)
                 painter.setBrush(fill_color)
 
@@ -380,7 +393,7 @@ class AnimationPanel(QWidget):
         rect = self.rect()
         return rect.left() + self._left_margin + self._offset + frame * self._pixels_per_frame
 
-    def _select_frame_at(self, x: float) -> None:
+    def _set_current_frame_from_x(self, x: float) -> None:
         frame = self._frame_from_x(x)
         if frame is None:
             return
@@ -388,7 +401,7 @@ class AnimationPanel(QWidget):
         self._current_frame = frame
         self._ensure_frame_visible(frame)
         if self._current_frame != previous:
-            self.frame_selected.emit(self._current_frame)
+            self.current_frame_changed.emit(self._current_frame)
         self.update()
 
     def _frame_from_x(self, x: float) -> Optional[int]:
@@ -422,8 +435,10 @@ class AnimationPanel(QWidget):
         normalized.sort()
         keyframe_tuple = tuple(normalized)
         if keyframe_tuple == self._keyframes:
+            self._sync_selection_with_keyframes()
             return
         self._keyframes = keyframe_tuple
+        self._sync_selection_with_keyframes()
         self.update()
 
     def _clamp_offset(self) -> None:
@@ -452,3 +467,81 @@ class AnimationPanel(QWidget):
             self._offset = available_width - target
 
         self._clamp_offset()
+
+    def selected_keyframes(self) -> tuple[int, ...]:
+        return self._selected_keyframes
+
+    def _handle_keyframe_click(self, frame: int, modifiers: Qt.KeyboardModifiers) -> None:
+        if modifiers & Qt.ControlModifier:
+            if frame in self._selected_keyframes:
+                remaining = tuple(f for f in self._selected_keyframes if f != frame)
+                self._selection_anchor = remaining[-1] if remaining else None
+                self._set_selected_keyframes(remaining)
+            else:
+                combined = tuple(sorted((*self._selected_keyframes, frame)))
+                self._selection_anchor = frame
+                self._set_selected_keyframes(combined)
+            return
+
+        if modifiers & Qt.ShiftModifier and self._selection_anchor is not None:
+            start = min(self._selection_anchor, frame)
+            end = max(self._selection_anchor, frame)
+            ranged = tuple(f for f in self._keyframes if start <= f <= end)
+            self._set_selected_keyframes(ranged)
+            return
+
+        self._selection_anchor = frame
+        self._set_selected_keyframes((frame,))
+
+    def _set_selected_keyframes(self, frames: Iterable[int]) -> None:
+        normalized = tuple(sorted({int(frame) for frame in frames if frame in self._keyframes}))
+        if normalized != self._selected_keyframes:
+            self._selected_keyframes = normalized
+            selection_changed = True
+        else:
+            selection_changed = False
+
+        if self._selection_anchor not in self._selected_keyframes:
+            self._selection_anchor = (
+                self._selected_keyframes[-1] if self._selected_keyframes else None
+            )
+
+        if selection_changed:
+            self.keyframes_selection_changed.emit(self._selected_keyframes)
+            self.update()
+
+    def _sync_selection_with_keyframes(self) -> None:
+        self._set_selected_keyframes(self._selected_keyframes)
+
+    def _keyframe_at(self, pos: QPointF) -> Optional[int]:
+        if not self._keyframes:
+            return None
+        rect = self.rect()
+        baseline_left = rect.left() + self._left_margin
+        baseline_right = rect.right() - self._right_margin
+        if baseline_left > baseline_right:
+            return None
+
+        timeline_y = rect.bottom() - 30
+        min_timeline_y = rect.top() + 40
+        if timeline_y < min_timeline_y:
+            timeline_y = min_timeline_y
+
+        center_offset = 5
+        center_y = timeline_y - center_offset
+        half_height = 5
+        half_width = 4
+        hit_radius_x = half_width + 2
+        hit_radius_y = half_height + 2
+        x_pos = pos.x()
+        y_pos = pos.y()
+        if x_pos < baseline_left - hit_radius_x or x_pos > baseline_right + hit_radius_x:
+            return None
+        if abs(y_pos - center_y) > hit_radius_y:
+            return None
+
+        for frame in self._keyframes:
+            key_x = round(self._frame_to_x(frame))
+            if abs(key_x - x_pos) <= hit_radius_x:
+                return frame
+        return None
