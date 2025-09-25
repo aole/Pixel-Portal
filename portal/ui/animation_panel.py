@@ -47,27 +47,8 @@ class AnimationPanel(QWidget):
         self.update()
 
     def set_loop_range(self, start: int, end: int) -> None:
-        try:
-            normalized_start = int(start)
-        except (TypeError, ValueError):
-            normalized_start = 0
-        try:
-            normalized_end = int(end)
-        except (TypeError, ValueError):
-            normalized_end = normalized_start + 1
-        if normalized_start < 0:
-            normalized_start = 0
-        if normalized_end <= normalized_start:
-            normalized_end = normalized_start + 1
-
-        if (
-            normalized_start == self._loop_start
-            and normalized_end == self._loop_end
-        ):
-            return
-
-        self._loop_start = normalized_start
-        self._loop_end = normalized_end
+        self._loop_start = start
+        self._loop_end = end
         self.update()
 
     def mousePressEvent(self, event):  # noqa: N802 - Qt override
@@ -301,7 +282,7 @@ class AnimationPanel(QWidget):
         highlight_pen = QPen(highlight_color, 2)
         highlight_pen.setCosmetic(True)
         painter.setPen(highlight_pen)
-        painter.drawLine(current_x, timeline_y - 13, current_x, timeline_y + 12)
+        painter.drawLine(current_x, timeline_y - 13, current_x, timeline_y + 5)
 
         # draw current frame indicator text
         label_text = str(self._current_frame)
@@ -313,11 +294,10 @@ class AnimationPanel(QWidget):
         total_height = text_height + padding_y * 2
 
         label_gap = 6
-        max_label_top = int(loop_line_y) - total_height - label_gap
+        max_label_top = int(loop_line_y) + label_gap
         min_label_top = rect.top() + 4
-        label_top = max(min_label_top, max_label_top)
-        if label_top > max_label_top:
-            label_top = max_label_top
+        # display the current frame label as the same height as scale time labels.
+        label_top = timeline_y + 4
 
         label_left = current_x - total_width // 2
         min_left = rect.left() + 4

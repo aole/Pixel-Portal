@@ -55,27 +55,18 @@ class NullAnimationPlayer(QObject):
             self.frame_changed.emit(self._current_frame)
 
     def set_loop_range(self, start: int, end: int) -> None:
-        self._loop_start = max(0, int(start))
-        try:
-            normalized_end = int(end)
-        except (TypeError, ValueError):
-            normalized_end = self._loop_start + 1
-        self._loop_end = max(self._loop_start + 1, normalized_end)
+        self._loop_start = start
+        self._loop_end = end
         if self._is_playing:
             self._current_frame = min(
                 max(self._current_frame, self._loop_start), self._loop_end
             )
 
     def set_current_frame(self, frame: int) -> None:
-        try:
-            normalized = int(frame)
-        except (TypeError, ValueError):
-            normalized = self._loop_start
-
         if self._is_playing:
-            normalized = max(self._loop_start, min(normalized, self._loop_end))
-        if normalized != self._current_frame:
-            self._current_frame = normalized
+            frame = max(self._loop_start, min(frame, self._loop_end))
+        if frame != self._current_frame:
+            self._current_frame = frame
             self.frame_changed.emit(self._current_frame)
 
     def set_fps(self, fps: float) -> None:
@@ -250,39 +241,24 @@ class PreviewPanel(QWidget):
 
         if frame is None:
             document = getattr(self.app, "document", None)
-            layer_manager = getattr(document, "layer_manager", None) if document else None
-            if layer_manager is None:
-                return
+            layer_manager = getattr(document, "layer_manager", None)
             frame = layer_manager.current_frame
 
-        try:
-            normalized_frame = int(frame)
-        except (TypeError, ValueError):
-            return
-
-        self.preview_player.set_current_frame(normalized_frame)
+        self.preview_player.set_current_frame(frame)
 
     def _frame_for_display(self, document) -> int:
         if self.preview_player.is_playing:
             return self.preview_player.current_frame
 
-        layer_manager = getattr(document, "layer_manager", None) if document else None
-        if layer_manager is None:
-            return self.preview_player.current_frame
-
+        layer_manager = getattr(document, "layer_manager", None)
         return layer_manager.current_frame
 
     def _render_document_frame(self, document, frame: int) -> QImage | None:
         if document is None:
             return None
 
-        try:
-            frame_index = int(frame)
-        except (TypeError, ValueError):
-            frame_index = 0
-
-        width = max(1, int(getattr(document, "width", 0)))
-        height = max(1, int(getattr(document, "height", 0)))
+        width = getattr(document, "width", 0)
+        height = getattr(document, "height", 0)
         image = QImage(width, height, QImage.Format_ARGB32)
         image.fill(Qt.transparent)
 
@@ -297,15 +273,12 @@ class PreviewPanel(QWidget):
             layers = []
 
         for layer in layers:
-            key_image = self._image_for_layer_frame(layer, frame_index)
+            key_image = self._image_for_layer_frame(layer, frame)
             if key_image is None or key_image.isNull():
                 continue
 
             opacity = getattr(layer, "opacity", 1.0)
-            try:
-                painter.setOpacity(float(opacity))
-            except (TypeError, ValueError):
-                painter.setOpacity(1.0)
+            painter.setOpacity(opacity)
             painter.drawImage(0, 0, key_image)
 
         painter.end()
