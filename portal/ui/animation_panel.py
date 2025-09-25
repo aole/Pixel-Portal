@@ -28,7 +28,7 @@ class AnimationPanel(QWidget):
         painter.drawLine(rect.left(), timeline_y, rect.right(), timeline_y)
 
         step = 10
-        for index, x in enumerate(range(rect.left(), rect.right() + 1, step)):
+        for index, x in enumerate(range(rect.left() + 10, rect.right() + 1, step)):
             if index % 5 == 0:
                 marker_height = 13
             else:
