@@ -27,8 +27,7 @@ class Layer(QObject):
         width: int,
         height: int,
         name: str,
-        *,
-        layer_manager: "LayerManager | None" = None,
+        layer_manager: "LayerManager",
         keys: list[Key] | None = None,
     ):
         super().__init__()
@@ -58,9 +57,7 @@ class Layer(QObject):
         key.image_changed.connect(self.on_image_change.emit)
         key.image_changed.connect(key.mark_non_transparent_bounds_dirty)
 
-    def attach_to_manager(self, manager: "LayerManager | None") -> None:
-        if manager is self._layer_manager:
-            return
+    def attach_to_manager(self, manager: "LayerManager") -> None:
         self._layer_manager = manager
         self.on_current_frame_changed(manager.current_frame)
 
@@ -143,6 +140,7 @@ class Layer(QObject):
             self.image.width(),
             self.image.height(),
             self.name,
+            self._layer_manager,
             keys=cloned_keys,
         )
         if preserve_identity:

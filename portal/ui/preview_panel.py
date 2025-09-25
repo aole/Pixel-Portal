@@ -14,7 +14,6 @@ class NullAnimationPlayer(QObject):
         super().__init__(parent)
         self._current_frame = 0
         self._is_playing = False
-        self.total_frames = 1
         self._loop_start = 0
         self._loop_end = 0
         self.fps = 12.0
@@ -46,11 +45,6 @@ class NullAnimationPlayer(QObject):
             self._current_frame = self._loop_start
             self.frame_changed.emit(self._current_frame)
 
-    def set_total_frames(self, value: int) -> None:
-        self.total_frames = max(1, int(value))
-        self._loop_end = max(0, self.total_frames - 1)
-        self._current_frame = min(self._current_frame, self._loop_end)
-
     def set_loop_range(self, start: int, end: int) -> None:
         self._loop_start = max(0, int(start))
         self._loop_end = max(self._loop_start, int(end))
@@ -74,7 +68,6 @@ class PreviewPanel(QWidget):
         super().__init__()
         self.app = app
 
-        self._playback_total_frames = 1
         self._current_playback_frame = 0
         self._current_document_id = None
         self._loop_start = 0
@@ -114,35 +107,12 @@ class PreviewPanel(QWidget):
 
         self.update_preview()
 
-    def set_playback_total_frames(self, total_frames: int) -> None:
-        total_frames = max(1, int(total_frames))
-        self._playback_total_frames = total_frames
-        self.preview_player.set_total_frames(total_frames)
-        self._loop_start = 0
-        self._loop_end = max(0, total_frames - 1)
-        self.preview_player.set_loop_range(self._loop_start, self._loop_end)
-        self._current_playback_frame = self.preview_player.current_frame
-
     def set_playback_fps(self, fps: float) -> None:
         self.preview_player.set_fps(fps)
 
     def set_loop_range(self, start: int, end: int) -> None:
-        try:
-            start_value = int(start)
-            end_value = int(end)
-        except (TypeError, ValueError):
-            return
-        if start_value < 0:
-            start_value = 0
-        max_loop = max(0, self._playback_total_frames - 1)
-        if end_value < start_value:
-            end_value = start_value
-        if end_value > max_loop:
-            end_value = max_loop
-        if start_value > end_value:
-            start_value = end_value
-        self._loop_start = start_value
-        self._loop_end = end_value
+        self._loop_start = start
+        self._loop_end = end
         self.preview_player.set_loop_range(self._loop_start, self._loop_end)
         if (
             self.preview_player.current_frame < self._loop_start
