@@ -193,6 +193,9 @@ class MainWindow(QMainWindow):
             self.tabifyDockWidget(self.layer_manager_dock, self.ai_panel_dock)
             self.layer_manager_dock.raise_()
 
+        self.setCorner(Qt.BottomLeftCorner, Qt.BottomDockWidgetArea)
+        self.setCorner(Qt.BottomRightCorner, Qt.RightDockWidgetArea)
+
         self.app.document_changed.connect(self.preview_panel.handle_document_changed)
         self.canvas.canvas_updated.connect(self.preview_panel.update_preview)
         self.app.ai_output_rect_changed.connect(self.canvas.set_ai_output_rect)
