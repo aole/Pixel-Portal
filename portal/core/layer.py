@@ -27,8 +27,7 @@ class Layer(QObject):
         width: int,
         height: int,
         name: str,
-        *,
-        key: Key | None = None,
+        layer_manager: "LayerManager",
         keys: list[Key] | None = None,
     ):
         super().__init__()
@@ -37,7 +36,7 @@ class Layer(QObject):
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
         self._onion_skin_enabled = False
         self._active_key_index = 0
-        self._layer_manager = None
+        self._layer_manager: "LayerManager | None" = None
         if keys is not None:
             provided_keys = list(keys)
         else:
@@ -50,14 +49,15 @@ class Layer(QObject):
 
         self.uid = self._next_uid()
 
+        if layer_manager is not None:
+            self.attach_to_manager(layer_manager)
+
     def _register_key(self, key: Key) -> None:
         key.setParent(self)
         key.image_changed.connect(self.on_image_change.emit)
         key.image_changed.connect(key.mark_non_transparent_bounds_dirty)
 
-    def attach_to_manager(self, manager: "LayerManager | None") -> None:
-        if manager is self._layer_manager:
-            return
+    def attach_to_manager(self, manager: "LayerManager") -> None:
         self._layer_manager = manager
         self.on_current_frame_changed(manager.current_frame)
 
@@ -140,6 +140,7 @@ class Layer(QObject):
             self.image.width(),
             self.image.height(),
             self.name,
+            self._layer_manager,
             keys=cloned_keys,
         )
         if preserve_identity:

@@ -18,21 +18,10 @@ rembg_remove = None
 
 def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool:
     layer_manager = document.layer_manager
-    if not (0 < layer_index < len(layer_manager.layers)):
+    try:
+        layer_manager.merge_layer_down(layer_index)
+    except IndexError:
         return False
-
-    top_layer = layer_manager.layers[layer_index]
-    bottom_layer = layer_manager.layers[layer_index - 1]
-
-    painter = QPainter(bottom_layer.image)
-    painter.setOpacity(top_layer.opacity)
-    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-    painter.drawImage(0, 0, top_layer.image)
-    painter.end()
-
-    bottom_layer.on_image_change.emit()
-    layer_manager.remove_layer(layer_index)
-    layer_manager.layer_structure_changed.emit()
     return True
 
 
