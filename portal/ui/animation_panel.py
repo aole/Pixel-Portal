@@ -15,6 +15,7 @@ class AnimationPanel(QWidget):
     frame_double_clicked = Signal(int)
     loop_range_changed = Signal(int, int)
     keyframes_selection_changed = Signal(tuple)
+    keyframes_dragged = Signal(tuple, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,6 +41,11 @@ class AnimationPanel(QWidget):
         self._loop_end_handle_rect = QRectF()
         self._selected_keyframes: tuple[int, ...] = tuple()
         self._selection_anchor: Optional[int] = None
+        self._dragging_keyframes = False
+        self._dragged_keyframes: tuple[int, ...] = tuple()
+        self._drag_start_frame: Optional[int] = None
+        self._drag_min_frame = 0
+        self._drag_frame_offset = 0
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -58,33 +64,46 @@ class AnimationPanel(QWidget):
         if event.button() == Qt.LeftButton:
             handle = self._loop_handle_hit_test(event.position())
             if handle == "start":
+                self._cancel_keyframe_drag()
                 self._dragging_loop_start = True
                 self._is_dragging_frame = False
                 event.accept()
                 return
             if handle == "end":
+                self._cancel_keyframe_drag()
                 self._dragging_loop_end = True
                 self._is_dragging_frame = False
                 event.accept()
                 return
+
             clicked_key = self._keyframe_at(event.position())
+            modifiers = event.modifiers()
             if clicked_key is not None:
-                self._handle_keyframe_click(clicked_key, event.modifiers())
-                self._is_dragging_frame = True
+                self._cancel_keyframe_drag()
+                self._handle_keyframe_click(clicked_key, modifiers)
+                if clicked_key in self._selected_keyframes:
+                    self._begin_keyframe_drag(clicked_key)
+                else:
+                    self._is_dragging_frame = True
                 self._set_current_frame_from_x(event.position().x())
                 event.accept()
                 return
+
+            self._cancel_keyframe_drag()
             self._is_dragging_frame = True
             if self._selected_keyframes:
                 self._set_selected_keyframes(())
             self._set_current_frame_from_x(event.position().x())
             event.accept()
             return
+
         if event.button() == Qt.MiddleButton:
+            self._cancel_keyframe_drag()
             self._is_panning = True
             self._last_pan_pos = QPointF(event.position())
             event.accept()
             return
+
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):  # noqa: N802 - Qt override
@@ -94,6 +113,10 @@ class AnimationPanel(QWidget):
             return
         if self._dragging_loop_end and event.buttons() & Qt.LeftButton:
             self._update_loop_end_from_x(event.position().x())
+            event.accept()
+            return
+        if self._dragging_keyframes and event.buttons() & Qt.LeftButton:
+            self._update_keyframe_drag(event.position().x())
             event.accept()
             return
         if self._is_dragging_frame and event.buttons() & Qt.LeftButton:
@@ -110,6 +133,7 @@ class AnimationPanel(QWidget):
 
     def mouseReleaseEvent(self, event):  # noqa: N802 - Qt override
         if event.button() == Qt.LeftButton:
+            self._finalize_keyframe_drag()
             self._is_dragging_frame = False
             self._dragging_loop_start = False
             self._dragging_loop_end = False
@@ -119,6 +143,7 @@ class AnimationPanel(QWidget):
         super().mouseReleaseEvent(event)
 
     def leaveEvent(self, event):  # noqa: N802 - Qt override
+        self._cancel_keyframe_drag()
         self._is_dragging_frame = False
         self._is_panning = False
         self._last_pan_pos = None
@@ -329,12 +354,21 @@ class AnimationPanel(QWidget):
             min_x = baseline_left - half_width - 1
             max_x = baseline_right + half_width + 1
 
+            drag_preview = {}
+            if self._dragging_keyframes and self._dragged_keyframes:
+                drag_preview = {
+                    frame: max(0, frame + self._drag_frame_offset)
+                    for frame in self._dragged_keyframes
+                }
+
             for frame in self._keyframes:
-                key_x = round(self._frame_to_x(frame))
+                frame_to_draw = drag_preview.get(frame, frame)
+                key_x = round(self._frame_to_x(frame_to_draw))
                 if key_x < min_x or key_x > max_x:
                     continue
 
-                fill_color = selected_fill if frame in self._selected_keyframes else unselected_fill
+                is_dragged = frame in drag_preview
+                fill_color = selected_fill if (frame in self._selected_keyframes or is_dragged) else unselected_fill
                 painter.setPen(outline_pen)
                 painter.setBrush(fill_color)
 
@@ -360,6 +394,66 @@ class AnimationPanel(QWidget):
         if expanded_end.contains(pos):
             return "end"
         return None
+
+    def _begin_keyframe_drag(self, frame: int) -> None:
+        if frame not in self._selected_keyframes:
+            return
+        self._dragging_keyframes = True
+        self._dragged_keyframes = tuple(self._selected_keyframes)
+        self._drag_start_frame = frame
+        self._drag_min_frame = min(self._dragged_keyframes) if self._dragged_keyframes else 0
+        self._drag_frame_offset = 0
+        self._is_dragging_frame = False
+
+    def _update_keyframe_drag(self, x: float) -> None:
+        if not self._dragging_keyframes or self._drag_start_frame is None:
+            return
+        self._set_current_frame_from_x(x)
+        frame = self._frame_from_x(x)
+        if frame is None:
+            return
+        offset = self._clamp_drag_offset(frame - self._drag_start_frame)
+        if offset != self._drag_frame_offset:
+            self._drag_frame_offset = offset
+            self.update()
+
+    def _clamp_drag_offset(self, delta: int) -> int:
+        if not self._dragged_keyframes:
+            return 0
+        if delta < -self._drag_min_frame:
+            return -self._drag_min_frame
+        return delta
+
+    def _cancel_keyframe_drag(self) -> None:
+        state_active = self._dragging_keyframes or self._drag_frame_offset != 0
+        self._dragging_keyframes = False
+        self._dragged_keyframes = tuple()
+        self._drag_start_frame = None
+        self._drag_min_frame = 0
+        self._drag_frame_offset = 0
+        if state_active:
+            self.update()
+
+    def _finalize_keyframe_drag(self) -> None:
+        if not self._dragging_keyframes:
+            self._cancel_keyframe_drag()
+            return
+        moved_frames = self._dragged_keyframes
+        delta = self._drag_frame_offset
+        self._dragging_keyframes = False
+        self._dragged_keyframes = tuple()
+        self._drag_start_frame = None
+        self._drag_min_frame = 0
+        self._drag_frame_offset = 0
+        if delta == 0 or not moved_frames:
+            self.update()
+            return
+        updated = tuple(sorted(frame + delta for frame in moved_frames))
+        self._selected_keyframes = updated
+        self._selection_anchor = updated[-1] if updated else None
+        self.keyframes_selection_changed.emit(self._selected_keyframes)
+        self.keyframes_dragged.emit(moved_frames, delta)
+        self.update()
 
     def _update_loop_start_from_x(self, x: float) -> None:
         frame = self._frame_from_x(x)
@@ -491,6 +585,8 @@ class AnimationPanel(QWidget):
             return
 
         self._selection_anchor = frame
+        if frame in self._selected_keyframes:
+            return
         self._set_selected_keyframes((frame,))
 
     def _set_selected_keyframes(self, frames: Iterable[int]) -> None:
@@ -545,3 +641,6 @@ class AnimationPanel(QWidget):
             if abs(key_x - x_pos) <= hit_radius_x:
                 return frame
         return None
+
+
+

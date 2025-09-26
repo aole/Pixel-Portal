@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, Iterable, List, Optional, TYPE_CHECKING
 
 from enum import Enum, auto
 
@@ -108,6 +108,84 @@ class AddKeyframeCommand(Command):
 
         self.layer.set_active_key_index(self.previous_active_key_index)
         self.layer_manager.set_current_frame(self.previous_current_frame)
+
+
+class MoveKeyframesCommand(Command):
+    """Shift one or more keyframes by a constant delta."""
+
+    def __init__(
+        self,
+        layer_manager: "LayerManager",
+        layer: Layer,
+        frames: Iterable[int],
+        delta: int,
+    ) -> None:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            if frame in seen:
+                continue
+            seen.add(frame)
+            normalized.append(frame)
+        self.frames: tuple[int, ...] = tuple(sorted(normalized))
+        self.layer_manager = layer_manager
+        self.layer = layer
+        self._requested_delta = delta
+        self._original_order: Optional[list[Key]] = None
+        self._original_frames: Dict[Key, int] = {}
+        self._previous_current_frame: Optional[int] = None
+
+    def execute(self) -> None:
+        if self._original_order is None:
+            self._original_order = list(self.layer.keys)
+            self._original_frames = {key: key.frame_number for key in self.layer.keys}
+            self._previous_current_frame = self.layer_manager.current_frame
+
+        frame_to_key = {key.frame_number: key for key in self.layer.keys}
+        keys_to_move = [frame_to_key.get(frame) for frame in self.frames]
+        keys_to_move = [key for key in keys_to_move if key is not None]
+        if not keys_to_move:
+            return
+
+        min_frame = min(key.frame_number for key in keys_to_move)
+        delta = self._requested_delta
+        if delta == 0:
+            return
+
+        moved_frames = {key.frame_number for key in keys_to_move}
+        remaining_keys = [key for key in self.layer.keys if key not in keys_to_move]
+        target_frames = {frame + delta for frame in moved_frames}
+        remaining_keys = [key for key in remaining_keys if key.frame_number not in target_frames]
+
+        for key in keys_to_move:
+            key.frame_number = key.frame_number + delta
+
+        updated_keys = remaining_keys + keys_to_move
+        updated_keys.sort(key=lambda key: key.frame_number)
+        self.layer.keys = updated_keys
+
+        current_frame = self.layer_manager.current_frame
+        if current_frame in moved_frames:
+            self.layer_manager.set_current_frame(current_frame + delta)
+        else:
+            self.layer_manager.set_current_frame(current_frame)
+
+        self.layer_manager.layer_structure_changed.emit()
+
+    def undo(self) -> None:
+        if self.layer is None or self.layer_manager is None:
+            return
+        if self._original_order is None:
+            return
+
+        for key, frame in self._original_frames.items():
+            key.frame_number = frame
+        self.layer.keys = list(self._original_order)
+
+        if self._previous_current_frame is not None:
+            self.layer_manager.set_current_frame(self._previous_current_frame)
+
+        self.layer_manager.layer_structure_changed.emit()
 
 class ModifyImageCommand(Command):
     """A command that modifies a layer's image with a drawing function."""
@@ -1114,3 +1192,9 @@ class SetLayerOpacityCommand(Command):
         instances = self._collect_instances()
         for instance, previous in zip(instances, self._previous_values):
             instance.opacity = previous
+
+
+
+
+
+

@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
             self.on_animation_frame_double_clicked
         )
         self.animation_panel.loop_range_changed.connect(self.on_loop_range_changed)
+        self.animation_panel.keyframes_dragged.connect(self.on_keyframes_dragged)
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
@@ -312,6 +313,14 @@ class MainWindow(QMainWindow):
     def on_loop_range_changed(self, start: int, end: int) -> None:
         self.app.set_playback_loop_range(start, end)
         self.preview_panel.set_loop_range(start, end)
+
+    @Slot(tuple, int)
+    def on_keyframes_dragged(self, frames: tuple[int, ...], delta: int) -> None:
+        if not frames:
+            return
+        if delta == 0:
+            return
+        self.app.move_keyframes(frames, delta)
 
     @Slot()
     def on_document_changed(self):

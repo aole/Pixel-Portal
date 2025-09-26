@@ -19,6 +19,7 @@ from portal.core.command import (
     AddLayerCommand,
     CompositeCommand,
     AddKeyframeCommand,
+    MoveKeyframesCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.core.color_utils import find_closest_color
@@ -186,9 +187,26 @@ class DocumentController(QObject):
         return
 
     def move_keyframes(self, frames: Iterable[int], delta: int) -> None:
-        """Keyframe management is no longer supported."""
+        if delta == 0:
+            return
+        document = self.document
 
-        return
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            if frame in seen:
+                continue
+            seen.add(frame)
+            normalized.append(frame)
+
+        if not normalized:
+            return
+
+        command = MoveKeyframesCommand(layer_manager, active_layer, normalized, delta)
+        self.execute_command(command)
 
     def duplicate_keyframes(self, frames: Iterable[int], delta: int) -> None:
         """Keyframe management is no longer supported."""
@@ -571,3 +589,5 @@ class DocumentController(QObject):
 
         rect = QRect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
         return image.copy(rect)
+
+
