@@ -5,7 +5,7 @@ from typing import Iterable, Optional
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPalette
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QMenu, QSizePolicy, QWidget
 
 
 class AnimationPanel(QWidget):
@@ -16,6 +16,7 @@ class AnimationPanel(QWidget):
     loop_range_changed = Signal(int, int)
     keyframes_selection_changed = Signal(tuple)
     keyframes_dragged = Signal(tuple, int)
+    keyframes_delete_requested = Signal(tuple)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -141,6 +142,15 @@ class AnimationPanel(QWidget):
             self._is_panning = False
             self._last_pan_pos = None
         super().mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event):  # noqa: N802 - Qt override
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Selected Keys")
+        delete_action.setEnabled(self._can_delete_selected_keyframes())
+        chosen_action = menu.exec(event.globalPos())
+        if chosen_action is delete_action and delete_action.isEnabled():
+            self._emit_delete_selected_keyframes()
+        event.accept()
 
     def leaveEvent(self, event):  # noqa: N802 - Qt override
         self._cancel_keyframe_drag()
@@ -454,6 +464,17 @@ class AnimationPanel(QWidget):
         self.keyframes_selection_changed.emit(self._selected_keyframes)
         self.keyframes_dragged.emit(moved_frames, delta)
         self.update()
+
+    def _emit_delete_selected_keyframes(self) -> None:
+        if not self._selected_keyframes:
+            return
+        self.keyframes_delete_requested.emit(self._selected_keyframes)
+
+    def _can_delete_selected_keyframes(self) -> bool:
+        if not self._selected_keyframes:
+            return False
+        remaining = len(self._keyframes) - len(self._selected_keyframes)
+        return remaining > 0
 
     def _update_loop_start_from_x(self, x: float) -> None:
         frame = self._frame_from_x(x)

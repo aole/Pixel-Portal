@@ -173,6 +173,9 @@ class MainWindow(QMainWindow):
         )
         self.animation_panel.loop_range_changed.connect(self.on_loop_range_changed)
         self.animation_panel.keyframes_dragged.connect(self.on_keyframes_dragged)
+        self.animation_panel.keyframes_delete_requested.connect(
+            self.on_keyframes_delete_requested
+        )
         self.animation_dock = QDockWidget("Animation Timeline", self)
         self.animation_dock.setWidget(self.animation_panel)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
@@ -321,6 +324,12 @@ class MainWindow(QMainWindow):
         if delta == 0:
             return
         self.app.move_keyframes(frames, delta)
+
+    @Slot(tuple)
+    def on_keyframes_delete_requested(self, frames: tuple[int, ...]) -> None:
+        if not frames:
+            return
+        self.app.remove_keyframes(frames)
 
     @Slot()
     def on_document_changed(self):

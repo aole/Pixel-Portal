@@ -63,3 +63,37 @@ def test_move_keyframes_overwrites_conflicting_target():
     frames = _collect_frames(layer)
     assert sorted(frames) == [0, 2, 5]
     assert existing in layer.keys
+
+
+@pytest.mark.usefixtures("qapp")
+def test_delete_keyframes_removes_selection():
+    controller = _make_controller()
+    layer = controller.document.layer_manager.active_layer
+
+    layer.keys[0].frame_number = 0
+    removed_key = _append_key(layer, 3)
+    _append_key(layer, 6)
+
+    controller.remove_keyframes((3,))
+
+    assert _collect_frames(layer) == [0, 6]
+    assert removed_key not in layer.keys
+
+    controller.undo()
+    assert _collect_frames(layer) == [0, 3, 6]
+    assert removed_key in layer.keys
+
+    controller.redo()
+    assert _collect_frames(layer) == [0, 6]
+
+
+@pytest.mark.usefixtures("qapp")
+def test_delete_keyframes_keeps_at_least_one_key():
+    controller = _make_controller()
+    layer = controller.document.layer_manager.active_layer
+
+    initial_frames = tuple(_collect_frames(layer))
+
+    controller.remove_keyframes(initial_frames)
+
+    assert _collect_frames(layer) == list(initial_frames)

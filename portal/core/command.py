@@ -187,6 +187,111 @@ class MoveKeyframesCommand(Command):
 
         self.layer_manager.layer_structure_changed.emit()
 
+
+class DeleteKeyframesCommand(Command):
+    """Remove one or more keyframes from the active layer."""
+
+    def __init__(
+        self,
+        layer_manager: "LayerManager",
+        layer: Layer,
+        frames: Iterable[int],
+    ) -> None:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            if frame in seen:
+                continue
+            seen.add(frame)
+            normalized.append(frame)
+        self.frames: tuple[int, ...] = tuple(sorted(normalized))
+        self.layer_manager = layer_manager
+        self.layer = layer
+        self._removed_keys: list[tuple[int, Key]] | None = None
+        self._previous_current_frame: Optional[int] = None
+        self._previous_active_index: Optional[int] = None
+
+    def execute(self) -> None:
+        layer = self.layer
+        layer_manager = self.layer_manager
+        keys = list(layer.keys)
+
+        if self._removed_keys is None:
+            frame_set = set(self.frames)
+            removal_plan: list[tuple[int, Key]] = [
+                (index, key)
+                for index, key in enumerate(keys)
+                if key.frame_number in frame_set
+            ]
+            if not removal_plan:
+                return
+            if len(removal_plan) >= len(keys):
+                return
+            self._removed_keys = removal_plan
+            self._previous_current_frame = layer_manager.current_frame
+            self._previous_active_index = layer.active_key_index
+        else:
+            removal_plan = self._removed_keys
+            if len(removal_plan) >= len(keys):
+                return
+
+        for index, key in sorted(removal_plan, key=lambda item: item[0], reverse=True):
+            if 0 <= index < len(layer.keys) and layer.keys[index] is key:
+                layer.keys.pop(index)
+                continue
+            try:
+                actual_index = layer.keys.index(key)
+            except ValueError:
+                continue
+            layer.keys.pop(actual_index)
+
+        remaining_frames = [key.frame_number for key in layer.keys]
+        if not remaining_frames:
+            return
+
+        current_frame = layer_manager.current_frame
+        if current_frame not in remaining_frames:
+            fallback = max(
+                (frame for frame in remaining_frames if frame <= current_frame),
+                default=None,
+            )
+            if fallback is None:
+                fallback = min(remaining_frames)
+            if fallback != current_frame:
+                layer_manager.set_current_frame(fallback)
+        else:
+            layer_manager.set_current_frame(current_frame)
+
+        layer.on_current_frame_changed(layer_manager.current_frame)
+        layer_manager.layer_structure_changed.emit()
+
+    def undo(self) -> None:
+        layer = self.layer
+        layer_manager = self.layer_manager
+        if layer is None or layer_manager is None:
+            return
+        if not self._removed_keys:
+            return
+
+        for index, key in sorted(self._removed_keys, key=lambda item: item[0]):
+            insert_at = min(max(0, index), len(layer.keys))
+            layer.keys.insert(insert_at, key)
+
+        if self._previous_active_index is not None:
+            try:
+                layer.set_active_key_index(self._previous_active_index)
+            except (IndexError, ValueError):
+                fallback_index = min(self._previous_active_index, len(layer.keys) - 1)
+                layer.set_active_key_index(max(0, fallback_index))
+
+        if self._previous_current_frame is not None:
+            layer_manager.set_current_frame(self._previous_current_frame)
+        else:
+            layer.on_current_frame_changed(layer_manager.current_frame)
+
+        layer_manager.layer_structure_changed.emit()
+
+
 class ModifyImageCommand(Command):
     """A command that modifies a layer's image with a drawing function."""
     def __init__(self, layer: Layer, drawing_func):
