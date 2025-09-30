@@ -27,7 +27,7 @@ class Layer(QObject):
         width: int,
         height: int,
         name: str,
-        layer_manager: "LayerManager",
+        layer_manager: "LayerManager | None" = None,
         keys: list[Key] | None = None,
     ):
         super().__init__()

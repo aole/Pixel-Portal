@@ -2,19 +2,31 @@ from __future__ import annotations
 
 import json
 import os
-import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 import zipfile
 
 from PySide6.QtCore import QBuffer
 from PySide6.QtGui import QImage
 
+from portal.core.key import Key
 from portal.core.layer import Layer
 
 
 class ArchiveFormatError(ValueError):
     """Raised when an AOLE archive cannot be parsed."""
+
+
+@dataclass
+class _KeyRecord:
+    frame: int
+    image_path: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "frame": self.frame,
+            "image": self.image_path,
+        }
 
 
 @dataclass
@@ -25,9 +37,10 @@ class _LayerRecord:
     opacity: float
     onion_skin_enabled: bool
     image_path: str
+    keys: list[_KeyRecord] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        data = {
             "uid": self.uid,
             "name": self.name,
             "visible": self.visible,
@@ -35,6 +48,9 @@ class _LayerRecord:
             "onion_skin_enabled": self.onion_skin_enabled,
             "image": self.image_path,
         }
+        if self.keys:
+            data["keys"] = [key.to_dict() for key in self.keys]
+        return data
 
 
 class AOLEArchive:
@@ -42,7 +58,7 @@ class AOLEArchive:
 
     METADATA_FILE = "document.json"
     IMAGE_ROOT = PurePosixPath("layers")
-    VERSION = 2
+    VERSION = 3
 
     @classmethod
     def save(cls, document: "Document", filename: str) -> None:
@@ -104,17 +120,42 @@ class _ArchiveWriter:
         return metadata
 
     def _serialize_layer(self, layer: Layer, index: int) -> _LayerRecord:
-        image_bytes = self._encode_layer_image(layer)
-        image_filename = f"{index}_{layer.uid}.png"
-        image_path = self._image_root / image_filename
-        self._binary_entries[str(image_path)] = image_bytes
+        legacy_filename = f"{index}_{layer.uid}.png"
+        legacy_path = self._image_root / legacy_filename
+        legacy_path_str = str(legacy_path)
+
+        active_key = layer.active_key
+
+        sorted_keys = sorted(
+            list(getattr(layer, "keys", []) or []),
+            key=lambda key: getattr(key, "frame_number", 0),
+        )
+
+        key_records: list[_KeyRecord] = []
+
+        if sorted_keys:
+            for position, key in enumerate(sorted_keys):
+                frame_number = getattr(key, "frame_number", 0)
+
+                if key is active_key or (active_key is None and position == 0):
+                    key_path_str = legacy_path_str
+                else:
+                    key_path = self._image_root / f"{index}_{layer.uid}_key{position}.png"
+                    key_path_str = str(key_path)
+
+                self._binary_entries[key_path_str] = self._encode_key_image(key)
+                key_records.append(_KeyRecord(frame=frame_number, image_path=key_path_str))
+        else:
+            self._binary_entries[legacy_path_str] = self._encode_layer_image(layer)
+
         return _LayerRecord(
             uid=layer.uid,
             name=layer.name,
             visible=layer.visible,
             opacity=layer.opacity,
             onion_skin_enabled=getattr(layer, "onion_skin_enabled", False),
-            image_path=str(image_path),
+            image_path=legacy_path_str,
+            keys=key_records,
         )
 
     @staticmethod
@@ -122,6 +163,13 @@ class _ArchiveWriter:
         buffer = QBuffer()
         buffer.open(QBuffer.ReadWrite)
         layer.image.save(buffer, "PNG")
+        return bytes(buffer.data())
+
+    @staticmethod
+    def _encode_key_image(key: Key) -> bytes:
+        buffer = QBuffer()
+        buffer.open(QBuffer.ReadWrite)
+        key.image.save(buffer, "PNG")
         return bytes(buffer.data())
 
 
@@ -151,7 +199,7 @@ class _ArchiveReader:
             document.layer_manager.layers = []
 
             for layer_info in metadata.get("layers", []):
-                layer = self._restore_layer(layer_info, archive)
+                layer = self._restore_layer(layer_info, archive, document.layer_manager)
                 document.layer_manager.layers.append(layer)
 
             active_index = int(metadata.get("active_layer_index", -1))
@@ -166,24 +214,48 @@ class _ArchiveReader:
 
         return document
 
-    def _restore_layer(self, info: dict[str, object], archive: zipfile.ZipFile) -> Layer:
+    def _restore_layer(
+        self,
+        info: dict[str, object],
+        archive: zipfile.ZipFile,
+        layer_manager: "LayerManager",
+    ) -> Layer:
         image_path = info.get("image")
         if not isinstance(image_path, str):
             raise ArchiveFormatError("Layer image path missing")
 
-        try:
-            image_bytes = archive.read(image_path)
-        except KeyError as exc:  # pragma: no cover - corrupted archive
-            raise ArchiveFormatError(f"Missing layer image: {image_path}") from exc
-
-        image = QImage()
-        image.loadFromData(image_bytes, "PNG")
-        if image.isNull():
-            raise ArchiveFormatError(f"Layer image is invalid: {image_path}")
+        image = self._load_image(archive, image_path)
 
         name = info.get("name") or "Layer"
-        layer = Layer(image.width(), image.height(), str(name))
-        layer.image = image
+        keys: list[Key] = []
+        keys_metadata = info.get("keys")
+
+        for entry in keys_metadata:
+            key_image_path = entry.get("image")
+            key_image = self._load_image(archive, key_image_path)
+            frame_number = entry.get("frame")
+            key = Key.from_qimage(key_image, frame_number=frame_number)
+            keys.append(key)
+
+        keys.sort(key=lambda key: key.frame_number)
+
+        if keys:
+            layer = Layer(
+                image.width(),
+                image.height(),
+                str(name),
+                layer_manager=layer_manager,
+                keys=keys,
+            )
+        else:
+            layer = Layer(
+                image.width(),
+                image.height(),
+                str(name),
+                layer_manager=layer_manager,
+            )
+            layer.image = image
+
         layer.visible = bool(info.get("visible", True))
         layer.opacity = float(info.get("opacity", 1.0))
         layer.onion_skin_enabled = bool(info.get("onion_skin_enabled", False))
@@ -194,9 +266,25 @@ class _ArchiveReader:
 
         return layer
 
+    def _load_image(self, archive: zipfile.ZipFile, image_path: str) -> QImage:
+        try:
+            image_bytes = archive.read(image_path)
+        except KeyError as exc:  # pragma: no cover - corrupted archive
+            raise ArchiveFormatError(f"Missing layer image: {image_path}") from exc
+
+        image = QImage()
+        image.loadFromData(image_bytes, "PNG")
+        if image.isNull():
+            raise ArchiveFormatError(f"Layer image is invalid: {image_path}")
+        return image
+
+
+
+
 
 from typing import TYPE_CHECKING  # noqa: E402  # circular import safe-guard
 
 if TYPE_CHECKING:  # pragma: no cover
     from portal.core.document import Document
+    from portal.core.layer_manager import LayerManager
 

@@ -1,4 +1,3 @@
-import functools
 import os
 from PySide6.QtWidgets import (
     QFileDialog,
