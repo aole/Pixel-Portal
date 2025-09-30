@@ -166,6 +166,8 @@ class MainWindow(QMainWindow):
         self._timeline_play_icon = QIcon("icons/play.png")
         self._timeline_pause_icon = QIcon("icons/pause.png")
         self._timeline_stop_icon = QIcon("icons/stop.png")
+        self._onion_enabled_icon = QIcon("icons/skinon.png")
+        self._onion_disabled_icon = QIcon("icons/skinoff.png")
 
         self._timeline_driving_playback = False
         self._updating_animation_controls = False
@@ -202,6 +204,19 @@ class MainWindow(QMainWindow):
         self.animation_stop_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.animation_stop_button.clicked.connect(self.on_animation_stop_clicked)
         animation_controls_layout.addWidget(self.animation_stop_button)
+
+        self.animation_onion_button = QToolButton(self.animation_controls_widget)
+        self.animation_onion_button.setCheckable(True)
+        self.animation_onion_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.animation_onion_button.setText("Onion Skin")
+        self.animation_onion_button.toggled.connect(self.on_onion_skin_toggled)
+        animation_controls_layout.addWidget(self.animation_onion_button)
+        blocker = QSignalBlocker(self.animation_onion_button)
+        try:
+            self.animation_onion_button.setChecked(self.canvas.onion_skin_enabled)
+        finally:
+            del blocker
+        self._update_onion_skin_button(self.canvas.onion_skin_enabled)
 
         animation_controls_layout.addStretch(1)
 
@@ -410,6 +425,22 @@ class MainWindow(QMainWindow):
                 self.preview_panel.preview_play_button.setChecked(False)
             finally:
                 self._updating_animation_controls = False
+
+    def _update_onion_skin_button(self, enabled: bool) -> None:
+        if not hasattr(self, "animation_onion_button"):
+            return
+        icon = self._onion_enabled_icon if enabled else self._onion_disabled_icon
+        label = "Onion Skin (On)" if enabled else "Onion Skin"
+        tooltip = "Disable onion skin overlays" if enabled else "Enable onion skin overlays"
+        self.animation_onion_button.setIcon(icon)
+        self.animation_onion_button.setText(label)
+        self.animation_onion_button.setToolTip(tooltip)
+
+    @Slot(bool)
+    def on_onion_skin_toggled(self, enabled: bool) -> None:
+        self.canvas.set_onion_skin_enabled(enabled)
+        self.canvas.update()
+        self._update_onion_skin_button(enabled)
 
     @Slot(bool)
     def on_preview_player_state_changed(self, playing: bool) -> None:

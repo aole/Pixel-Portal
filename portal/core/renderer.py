@@ -524,9 +524,119 @@ class CanvasRenderer:
     def _build_onion_skin_context(
         self, document
     ) -> Optional[_OnionSkinContext]:
-        """Return ``None`` now that onion-skinning has been retired."""
+        layer_manager = resolve_active_layer_manager(document)
+        layers = list(getattr(layer_manager, "layers", []))
+        active_layer = getattr(layer_manager, "active_layer", None)
 
-        return None
+        allowed_uid_order: List[int] = []
+        for layer in layers:
+            uid = getattr(layer, "uid", None)
+            if uid is None or uid in allowed_uid_order:
+                continue
+
+            include_layer = layer is active_layer or getattr(layer, "onion_skin_enabled", False)
+            if not include_layer:
+                continue
+
+            allowed_uid_order.append(uid)
+
+        if not allowed_uid_order:
+            return None
+
+        current_frame = getattr(layer_manager, "current_frame", 0)
+
+        resolved_frame: Optional[int] = None
+        if active_layer is not None:
+            active_key_index = active_layer._index_for_frame(current_frame)
+            keys = list(getattr(active_layer, "keys", []))
+            if keys:
+                try:
+                    resolved_frame = int(getattr(keys[active_key_index], "frame_number", current_frame))
+                except Exception:
+                    resolved_frame = current_frame
+
+        key_frames: set[int] = set()
+        for layer in layers:
+            layer_uid = getattr(layer, "uid", None)
+            if layer_uid not in allowed_uid_order:
+                continue
+            for key in getattr(layer, "keys", []):
+                frame_number = getattr(key, "frame_number", 0)
+                key_frames.add(frame_number)
+
+        if not key_frames:
+            return None
+
+        if resolved_frame is not None:
+            key_frames.add(resolved_frame)
+
+        frame_numbers = set(key_frames)
+        frame_numbers.add(current_frame)
+        if resolved_frame is not None:
+            frame_numbers.add(resolved_frame)
+
+        sorted_frames = sorted(frame_numbers)
+        index_map = {frame: index for index, frame in enumerate(sorted_frames)}
+
+        active_index = index_map.get(current_frame)
+        if active_index is None:
+            return None
+
+        resolved_index = None
+        if resolved_frame is not None:
+            resolved_index = index_map.get(resolved_frame)
+
+        key_indices = tuple(
+            index_map[frame]
+            for frame in sorted(key_frames)
+            if frame in index_map
+        )
+        if not key_indices:
+            return None
+
+        class _FrameAdapter:
+            __slots__ = ("_document", "_frame")
+
+            def __init__(self, document_ref, frame_number):
+                self._document = document_ref
+                self._frame = frame_number
+
+            def render(self, *, allowed_layer_uids):
+                return self._render_frame(self._document, self._frame, allowed_layer_uids)
+
+            @staticmethod
+            def _render_frame(document_ref, frame_number, allowed_layer_uids):
+                layer_manager_ref = resolve_active_layer_manager(document_ref)
+                if layer_manager_ref is None:
+                    return None
+
+                width = getattr(document_ref, "width", 0)
+                height = getattr(document_ref, "height", 0)
+                final_image = QImage(width, height, QImage.Format_ARGB32)
+                final_image.fill(Qt.transparent)
+
+                painter = QPainter(final_image)
+                try:
+                    allowed = set(allowed_layer_uids)
+                    for layer in getattr(layer_manager_ref, "layers", []):
+                        layer_uid = getattr(layer, "uid", None)
+                        if layer_uid is None or (allowed and layer_uid not in allowed):
+                            continue
+                        frame_image = document_ref._image_for_layer_frame(layer, frame_number)
+                        painter.setOpacity(getattr(layer, "opacity", 1.0))
+                        painter.drawImage(0, 0, frame_image)
+                finally:
+                    painter.end()
+                return final_image
+
+        frames = tuple(_FrameAdapter(document, frame) for frame in sorted_frames)
+        return _OnionSkinContext(
+            frames=frames,
+            active_index=active_index,
+            resolved_index=resolved_index,
+            key_indices=key_indices,
+            allowed_layer_uids=tuple(allowed_uid_order),
+        )
 
     @staticmethod
     def _normalize_onion_count(raw_value) -> int:
