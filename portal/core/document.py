@@ -15,6 +15,8 @@ from portal.core.layer_manager import LayerManager
 
 DEFAULT_TOTAL_FRAMES = 1
 DEFAULT_PLAYBACK_FPS = 12.0
+DEFAULT_PLAYBACK_LOOP_START = 0
+DEFAULT_PLAYBACK_LOOP_END = 12
 
 
 class Document:
@@ -37,6 +39,9 @@ class Document:
             DEFAULT_TOTAL_FRAMES
         )
         self.playback_fps = self.normalize_playback_fps(DEFAULT_PLAYBACK_FPS)
+        self.set_playback_loop_range(
+            DEFAULT_PLAYBACK_LOOP_START, DEFAULT_PLAYBACK_LOOP_END
+        )
         self._notify_layer_manager_changed()
 
     # ------------------------------------------------------------------
@@ -86,6 +91,10 @@ class Document:
         )
         duplicate.set_playback_total_frames(self.playback_total_frames)
         duplicate.set_playback_fps(self.playback_fps)
+        duplicate.set_playback_loop_range(
+            getattr(self, "playback_loop_start", DEFAULT_PLAYBACK_LOOP_START),
+            getattr(self, "playback_loop_end", DEFAULT_PLAYBACK_LOOP_END),
+        )
         duplicate._notify_layer_manager_changed()
         return duplicate
 
@@ -121,6 +130,19 @@ class Document:
         normalized = self.normalize_playback_fps(fps)
         self.playback_fps = normalized
         return normalized
+
+    def set_playback_loop_range(self, start: object, end: object) -> tuple[int, int]:
+        if start is None:
+            return
+        
+        if end <= start:
+            end = start + 1
+        self.playback_loop_start = start
+        self.playback_loop_end = end
+        return start, end
+
+    def get_playback_loop_range(self) -> tuple[int, int]:
+        return self.playback_loop_start, self.playback_loop_end
 
     # ------------------------------------------------------------------
     # Rendering helpers

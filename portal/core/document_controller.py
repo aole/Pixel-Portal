@@ -1,6 +1,7 @@
 import os
 from enum import Enum, auto
 from typing import Iterable, Optional
+from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
@@ -21,16 +22,24 @@ from portal.core.command import (
     AddKeyframeCommand,
     MoveKeyframesCommand,
     DeleteKeyframesCommand,
+    PasteKeyframesCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
 from portal.core.color_utils import find_closest_color
 from portal.core.layer import Layer
+from portal.core.key import Key
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
 
 
 DEFAULT_PLAYBACK_FPS = 12.0
+
+
+@dataclass(slots=True)
+class _CopiedKeyframesState:
+    base_frame: int
+    keys: tuple[Key, ...]
 
 
 class BackgroundRemovalScope(Enum):
@@ -174,9 +183,12 @@ class DocumentController(QObject):
             document.set_playback_fps(normalized)
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
+        document = self.document
+        loop_range_setter = getattr(document, "set_playback_loop_range", None)
+        start, nd = loop_range_setter(start, end)
+        setattr(document, "playback_loop_start", start)
+        setattr(document, "playback_loop_end", end)
         self._playback_loop_start = start
-        if end <= start:
-            end = start + 1
         self._playback_loop_end = end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
@@ -215,6 +227,57 @@ class DocumentController(QObject):
         """Keyframe management is no longer supported."""
 
         return
+
+    def copy_keyframes(self, frames: Iterable[int]) -> bool:
+        document = self.document
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            seen.add(frame)
+            normalized.append(frame)
+
+        if not normalized:
+            return False
+
+        normalized.sort()
+        frame_lookup = {key.frame_number: key for key in active_layer.keys}
+        keys_to_copy: list[Key] = []
+        for frame in normalized:
+            key = frame_lookup.get(frame)
+            keys_to_copy.append(key)
+
+        if not keys_to_copy:
+            return False
+
+        base_frame = min(key.frame_number for key in keys_to_copy)
+        clones = tuple(key.clone(deep_copy=True) for key in keys_to_copy)
+        self._copied_key_state = _CopiedKeyframesState(base_frame=base_frame, keys=clones)
+        return True
+
+    def paste_keyframes(self, target_frame: int) -> bool:
+        state = self._copied_key_state
+        document = self.document
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        entries: list[tuple[int, Key]] = []
+        base_frame = state.base_frame
+        for key in state.keys:
+            offset = key.frame_number - base_frame
+            new_frame = target_frame + offset
+            entries.append((new_frame, key.clone(deep_copy=True)))
+
+        if not entries:
+            return False
+
+        entries.sort(key=lambda item: item[0])
+
+        command = PasteKeyframesCommand(layer_manager, active_layer, entries)
+        self.execute_command(command)
+        return True
 
     # ------------------------------------------------------------------
     def _on_document_mutated(self):
@@ -371,13 +434,14 @@ class DocumentController(QObject):
         return
 
     def has_copied_keyframe(self) -> bool:
-        return False
+        state = self._copied_key_state
+        return bool(state and state.keys)
 
     def copy_keyframe(self, frame_index: int) -> bool:
-        return False
+        return self.copy_keyframes((frame_index,))
 
     def paste_keyframe(self, frame_index: int) -> bool:
-        return False
+        return self.paste_keyframes(frame_index)
 
     def paste_key_from_image(
         self,
@@ -444,6 +508,12 @@ class DocumentController(QObject):
         normalized_fps = Document.normalize_playback_fps(stored_fps)
         self._playback_fps = normalized_fps
         document.set_playback_fps(normalized_fps)
+        loop_range_getter = getattr(document, "get_playback_loop_range", None)
+        loop_start, loop_end = loop_range_getter()
+
+        self._playback_loop_start = loop_start
+        self._playback_loop_end = loop_end
+        
         if self._layer_manager_unsubscribe:
             self._layer_manager_unsubscribe()
             self._layer_manager_unsubscribe = None

@@ -292,6 +292,103 @@ class DeleteKeyframesCommand(Command):
         layer_manager.layer_structure_changed.emit()
 
 
+
+class PasteKeyframesCommand(Command):
+    """Insert previously copied keyframes into the active layer."""
+
+    def __init__(
+        self,
+        layer_manager: "LayerManager",
+        layer: Layer,
+        frames_and_keys: Iterable[tuple[int, Key]],
+    ) -> None:
+        normalized: list[tuple[int, Key]] = []
+        for frame, key in frames_and_keys:
+            frame_value = frame
+            normalized.append((frame_value, key))
+        normalized.sort(key=lambda item: item[0])
+        self.layer_manager = layer_manager
+        self.layer = layer
+        self._entries: list[tuple[int, Key]] = normalized
+        self._original_order: Optional[list[Key]] = None
+        self._original_frames: dict[Key, int] = {}
+        self._previous_current_frame: Optional[int] = None
+        self._previous_active_index: Optional[int] = None
+
+    def execute(self) -> None:
+        layer = self.layer
+        layer_manager = self.layer_manager
+        if not self._entries:
+            return
+        if self._original_order is None:
+            self._original_order = list(layer.keys)
+            self._original_frames = {key: key.frame_number for key in layer.keys}
+            self._previous_current_frame = layer_manager.current_frame
+            self._previous_active_index = getattr(layer, "active_key_index", None)
+
+        existing_lookup = {key.frame_number: key for key in list(layer.keys)}
+        for frame, _ in self._entries:
+            existing = existing_lookup.get(frame)
+            if existing is None:
+                continue
+            try:
+                layer.keys.remove(existing)
+            except ValueError:
+                continue
+
+        for frame, key in self._entries:
+            key.frame_number = frame
+            if key.parent() is not layer:
+                layer._register_key(key)
+            layer.keys.append(key)
+
+        layer.keys.sort(key=lambda item: item.frame_number)
+
+        first_frame = self._entries[0][0]
+        layer_manager.set_current_frame(first_frame)
+        try:
+            active_index = layer._index_for_frame(first_frame)
+        except Exception:
+            active_index = None
+        if isinstance(active_index, int):
+            try:
+                layer.set_active_key_index(active_index)
+            except (IndexError, ValueError):
+                pass
+
+        layer_manager.layer_structure_changed.emit()
+
+    def undo(self) -> None:
+        layer = self.layer
+        layer_manager = self.layer_manager
+        if not self._entries or self._original_order is None:
+            return
+
+        for _, key in self._entries:
+            try:
+                layer.keys.remove(key)
+            except ValueError:
+                continue
+
+        for key, frame in self._original_frames.items():
+            key.frame_number = frame
+        layer.keys = list(self._original_order)
+
+        if isinstance(self._previous_active_index, int):
+            try:
+                layer.set_active_key_index(self._previous_active_index)
+            except (IndexError, ValueError):
+                fallback_index = min(self._previous_active_index, len(layer.keys) - 1)
+                if fallback_index >= 0:
+                    layer.set_active_key_index(fallback_index)
+
+        if self._previous_current_frame is not None:
+            layer_manager.set_current_frame(self._previous_current_frame)
+        else:
+            layer.on_current_frame_changed(layer_manager.current_frame)
+
+        layer_manager.layer_structure_changed.emit()
+
 class ModifyImageCommand(Command):
     """A command that modifies a layer's image with a drawing function."""
     def __init__(self, layer: Layer, drawing_func):
@@ -1335,6 +1432,9 @@ class SetLayerOpacityCommand(Command):
         instances = self._collect_instances()
         for instance, previous in zip(instances, self._previous_values):
             instance.opacity = previous
+
+
+
 
 
 

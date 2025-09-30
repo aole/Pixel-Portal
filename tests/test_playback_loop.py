@@ -120,3 +120,16 @@ def test_preview_panel_tracks_document_frame_when_idle(qtbot):
     panel.sync_to_document_frame()
 
     assert panel.preview_player.current_frame == 2
+
+
+def test_aole_roundtrip_preserves_loop_range(tmp_path, document_controller):
+    document = Document(8, 8)
+    document.set_playback_loop_range(2, 10)
+    archive_path = tmp_path / "loop_range.aole"
+    document.save_aole(str(archive_path))
+
+    loaded = Document.load_aole(str(archive_path))
+    assert loaded.get_playback_loop_range() == (2, 10)
+
+    document_controller.attach_document(loaded)
+    assert document_controller.playback_loop_range == (2, 10)

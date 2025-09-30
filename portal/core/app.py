@@ -170,6 +170,12 @@ class App(QObject):
     def remove_keyframes(self, frames: Iterable[int]) -> None:
         self.document_controller.remove_keyframes(frames)
 
+    def copy_keyframes(self, frames: Iterable[int]) -> bool:
+        return self.document_controller.copy_keyframes(frames)
+
+    def paste_keyframes(self, target_frame: int) -> bool:
+        return self.document_controller.paste_keyframes(target_frame)
+
     def duplicate_keyframes(self, frames: Iterable[int], delta: int) -> None:
         self.document_controller.duplicate_keyframes(frames, delta)
 
@@ -191,10 +197,10 @@ class App(QObject):
         self.document_controller.delete_frame(frame_index)
 
     def copy_keyframe(self, frame_index: int) -> bool:
-        return self.document_controller.copy_keyframe(frame_index)
+        return self.copy_keyframes((frame_index,))
 
     def paste_keyframe(self, frame_index: int) -> bool:
-        return self.document_controller.paste_keyframe(frame_index)
+        return self.paste_keyframes(frame_index)
 
     def has_copied_keyframe(self) -> bool:
         return self.document_controller.has_copied_keyframe()

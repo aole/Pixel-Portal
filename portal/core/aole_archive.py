@@ -103,6 +103,8 @@ class _ArchiveWriter:
         document = self._document
         layer_manager = document.layer_manager
 
+        loop_start, loop_end = document.get_playback_loop_range()
+
         metadata: dict[str, object] = {
             "version": self._version,
             "width": document.width,
@@ -111,6 +113,8 @@ class _ArchiveWriter:
             "active_layer_index": layer_manager.active_layer_index,
             "playback_total_frames": getattr(document, "playback_total_frames", 1),
             "playback_fps": getattr(document, "playback_fps", 12.0),
+            "playback_loop_start": loop_start,
+            "playback_loop_end": loop_end,
         }
 
         for index, layer in enumerate(layer_manager.layers):
@@ -211,6 +215,10 @@ class _ArchiveReader:
 
             document.set_playback_total_frames(metadata.get("playback_total_frames"))
             document.set_playback_fps(metadata.get("playback_fps"))
+            document.set_playback_loop_range(
+                metadata.get("playback_loop_start"),
+                metadata.get("playback_loop_end"),
+            )
 
         return document
 

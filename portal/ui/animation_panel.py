@@ -17,6 +17,8 @@ class AnimationPanel(QWidget):
     keyframes_selection_changed = Signal(tuple)
     keyframes_dragged = Signal(tuple, int)
     keyframes_delete_requested = Signal(tuple)
+    keyframes_copy_requested = Signal(tuple)
+    keyframes_paste_requested = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +49,7 @@ class AnimationPanel(QWidget):
         self._drag_start_frame: Optional[int] = None
         self._drag_min_frame = 0
         self._drag_frame_offset = 0
+        self._can_paste_keyframes = False
 
     def set_current_frame(self, frame: int) -> None:
         frame = max(0, int(frame))
@@ -145,10 +148,19 @@ class AnimationPanel(QWidget):
 
     def contextMenuEvent(self, event):  # noqa: N802 - Qt override
         menu = QMenu(self)
+        copy_action = menu.addAction("Copy Selected Keys")
+        copy_action.setEnabled(bool(self._selected_keyframes))
+        paste_action = menu.addAction("Paste Keys")
+        paste_action.setEnabled(self._can_paste_keyframes)
+        menu.addSeparator()
         delete_action = menu.addAction("Delete Selected Keys")
         delete_action.setEnabled(self._can_delete_selected_keyframes())
         chosen_action = menu.exec(event.globalPos())
-        if chosen_action is delete_action and delete_action.isEnabled():
+        if chosen_action is copy_action and copy_action.isEnabled():
+            self.keyframes_copy_requested.emit(self._selected_keyframes)
+        elif chosen_action is paste_action and paste_action.isEnabled():
+            self.keyframes_paste_requested.emit(int(self._current_frame))
+        elif chosen_action is delete_action and delete_action.isEnabled():
             self._emit_delete_selected_keyframes()
         event.accept()
 
@@ -585,6 +597,12 @@ class AnimationPanel(QWidget):
 
     def selected_keyframes(self) -> tuple[int, ...]:
         return self._selected_keyframes
+
+    def set_can_paste_keyframes(self, can_paste: bool) -> None:
+        normalized = bool(can_paste)
+        if normalized == self._can_paste_keyframes:
+            return
+        self._can_paste_keyframes = normalized
 
     def _handle_keyframe_click(self, frame: int, modifiers: Qt.KeyboardModifiers) -> None:
         if modifiers & Qt.ControlModifier:

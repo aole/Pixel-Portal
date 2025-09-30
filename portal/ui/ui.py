@@ -184,6 +184,12 @@ class MainWindow(QMainWindow):
         self.animation_panel.keyframes_delete_requested.connect(
             self.on_keyframes_delete_requested
         )
+        self.animation_panel.keyframes_copy_requested.connect(
+            self.on_keyframes_copy_requested
+        )
+        self.animation_panel.keyframes_paste_requested.connect(
+            self.on_keyframes_paste_requested
+        )
 
         self.animation_controls_widget = QWidget(self)
         animation_controls_layout = QHBoxLayout(self.animation_controls_widget)
@@ -361,6 +367,7 @@ class MainWindow(QMainWindow):
             self.animation_panel.set_loop_range(loop_start, loop_end)
             self.animation_panel.set_current_frame(current_frame)
             self.animation_panel.set_keyframes(keyframes)
+            self.animation_panel.set_can_paste_keyframes(self.app.has_copied_keyframe())
             self.preview_panel.sync_to_document_frame(current_frame)
 
     @Slot(int)
@@ -396,6 +403,20 @@ class MainWindow(QMainWindow):
         if not frames:
             return
         self.app.remove_keyframes(frames)
+
+    @Slot(tuple)
+    def on_keyframes_copy_requested(self, frames: tuple[int, ...]) -> None:
+        if not frames:
+            return
+        self.app.copy_keyframes(frames)
+        self.animation_panel.set_can_paste_keyframes(self.app.has_copied_keyframe())
+
+    @Slot(int)
+    def on_keyframes_paste_requested(self, frame: int) -> None:
+        if not self.app.has_copied_keyframe():
+            return
+        self.app.paste_keyframes(frame)
+        self.animation_panel.set_can_paste_keyframes(self.app.has_copied_keyframe())
 
     @Slot(bool)
     def on_animation_play_toggled(self, checked: bool) -> None:

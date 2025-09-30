@@ -5,6 +5,7 @@ import pytest
 
 from portal.core.document_controller import DocumentController
 from portal.core.key import Key
+from PySide6.QtGui import QColor
 
 
 def _make_controller():
@@ -97,3 +98,50 @@ def test_delete_keyframes_keeps_at_least_one_key():
     controller.remove_keyframes(initial_frames)
 
     assert _collect_frames(layer) == list(initial_frames)
+
+
+@pytest.mark.usefixtures("qapp")
+def test_copy_paste_keyframes_creates_new_keys():
+    controller = _make_controller()
+    layer = controller.document.layer_manager.active_layer
+
+    base_key = layer.keys[0]
+    base_key.frame_number = 0
+    base_key.image.fill(QColor(10, 20, 30, 255))
+    second_key = _append_key(layer, 4)
+    _append_key(layer, 8)
+
+    assert controller.copy_keyframes((0, 4)) is True
+    assert controller.has_copied_keyframe() is True
+
+    assert controller.paste_keyframes(6) is True
+
+    frames = _collect_frames(layer)
+    assert frames == [0, 4, 6, 8, 10]
+
+    pasted_six = next(key for key in layer.keys if key.frame_number == 6)
+    pasted_ten = next(key for key in layer.keys if key.frame_number == 10)
+
+    assert pasted_six is not base_key
+    assert pasted_six is not second_key
+    assert pasted_ten.frame_number == 10
+
+    pasted_six.image.fill(QColor(200, 100, 50, 255))
+    assert base_key.image.pixelColor(0, 0) == QColor(10, 20, 30, 255)
+
+    controller.undo()
+    assert _collect_frames(layer) == [0, 4, 8]
+
+    controller.redo()
+    assert _collect_frames(layer) == [0, 4, 6, 8, 10]
+
+
+@pytest.mark.usefixtures("qapp")
+def test_copy_keyframes_requires_existing_frames():
+    controller = _make_controller()
+
+    assert controller.copy_keyframes(()) is False
+    assert controller.copy_keyframes((99,)) is False
+    assert controller.has_copied_keyframe() is False
+    assert controller.paste_keyframes(5) is False
+
