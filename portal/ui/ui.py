@@ -4,19 +4,19 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDockWidget,
     QGridLayout,
-    QLabel,
+    QHBoxLayout,
     QMainWindow,
-    QMenu,
-    QPushButton,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 from PySide6.QtGui import (
-    QAction,
     QColor,
-    QPixmap,
+    QIcon,
     QImage,
+    QKeySequence,
+    QShortcut,
 )
 from PySide6.QtCore import Qt, Slot, QSignalBlocker
 from portal.ui.canvas import Canvas
@@ -164,6 +164,13 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
 
         # Animation Panel
+        self._timeline_play_icon = QIcon("icons/play.png")
+        self._timeline_pause_icon = QIcon("icons/pause.png")
+        self._timeline_stop_icon = QIcon("icons/stop.png")
+
+        self._timeline_driving_playback = False
+        self._updating_animation_controls = False
+
         self.animation_panel = AnimationPanel(self)
         self.animation_panel.current_frame_changed.connect(
             self.on_animation_current_frame_changed
@@ -176,11 +183,56 @@ class MainWindow(QMainWindow):
         self.animation_panel.keyframes_delete_requested.connect(
             self.on_keyframes_delete_requested
         )
+
+        self.animation_controls_widget = QWidget(self)
+        animation_controls_layout = QHBoxLayout(self.animation_controls_widget)
+        animation_controls_layout.setContentsMargins(6, 6, 6, 6)
+        animation_controls_layout.setSpacing(6)
+
+        self.animation_play_button = QToolButton(self.animation_controls_widget)
+        self.animation_play_button.setCheckable(True)
+        self.animation_play_button.setIcon(self._timeline_play_icon)
+        self.animation_play_button.setText("Play")
+        self.animation_play_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.animation_play_button.toggled.connect(self.on_animation_play_toggled)
+        animation_controls_layout.addWidget(self.animation_play_button)
+
+        self.animation_stop_button = QToolButton(self.animation_controls_widget)
+        self.animation_stop_button.setIcon(self._timeline_stop_icon)
+        self.animation_stop_button.setText("Stop")
+        self.animation_stop_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.animation_stop_button.clicked.connect(self.on_animation_stop_clicked)
+        animation_controls_layout.addWidget(self.animation_stop_button)
+
+        animation_controls_layout.addStretch(1)
+
+        self.animation_container = QWidget(self)
+        animation_container_layout = QVBoxLayout(self.animation_container)
+        animation_container_layout.setContentsMargins(0, 0, 0, 0)
+        animation_container_layout.setSpacing(0)
+        animation_container_layout.addWidget(self.animation_controls_widget, 0)
+        animation_container_layout.addWidget(self.animation_panel, 1)
+
         self.animation_dock = QDockWidget("Animation Timeline", self)
-        self.animation_dock.setWidget(self.animation_panel)
+        self.animation_dock.setWidget(self.animation_container)
         self.animation_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.animation_dock)
         self.sync_timeline_from_document()
+
+        self.preview_panel.preview_player.playing_changed.connect(
+            self.on_preview_player_state_changed
+        )
+        self.preview_panel.preview_player.frame_changed.connect(
+            self.on_preview_player_frame_changed
+        )
+
+        self._playback_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self._playback_shortcut.setContext(Qt.ApplicationShortcut)
+        self._playback_shortcut.activated.connect(self.on_playback_shortcut_triggered)
+
+        self.on_preview_player_state_changed(
+            self.preview_panel.preview_player.is_playing
+        )
 
         # Layer Manager Panel
         self.layer_manager_widget = LayerManagerWidget(self.app, self.canvas)
@@ -330,6 +382,67 @@ class MainWindow(QMainWindow):
         if not frames:
             return
         self.app.remove_keyframes(frames)
+
+    @Slot(bool)
+    def on_animation_play_toggled(self, checked: bool) -> None:
+        self._timeline_driving_playback = checked
+        self._updating_animation_controls = True
+        try:
+            self.preview_panel.preview_play_button.setChecked(checked)
+        finally:
+            self._updating_animation_controls = False
+        if not checked:
+            self.canvas.set_animation_playback_active(False)
+            self.canvas.update()
+
+    @Slot()
+    def on_animation_stop_clicked(self) -> None:
+        if hasattr(self, "animation_play_button") and self.animation_play_button.isChecked():
+            self.animation_play_button.setChecked(False)
+        self._timeline_driving_playback = False
+        self._updating_animation_controls = True
+        try:
+            self.preview_panel.preview_player.stop()
+        finally:
+            self._updating_animation_controls = False
+        if self.preview_panel.preview_play_button.isChecked():
+            self._updating_animation_controls = True
+            try:
+                self.preview_panel.preview_play_button.setChecked(False)
+            finally:
+                self._updating_animation_controls = False
+
+    @Slot(bool)
+    def on_preview_player_state_changed(self, playing: bool) -> None:
+        timeline_controlled = self._timeline_driving_playback or self._updating_animation_controls
+        with QSignalBlocker(self.animation_play_button):
+            if timeline_controlled:
+                self.animation_play_button.setChecked(playing)
+            else:
+                self.animation_play_button.setChecked(False)
+        self.animation_play_button.setIcon(
+            self._timeline_pause_icon if timeline_controlled and playing else self._timeline_play_icon
+        )
+        self.animation_play_button.setText("Pause" if timeline_controlled and playing else "Play")
+        self.canvas.set_animation_playback_active(timeline_controlled and playing)
+        if not (timeline_controlled and playing):
+            self.canvas.update()
+
+    @Slot(int)
+    def on_preview_player_frame_changed(self, frame: int) -> None:
+        if not (self._timeline_driving_playback or self._updating_animation_controls):
+            return
+        self.animation_panel.set_current_frame(frame)
+        document = getattr(self.app, "document", None)
+        layer_manager = getattr(document, "layer_manager", None)
+        self.app.select_frame(frame)
+        self.canvas.update()
+
+    @Slot()
+    def on_playback_shortcut_triggered(self) -> None:
+        self.animation_play_button.setChecked(
+            not self.animation_play_button.isChecked()
+        )
 
     @Slot()
     def on_document_changed(self):
