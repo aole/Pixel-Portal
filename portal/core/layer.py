@@ -27,7 +27,7 @@ class Layer(QObject):
         width: int,
         height: int,
         name: str,
-        layer_manager: "LayerManager | None" = None,
+        layer_manager = None,
         keys: list[Key] | None = None,
     ):
         super().__init__()
@@ -36,7 +36,7 @@ class Layer(QObject):
         self.opacity = 1.0  # 0.0 (transparent) to 1.0 (opaque)
         self._onion_skin_enabled = False
         self._active_key_index = 0
-        self._layer_manager: "LayerManager | None" = None
+        self._layer_manager = layer_manager
         if keys is not None:
             provided_keys = list(keys)
         else:
@@ -57,7 +57,7 @@ class Layer(QObject):
         key.image_changed.connect(self.on_image_change.emit)
         key.image_changed.connect(key.mark_non_transparent_bounds_dirty)
 
-    def attach_to_manager(self, manager: "LayerManager") -> None:
+    def attach_to_manager(self, manager) -> None:
         self._layer_manager = manager
         self.on_current_frame_changed(manager.current_frame)
 

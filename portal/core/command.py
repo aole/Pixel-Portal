@@ -951,6 +951,7 @@ class ShapeCommand(Command):
         pattern_image: QImage | None = None,
         mirror_x_position: float | None = None,
         mirror_y_position: float | None = None,
+        erase: bool = False,
     ):
         from portal.core.document import Document
         self.layer = layer
@@ -967,6 +968,7 @@ class ShapeCommand(Command):
         self.pattern_image = pattern_image
         self.mirror_x_position = mirror_x_position
         self.mirror_y_position = mirror_y_position
+        self.erase = erase
         self.drawing = Drawing()
         self.before_image = None
 
@@ -984,38 +986,35 @@ class ShapeCommand(Command):
             if self.selection_shape:
                 painter.setClipPath(self.selection_shape)
 
-            pen = QPen(self.color)
-            pen.setWidth(self.width)
-            painter.setPen(pen)
+            if self.erase:
+                mask_image = QImage(self.layer.image.size(), QImage.Format_ARGB32)
+                mask_image.fill(Qt.transparent)
 
-            doc_size = QSize(self.document.width, self.document.height)
-            if self.shape_type == 'ellipse':
-                self.drawing.draw_ellipse(
+                mask_painter = QPainter(mask_image)
+                try:
+                    if self.selection_shape:
+                        mask_painter.setClipPath(self.selection_shape)
+                    mask_pen = QPen(Qt.black)
+                    mask_pen.setWidth(self.width)
+                    mask_painter.setPen(mask_pen)
+                    self._paint_shape(
+                        mask_painter,
+                        wrap=self.wrap,
+                        pattern=self.pattern_image,
+                    )
+                finally:
+                    mask_painter.end()
+
+                painter.setCompositionMode(QPainter.CompositionMode_DestinationOut)
+                painter.drawImage(0, 0, mask_image)
+            else:
+                pen = QPen(self.color)
+                pen.setWidth(self.width)
+                painter.setPen(pen)
+                self._paint_shape(
                     painter,
-                    self.rect,
-                    doc_size,
-                    self.brush_type,
-                    self.width,
-                    self.mirror_x,
-                    self.mirror_y,
                     wrap=self.wrap,
                     pattern=self.pattern_image,
-                    mirror_x_position=self.mirror_x_position,
-                    mirror_y_position=self.mirror_y_position,
-                )
-            elif self.shape_type == 'rectangle':
-                self.drawing.draw_rect(
-                    painter,
-                    self.rect,
-                    doc_size,
-                    self.brush_type,
-                    self.width,
-                    self.mirror_x,
-                    self.mirror_y,
-                    wrap=self.wrap,
-                    pattern=self.pattern_image,
-                    mirror_x_position=self.mirror_x_position,
-                    mirror_y_position=self.mirror_y_position,
                 )
         finally:
             painter.end()
@@ -1045,6 +1044,45 @@ class ShapeCommand(Command):
             pad_x = max(pad_x, (self.pattern_image.width() + 1) // 2)
             pad_y = max(pad_y, (self.pattern_image.height() + 1) // 2)
         return pad_x, pad_y
+
+    def _paint_shape(
+        self,
+        painter: QPainter,
+        *,
+        wrap: bool,
+        pattern: QImage | None,
+    ) -> None:
+        doc_size = QSize(self.document.width, self.document.height)
+        if self.shape_type == 'ellipse':
+            self.drawing.draw_ellipse(
+                painter,
+                self.rect,
+                doc_size,
+                self.brush_type,
+                self.width,
+                self.mirror_x,
+                self.mirror_y,
+                wrap=wrap,
+                pattern=pattern,
+                mirror_x_position=self.mirror_x_position,
+                mirror_y_position=self.mirror_y_position,
+            )
+        elif self.shape_type == 'rectangle':
+            self.drawing.draw_rect(
+                painter,
+                self.rect,
+                doc_size,
+                self.brush_type,
+                self.width,
+                self.mirror_x,
+                self.mirror_y,
+                wrap=wrap,
+                pattern=pattern,
+                mirror_x_position=self.mirror_x_position,
+                mirror_y_position=self.mirror_y_position,
+            )
+        else:
+            raise ValueError(f'Unsupported shape type: {self.shape_type}')
 
 class MoveCommand(Command):
     def __init__(self, layer: Layer, before_move_image: QImage, after_cut_image: QImage, moved_image: QImage, delta: QPoint, original_selection_shape: QPainterPath | None):

@@ -158,8 +158,12 @@ def test_draw_ellipse_vertical_line_stays_within_bounds():
 def pen_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
-    mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_layer.image.fill(Qt.transparent)
     mock_layer.visible = True
+    mock_layer.active_key = None
+    mock_layer.keys = []
+    mock_layer.active_key_index = 0
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
@@ -266,8 +270,12 @@ def test_pen_tile_preview_overlay(pen_tool, qtbot):
 def eraser_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
-    mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_layer.image.fill(Qt.transparent)
     mock_layer.visible = True
+    mock_layer.active_key = None
+    mock_layer.keys = []
+    mock_layer.active_key_index = 0
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
@@ -377,8 +385,12 @@ def test_eraser_tile_preview_overlay(eraser_tool, qtbot):
 def line_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
-    mock_layer.image.rect.return_value = QRect(0, 0, 256, 256)
+    mock_layer.image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_layer.image.fill(Qt.transparent)
     mock_layer.visible = True
+    mock_layer.active_key = None
+    mock_layer.keys = []
+    mock_layer.active_key_index = 0
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.document.width = 256
     mock_canvas.document.height = 256
@@ -397,6 +409,7 @@ def line_tool(qtbot):
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
     mock_canvas.drawing = Drawing()
+    mock_canvas.is_erasing_preview = False
     mock_canvas.preview_layer = mock_layer
 
     def _set_preview_layer(layer):
@@ -453,6 +466,59 @@ def test_line_mouse_events(line_tool, qtbot):
     assert command.erase is False
     assert canvas.temp_image is None
     assert canvas.original_image is None
+    assert canvas.temp_image_replaces_active_layer is False
+
+
+def test_line_right_click_erases(line_tool, qtbot):
+    tool = line_tool
+    canvas = tool.canvas
+
+    press_point = QPoint(5, 5)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        press_point,
+        press_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as press_blocker:
+        tool.mousePressEvent(press_event, press_point)
+    assert press_blocker.signal_triggered
+    assert press_blocker.args == [("get_active_layer_image", "line_tool_start")]
+    assert canvas.temp_image_replaces_active_layer is False
+    assert canvas.is_erasing_preview is True
+
+    move_point = QPoint(12, 8)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+    assert canvas.temp_image is not None
+    assert canvas.temp_image.pixelColor(move_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as release_blocker:
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert release_blocker.signal_triggered
+    command = release_blocker.args[0]
+    assert isinstance(command, DrawCommand)
+    assert command.erase is True
+    assert canvas.is_erasing_preview is False
+    assert canvas.temp_image is None
     assert canvas.temp_image_replaces_active_layer is False
 
 
@@ -706,7 +772,12 @@ def test_bucket_ctrl_disables_contiguous(bucket_tool, qtbot):
 def ellipse_tool(qtbot):
     mock_canvas = Mock()
     mock_layer = Mock()
+    mock_layer.image = QImage(256, 256, QImage.Format_ARGB32)
+    mock_layer.image.fill(Qt.transparent)
     mock_layer.visible = True
+    mock_layer.active_key = None
+    mock_layer.keys = []
+    mock_layer.active_key_index = 0
     mock_canvas.document.layer_manager.active_layer = mock_layer
     mock_canvas.drawing_context.pen_color = QColor("red")
     mock_canvas.drawing_context.pen_width = 1
@@ -723,6 +794,7 @@ def ellipse_tool(qtbot):
     mock_canvas.temp_image_replaces_active_layer = False
     mock_canvas.tile_preview_enabled = False
     mock_canvas.drawing = Drawing()
+    mock_canvas.is_erasing_preview = False
     mock_canvas.preview_layer = mock_layer
 
     def _set_preview_layer(layer):
@@ -780,6 +852,63 @@ def test_ellipse_mouse_events(ellipse_tool, qtbot):
     assert command.rect == QRect(10, 10, 21, 31)
     assert canvas.temp_image is None
     assert canvas.original_image is None
+    assert canvas.temp_image_replaces_active_layer is False
+
+
+def test_ellipse_right_click_erases(ellipse_tool, qtbot):
+    tool = ellipse_tool
+    canvas = tool.canvas
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as press_blocker:
+        tool.mousePressEvent(press_event, start_point)
+    assert press_blocker.signal_triggered
+    assert press_blocker.args == [("get_active_layer_image", "ellipse_tool_start")]
+    assert canvas.temp_image_replaces_active_layer is False
+    assert canvas.is_erasing_preview is True
+
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
+
+    move_point = QPoint(30, 40)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+    assert canvas.temp_image is not None
+    top_center = QPoint((start_point.x() + move_point.x()) // 2, start_point.y())
+    assert canvas.temp_image.pixelColor(top_center).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as release_blocker:
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert release_blocker.signal_triggered
+    command = release_blocker.args[0]
+    assert isinstance(command, ShapeCommand)
+    assert command.erase is True
+    assert command.rect == QRect(10, 10, 21, 31)
+    assert canvas.is_erasing_preview is False
+    assert canvas.temp_image is None
     assert canvas.temp_image_replaces_active_layer is False
 
 
@@ -873,6 +1002,62 @@ def test_ellipse_tile_preview_overlay(ellipse_tool, qtbot):
         tool.mouseReleaseEvent(release_event, move_point)
 
     assert canvas.tile_preview_image is None
+
+
+def test_rectangle_right_click_erases(rectangle_tool, qtbot):
+    tool = rectangle_tool
+    canvas = tool.canvas
+
+    start_point = QPoint(10, 10)
+    press_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        start_point,
+        start_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as press_blocker:
+        tool.mousePressEvent(press_event, start_point)
+    assert press_blocker.signal_triggered
+    assert press_blocker.args == [("get_active_layer_image", "rectangle_tool_start")]
+    assert canvas.temp_image_replaces_active_layer is False
+    assert canvas.is_erasing_preview is True
+
+    canvas.set_preview_layer(canvas.document.layer_manager.active_layer)
+
+    move_point = QPoint(30, 40)
+    move_event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    tool.mouseMoveEvent(move_event, move_point)
+    assert canvas.temp_image is not None
+    assert canvas.temp_image.pixelColor(move_point).alpha() > 0
+
+    release_event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        move_point,
+        move_point,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(tool.command_generated) as release_blocker:
+        tool.mouseReleaseEvent(release_event, move_point)
+
+    assert release_blocker.signal_triggered
+    command = release_blocker.args[0]
+    assert isinstance(command, ShapeCommand)
+    assert command.erase is True
+    assert command.rect == QRect(10, 10, 21, 31)
+    assert canvas.is_erasing_preview is False
+    assert canvas.temp_image is None
+    assert canvas.temp_image_replaces_active_layer is False
 
 
 def test_rectangle_tile_preview_overlay(rectangle_tool, qtbot):
