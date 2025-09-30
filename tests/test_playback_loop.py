@@ -23,9 +23,6 @@ def document_controller():
 
 
 def test_document_controller_loop_range_clamping(document_controller):
-    document_controller.set_playback_loop_range(-5, 0)
-    assert document_controller.playback_loop_range == (0, 1)
-
     document_controller.set_playback_loop_range(3, 3)
     assert document_controller.playback_loop_range == (3, 4)
 

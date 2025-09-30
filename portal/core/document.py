@@ -125,8 +125,8 @@ class Document:
     # ------------------------------------------------------------------
     # Rendering helpers
     # ------------------------------------------------------------------
-    def render(self) -> QImage:
-        """Composite all visible layers into a single image."""
+    def render(self, frame: int | None = None) -> QImage:
+        """Composite visible layers for the requested frame (or current frame)."""
 
         final_image = QImage(
             QSize(max(1, int(self.width)), max(1, int(self.height))),
@@ -134,12 +134,19 @@ class Document:
         )
         final_image.fill(Qt.transparent)
 
+        layer_manager = getattr(self, "layer_manager", None)
+        if frame is None:
+            frame = getattr(layer_manager, "current_frame", 0)
+
         painter = QPainter(final_image)
-        for layer in self.layer_manager.layers:
-            if not layer.visible:
+        for layer in list(getattr(layer_manager, "layers", [])):
+            if not getattr(layer, "visible", False):
                 continue
-            painter.setOpacity(layer.opacity)
-            painter.drawImage(0, 0, layer.image)
+
+            frame_image = self._image_for_layer_frame(layer, frame)
+
+            painter.setOpacity(getattr(layer, "opacity", 1.0))
+            painter.drawImage(0, 0, frame_image)
         painter.end()
         return final_image
 
@@ -160,6 +167,33 @@ class Document:
             painter.drawImage(0, 0, layer.image)
         painter.end()
         return final_image
+
+    def _image_for_layer_frame(self, layer: Layer, frame: int) -> QImage | None:
+        if layer is None:
+            return None
+
+        keys = getattr(layer, "keys", None)
+        if not keys:
+            image = getattr(layer, "image", None)
+            return image if isinstance(image, QImage) else None
+
+        try:
+            index = layer._index_for_frame(frame)
+        except Exception:
+            try:
+                index = layer.active_key_index
+            except Exception:
+                index = 0
+
+        try:
+            key = keys[index]
+        except Exception:
+            return None
+
+        image = getattr(key, "image", None)
+        if isinstance(image, QImage):
+            return image
+        return None
 
     # ------------------------------------------------------------------
     # AI output rectangle helpers

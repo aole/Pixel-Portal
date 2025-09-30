@@ -254,53 +254,6 @@ class PreviewPanel(QWidget):
         return layer_manager.current_frame
 
     def _render_document_frame(self, document, frame: int) -> QImage | None:
-        if document is None:
-            return None
-
-        width = getattr(document, "width", 0)
-        height = getattr(document, "height", 0)
-        image = QImage(width, height, QImage.Format_ARGB32)
-        image.fill(Qt.transparent)
-
-        layer_manager = getattr(document, "layer_manager", None)
-        if layer_manager is None:
-            return image
-
-        painter = QPainter(image)
-        try:
-            layers = list(getattr(layer_manager, "layers", []))
-        except TypeError:
-            layers = []
-
-        for layer in layers:
-            key_image = self._image_for_layer_frame(layer, frame)
-            if key_image is None or key_image.isNull():
-                continue
-
-            opacity = getattr(layer, "opacity", 1.0)
-            painter.setOpacity(opacity)
-            painter.drawImage(0, 0, key_image)
-
-        painter.end()
+        render_method = getattr(document, "render", None)
+        image = render_method(frame)
         return image
-
-    @staticmethod
-    def _image_for_layer_frame(layer, frame: int) -> QImage | None:
-        if layer is None:
-            return None
-
-        keys = getattr(layer, "keys", None)
-        if keys:
-            try:
-                index = layer._index_for_frame(frame)
-                key = keys[index]
-                image = getattr(key, "image", None)
-                if isinstance(image, QImage):
-                    return image
-            except Exception:
-                pass
-
-        image = getattr(layer, "image", None)
-        if isinstance(image, QImage):
-            return image
-        return None

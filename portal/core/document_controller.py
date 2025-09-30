@@ -175,6 +175,8 @@ class DocumentController(QObject):
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
         self._playback_loop_start = start
+        if end <= start:
+            end = start + 1
         self._playback_loop_end = end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
