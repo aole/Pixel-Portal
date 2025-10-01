@@ -205,10 +205,22 @@ class AnimationPanel(QWidget):
         if timeline_y < min_timeline_y:
             timeline_y = min_timeline_y
 
-        line_pen = QPen(self.palette().color(QPalette.WindowText))
+        line_color = self.palette().color(QPalette.WindowText)
+        line_pen = QPen(line_color)
         line_pen.setCosmetic(True)
         painter.setPen(line_pen)
         painter.drawLine(baseline_left, timeline_y, baseline_right, timeline_y)
+
+        active_tick_pen = QPen(line_pen)
+        inactive_tick_pen = QPen(line_pen)
+        inactive_color = inactive_tick_pen.color()
+        inactive_color.setAlphaF(inactive_color.alphaF() * 0.55)
+        inactive_tick_pen.setColor(inactive_color)
+
+        loop_start = min(self._loop_start, self._loop_end)
+        loop_end = max(self._loop_start, self._loop_end)
+        if loop_end <= loop_start:
+            loop_end = loop_start + 1
 
         available_width = max(0, baseline_right - baseline_left)
         visible_left = max(0.0, -self._offset)
@@ -225,6 +237,9 @@ class AnimationPanel(QWidget):
 
         # draw all frames
         for frame in range(start_frame, end_frame):
+            tick_pen = active_tick_pen if loop_start <= frame <= loop_end else inactive_tick_pen
+            painter.setPen(tick_pen)
+
             tick_x = round(self._frame_to_x(frame))
             if tick_x < baseline_left - 2 or tick_x > baseline_right + 2:
                 continue
@@ -250,6 +265,8 @@ class AnimationPanel(QWidget):
                     text_height,
                 )
                 painter.drawText(text_rect, Qt.AlignCenter, text)
+
+        painter.setPen(line_pen)
 
         loop_pen = QPen(highlight_color, 2)
         loop_pen.setCosmetic(True)
@@ -291,7 +308,7 @@ class AnimationPanel(QWidget):
         )
         painter.setPen(handle_pen)
         painter.drawText(text_rect, Qt.AlignLeft, text)
-        
+
         # draw left loop handle
         if baseline_left <= start_pos <= baseline_right:
             start_rect = QRectF(
