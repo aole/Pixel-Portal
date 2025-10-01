@@ -378,8 +378,10 @@ class CanvasRenderer:
         if state is None:
             return
         settings, context = state
-        include_previous = settings.has_previous and not context.should_overlay_previous_on_top
-        include_next = settings.has_next
+        paint_previous_in_foreground = context.should_overlay_previous_on_top or context.active_is_key
+        paint_next_in_foreground = context.active_is_key
+        include_previous = settings.has_previous and not paint_previous_in_foreground
+        include_next = settings.has_next and not paint_next_in_foreground
         if not include_previous and not include_next:
             return
         self._apply_onion_skin(
@@ -396,13 +398,15 @@ class CanvasRenderer:
         if state is None:
             return
         settings, context = state
-        if not context.should_overlay_previous_on_top or not settings.has_previous:
+        paint_previous = settings.has_previous and (context.should_overlay_previous_on_top or context.active_is_key)
+        paint_next = settings.has_next and context.active_is_key
+        if not paint_previous and not paint_next:
             return
         self._apply_onion_skin(
             target,
             document,
-            include_previous=True,
-            include_next=False,
+            include_previous=paint_previous,
+            include_next=paint_next,
             settings=settings,
             context=context,
         )
