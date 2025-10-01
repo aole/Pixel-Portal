@@ -1,7 +1,5 @@
 1. better icons / set
-3. brush size slider restrict width
 6. better status bar
 11. polygon create
 12. polygon select
-15. design a new timeline or frame list once the animation stack is rebuilt (current timeline UI has been removed)
 16. expand preview playback controls (e.g. ping-pong, per-layer preview toggles)

@@ -17,7 +17,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QShortcut,
 )
-from PySide6.QtCore import Qt, Slot, QSignalBlocker
+from PySide6.QtCore import Qt, Slot, QSignalBlocker, QSize
 from portal.ui.canvas import Canvas
 from portal.ui.layer_manager_widget import LayerManagerWidget
 try:
@@ -168,6 +168,8 @@ class MainWindow(QMainWindow):
         self._timeline_stop_icon = QIcon("icons/stop.png")
         self._onion_enabled_icon = QIcon("icons/skinon.png")
         self._onion_disabled_icon = QIcon("icons/skinoff.png")
+        self._auto_key_enabled_icon = QIcon("icons/autokey.png")
+        self._auto_key_disabled_icon = QIcon("icons/autokeydisabled.png")
 
         self._timeline_driving_playback = False
         self._updating_animation_controls = False
@@ -210,6 +212,19 @@ class MainWindow(QMainWindow):
         self.animation_stop_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.animation_stop_button.clicked.connect(self.on_animation_stop_clicked)
         animation_controls_layout.addWidget(self.animation_stop_button)
+        self.animation_auto_key_button = QToolButton(self.animation_controls_widget)
+        self.animation_auto_key_button.setCheckable(True)
+        self.animation_auto_key_button.setAutoRaise(True)
+        self.animation_auto_key_button.setIconSize(QSize(48, 150))
+        self.animation_auto_key_button.setFixedHeight(self.animation_stop_button.sizeHint().height())
+        self.animation_auto_key_button.toggled.connect(self.on_auto_key_toggled)
+        animation_controls_layout.addWidget(self.animation_auto_key_button)
+        auto_key_blocker = QSignalBlocker(self.animation_auto_key_button)
+        try:
+            self.animation_auto_key_button.setChecked(self.canvas.is_auto_key_enabled())
+        finally:
+            del auto_key_blocker
+        self._update_auto_key_button(self.animation_auto_key_button.isChecked())
 
         self.animation_onion_button = QToolButton(self.animation_controls_widget)
         self.animation_onion_button.setCheckable(True)
@@ -369,6 +384,13 @@ class MainWindow(QMainWindow):
             self.animation_panel.set_keyframes(keyframes)
             self.animation_panel.set_can_paste_keyframes(self.app.has_copied_keyframe())
             self.preview_panel.sync_to_document_frame(current_frame)
+            if hasattr(self, "animation_auto_key_button"):
+                auto_key_blocker = QSignalBlocker(self.animation_auto_key_button)
+                try:
+                    self.animation_auto_key_button.setChecked(self.canvas.is_auto_key_enabled())
+                finally:
+                    del auto_key_blocker
+                self._update_auto_key_button(self.animation_auto_key_button.isChecked())
 
     @Slot(int)
     def on_animation_current_frame_changed(self, frame: int) -> None:
@@ -446,6 +468,21 @@ class MainWindow(QMainWindow):
                 self.preview_panel.preview_play_button.setChecked(False)
             finally:
                 self._updating_animation_controls = False
+
+    def _update_auto_key_button(self, enabled: bool) -> None:
+        if not hasattr(self, "animation_auto_key_button"):
+            return
+        icon = self._auto_key_enabled_icon if enabled else self._auto_key_disabled_icon
+        tooltip = "Disable automatic keyframe creation" if enabled else "Enable automatic keyframe creation"
+        button = self.animation_auto_key_button
+        button.setIcon(icon)
+        button.setToolTip(tooltip)
+        button.setText("")
+
+    @Slot(bool)
+    def on_auto_key_toggled(self, enabled: bool) -> None:
+        self.app.set_auto_key_enabled(enabled)
+        self._update_auto_key_button(enabled)
 
     def _update_onion_skin_button(self, enabled: bool) -> None:
         if not hasattr(self, "animation_onion_button"):

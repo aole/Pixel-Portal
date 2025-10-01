@@ -192,9 +192,25 @@ class DocumentController(QObject):
         self._playback_loop_end = end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
-        """Auto-key functionality has been removed."""
+        """Ensure the active layer has a keyframe for the current frame when auto-key is enabled."""
 
-        return False
+        if not self.auto_key_enabled:
+            return False
+
+        document = self.document
+        layer_manager = getattr(document, "layer_manager", None)
+        active_layer = getattr(layer_manager, "active_layer", None)
+        current_frame = getattr(layer_manager, "current_frame", 0)
+        keys = getattr(active_layer, "keys", [])
+        for index, key in enumerate(keys):
+            if getattr(key, "frame_number", None) == current_frame:
+                if getattr(active_layer, "active_key_index", None) != index:
+                    active_layer.set_active_key_index(index)
+                return False
+
+        command = AddKeyframeCommand(self, active_layer, current_frame)
+        self.execute_command(command)
+        return True
 
     def set_keyframes(self, frames: Iterable[int]) -> None:
         """Keyframe management is no longer supported."""
