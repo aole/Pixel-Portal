@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from portal.core.command import Command
@@ -18,111 +21,226 @@ rembg_remove = None
 
 def _merge_layer_down_with_union(document: 'Document', layer_index: int) -> bool:
     layer_manager = document.layer_manager
-    if not (0 < layer_index < len(layer_manager.layers)):
+    try:
+        layer_manager.merge_layer_down(layer_index)
+    except IndexError:
         return False
-
-    top_layer = layer_manager.layers[layer_index]
-    bottom_layer = layer_manager.layers[layer_index - 1]
-
-    top_uid = getattr(top_layer, "uid", None)
-    bottom_uid = getattr(bottom_layer, "uid", None)
-    if top_uid is None or bottom_uid is None:
-        return False
-
-    frame_manager = document.frame_manager
-
-    top_keys = set(frame_manager.layer_keys.get(top_uid, {0}))
-    bottom_keys = set(frame_manager.layer_keys.get(bottom_uid, {0}))
-    union_keys = sorted(top_keys | bottom_keys)
-
-    bottom_keys_set = frame_manager.layer_keys.get(bottom_uid)
-    if bottom_keys_set is None:
-        bottom_keys_set = frame_manager.layer_keys[bottom_uid] = {0}
-
-    for frame_index in union_keys:
-        frame_manager.ensure_frame(frame_index)
-        if frame_index not in bottom_keys_set:
-            frame_manager.add_layer_key(bottom_uid, frame_index)
-            bottom_keys_set = frame_manager.layer_keys.get(bottom_uid, bottom_keys_set)
-
-        top_source_index = frame_manager.resolve_layer_key_frame_index(top_uid, frame_index)
-        if top_source_index is None:
-            continue
-        if not (0 <= top_source_index < len(frame_manager.frames)):
-            continue
-
-        top_source_layer = frame_manager.layer_for_frame(top_source_index, top_uid)
-        bottom_target_layer = frame_manager.layer_for_frame(frame_index, bottom_uid)
-
-        if top_source_layer is None or bottom_target_layer is None:
-            continue
-
-        painter = QPainter(bottom_target_layer.image)
-        painter.setOpacity(top_source_layer.opacity)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-        painter.drawImage(0, 0, top_source_layer.image)
-        painter.end()
-
-        bottom_target_layer.on_image_change.emit()
-
-    layer_manager.remove_layer(layer_index)
-    document.unregister_layer(top_uid)
     return True
 
 
 def _merge_layer_down_current_frame(document: 'Document', layer_index: int) -> bool:
+    return _merge_layer_down_with_union(document, layer_index)
+
+
+@dataclass(slots=True)
+class _LayerStateSnapshot:
+    layer: "Layer"
+    snapshot: "Layer"
+
+
+@dataclass(slots=True)
+class _MergeBeforeState:
+    top: _LayerStateSnapshot
+    bottom: _LayerStateSnapshot
+    top_index: int
+    bottom_index: int
+    active_layer_index: int
+
+
+@dataclass(slots=True)
+class _MergeAfterState:
+    bottom: _LayerStateSnapshot
+    active_layer_index: int
+
+
+@dataclass(slots=True)
+class _LayerManagerState:
+    snapshot: "LayerManager"
+    layer_lookup: dict[int, "Layer"]
+
+
+def _capture_layer_state(layer: "Layer") -> _LayerStateSnapshot:
+    return _LayerStateSnapshot(layer=layer, snapshot=layer.clone(deep_copy=True))
+
+
+def _restore_layer_state(state: _LayerStateSnapshot) -> None:
+    from portal.core.layer import Layer
+
+    layer = state.layer
+    source = state.snapshot
+
+    if not isinstance(layer, Layer):
+        return
+
+    existing_keys = {key.frame_number: key for key in layer.keys}
+    new_keys = []
+
+    for source_key in source.keys:
+        key = existing_keys.pop(source_key.frame_number, None)
+        if key is None:
+            key = source_key.clone(deep_copy=True)
+            layer._register_key(key)
+        else:
+            key.apply_state_from(source_key, deep_copy=True, emit_change=False)
+        key.frame_number = source_key.frame_number
+        new_keys.append(key)
+
+    for stale_key in existing_keys.values():
+        try:
+            layer.keys.remove(stale_key)
+        except ValueError:
+            pass
+        stale_key.setParent(None)
+
+    layer.keys = new_keys
+    layer.name = source.name
+    layer.visible = source.visible
+    layer.opacity = source.opacity
+    layer.onion_skin_enabled = source.onion_skin_enabled
+
     try:
-        layer_manager = document.layer_manager
-    except ValueError:
-        return False
+        layer.set_active_key_index(source.active_key_index)
+    except (IndexError, ValueError):
+        layer.set_active_key_index(0 if layer.keys else -1)
+
+    layer.on_image_change.emit()
+
+
+def _build_merge_before_state(layer_manager, layer_index: int) -> _MergeBeforeState | None:
     if not (0 < layer_index < len(layer_manager.layers)):
-        return False
+        return None
 
-    top_layer = layer_manager.layers[layer_index]
-    bottom_layer = layer_manager.layers[layer_index - 1]
+    top_index = layer_index
+    bottom_index = layer_index - 1
 
-    top_uid = getattr(top_layer, "uid", None)
-    bottom_uid = getattr(bottom_layer, "uid", None)
-    if top_uid is None or bottom_uid is None:
-        return False
+    top_layer = layer_manager.layers[top_index]
+    bottom_layer = layer_manager.layers[bottom_index]
 
-    frame_manager = getattr(document, "frame_manager", None)
-    if frame_manager is None:
-        return False
+    return _MergeBeforeState(
+        top=_capture_layer_state(top_layer),
+        bottom=_capture_layer_state(bottom_layer),
+        top_index=top_index,
+        bottom_index=bottom_index,
+        active_layer_index=layer_manager.active_layer_index,
+    )
 
-    frame_index = getattr(frame_manager, "active_frame_index", None)
-    if frame_index is None or frame_index < 0:
-        return False
 
-    frame_manager.ensure_frame(frame_index)
-    if not (0 <= frame_index < len(frame_manager.frames)):
-        return False
+def _build_merge_after_state(layer_manager, before_state: _MergeBeforeState) -> _MergeAfterState:
+    return _MergeAfterState(
+        bottom=_capture_layer_state(before_state.bottom.layer),
+        active_layer_index=layer_manager.active_layer_index,
+    )
 
-    source_frame_index = frame_manager.resolve_layer_key_frame_index(top_uid, frame_index)
-    if source_frame_index is None:
-        return False
-    if not (0 <= source_frame_index < len(frame_manager.frames)):
-        return False
 
-    keys = frame_manager.layer_keys.setdefault(bottom_uid, {0})
-    if frame_index not in keys:
-        frame_manager.add_layer_key(bottom_uid, frame_index)
+def _undo_merge_state(layer_manager, before_state: _MergeBeforeState) -> None:
+    layers = layer_manager.layers
 
-    source_layer = frame_manager.layer_for_frame(source_frame_index, top_uid)
-    target_layer = frame_manager.layer_for_frame(frame_index, bottom_uid)
-    if source_layer is None or target_layer is None:
-        return False
+    try:
+        current_index = layers.index(before_state.top.layer)
+    except ValueError:
+        current_index = None
 
-    painter = QPainter(target_layer.image)
-    painter.setOpacity(source_layer.opacity)
-    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-    painter.drawImage(0, 0, source_layer.image)
-    painter.end()
+    if current_index is not None and current_index != before_state.top_index:
+        layers.pop(current_index)
+        current_index = None
 
-    target_layer.on_image_change.emit()
-    layer_manager.remove_layer(layer_index)
-    document.unregister_layer(top_uid)
-    return True
+    if current_index is None:
+        insert_at = min(before_state.top_index, len(layers))
+        layers.insert(insert_at, before_state.top.layer)
+        before_state.top.layer.attach_to_manager(layer_manager)
+
+    _restore_layer_state(before_state.bottom)
+    _restore_layer_state(before_state.top)
+
+    layer_manager.active_layer_index = before_state.active_layer_index
+    layer_manager.layer_structure_changed.emit()
+
+
+def _redo_merge_state(layer_manager, before_state: _MergeBeforeState, after_state: _MergeAfterState) -> None:
+    layers = layer_manager.layers
+
+    _restore_layer_state(after_state.bottom)
+
+    try:
+        top_index = layers.index(before_state.top.layer)
+    except ValueError:
+        top_index = None
+
+    if top_index is None:
+        return
+
+    layer_manager.remove_layer(top_index)
+    layer_manager.active_layer_index = after_state.active_layer_index
+
+
+def _capture_layer_manager(layer_manager):
+    from portal.core.layer import Layer  # Local import to avoid cycles in TYPE_CHECKING.
+
+    snapshot = layer_manager.clone(deep_copy=True)
+    layer_lookup: dict[int, Layer] = {}
+    for layer in layer_manager.layers:
+        layer_lookup[getattr(layer, "uid", id(layer))] = layer
+    return _LayerManagerState(snapshot, layer_lookup)
+
+
+def _restore_layer_manager(target_manager, state: _LayerManagerState):
+    from portal.core.layer import Layer
+
+    snapshot = state.snapshot
+    lookup = state.layer_lookup
+
+    def _apply_layer_state(destination: Layer, source: Layer) -> Layer:
+        existing_keys = {key.frame_number: key for key in destination.keys}
+        new_keys = []
+        for source_key in source.keys:
+            key = existing_keys.pop(source_key.frame_number, None)
+            if key is None:
+                key = source_key.clone(deep_copy=True)
+                destination._register_key(key)
+            else:
+                key.apply_state_from(source_key, deep_copy=True, emit_change=False)
+            key.frame_number = source_key.frame_number
+            new_keys.append(key)
+
+        # Remove any keys that are no longer present in the source snapshot.
+        for stale_key in existing_keys.values():
+            try:
+                destination.keys.remove(stale_key)
+            except ValueError:
+                pass
+            stale_key.setParent(None)
+
+        destination.keys = new_keys
+
+        # Mirror the layer level properties from the snapshot.
+        destination.name = source.name
+        destination.visible = source.visible
+        destination.opacity = source.opacity
+        destination.onion_skin_enabled = source.onion_skin_enabled
+
+        try:
+            destination.set_active_key_index(source.active_key_index)
+        except (IndexError, ValueError):
+            destination.set_active_key_index(0 if destination.keys else -1)
+
+        destination.on_image_change.emit()
+        return destination
+
+    target_manager._current_frame = snapshot.current_frame
+
+    restored_layers: list[Layer] = []
+    for source_layer in snapshot.layers:
+        uid = getattr(source_layer, "uid", None)
+        destination = lookup.get(uid)
+        if destination is None:
+            destination = source_layer.clone(deep_copy=True)
+        destination = _apply_layer_state(destination, source_layer)
+        destination.attach_to_manager(target_manager)
+        restored_layers.append(destination)
+
+    target_manager.layers = restored_layers
+    target_manager.active_layer_index = snapshot.active_layer_index
+    target_manager.layer_structure_changed.emit()
 
 
 def apply_qimage_transform_nearest(
@@ -179,23 +297,26 @@ class MergeLayerDownCommand(Command):
         self._after_state = None
 
     def execute(self):
+        layer_manager = self.document.layer_manager
         if self._before_state is None:
-            if not (0 < self.layer_index < len(self.document.layer_manager.layers)):
+            before_state = _build_merge_before_state(layer_manager, self.layer_index)
+            if before_state is None:
                 return
-            self._before_state = self.document.frame_manager.clone(deep_copy=True)
+            self._before_state = before_state
+            self.layer_index = before_state.top_index
             if not _merge_layer_down_with_union(self.document, self.layer_index):
                 self._before_state = None
                 return
-            self._after_state = self.document.frame_manager.clone(deep_copy=True)
+            self._after_state = _build_merge_after_state(layer_manager, self._before_state)
         else:
-            if self._after_state is None:
+            if self._after_state is None or self._before_state is None:
                 return
-            self.document.apply_frame_manager_snapshot(self._after_state)
+            _redo_merge_state(layer_manager, self._before_state, self._after_state)
 
     def undo(self):
         if self._before_state is None:
             return
-        self.document.apply_frame_manager_snapshot(self._before_state)
+        _undo_merge_state(self.document.layer_manager, self._before_state)
 
 
 class MergeLayerDownCurrentFrameCommand(Command):
@@ -206,27 +327,26 @@ class MergeLayerDownCurrentFrameCommand(Command):
         self._after_state = None
 
     def execute(self):
+        layer_manager = self.document.layer_manager
         if self._before_state is None:
-            try:
-                layer_count = len(self.document.layer_manager.layers)
-            except ValueError:
+            before_state = _build_merge_before_state(layer_manager, self.layer_index)
+            if before_state is None:
                 return
-            if not (0 < self.layer_index < layer_count):
-                return
-            self._before_state = self.document.frame_manager.clone(deep_copy=True)
+            self._before_state = before_state
+            self.layer_index = before_state.top_index
             if not _merge_layer_down_current_frame(self.document, self.layer_index):
                 self._before_state = None
                 return
-            self._after_state = self.document.frame_manager.clone(deep_copy=True)
+            self._after_state = _build_merge_after_state(layer_manager, self._before_state)
         else:
-            if self._after_state is None:
+            if self._after_state is None or self._before_state is None:
                 return
-            self.document.apply_frame_manager_snapshot(self._after_state)
+            _redo_merge_state(layer_manager, self._before_state, self._after_state)
 
     def undo(self):
         if self._before_state is None:
             return
-        self.document.apply_frame_manager_snapshot(self._before_state)
+        _undo_merge_state(self.document.layer_manager, self._before_state)
 
 
 class CollapseLayersCommand(Command):
@@ -236,24 +356,27 @@ class CollapseLayersCommand(Command):
         self._after_state = None
 
     def execute(self):
-        layer_count = len(self.document.layer_manager.layers)
+        layer_manager = self.document.layer_manager
+        layer_count = len(layer_manager.layers)
         if layer_count <= 1:
             return
 
         if self._before_state is None:
-            self._before_state = self.document.frame_manager.clone(deep_copy=True)
+            self._before_state = _capture_layer_manager(layer_manager)
             for index in range(layer_count - 1, 0, -1):
-                _merge_layer_down_with_union(self.document, index)
-            self._after_state = self.document.frame_manager.clone(deep_copy=True)
+                if not _merge_layer_down_with_union(self.document, index):
+                    self._before_state = None
+                    return
+            self._after_state = _capture_layer_manager(layer_manager)
         else:
             if self._after_state is None:
                 return
-            self.document.apply_frame_manager_snapshot(self._after_state)
+            _restore_layer_manager(layer_manager, self._after_state)
 
     def undo(self):
         if self._before_state is None:
             return
-        self.document.apply_frame_manager_snapshot(self._before_state)
+        _restore_layer_manager(self.document.layer_manager, self._before_state)
 
 
 class SetLayerVisibleCommand(Command):
@@ -283,21 +406,7 @@ class SetLayerVisibleCommand(Command):
         except IndexError:
             layer = None
 
-        document = getattr(self.layer_manager, "document", None)
-        frame_manager = getattr(document, "frame_manager", None) if document else None
-        if (
-            frame_manager is not None
-            and hasattr(frame_manager, "iter_layer_instances")
-            and self._layer_uid is not None
-        ):
-            frames = getattr(frame_manager, "frames", None)
-            if frames is not None:
-                frame_indices = range(len(frames))
-                instances = list(
-                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
-                )
-
-        if not instances and layer is not None:
+        if layer is not None:
             instances = [layer]
 
         self._instances = instances
@@ -350,21 +459,7 @@ class SetLayerOnionSkinCommand(Command):
         except IndexError:
             layer = None
 
-        document = getattr(self.layer_manager, "document", None)
-        frame_manager = getattr(document, "frame_manager", None) if document else None
-        if (
-            frame_manager is not None
-            and hasattr(frame_manager, "iter_layer_instances")
-            and self._layer_uid is not None
-        ):
-            frames = getattr(frame_manager, "frames", None)
-            if frames is not None:
-                frame_indices = range(len(frames))
-                instances = list(
-                    frame_manager.iter_layer_instances(self._layer_uid, frame_indices)
-                )
-
-        if not instances and layer is not None:
+        if layer is not None:
             instances = [layer]
 
         self._instances = instances

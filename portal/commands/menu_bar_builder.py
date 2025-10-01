@@ -12,10 +12,11 @@ class MenuBarBuilder:
         self.panels_menu = None
         self.toolbars_menu = None
 
-    def set_panels(self, layer_manager_dock, preview_dock, ai_panel_dock):
-        self.panels_menu.addAction(layer_manager_dock.toggleViewAction())
-        self.panels_menu.addAction(preview_dock.toggleViewAction())
-        self.panels_menu.addAction(ai_panel_dock.toggleViewAction())
+    def set_panels(self, *docks):
+        for dock in docks:
+            if dock is None:
+                continue
+            self.panels_menu.addAction(dock.toggleViewAction())
 
     def set_toolbars(self, toolbars):
         for toolbar in toolbars:

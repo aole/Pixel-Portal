@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage
 from types import SimpleNamespace
+from portal.core.key import Key
 
 
 @pytest.fixture
@@ -246,7 +247,6 @@ def test_open_as_key(mock_get_open_file_name, app, qtbot):
 
     top_left = active_layer.image.pixelColor(0, 0)
     assert top_left == QColor(0, 0, 0)
-    assert 0 in app.document.key_frames
 
 @patch('PySide6.QtWidgets.QFileDialog.getSaveFileName')
 def test_save_document(mock_get_save_file_name, app, tmp_path):
@@ -530,6 +530,64 @@ def test_draw_command(layer, document):
     restored_image_data = layer.image.constBits().tobytes()
     assert original_image_data == restored_image_data
 
+
+def test_draw_command_redo_targets_original_frame(document):
+    """Redo should repaint the key that was active when the stroke was created."""
+
+    layer_manager = document.layer_manager
+    layer = layer_manager.layers[0]
+
+    frame_zero_key = layer.keys[0]
+    frame_five_key = Key(document.width, document.height, frame_number=5)
+    layer._register_key(frame_five_key)
+    layer.keys.append(frame_five_key)
+
+    assert frame_zero_key.frame_number == 0
+    assert frame_five_key.frame_number == 5
+
+    frame_zero_before = frame_zero_key.image.constBits().tobytes()
+    frame_five_before = frame_five_key.image.constBits().tobytes()
+
+    layer_manager.set_current_frame(0)
+    assert layer.active_key is frame_zero_key
+
+    undo_manager = UndoManager()
+
+    command = DrawCommand(
+        layer=layer,
+        points=[QPoint(10, 10), QPoint(20, 20)],
+        color=QColor("red"),
+        width=5,
+        brush_type="Circular",
+        document=document,
+        selection_shape=None,
+        erase=False,
+        mirror_x=False,
+        mirror_y=False,
+    )
+
+    command.execute()
+    undo_manager.add_command(command)
+
+    frame_zero_after = frame_zero_key.image.constBits().tobytes()
+
+    assert frame_zero_after != frame_zero_before
+    assert frame_five_key.image.constBits().tobytes() == frame_five_before
+
+    undo_manager.undo()
+    assert frame_zero_key.image.constBits().tobytes() == frame_zero_before
+
+    layer_manager.set_current_frame(5)
+    assert layer.active_key is frame_five_key
+    assert layer_manager.current_frame == 5
+
+    undo_manager.redo()
+
+    assert frame_zero_key.image.constBits().tobytes() == frame_zero_after
+    assert frame_five_key.image.constBits().tobytes() == frame_five_before
+    assert layer_manager.current_frame == 5
+    assert layer.active_key is frame_five_key
+
 def test_shape_command(document, layer):
     """Test that the ShapeCommand correctly draws a shape and that undo restores the previous state."""
     # Get the original image data
@@ -610,141 +668,6 @@ def test_flip_command_frame_scope(document):
         assert layer.image.pixelColor(99, 99) == QColor("blue")
 
 
-def test_flip_command_layer_scope_creates_key(document):
-    """Ensure flipping a layer keys the frame and flips every keyed instance."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_layer = frame_manager.frames[0].layer_manager.layers[0]
-    mirror_layer = frame_manager.frames[1].layer_manager.layers[0]
-    assert mirror_layer is base_layer
-
-    width = document.width
-    base_layer.image.fill(QColor(0, 0, 0, 0))
-    base_layer.image.setPixelColor(0, 0, QColor("red"))
-    base_layer.image.setPixelColor(width - 1, 0, QColor("blue"))
-
-    document.select_frame(1)
-    assert document.layer_manager.active_layer is base_layer
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.LAYER)
-    command.execute()
-
-    keys = frame_manager.layer_key_frames(base_layer.uid)
-    assert 1 in keys
-
-    keyed_layer = frame_manager.frames[1].layer_manager.layers[0]
-    assert keyed_layer is not base_layer
-
-    document.select_frame(0)
-    original_layer = document.layer_manager.active_layer
-    assert original_layer.image.pixelColor(width - 1, 0) == QColor("red")
-    assert original_layer.image.pixelColor(0, 0) == QColor("blue")
-
-    document.select_frame(1)
-    flipped_layer = document.layer_manager.active_layer
-    assert flipped_layer.image.pixelColor(width - 1, 0) == QColor("red")
-    assert flipped_layer.image.pixelColor(0, 0) == QColor("blue")
-
-    command.undo()
-
-    document.select_frame(0)
-    restored_base = document.layer_manager.active_layer
-    assert restored_base.image.pixelColor(0, 0) == QColor("red")
-    assert restored_base.image.pixelColor(width - 1, 0) == QColor("blue")
-
-    document.select_frame(1)
-    restored_key = document.layer_manager.active_layer
-    assert restored_key.image.pixelColor(0, 0) == QColor("red")
-    assert restored_key.image.pixelColor(width - 1, 0) == QColor("blue")
-
-
-def test_flip_command_frame_scope_creates_keys(document):
-    """Ensure flipping a frame creates keys for every layer on that frame."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_layers = list(frame_manager.frames[0].layer_manager.layers)
-    for layer in base_layers:
-        layer.image.fill(QColor(0, 0, 0, 0))
-        layer.image.setPixelColor(0, 0, QColor("red"))
-        layer.image.setPixelColor(document.width - 1, 0, QColor("blue"))
-
-    document.select_frame(1)
-
-    for layer, base in zip(document.layer_manager.layers, base_layers):
-        assert layer is base
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.FRAME)
-    command.execute()
-
-    for layer in base_layers:
-        keys = frame_manager.layer_key_frames(layer.uid)
-        assert 1 in keys
-
-    keyed_layers = list(frame_manager.frames[1].layer_manager.layers)
-    for base_layer, keyed_layer in zip(base_layers, keyed_layers):
-        assert keyed_layer is not base_layer
-
-    document.select_frame(0)
-    for layer in document.layer_manager.layers:
-        assert layer.image.pixelColor(0, 0) == QColor("red")
-        assert layer.image.pixelColor(document.width - 1, 0) == QColor("blue")
-
-    document.select_frame(1)
-    for layer in document.layer_manager.layers:
-        assert layer.image.pixelColor(document.width - 1, 0) == QColor("red")
-        assert layer.image.pixelColor(0, 0) == QColor("blue")
-
-
-def test_flip_command_document_scope(document):
-    """Flip the entire document by updating every key on every layer."""
-
-    frame_manager = document.frame_manager
-    frame_manager.ensure_frame(1)
-
-    base_manager = frame_manager.frames[0].layer_manager
-    second_manager = frame_manager.frames[1].layer_manager
-
-    width = document.width
-    tracked_states: list[tuple[Layer, QColor, QColor]] = []
-
-    for index, base_layer in enumerate(base_manager.layers):
-        base_layer.image.fill(QColor(0, 0, 0, 0))
-        left_color = QColor(32 + index, 0, 0)
-        right_color = QColor(0, 32 + index, 0)
-        base_layer.image.setPixelColor(0, 0, left_color)
-        base_layer.image.setPixelColor(width - 1, 0, right_color)
-        tracked_states.append((base_layer, left_color, right_color))
-
-        frame_manager.add_layer_key(base_layer.uid, 1)
-
-        keyed_layer = next(
-            layer for layer in second_manager.layers if layer.uid == base_layer.uid
-        )
-        assert keyed_layer is not base_layer
-        keyed_layer.image.fill(QColor(0, 0, 0, 0))
-        keyed_left = QColor(0, 0, 32 + index)
-        keyed_right = QColor(32 + index, 32 + index, 0)
-        keyed_layer.image.setPixelColor(0, 0, keyed_left)
-        keyed_layer.image.setPixelColor(width - 1, 0, keyed_right)
-        tracked_states.append((keyed_layer, keyed_left, keyed_right))
-
-    command = FlipCommand(document, horizontal=True, vertical=False, scope=FlipScope.DOCUMENT)
-    command.execute()
-
-    for layer, left_color, right_color in tracked_states:
-        assert layer.image.pixelColor(width - 1, 0) == left_color
-        assert layer.image.pixelColor(0, 0) == right_color
-
-    command.undo()
-
-    for layer, left_color, right_color in tracked_states:
-        assert layer.image.pixelColor(0, 0) == left_color
-        assert layer.image.pixelColor(width - 1, 0) == right_color
-
 def test_add_layer_command(document):
     """Test that the AddLayerCommand adds a new layer and that undo removes it."""
     initial_layer_count = len(document.layer_manager.layers)
@@ -761,60 +684,6 @@ def test_add_layer_command(document):
 
 
 from portal.commands.canvas_input_handler import CanvasInputHandler
-
-def test_ctrl_key_activates_transform_tool(app, qtbot):
-    """Test that pressing Ctrl activates the Transform tool and releasing it reverts to the previous tool."""
-    # Set initial tool
-    app.drawing_context.set_tool("Pen")
-    assert app.drawing_context.tool == "Pen"
-
-    # Mock a canvas to instantiate the handler
-    mock_canvas = MagicMock()
-    mock_canvas.drawing_context = app.drawing_context
-    mock_canvas.tools = {}
-    mock_canvas.current_tool = None
-    handler = CanvasInputHandler(mock_canvas)
-
-    # Simulate Ctrl press
-    mock_event = MagicMock()
-    mock_event.key.return_value = Qt.Key_Control
-    mock_event.text.return_value = ""
-    handler.keyPressEvent(mock_event)
-
-    assert app.drawing_context.tool == "Transform"
-    assert app.drawing_context.previous_tool == "Pen"
-
-    # Simulate Ctrl release
-    handler.keyReleaseEvent(mock_event)
-    assert app.drawing_context.tool == "Pen"
-
-
-def test_ctrl_key_does_not_override_selection_tool(app):
-    """Ctrl should not switch to the Transform tool when a selection tool is active."""
-
-    app.drawing_context.set_tool("Select Rectangle")
-
-    dummy_canvas = SimpleNamespace(
-        drawing_context=app.drawing_context,
-        tools={},
-        selection_shape=None,
-        _document_size=None,
-    )
-    dummy_canvas.current_tool = SelectRectangleTool(dummy_canvas)
-
-    handler = CanvasInputHandler(dummy_canvas)
-
-    mock_event = MagicMock()
-    mock_event.key.return_value = Qt.Key_Control
-    mock_event.text.return_value = ""
-
-    handler.keyPressEvent(mock_event)
-
-    assert app.drawing_context.tool == "Select Rectangle"
-
-    handler.keyReleaseEvent(mock_event)
-
-    assert app.drawing_context.tool == "Select Rectangle"
 
 
 def test_add_command():
@@ -869,7 +738,6 @@ def test_duplicate_layer_command(document):
     duplicated_layer = layer_manager.layers[layer_to_duplicate_index + 1]
     assert duplicated_layer.name == f"{original_layer.name} copy"
     assert duplicated_layer.image.constBits() == original_layer.image.constBits()
-    assert document.key_frames_for_layer(duplicated_layer) == document.key_frames_for_layer(original_layer)
 
     command.undo()
 
@@ -898,10 +766,6 @@ def test_remove_layer_command(document):
     """Test that the RemoveLayerCommand removes the layer and that undo restores it."""
     layer_manager = document.layer_manager
     layer_manager.add_layer("Layer 2")
-    document.register_layer(
-        layer_manager.active_layer,
-        layer_manager.active_layer_index,
-    )
     initial_layer_count = len(layer_manager.layers)
     layer_to_remove_index = 1
 
@@ -920,22 +784,9 @@ def test_move_layer_command(document):
     """Test that the MoveLayerCommand moves the layer and that undo moves it back."""
     layer_manager = document.layer_manager
     layer_manager.add_layer("Layer 2")
-    document.register_layer(
-        layer_manager.active_layer,
-        layer_manager.active_layer_index,
-    )
     layer_manager.add_layer("Layer 3")
-    document.register_layer(
-        layer_manager.active_layer,
-        layer_manager.active_layer_index,
-    )
-
-    # Ensure an additional frame exists so the command must propagate ordering changes.
-    document.frame_manager.ensure_frame(1)
-    second_manager = document.frame_manager.frames[1].layer_manager
 
     original_layers = list(layer_manager.layers)
-    original_second_order = list(second_manager.layers)
 
     from_index = 0
     to_index = 2
@@ -944,16 +795,10 @@ def test_move_layer_command(document):
     command.execute()
 
     assert layer_manager.layers[to_index] == original_layers[from_index]
-    assert [layer.uid for layer in second_manager.layers] == [
-        layer.uid for layer in layer_manager.layers
-    ]
 
     command.undo()
 
     assert layer_manager.layers == original_layers
-    assert [layer.uid for layer in second_manager.layers] == [
-        layer.uid for layer in original_second_order
-    ]
 
 def test_fill_command(document, layer):
     """Test that the FillCommand correctly fills an area and that undo restores the previous state."""

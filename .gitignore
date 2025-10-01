@@ -136,3 +136,4 @@ dmypy.json
 # model output
 /output/*
 /tmp
+/.vscode

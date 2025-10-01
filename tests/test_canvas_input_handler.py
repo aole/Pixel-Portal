@@ -78,12 +78,12 @@ def test_alt_forces_picker_temporarily(non_selection_canvas: DummyCanvas):
     assert non_selection_canvas.drawing_context.tool == "Pen"
 
 
-def test_ctrl_forces_move_temporarily(non_selection_canvas: DummyCanvas):
+def test_ctrl_does_not_force_tool_temporarily(non_selection_canvas: DummyCanvas):
     handler = CanvasInputHandler(non_selection_canvas)
     event = FakeKeyEvent(Qt.Key_Control)
 
     handler.keyPressEvent(event)
-    assert non_selection_canvas.drawing_context.tool == "Move"
+    assert non_selection_canvas.drawing_context.tool == "Pen"
 
     handler.keyReleaseEvent(event)
     assert non_selection_canvas.drawing_context.tool == "Pen"

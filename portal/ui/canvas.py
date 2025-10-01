@@ -84,7 +84,7 @@ class Canvas(QWidget):
         self.background.image_mode = self.background_mode
         self.background.image_alpha = self.background_image_alpha
         self.background_color = self.palette().window().color()
-        self.selection_shape = None
+        self.selection_shape: QRect = None
         self.selection_overlay_hidden = False
         self.ctrl_pressed = False
         self.picker_cursor = QCursor(QPixmap("icons/toolpicker.png"), 0, 31)

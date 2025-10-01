@@ -14,8 +14,11 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from portal.core.frame_manager import resolve_active_layer_manager
 from portal.ui.background import BackgroundImageMode
+
+
+def resolve_active_layer_manager(document):
+    return getattr(document, "layer_manager", None)
 
 
 @dataclass(frozen=True)
@@ -521,85 +524,118 @@ class CanvasRenderer:
     def _build_onion_skin_context(
         self, document
     ) -> Optional[_OnionSkinContext]:
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
+        layer_manager = resolve_active_layer_manager(document)
+        layers = list(getattr(layer_manager, "layers", []))
+        active_layer = getattr(layer_manager, "active_layer", None)
+
+        allowed_uid_order: List[int] = []
+        for layer in layers:
+            uid = getattr(layer, "uid", None)
+            if uid is None or uid in allowed_uid_order:
+                continue
+
+            include_layer = layer is active_layer or getattr(layer, "onion_skin_enabled", False)
+            if not include_layer:
+                continue
+
+            allowed_uid_order.append(uid)
+
+        if not allowed_uid_order:
             return None
 
-        frames = getattr(frame_manager, "frames", None)
-        if not frames:
-            return None
+        current_frame = getattr(layer_manager, "current_frame", 0)
 
-        total_frames = len(frames)
-        if total_frames <= 0:
-            return None
-
-        active_raw = getattr(frame_manager, "active_frame_index", 0)
-        try:
-            active_index = int(active_raw)
-        except (TypeError, ValueError):
-            active_index = 0
-        active_index = max(0, min(active_index, total_frames - 1))
-
-        resolved_index: Optional[int] = None
-        if hasattr(frame_manager, "resolve_key_frame_index"):
-            try:
-                resolved_candidate = frame_manager.resolve_key_frame_index(active_index)
-            except (TypeError, ValueError):
-                resolved_candidate = None
-            if resolved_candidate is not None:
+        resolved_frame: Optional[int] = None
+        if active_layer is not None:
+            active_key_index = active_layer._index_for_frame(current_frame)
+            keys = list(getattr(active_layer, "keys", []))
+            if keys:
                 try:
-                    resolved_index = int(resolved_candidate)
-                except (TypeError, ValueError):
-                    resolved_index = None
-                else:
-                    if resolved_index < 0 or resolved_index >= total_frames:
-                        resolved_index = None
+                    resolved_frame = int(getattr(keys[active_key_index], "frame_number", current_frame))
+                except Exception:
+                    resolved_frame = current_frame
 
-        markers_raw = getattr(frame_manager, "frame_markers", None)
-        normalized_markers: List[int] = []
-        if markers_raw:
-            for marker in markers_raw:
+        key_frames: set[int] = set()
+        for layer in layers:
+            layer_uid = getattr(layer, "uid", None)
+            if layer_uid not in allowed_uid_order:
+                continue
+            for key in getattr(layer, "keys", []):
+                frame_number = getattr(key, "frame_number", 0)
+                key_frames.add(frame_number)
+
+        if not key_frames:
+            return None
+
+        if resolved_frame is not None:
+            key_frames.add(resolved_frame)
+
+        frame_numbers = set(key_frames)
+        frame_numbers.add(current_frame)
+        if resolved_frame is not None:
+            frame_numbers.add(resolved_frame)
+
+        sorted_frames = sorted(frame_numbers)
+        index_map = {frame: index for index, frame in enumerate(sorted_frames)}
+
+        active_index = index_map.get(current_frame)
+        if active_index is None:
+            return None
+
+        resolved_index = None
+        if resolved_frame is not None:
+            resolved_index = index_map.get(resolved_frame)
+
+        key_indices = tuple(
+            index_map[frame]
+            for frame in sorted(key_frames)
+            if frame in index_map
+        )
+        if not key_indices:
+            return None
+
+        class _FrameAdapter:
+            __slots__ = ("_document", "_frame")
+
+            def __init__(self, document_ref, frame_number):
+                self._document = document_ref
+                self._frame = frame_number
+
+            def render(self, *, allowed_layer_uids):
+                return self._render_frame(self._document, self._frame, allowed_layer_uids)
+
+            @staticmethod
+            def _render_frame(document_ref, frame_number, allowed_layer_uids):
+                layer_manager_ref = resolve_active_layer_manager(document_ref)
+                if layer_manager_ref is None:
+                    return None
+
+                width = getattr(document_ref, "width", 0)
+                height = getattr(document_ref, "height", 0)
+                final_image = QImage(width, height, QImage.Format_ARGB32)
+                final_image.fill(Qt.transparent)
+
+                painter = QPainter(final_image)
                 try:
-                    normalized = int(marker)
-                except (TypeError, ValueError):
-                    continue
-                if 0 <= normalized < total_frames:
-                    normalized_markers.append(normalized)
+                    allowed = set(allowed_layer_uids)
+                    for layer in getattr(layer_manager_ref, "layers", []):
+                        layer_uid = getattr(layer, "uid", None)
+                        if layer_uid is None or (allowed and layer_uid not in allowed):
+                            continue
+                        frame_image = document_ref._image_for_layer_frame(layer, frame_number)
+                        painter.setOpacity(getattr(layer, "opacity", 1.0))
+                        painter.drawImage(0, 0, frame_image)
+                finally:
+                    painter.end()
+                return final_image
 
-        if not normalized_markers:
-            normalized_markers = list(range(total_frames))
-
-        if (
-            resolved_index is not None
-            and 0 <= resolved_index < total_frames
-            and resolved_index not in normalized_markers
-        ):
-            normalized_markers.append(resolved_index)
-
-        normalized_markers = sorted(set(normalized_markers))
-
-        allowed_layer_uids: set[int] = set()
-        active_layer_manager = resolve_active_layer_manager(document)
-        if active_layer_manager is not None:
-            active_layer = getattr(active_layer_manager, "active_layer", None)
-            active_uid = getattr(active_layer, "uid", None) if active_layer is not None else None
-            if isinstance(active_uid, int):
-                allowed_layer_uids.add(active_uid)
-
-            for layer in getattr(active_layer_manager, "layers", []):
-                if getattr(layer, "onion_skin_enabled", False):
-                    layer_uid = getattr(layer, "uid", None)
-                    if isinstance(layer_uid, int):
-                        allowed_layer_uids.add(layer_uid)
-
-        allowed_tuple = tuple(sorted(allowed_layer_uids))
-
+        frames = tuple(_FrameAdapter(document, frame) for frame in sorted_frames)
         return _OnionSkinContext(
             frames=frames,
             active_index=active_index,
             resolved_index=resolved_index,
-            key_indices=tuple(normalized_markers),
-            allowed_layer_uids=allowed_tuple,
+            key_indices=key_indices,
+            allowed_layer_uids=tuple(allowed_uid_order),
         )
 
     @staticmethod

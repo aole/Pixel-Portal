@@ -36,9 +36,6 @@ class LayerManagerWidget(QWidget):
         self.layer_list.itemSelectionChanged.connect(self.on_selection_changed)
         self.layer_list.model().rowsMoved.connect(self.on_layers_moved)
         self.layer_list.merge_down_requested.connect(self.merge_layer_down)
-        self.layer_list.merge_down_current_frame_requested.connect(
-            self.merge_layer_down_current_frame
-        )
         self.layer_list.select_opaque_requested.connect(self.select_opaque)
         self.layer_list.duplicate_requested.connect(self.duplicate_layer_from_menu)
         self.layer_list.remove_background_requested.connect(self.remove_background_from_menu)
@@ -206,27 +203,16 @@ class LayerManagerWidget(QWidget):
         self.layer_changed.emit()
 
     def _collect_layer_instances(self, layer) -> list:
-        document = getattr(self.app, "document", None)
-        if document is None:
-            return [layer]
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return [layer]
-        layer_uid = getattr(layer, "uid", None)
-        if layer_uid is None:
-            return [layer]
-        frames = getattr(frame_manager, "frames", None)
-        if frames is None:
-            return [layer]
-        try:
-            instances = list(
-                frame_manager.iter_layer_instances(layer_uid, range(len(frames)))
-            )
-        except AttributeError:
-            instances = []
-        if not instances:
-            instances = [layer]
-        return instances
+        """Return the live instances backing *layer*.
+
+        Animation support has been removed, so each layer is represented by a
+        single object.  The helper now simply returns ``[layer]`` to keep the
+        existing signal wiring intact without touching the surrounding code.
+        """
+
+        if layer is None:
+            return []
+        return [layer]
 
     def on_layers_moved(self, _parent, start, end, _destination, row):
         """Handles reordering layers via drag-and-drop."""
@@ -357,16 +343,6 @@ class LayerManagerWidget(QWidget):
         actual_index = len(document.layer_manager.layers) - 1 - index_in_list
         from portal.commands.layer_commands import MergeLayerDownCommand
         command = MergeLayerDownCommand(document, actual_index)
-        self.app.execute_command(command)
-
-    def merge_layer_down_current_frame(self, index_in_list):
-        document = self.app.document
-        if document is None:
-            return
-        actual_index = len(document.layer_manager.layers) - 1 - index_in_list
-        from portal.commands.layer_commands import MergeLayerDownCurrentFrameCommand
-
-        command = MergeLayerDownCurrentFrameCommand(document, actual_index)
         self.app.execute_command(command)
 
     def select_opaque(self, index_in_list):

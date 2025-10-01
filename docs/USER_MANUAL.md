@@ -14,7 +14,7 @@
   - [4.3 Where Pixel-Portal stores preferences](#43-where-pixel-portal-stores-preferences)
 - [5. Understanding Pixel-Portal documents](#5-understanding-pixel-portal-documents)
 - [6. Tour of the workspace](#6-tour-of-the-workspace)
-  - [6.1 Canvas and animation timeline](#61-canvas-and-animation-timeline)
+  - [6.1 Canvas and preview](#61-canvas-and-preview)
   - [6.2 Toolbars](#62-toolbars)
   - [6.3 Dockable panels](#63-dockable-panels)
   - [6.4 Status bar](#64-status-bar)
@@ -30,9 +30,9 @@
   - [9.6 Modifier keys and gesture reference](#96-modifier-keys-and-gesture-reference)
 - [10. Color and palette management](#10-color-and-palette-management)
 - [11. Working with layers](#11-working-with-layers)
-- [12. Animation workflow](#12-animation-workflow)
-  - [12.1 Timeline editing](#121-timeline-editing)
-  - [12.2 Onion skinning and playback controls](#122-onion-skinning-and-playback-controls)
+- [12. Animation playback](#12-animation-playback)
+  - [12.1 Playback metadata](#121-playback-metadata)
+  - [12.2 Onion skinning](#122-onion-skinning)
   - [12.3 Previewing animations](#123-previewing-animations)
 - [13. AI assistance](#13-ai-assistance)
   - [13.1 Preparing the environment](#131-preparing-the-environment)
@@ -138,16 +138,16 @@ Delete this file to revert to factory defaults. Project assets, palettes, and ex
 ## 5. Understanding Pixel-Portal documents
 A Pixel-Portal project is built from the following layers:
 - **Document:** Defines canvas size, resolution, playback settings, and metadata. Native `.aole` files preserve the full layer stack, animation frames, palette assignments, and undo history metadata.
-- **Frames:** Each animation frame owns its own layer stack. The timeline maps playback frames to key frames and repeats frames based on the playback range.
+- **Frames:** Each animation frame owns its own layer stack. Playback totals, loop ranges, and FPS are stored with the document so the preview panel can reflect the intended timing even without a dedicated timeline.
 - **Layers:** Individual raster images stacked to form the final artwork. Layers carry visibility, opacity, and names. Commands such as drawing, transforms, and filters operate on the active layer.
 - **Selection:** Tools can limit edits to specific regions. Selections affect painting commands, fills, and clipboard operations.
 - **Undo/Redo:** Every command is undoable. The undo stack is cleared when a new document is created or an animation is imported.
 
 ## 6. Tour of the workspace
 
-### 6.1 Canvas and animation timeline
+### 6.1 Canvas and preview
 - The **canvas** occupies the center of the window, displaying the current frame with pixel-perfect zooming. Onion skin ghosts and tile previews render directly on the canvas for accurate placement.
-- The **timeline** sits beneath the canvas. It shows frame indices, onion skin range handles, auto-key status, and playback position. Drag the playhead or scroll the mouse wheel over the timeline to scrub, and use the context menu for frame insertion or deletion.
+- The **preview dock** sits to the side of the workspace and mirrors the current document using an independent `NullAnimationPlayer`. Use it to inspect loops while editing without changing the canvas state.
 
 ### 6.2 Toolbars
 - The **top toolbar** contains file commands, undo/redo, brush width slider, brush shape buttons (circular, square, pattern), mirror toggles (X/Y), ruler toggle, grid toggle, and AI panel toggle.
@@ -181,7 +181,7 @@ When the canvas is idle, transform readouts disappear to keep the status bar unc
 3. Set your foreground color from the palette. Use the **Eyedropper** (`I` or hold `Alt`) to sample pixels from the canvas.
 4. Sketch on the canvas. Middle mouse button pans and the mouse wheel zooms toward the cursor for precise navigation.
 5. Add new layers from the Layers dock or press the “+” button beneath the layer list. Rename a layer by double-clicking its title.
-6. To animate, move the timeline playhead, enable **Auto-Key**, and draw on subsequent frames. Onion skin controls help visualize adjacent frames.
+6. To animate, duplicate frames from the Layers dock, paint changes, and adjust playback totals or loop ranges from the Settings dialog. Use onion skinning and the preview dock to validate timing.
 7. Save progress with **File → Save** (`Ctrl+S`). Use the `.aole` format for full fidelity or export PNGs/GIFs when ready to share.
 
 ## 8. Canvas navigation and display controls
@@ -189,7 +189,7 @@ When the canvas is idle, transform readouts disappear to keep the status bar unc
 - **Pan:** Middle mouse button drag to reposition the canvas.
 - **Grid:** Toggle the pixel grid from the toolbar or **View → Grid**. Major/minor spacing and colors are configurable in Settings.
 - **Tile preview:** Enable **View → Tile Preview** to repeat the canvas in a tiled arrangement—ideal for seamless textures.
-- **Onion skin:** Onion skin options sit on the timeline (previous/next frame count and tint colors). Enable them when animating to view ghosted frames around the current key.
+- **Onion skin:** Enable per-layer onion skinning from the Layers dock and fine-tune previous/next frame counts in **Settings → Animation**.
 - **Backgrounds:** Choose between checkered transparency, solid colors (white, black, gray, magenta), or a custom color/image. Image backgrounds can be fit, stretched, filled, or centered with adjustable opacity.
 - **Ruler helper:** Activate from the toolbar. Drag the ruler endpoints on the canvas to measure distances; the status bar shows the measurement in pixels. Configure segment count in Settings.
 - **Mirror guides:** Toggle horizontal or vertical mirroring to draw symmetrically. Drag the mirror axis handles on the canvas to reposition them.
@@ -228,7 +228,6 @@ Selections support move handles for repositioning. Use **Select → Invert** (`C
 
 ### 9.6 Modifier keys and gesture reference
 - **Alt (any paint tool):** Eyedropper
-- **Ctrl (paint tools):** Temporarily activates the Transform tool while pressed
 - **Shift (shape/select tools):** Constrain proportions or angles
 - **Right-click (paint tools):** Use the eraser color (transparent)
 - **Middle-click:** Pan canvas
@@ -247,26 +246,23 @@ Selections support move handles for repositioning. Use **Select → Invert** (`C
 - Drag layers to reorder them. Dragging respects undo/redo and updates the canvas immediately.
 - Toggle visibility by clicking the eye icon next to each layer. Opacity sliders provide live previews while dragging; releasing commits an undoable command.
 - Double-click a layer name to rename it. Layer thumbnails refresh automatically after drawing.
-- Right-click a layer for advanced commands: **Merge Down**, **Merge Down (Current Frame)**, **Duplicate**, **Select Opaque**, **Remove Background**, and **Collapse Layers** (flattens the entire stack into a single layer).
+- Right-click a layer for advanced commands: **Merge Down**, **Duplicate**, **Select Opaque**, **Remove Background**, and **Collapse Layers** (flattens the entire stack into a single layer).
 - Collapse Layers preserves the active frame while converting all layers into one, useful for exporting flattened sprites.
 - Use **Layer → Remove Background** to launch the background removal dialog and choose whether to apply to the current key or all keys in the active layer.
 
-## 12. Animation workflow
+## 12. Animation playback
 
-### 12.1 Timeline editing
-- Click in the timeline to move the playhead. Drag to scrub through frames.
-- Right-click the timeline to insert frames, duplicate frames, delete frames, or adjust keyframe spans.
-- Auto-key ensures that drawing on a frame automatically creates a key for the active layer. Toggle it from the timeline controls.
-- The frame counter displays playback length and the currently selected frame index. Adjust total playback frames to introduce holds without adding duplicate keys.
+### 12.1 Playback metadata
+- Pixel-Portal stores playback totals, loop ranges, and FPS alongside the document. Use **Edit → Settings → Animation** to adjust these values. The preview dock and export routines honour the configured metadata.
+- Frame duplication and reordering happen through the Layers dock. Duplicate keys for hold frames or copy/paste layers between frames to build longer sequences.
 
-### 12.2 Onion skinning and playback controls
-- Configure how many previous/next frames appear—and their tint—from the **Settings → Animation** tab.
-- Playback controls (Play/Pause, loop toggle) live beneath the timeline. Press `Space` to toggle playback from anywhere in the window.
-- Adjust the animation FPS in **Settings → Animation**. Changes apply to timeline playback and export defaults.
+### 12.2 Onion skinning
+- Toggle onion skinning per layer via the eye/skin icon in the Layers dock. This keeps ghosted frames focused on the layers you care about while animating.
+- Fine-tune the number of previous/next frames and their tint colors from **Settings → Animation**. Changes update the canvas immediately.
 
 ### 12.3 Previewing animations
-- The Preview dock mirrors the main playhead. Dock it beside the canvas for side-by-side reference or float it on a secondary display.
-- Preview playback can be triggered independently of the main timeline to inspect loops at different zoom levels. The preview uses bilinear scaling to show smooth results while preserving pixel-perfect rendering in the main canvas.
+- The Preview dock plays back the document using an independent `NullAnimationPlayer`. Dock it beside the canvas for side-by-side reference or float it on a secondary display.
+- Use the play button in the Preview dock or press `Space` to toggle playback. The preview respects the configured loop range and FPS so you can validate timing without additional UI chrome.
 
 ## 13. AI assistance
 
@@ -294,18 +290,18 @@ Ensure the optional AI libraries are installed (Section 3.3). GPU acceleration r
 ### 15.1 Creating, opening, and saving documents
 - **File → New** (`Ctrl+N`): set width/height with numeric inputs or preset buttons.
 - **File → Open** (`Ctrl+O`): supports `.aole`, `.png`, `.jpg`, `.jpeg`, `.bmp`, `.tif`, and `.tiff` files. Raster files import as single-layer documents.
-- **File → Open as Key:** imports an image directly into the current timeline position as a keyframe without replacing the existing document.
+- **File → Open as Key:** imports an image directly into the current frame as a keyframe without replacing the existing document.
 - **File → Save / Save As:** choose `.aole` for complete projects, or export to `.png`, `.jpg`, `.bmp`, `.tif`, `.tiff`. Pixel-Portal warns if the format cannot store layers/animation data.
 - Unsaved changes trigger a confirmation dialog when closing or opening another file.
 
 ### 15.2 Importing animation files
 - Use **File → Import Animation** to load GIF, APNG, PNG sequence, WebP, or TIFF animation data. Pixel-Portal reads embedded metadata to preserve frame delays and playback ranges.
-- Imported animations populate the frame manager with individual keyframes. The application adjusts the playback frame count and FPS automatically, then resets the undo stack.
+- Imported animations populate the document with individual keyframes. The application adjusts the playback frame count and FPS automatically, then resets the undo stack.
 
 ### 15.3 Exporting sprites and animations
 - **File → Export Animation** outputs GIF, APNG, or WebP. Choose the format from the save dialog filter; Pixel-Portal ensures the file extension matches the selected option.
-- The export inherits the current playback range and FPS. Adjust the playback range on the timeline and update FPS from **Settings → Animation** to control loop length and pacing.
-- For sprite sheets, export individual frames as PNGs by stepping through the timeline and using **File → Save As** with unique filenames.
+- The export inherits the current playback range and FPS. Adjust both values from **Settings → Animation** to control loop length and pacing.
+- For sprite sheets, export individual frames as PNGs by selecting each frame in turn and using **File → Save As** with unique filenames.
 
 ## 16. Scripting and automation
 - Place Python scripts inside the `scripts/` directory. Each script should define a `SCRIPT_INFO` dictionary describing its name and parameters, plus a `run(api, params)` function that receives the scripting API.
@@ -333,7 +329,6 @@ Shortcuts can be customised by editing the Qt action definitions in the source i
 
 ## 19. Workflow tips and best practices
 - **Work destructively only when needed:** Duplicate layers before drastic edits to preserve originals. Collapsing layers is undoable but easier to manage when working on copies.
-- **Use auto-key sparingly:** Enable it while animating active layers, then disable to prevent accidental key creation when editing hold frames.
 - **Take advantage of tile preview:** When designing seamless textures, enable tile preview early to catch seams.
 - **Create custom brushes:** Select an area (with or without transparency) and run **Edit → Create Brush**. Switch the brush mode to Pattern to stamp it repeatedly.
 - **Leverage palette conformance:** After importing artwork or AI generations, run **Conform to Palette** to maintain consistent color counts for retro platforms.

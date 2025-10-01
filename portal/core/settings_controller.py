@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 import configparser
 import os
 
-from portal.core.animation_player import DEFAULT_PLAYBACK_FPS
+from portal.core.document import DEFAULT_PLAYBACK_FPS
 from portal.ui.background import BackgroundImageMode
 
 

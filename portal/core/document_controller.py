@@ -1,6 +1,7 @@
 import os
 from enum import Enum, auto
 from typing import Iterable, Optional
+from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal, Slot, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
@@ -8,7 +9,6 @@ from PySide6.QtWidgets import QMessageBox
 
 from PIL.ImageQt import ImageQt
 
-from portal.core.animation_player import DEFAULT_TOTAL_FRAMES, DEFAULT_PLAYBACK_FPS
 from portal.core.document import Document
 from portal.core.undo import UndoManager
 from portal.core.drawing_context import DrawingContext
@@ -19,24 +19,27 @@ from portal.core.command import (
     CropCommand,
     AddLayerCommand,
     CompositeCommand,
+    AddKeyframeCommand,
+    MoveKeyframesCommand,
+    DeleteKeyframesCommand,
+    PasteKeyframesCommand,
 )
 from portal.commands.layer_commands import RemoveBackgroundCommand
-from portal.commands.timeline_commands import (
-    AddKeyframeCommand,
-    DeleteFrameCommand,
-    DuplicateKeyframeCommand,
-    DuplicateKeyframesCommand,
-    InsertFrameCommand,
-    MoveKeyframesCommand,
-    PasteKeyframeCommand,
-    RemoveKeyframeCommand,
-    SetKeyframesCommand,
-)
 from portal.core.color_utils import find_closest_color
 from portal.core.layer import Layer
+from portal.core.key import Key
 from portal.core.services.document_service import DocumentService
 from portal.core.services.clipboard_service import ClipboardService
 from portal.core.settings_controller import SettingsController
+
+
+DEFAULT_PLAYBACK_FPS = 12.0
+
+
+@dataclass(slots=True)
+class _CopiedKeyframesState:
+    base_frame: int
+    keys: tuple[Key, ...]
 
 
 class BackgroundRemovalScope(Enum):
@@ -73,11 +76,10 @@ class DocumentController(QObject):
         self._base_window_title = "Pixel Portal"
         self._copied_key_state = None
         self.auto_key_enabled = False
-        self._playback_total_frames = DEFAULT_TOTAL_FRAMES
         default_fps = getattr(settings, "animation_fps", DEFAULT_PLAYBACK_FPS)
         self._playback_fps = Document.normalize_playback_fps(default_fps)
         self._playback_loop_start = 0
-        self._playback_loop_end = max(0, self._playback_total_frames - 1)
+        self._playback_loop_end = 12
 
         self._last_ai_output_rect = QRect()
         self.document_changed.connect(self._on_document_mutated)
@@ -161,28 +163,6 @@ class DocumentController(QObject):
             self.ai_output_rect_changed.emit(normalized)
 
     @property
-    def playback_total_frames(self) -> int:
-        return self._playback_total_frames
-
-    def set_playback_total_frames(self, frame_count: int) -> None:
-        normalized = Document.normalize_playback_total_frames(frame_count)
-        if normalized == self._playback_total_frames:
-            document = self.document
-            if document is not None:
-                document.set_playback_total_frames(normalized)
-            return
-        self._playback_total_frames = normalized
-        document = self.document
-        if document is not None:
-            document.set_playback_total_frames(normalized)
-            
-        max_loop = max(0, self._playback_total_frames - 1)
-        if self._playback_loop_end > max_loop:
-            self._playback_loop_end = max_loop
-        if self._playback_loop_start > self._playback_loop_end:
-            self._playback_loop_start = self._playback_loop_end
-
-    @property
     def playback_loop_range(self) -> tuple[int, int]:
         return self._playback_loop_start, self._playback_loop_end
 
@@ -203,138 +183,101 @@ class DocumentController(QObject):
             document.set_playback_fps(normalized)
 
     def set_playback_loop_range(self, start: int, end: int) -> None:
-        try:
-            start_value = int(start)
-            end_value = int(end)
-        except (TypeError, ValueError):
-            return
-        if start_value < 0:
-            start_value = 0
-        max_loop = max(0, self._playback_total_frames - 1)
-        if end_value < start_value:
-            end_value = start_value
-        if end_value > max_loop:
-            end_value = max_loop
-        if start_value > end_value:
-            start_value = end_value
-        self._playback_loop_start = start_value
-        self._playback_loop_end = end_value
+        document = self.document
+        loop_range_setter = getattr(document, "set_playback_loop_range", None)
+        start, nd = loop_range_setter(start, end)
+        setattr(document, "playback_loop_start", start)
+        setattr(document, "playback_loop_end", end)
+        self._playback_loop_start = start
+        self._playback_loop_end = end
 
     def ensure_auto_key_for_active_layer(self) -> bool:
-        """Create a keyframe on the active layer if auto-key is enabled."""
+        """Auto-key functionality has been removed."""
 
-        if not self.auto_key_enabled:
-            return False
-
-        document = self.document
-        if document is None:
-            return False
-
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            return False
-
-        current_frame = getattr(frame_manager, "active_frame_index", None)
-        if current_frame is None or current_frame < 0:
-            return False
-
-        try:
-            layer_manager = document.layer_manager
-        except ValueError:
-            return False
-
-        active_layer = getattr(layer_manager, "active_layer", None)
-        if active_layer is None:
-            return False
-
-        key_frames = getattr(document, "key_frames", [])
-        if current_frame in key_frames:
-            return False
-
-        self.add_keyframe(current_frame)
-        return True
+        return False
 
     def set_keyframes(self, frames: Iterable[int]) -> None:
-        document = self.document
-        if document is None:
-            return
-        frame_manager = document.frame_manager
-        layer_manager = getattr(frame_manager, "current_layer_manager", None)
-        if layer_manager is None or layer_manager.active_layer is None:
-            return
-        normalized: set[int] = set()
-        for value in frames:
-            try:
-                frame_index = int(value)
-            except (TypeError, ValueError):
-                continue
-            if frame_index < 0:
-                continue
-            normalized.add(frame_index)
-        if not normalized:
-            normalized = {0}
-        existing_keys = set(document.key_frames)
-        if normalized == existing_keys:
-            return
-        command = SetKeyframesCommand(document, normalized)
-        self.execute_command(command)
+        """Keyframe management is no longer supported."""
+
+        return
 
     def move_keyframes(self, frames: Iterable[int], delta: int) -> None:
+        if delta == 0:
+            return
         document = self.document
-        if document is None:
-            return
-        frame_manager = document.frame_manager
-        layer_manager = getattr(frame_manager, "current_layer_manager", None)
-        if layer_manager is None or layer_manager.active_layer is None:
-            return
-        try:
-            offset = int(delta)
-        except (TypeError, ValueError):
-            return
-        if not offset:
-            return
-        normalized: dict[int, int] = {}
-        for value in frames:
-            try:
-                source = int(value)
-            except (TypeError, ValueError):
+
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            if frame in seen:
                 continue
-            target = source + offset
-            if source < 0 or target < 0:
-                continue
-            normalized[source] = target
+            seen.add(frame)
+            normalized.append(frame)
+
         if not normalized:
             return
-        command = MoveKeyframesCommand(document, normalized)
+
+        command = MoveKeyframesCommand(layer_manager, active_layer, normalized, delta)
         self.execute_command(command)
 
     def duplicate_keyframes(self, frames: Iterable[int], delta: int) -> None:
+        """Keyframe management is no longer supported."""
+
+        return
+
+    def copy_keyframes(self, frames: Iterable[int]) -> bool:
         document = self.document
-        if document is None:
-            return
-        frame_manager = document.frame_manager
-        layer_manager = getattr(frame_manager, "current_layer_manager", None)
-        if layer_manager is None or layer_manager.active_layer is None:
-            return
-        try:
-            offset = int(delta)
-        except (TypeError, ValueError):
-            return
-        if not offset:
-            return
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
         normalized: list[int] = []
-        for value in frames:
-            try:
-                source = int(value)
-            except (TypeError, ValueError):
-                continue
-            if source < 0:
-                continue
-            normalized.append(source)
+        seen: set[int] = set()
+        for frame in frames:
+            seen.add(frame)
+            normalized.append(frame)
+
         if not normalized:
-            return
-        command = DuplicateKeyframesCommand(document, normalized, offset)
+            return False
+
+        normalized.sort()
+        frame_lookup = {key.frame_number: key for key in active_layer.keys}
+        keys_to_copy: list[Key] = []
+        for frame in normalized:
+            key = frame_lookup.get(frame)
+            keys_to_copy.append(key)
+
+        if not keys_to_copy:
+            return False
+
+        base_frame = min(key.frame_number for key in keys_to_copy)
+        clones = tuple(key.clone(deep_copy=True) for key in keys_to_copy)
+        self._copied_key_state = _CopiedKeyframesState(base_frame=base_frame, keys=clones)
+        return True
+
+    def paste_keyframes(self, target_frame: int) -> bool:
+        state = self._copied_key_state
+        document = self.document
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        entries: list[tuple[int, Key]] = []
+        base_frame = state.base_frame
+        for key in state.keys:
+            offset = key.frame_number - base_frame
+            new_frame = target_frame + offset
+            entries.append((new_frame, key.clone(deep_copy=True)))
+
+        if not entries:
+            return False
+
+        entries.sort(key=lambda item: item[0])
+
+        command = PasteKeyframesCommand(layer_manager, active_layer, entries)
         self.execute_command(command)
+        return True
 
     # ------------------------------------------------------------------
     def _on_document_mutated(self):
@@ -424,111 +367,81 @@ class DocumentController(QObject):
         document = self.document
         if document is None:
             return
-        if frame_index < 0:
-            return
-        frame_manager = document.frame_manager
-        frame_manager.ensure_frame(frame_index)
-        if frame_index in document.key_frames:
-            return
-        command = AddKeyframeCommand(document, frame_index)
-        self.execute_command(command)
-        self.select_frame(frame_index)
 
-    def remove_keyframe(self, frame_index: int) -> None:
+        layer_manager = getattr(document, "layer_manager", None)
+        active_layer = getattr(layer_manager, "active_layer", None) if layer_manager else None
+        if active_layer is None:
+            return
+
+        try:
+            normalized_frame = int(frame_index)
+        except (TypeError, ValueError):
+            normalized_frame = layer_manager.current_frame if layer_manager else 0
+        if normalized_frame < 0:
+            normalized_frame = 0
+
+        for index, key in enumerate(getattr(active_layer, "keys", [])):
+            if getattr(key, "frame_number", None) == normalized_frame:
+                active_layer.set_active_key_index(index)
+                if layer_manager is not None:
+                    layer_manager.set_current_frame(normalized_frame)
+                return
+
+        command = AddKeyframeCommand(self, active_layer, normalized_frame)
+        self.execute_command(command)
+
+    def remove_keyframes(self, frames: Iterable[int]) -> None:
         document = self.document
         if document is None:
             return
-        if frame_index not in document.key_frames:
+
+        layer_manager = getattr(document, 'layer_manager', None)
+        active_layer = getattr(layer_manager, 'active_layer', None)
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for frame in frames:
+            if frame in seen:
+                continue
+            seen.add(frame)
+            normalized.append(frame)
+
+        if not normalized:
             return
-        if len(document.key_frames) <= 1:
-            return
-        command = RemoveKeyframeCommand(document, frame_index)
+
+        command = DeleteKeyframesCommand(layer_manager, active_layer, normalized)
         self.execute_command(command)
 
+    def remove_keyframe(self, frame_index: int) -> None:
+        self.remove_keyframes((frame_index,))
     def duplicate_keyframe(
         self,
         source_frame: Optional[int],
         target_frame: Optional[int],
     ) -> Optional[int]:
-        document = self.document
-        if document is None:
-            return None
-        if not document.key_frames:
-            return None
-        frame_manager = document.frame_manager
-        if target_frame is not None and target_frame < 0:
-            return None
-        if target_frame is not None:
-            frame_manager.ensure_frame(target_frame)
+        """Keyframe management is no longer supported."""
 
-        command = DuplicateKeyframeCommand(document, source_frame, target_frame)
-        self.execute_command(command)
-        return command.created_frame
+        return None
 
     def insert_frame(self, frame_index: int) -> None:
-        document = self.document
-        if document is None:
-            return
-        if frame_index < 0:
-            frame_index = 0
-        command = InsertFrameCommand(document, frame_index)
-        self.execute_command(command)
+        """Frame management is no longer supported."""
+
+        return
 
     def delete_frame(self, frame_index: int) -> None:
-        document = self.document
-        if document is None:
-            return
-        frame_manager = document.frame_manager
-        frame_count = len(frame_manager.frames)
-        if frame_count <= 1:
-            return
-        if not (0 <= frame_index < frame_count):
-            return
-        command = DeleteFrameCommand(document, frame_index)
-        self.execute_command(command)
+        """Frame management is no longer supported."""
+
+        return
 
     def has_copied_keyframe(self) -> bool:
-        return self._copied_key_state is not None
+        state = self._copied_key_state
+        return bool(state and state.keys)
 
     def copy_keyframe(self, frame_index: int) -> bool:
-        document = self.document
-        if document is None:
-            return False
-        if frame_index < 0:
-            return False
-        key_state = document.copy_active_layer_key(frame_index)
-        if key_state is None:
-            return False
-        self._copied_key_state = key_state
-        return True
+        return self.copy_keyframes((frame_index,))
 
     def paste_keyframe(self, frame_index: int) -> bool:
-        if self._copied_key_state is None:
-            return False
-        document = self.document
-        if document is None:
-            return False
-        if frame_index < 0:
-            return False
-        frame_manager = document.frame_manager
-        layer_manager = frame_manager.current_layer_manager
-        if layer_manager is None or layer_manager.active_layer is None:
-            return False
-        existing_keys = set(document.key_frames)
-        if frame_index in existing_keys:
-            parent = getattr(self, "main_window", None)
-            response = QMessageBox.question(
-                parent,
-                "Replace Keyframe?",
-                f"Frame {frame_index} already has a key. Replace it with the copied key?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if response != QMessageBox.Yes:
-                return False
-        command = PasteKeyframeCommand(document, frame_index, self._copied_key_state)
-        self.execute_command(command)
-        return command.applied
+        return self.paste_keyframes(frame_index)
 
     def paste_key_from_image(
         self,
@@ -539,67 +452,7 @@ class DocumentController(QObject):
     ) -> bool:
         if image is None or image.isNull():
             return False
-        document = self.document
-        if document is None:
-            return False
-        frame_manager = document.frame_manager
-        if frame_manager is None:
-            return False
-        target_frame = frame_index
-        if target_frame is None:
-            target_frame = getattr(frame_manager, "active_frame_index", None)
-        if target_frame is None or target_frame < 0:
-            return False
-        frame_manager.ensure_frame(target_frame)
-        layer_manager = frame_manager.current_layer_manager
-        if layer_manager is None:
-            return False
-        layer = layer_manager.active_layer
-        if layer is None:
-            return False
-        if prompt_on_replace:
-            existing_keys = set(document.key_frames)
-            if target_frame in existing_keys:
-                parent = getattr(self, "main_window", None)
-                response = QMessageBox.question(
-                    parent,
-                    "Replace Keyframe?",
-                    (
-                        f"Frame {target_frame} already has a key. "
-                        "Replace it with the imported image?"
-                    ),
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
-                )
-                if response != QMessageBox.Yes:
-                    return False
-
-        target_width = layer.image.width()
-        target_height = layer.image.height()
-        prepared_image = image
-        if (
-            prepared_image.width() > target_width
-            or prepared_image.height() > target_height
-        ):
-            prepared_image = prepared_image.scaled(
-                target_width,
-                target_height,
-                Qt.KeepAspectRatio,
-                Qt.FastTransformation,
-            )
-
-        key_state = Layer(target_width, target_height, layer.name)
-        key_state.visible = layer.visible
-        key_state.opacity = layer.opacity
-        key_state.image.fill(Qt.transparent)
-
-        painter = QPainter(key_state.image)
-        painter.drawImage(0, 0, prepared_image)
-        painter.end()
-
-        command = PasteKeyframeCommand(document, target_frame, key_state)
-        self.execute_command(command)
-        return command.applied
+        return False
 
     def add_new_layer_with_image(self, image):
         document = self.document
@@ -651,14 +504,16 @@ class DocumentController(QObject):
         """Swap to a new document and bind to its layer manager lifecycle."""
 
         self.document = document
-        stored_total = getattr(document, "playback_total_frames", DEFAULT_TOTAL_FRAMES)
-        normalized_total = Document.normalize_playback_total_frames(stored_total)
-        self._playback_total_frames = normalized_total
-        document.set_playback_total_frames(normalized_total)
         stored_fps = getattr(document, "playback_fps", DEFAULT_PLAYBACK_FPS)
         normalized_fps = Document.normalize_playback_fps(stored_fps)
         self._playback_fps = normalized_fps
         document.set_playback_fps(normalized_fps)
+        loop_range_getter = getattr(document, "get_playback_loop_range", None)
+        loop_start, loop_end = loop_range_getter()
+
+        self._playback_loop_start = loop_start
+        self._playback_loop_end = loop_end
+        
         if self._layer_manager_unsubscribe:
             self._layer_manager_unsubscribe()
             self._layer_manager_unsubscribe = None
@@ -743,81 +598,13 @@ class DocumentController(QObject):
             return
 
         layer_manager = getattr(document, "layer_manager", None)
-        if layer_manager is None:
-            return
-
         layer = getattr(layer_manager, "active_layer", None)
-        if layer is None:
-            return
-
-        frame_manager = getattr(document, "frame_manager", None)
-        if frame_manager is None:
-            command = RemoveBackgroundCommand(layer)
-            self.execute_command(command)
-            return
-
-        layer_uid = getattr(layer, "uid", None)
-        if layer_uid is None:
-            return
-
-        active_frame_index = getattr(frame_manager, "active_frame_index", None)
-        if active_frame_index is None:
-            active_frame_index = 0
-
-        layer_keys_map = getattr(frame_manager, "layer_keys", {})
-        if not isinstance(layer_keys_map, dict):
-            layer_keys_map = {}
-
-        resolve_key = getattr(
-            frame_manager, "resolve_layer_key_frame_index", lambda *_, **__: None
-        )
-
-        if scope is BackgroundRemovalScope.ALL_KEYS:
-            keys = sorted(layer_keys_map.get(layer_uid, set()))
-            if not keys:
-                resolved = resolve_key(layer_uid, active_frame_index)
-                keys = [resolved] if resolved is not None else []
-        else:
-            resolved = resolve_key(layer_uid, active_frame_index)
-            keys = [resolved] if resolved is not None else []
-
-        target_layers = list(
-            frame_manager.iter_layer_instances(
-                layer_uid, keys, ensure_frames=True
-            )
-        )
-
-        if not target_layers:
-            command = RemoveBackgroundCommand(layer)
-            self.execute_command(command)
-            return
-
-        commands = [RemoveBackgroundCommand(target) for target in target_layers]
-
-        if len(commands) == 1:
-            command = commands[0]
-        else:
-            name = (
-                "Remove Background (All Keys)"
-                if scope is BackgroundRemovalScope.ALL_KEYS
-                else "Remove Background"
-            )
-            command = CompositeCommand(commands, name=name)
-
+        command = RemoveBackgroundCommand(layer)
         self.execute_command(command)
 
     def select_frame(self, index: int) -> None:
-        document = self.document
-        if document is None:
-            return
-        frame_manager = document.frame_manager
-        if index < 0:
-            return
-        frame_manager.ensure_frame(index)
-        if frame_manager.active_frame_index == index:
-            return
-        document.select_frame(index)
-        self.document_changed.emit()
+        layer_manager = getattr(self.document, "layer_manager", None)
+        layer_manager.set_current_frame(index)
 
     def check_for_unsaved_changes(self):
         if not self.is_dirty:
@@ -894,3 +681,5 @@ class DocumentController(QObject):
 
         rect = QRect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
         return image.copy(rect)
+
+

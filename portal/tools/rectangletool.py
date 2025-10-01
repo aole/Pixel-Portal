@@ -10,38 +10,47 @@ class RectangleTool(BaseTool):
     icon = "icons/toolrect.png"
     shortcut = "s"
     category = "shape"
+    supports_right_click_erase = True
 
     def __init__(self, canvas):
         super().__init__(canvas)
         self.start_point = QPoint()
         self.cursor = QCursor(Qt.BlankCursor)
+        self._is_erasing = False
 
     def mousePressEvent(self, event: QMouseEvent, doc_pos: QPoint):
+        if event.button() not in (Qt.LeftButton, Qt.RightButton):
+            self._is_erasing = False
+            return
+
         layer_manager = self._get_active_layer_manager()
-        if layer_manager is None:
-            return
-
         active_layer = layer_manager.active_layer
-        if not active_layer or not active_layer.visible:
+        if not active_layer.visible:
+            self._is_erasing = False
             return
 
+        self._is_erasing = event.button() == Qt.RightButton
         self.start_point = doc_pos
-        self._allocate_preview_images(replace_active_layer=True)
+        self._allocate_preview_images(
+            replace_active_layer=not self._is_erasing,
+            erase_preview=self._is_erasing,
+        )
         self.command_generated.emit(("get_active_layer_image", "rectangle_tool_start"))
 
     def mouseMoveEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if not self._redraw_temp_from_preview_layer():
-            return
+        if self._is_erasing:
+            if self.canvas.temp_image is None:
+                return
+        else:
+            if not self._redraw_temp_from_preview_layer():
+                return
 
         layer_manager = self._get_active_layer_manager()
-        if layer_manager is None:
-            return
-
         active_layer = layer_manager.active_layer
-        if not active_layer or not active_layer.visible:
+        if not active_layer.visible:
             return
 
-        self._refresh_preview_images(clear_temp=False)
+        self._refresh_preview_images(clear_temp=self._is_erasing)
 
         end_point = doc_pos
         if event.modifiers() & Qt.ShiftModifier:
@@ -66,68 +75,71 @@ class RectangleTool(BaseTool):
         self.canvas.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent, doc_pos: QPoint):
-        if getattr(self.canvas, "preview_layer", None) is None:
-            return
+        try:
+            if event.button() not in (Qt.LeftButton, Qt.RightButton):
+                return
 
-        end_point = doc_pos
-        if event.modifiers() & Qt.ShiftModifier:
-            dx = end_point.x() - self.start_point.x()
-            dy = end_point.y() - self.start_point.y()
-            size = min(abs(dx), abs(dy))
-            end_point = QPoint(
-                self.start_point.x() + size * (1 if dx > 0 else -1),
-                self.start_point.y() + size * (1 if dy > 0 else -1),
+            if getattr(self.canvas, "preview_layer", None) is None:
+                return
+
+            end_point = doc_pos
+            if event.modifiers() & Qt.ShiftModifier:
+                dx = end_point.x() - self.start_point.x()
+                dy = end_point.y() - self.start_point.y()
+                size = min(abs(dx), abs(dy))
+                end_point = QPoint(
+                    self.start_point.x() + size * (1 if dx > 0 else -1),
+                    self.start_point.y() + size * (1 if dy > 0 else -1),
+                )
+
+            rect = self._rect_from_points(self.start_point, end_point)
+
+            layer_manager = self._get_active_layer_manager()
+            active_layer = layer_manager.active_layer
+
+            command = ShapeCommand(
+                layer=active_layer,
+                rect=rect,
+                shape_type='rectangle',
+                color=self.canvas.drawing_context.pen_color,
+                width=self.canvas.drawing_context.pen_width,
+                document=self.canvas.document,
+                selection_shape=self.canvas.selection_shape,
+                mirror_x=self.canvas.drawing_context.mirror_x,
+                mirror_y=self.canvas.drawing_context.mirror_y,
+                wrap=self.canvas.tile_preview_enabled,
+                brush_type=self.canvas.drawing_context.brush_type,
+                pattern_image=self.canvas.drawing_context.pattern_brush,
+                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
+                erase=self._is_erasing,
             )
+            self.command_generated.emit(command)
 
-        rect = self._rect_from_points(self.start_point, end_point)
-
-        layer_manager = self._get_active_layer_manager()
-        if layer_manager is None:
             self._clear_preview_images()
             self.canvas.update()
-            return
-
-        active_layer = layer_manager.active_layer
-        if not active_layer:
-            return
-
-        command = ShapeCommand(
-            layer=active_layer,
-            rect=rect,
-            shape_type='rectangle',
-            color=self.canvas.drawing_context.pen_color,
-            width=self.canvas.drawing_context.pen_width,
-            document=self.canvas.document,
-            selection_shape=self.canvas.selection_shape,
-            mirror_x=self.canvas.drawing_context.mirror_x,
-            mirror_y=self.canvas.drawing_context.mirror_y,
-            wrap=self.canvas.tile_preview_enabled,
-            brush_type=self.canvas.drawing_context.brush_type,
-            pattern_image=self.canvas.drawing_context.pattern_brush,
-            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
-        )
-        self.command_generated.emit(command)
-
-        self._clear_preview_images()
-        self.canvas.update()
+        finally:
+            self._is_erasing = False
 
     def _paint_preview_rect(self, image: QImage, *, rect: QRect, wrap: bool):
         painter = QPainter(image)
-        if self.canvas.selection_shape:
-            painter.setClipPath(self.canvas.selection_shape)
-        painter.setPen(QPen(self.canvas.drawing_context.pen_color))
-        self.canvas.drawing.draw_rect(
-            painter,
-            rect,
-            self.canvas._document_size,
-            self.canvas.drawing_context.brush_type,
-            self.canvas.drawing_context.pen_width,
-            self.canvas.drawing_context.mirror_x,
-            self.canvas.drawing_context.mirror_y,
-            wrap=wrap,
-            pattern=self.canvas.drawing_context.pattern_brush,
-            mirror_x_position=self.canvas.drawing_context.mirror_x_position,
-            mirror_y_position=self.canvas.drawing_context.mirror_y_position,
-        )
-        painter.end()
+        try:
+            if self.canvas.selection_shape:
+                painter.setClipPath(self.canvas.selection_shape)
+            pen_color = Qt.black if self._is_erasing else self.canvas.drawing_context.pen_color
+            painter.setPen(QPen(pen_color))
+            self.canvas.drawing.draw_rect(
+                painter,
+                rect,
+                self.canvas._document_size,
+                self.canvas.drawing_context.brush_type,
+                self.canvas.drawing_context.pen_width,
+                self.canvas.drawing_context.mirror_x,
+                self.canvas.drawing_context.mirror_y,
+                wrap=wrap,
+                pattern=self.canvas.drawing_context.pattern_brush,
+                mirror_x_position=self.canvas.drawing_context.mirror_x_position,
+                mirror_y_position=self.canvas.drawing_context.mirror_y_position,
+            )
+        finally:
+            painter.end()

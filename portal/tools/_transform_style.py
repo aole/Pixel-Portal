@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QCursor
 # fixture) spin up the application, so we expose a factory to avoid constructing
 # cursor instances at import time. The tools call :func:`make_transform_cursor`
 # from their initialisers when the application is already available.
-TRANSFORM_CURSOR_SHAPE = Qt.OpenHandCursor
+TRANSFORM_CURSOR_SHAPE = Qt.ArrowCursor
 
 
 def make_transform_cursor() -> QCursor:
@@ -18,8 +18,8 @@ def make_transform_cursor() -> QCursor:
     return QCursor(TRANSFORM_CURSOR_SHAPE)
 
 
-TRANSFORM_GIZMO_BASE_COLOR = QColor("#0c7bdc")
-TRANSFORM_GIZMO_HOVER_COLOR = QColor(TRANSFORM_GIZMO_BASE_COLOR)
-TRANSFORM_GIZMO_HOVER_COLOR = TRANSFORM_GIZMO_HOVER_COLOR.lighter(130)
-TRANSFORM_GIZMO_ACTIVE_COLOR = QColor(TRANSFORM_GIZMO_BASE_COLOR)
-TRANSFORM_GIZMO_ACTIVE_COLOR = TRANSFORM_GIZMO_ACTIVE_COLOR.lighter(160)
+TRANSFORM_GIZMO_BASE_COLOR = QColor("#ffffff")
+TRANSFORM_GIZMO_HOVER_COLOR = QColor("#dcdcdc")
+TRANSFORM_GIZMO_ACTIVE_COLOR = QColor("#ffc800")
+TRANSFORM_GIZMO_BORDER_COLOR = QColor("#ffffff")
+TRANSFORM_GIZMO_HANDLE_OUTLINE_COLOR = QColor(0, 0, 0, 200)
