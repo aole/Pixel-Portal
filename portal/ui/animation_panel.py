@@ -615,6 +615,38 @@ class AnimationPanel(QWidget):
     def selected_keyframes(self) -> tuple[int, ...]:
         return self._selected_keyframes
 
+    def apply_keyframe_delta(self, added: Iterable[int], removed: Iterable[int]) -> None:
+        current = set(self._keyframes)
+        changed = False
+        for frame in removed:
+            if frame in current:
+                current.remove(frame)
+                changed = True
+        for frame in added:
+            if frame not in current:
+                current.add(frame)
+                changed = True
+        if not changed:
+            return
+        self._keyframes = tuple(sorted(current))
+        self._sync_selection_with_keyframes()
+        self.update()
+
+    def focus_keyframes(self, frames: Iterable[int]) -> None:
+        frame_set = set(self._keyframes)
+        if not frame_set:
+            return
+        collected: list[int] = []
+        for frame in frames:
+            if frame in frame_set:
+                collected.append(frame)
+        if not collected:
+            return
+        unique = tuple(sorted(set(collected)))
+        self._selection_anchor = unique[-1]
+        self._set_selected_keyframes(unique)
+        self._ensure_frame_visible(unique[-1])
+
     def set_can_paste_keyframes(self, can_paste: bool) -> None:
         normalized = bool(can_paste)
         if normalized == self._can_paste_keyframes:

@@ -53,6 +53,7 @@ class DocumentController(QObject):
     undo_stack_changed = Signal()
     document_changed = Signal()
     ai_output_rect_changed = Signal(QRect)
+    keyframes_delta = Signal(tuple, tuple, tuple)
 
     def __init__(self, settings: SettingsController, document_service: DocumentService | None = None, clipboard_service: ClipboardService | None = None):
         super().__init__()
@@ -144,6 +145,9 @@ class DocumentController(QObject):
         if normalized == self.auto_key_enabled:
             return
         self.auto_key_enabled = normalized
+
+    def _snapshot_keyframes(self, layer) -> tuple[int, ...]:
+        return layer.keys
 
     # ------------------------------------------------------------------
     def get_ai_output_rect(self) -> QRect | None:
@@ -286,9 +290,6 @@ class DocumentController(QObject):
             new_frame = target_frame + offset
             entries.append((new_frame, key.clone(deep_copy=True)))
 
-        if not entries:
-            return False
-
         entries.sort(key=lambda item: item[0])
 
         command = PasteKeyframesCommand(layer_manager, active_layer, entries)
@@ -306,6 +307,10 @@ class DocumentController(QObject):
             self.ai_output_rect_changed.emit(rect)
 
     def execute_command(self, command):
+        layer_manager_before = getattr(self.document, 'layer_manager', None)
+        active_layer_before = getattr(layer_manager_before, 'active_layer', None)
+        before_frames = self._snapshot_keyframes(active_layer_before)
+
         command.execute()
         if self.is_recording:
             self.recorded_commands.append(command)
@@ -314,6 +319,15 @@ class DocumentController(QObject):
             self.undo_stack_changed.emit()
         self.is_dirty = True
         self.document_changed.emit()
+
+        layer_manager_after = getattr(self.document, 'layer_manager', None)
+        active_layer_after = getattr(layer_manager_after, 'active_layer', None)
+        after_frames = self._snapshot_keyframes(active_layer_after)
+
+        added = tuple(sorted(set(after_frames) - set(before_frames)))
+        removed = tuple(sorted(set(before_frames) - set(after_frames)))
+        selection_source = getattr(command, 'selection_frames', ())
+        self.keyframes_delta.emit(added, removed, selection_source)
 
     @Slot(int, int)
     def new_document(self, width, height):
@@ -697,5 +711,4 @@ class DocumentController(QObject):
 
         rect = QRect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
         return image.copy(rect)
-
 

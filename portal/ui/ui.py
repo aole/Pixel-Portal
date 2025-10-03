@@ -302,6 +302,7 @@ class MainWindow(QMainWindow):
 
         self.app.document_changed.connect(self.on_document_changed)
         self.app.document_changed.connect(self.sync_timeline_from_document)
+        self.app.document_controller.keyframes_delta.connect(self.on_keyframes_delta)
         self.app.select_all_triggered.connect(self.canvas.select_all)
         self.app.select_none_triggered.connect(self.canvas.select_none)
         self.app.invert_selection_triggered.connect(self.canvas.invert_selection)
@@ -419,6 +420,15 @@ class MainWindow(QMainWindow):
         if delta == 0:
             return
         self.app.move_keyframes(frames, delta)
+
+    @Slot(tuple, tuple, tuple)
+    def on_keyframes_delta(self, added: tuple[int, ...], removed: tuple[int, ...], select: tuple[int, ...]) -> None:
+        if not hasattr(self, 'animation_panel'):
+            return
+        if added or removed:
+            self.animation_panel.apply_keyframe_delta(added, removed)
+        if select:
+            self.animation_panel.focus_keyframes(select)
 
     @Slot(tuple)
     def on_keyframes_delete_requested(self, frames: tuple[int, ...]) -> None:

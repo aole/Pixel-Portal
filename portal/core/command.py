@@ -93,6 +93,7 @@ class AddKeyframeCommand(Command):
 
         active_index = insert_index
         self.layer.set_active_key_index(active_index)
+        self.selection_frames = (self.frame_index,)
 
         self.layer_manager.set_current_frame(self.frame_index)
 
@@ -310,6 +311,7 @@ class PasteKeyframesCommand(Command):
         self.layer_manager = layer_manager
         self.layer = layer
         self._entries: list[tuple[int, Key]] = normalized
+        self.selection_frames = tuple(frame for frame, _ in self._entries)
         self._original_order: Optional[list[Key]] = None
         self._original_frames: dict[Key, int] = {}
         self._previous_current_frame: Optional[int] = None
